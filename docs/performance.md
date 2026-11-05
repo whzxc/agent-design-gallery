@@ -8,6 +8,12 @@ npx playwright install chromium
 node tooling/compare.mjs /path/to/agent-remote-control output/comparison 3
 ```
 
+To reuse an existing exact source snapshot instead of the current ARC checkout:
+
+```sh
+node tooling/compare.mjs output/performance-v2 output/comparison-new 3 --reuse-snapshot
+```
+
 Use a new output directory for each comparison. The runner exports the exact ARC HEAD into an isolated source snapshot, reuses its installed build dependencies, extracts its product grouping into the snapshot's `design/gallery.json`, and serves the same 46 SVG assets to both implementations. It never saves into the original ARC checkout. Each candidate run uses an isolated preferences directory. ARC and SDG runs are sequential, with fresh browser contexts and server processes. The output retains the source snapshot, JSON samples, screenshots, environment, server logs, and source commit.
 
 `tooling/benchmark.mjs <url> <output.json> [snapshot-design-directory]` can measure an already-running instance. Supply only a disposable copied fixture directory as the final argument: the file-save phase appends a comment to `components/button.svg` and restores it in `finally`.

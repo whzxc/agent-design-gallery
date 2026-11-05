@@ -207,6 +207,8 @@ export async function startServer({
     recent: state.recent,
     view: state.views[root] ?? null,
     theme: state.theme,
+    sidebar: state.sidebar ?? true,
+    inspector: state.inspector ?? false,
   });
   async function svg(name, theme, chain = []) {
     if (chain.includes(name))
@@ -300,6 +302,8 @@ export async function startServer({
             throw new Error("Enter a directory path.");
           await openDirectory(data.directory);
         } else if (url.pathname === "/preferences") {
+          for (const key of ["sidebar", "inspector"])
+            if (typeof data[key] === "boolean") state[key] = data[key];
           if (["system", "light", "dark"].includes(data.theme))
             state.theme = data.theme;
           if (
@@ -384,6 +388,7 @@ export async function startServer({
         const file = {
           "/": "index.html",
           "/app.js": "app.js",
+          "/assets.js": "assets.js",
           "/style.css": "style.css",
         }[url.pathname];
         if (!file) {
@@ -395,6 +400,7 @@ export async function startServer({
         type = {
           "index.html": "text/html",
           "app.js": "text/javascript",
+          "assets.js": "text/javascript",
           "style.css": "text/css",
         }[file];
       }

@@ -1,55 +1,74 @@
 import { execFileSync, spawn } from "node:child_process";
-import { mkdir, readFile, writeFile, symlink } from "node:fs/promises";
+import { mkdir, readFile, writeFile, symlink, cp } from "node:fs/promises";
 import path from "node:path";
 import { createServer } from "node:net";
 const [arc, destination = `output/comparison-${Date.now()}`, count = "3"] =
   process.argv.slice(2);
 if (!arc)
   throw new Error(
-    "Usage: node tooling/compare.mjs <ARC checkout> [output-directory] [runs]",
+    "Usage: node tooling/compare.mjs <ARC checkout> [output-directory] [runs] [--reuse-snapshot]",
   );
 const root = process.cwd(),
   out = path.resolve(destination),
   snapshot = path.join(out, "arc");
 await mkdir(snapshot, { recursive: true });
-const sha = execFileSync("git", ["-C", arc, "rev-parse", "HEAD"], {
-  encoding: "utf8",
-}).trim();
-execFileSync("tar", ["-x", "-C", snapshot], {
-  input: execFileSync("git", ["-C", arc, "archive", sha], {
-    maxBuffer: 128 * 1024 * 1024,
-  }),
-});
-await symlink(
-  path.join(path.resolve(arc), "node_modules"),
-  path.join(snapshot, "node_modules"),
-);
-const source = await readFile(
-  path.join(snapshot, "ui/design-gallery.tsx"),
-  "utf8",
-);
-const names = execFileSync(
-  "git",
-  ["-C", arc, "ls-tree", "-r", "--name-only", sha, "design"],
-  { encoding: "utf8" },
-)
-  .trim()
-  .split("\n")
-  .filter((x) => x.endsWith(".svg"));
-const groups = [
-  ...source.matchAll(/title: '([^']+)', names: \[([^\]]+)\]/g),
-].map(([, title, list]) => ({
-  title,
-  assets: [...list.matchAll(/'([^']+)'/g)].flatMap(([, n]) =>
-    names.filter((p) => path.basename(p, ".svg") === n).map((p) => p.slice(7)),
-  ),
-}));
-if (!groups.length)
-  throw new Error("ARC grouping format changed; update the benchmark adapter.");
-await writeFile(
-  path.join(snapshot, "design/gallery.json"),
-  JSON.stringify({ groups }, null, 2),
-);
+let sha, assetCount;
+if (process.argv.includes("--reuse-snapshot")) {
+  const previous = JSON.parse(
+    await readFile(path.join(arc, "comparison.json"), "utf8"),
+  );
+  sha = previous.arcCommit;
+  assetCount = previous.assetCount;
+  await cp(path.join(arc, "arc"), snapshot, {
+    recursive: true,
+    verbatimSymlinks: true,
+  });
+} else {
+  sha = execFileSync("git", ["-C", arc, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+  }).trim();
+  execFileSync("tar", ["-x", "-C", snapshot], {
+    input: execFileSync("git", ["-C", arc, "archive", sha], {
+      maxBuffer: 128 * 1024 * 1024,
+    }),
+  });
+  await symlink(
+    path.join(path.resolve(arc), "node_modules"),
+    path.join(snapshot, "node_modules"),
+  );
+  const source = await readFile(
+    path.join(snapshot, "ui/design-gallery.tsx"),
+    "utf8",
+  );
+  const names = execFileSync(
+    "git",
+    ["-C", arc, "ls-tree", "-r", "--name-only", sha, "design"],
+    { encoding: "utf8" },
+  )
+    .trim()
+    .split("\n")
+    .filter((x) => x.endsWith(".svg"));
+  const groups = [
+    ...source.matchAll(/title: '([^']+)', names: \[([^\]]+)\]/g),
+  ].map(([, title, list]) => ({
+    title,
+    assets: [...list.matchAll(/'([^']+)'/g)].flatMap(([, n]) =>
+      names
+        .filter((p) => path.basename(p, ".svg") === n)
+        .map((p) => p.slice(7)),
+    ),
+  }));
+  if (!groups.length)
+    throw new Error(
+      "ARC grouping format changed; update the benchmark adapter.",
+    );
+  await writeFile(
+    path.join(snapshot, "design/gallery.json"),
+    JSON.stringify({ groups }, null, 2),
+  );
+
+  assetCount = names.length;
+}
 const freePort = () =>
   new Promise((resolve) => {
     const s = createServer();
@@ -150,16 +169,8 @@ for (let run = 1; run <= Number(count); run++)
   }
 await writeFile(
   path.join(out, "comparison.json"),
-  JSON.stringify(
-    { arcCommit: sha, assetCount: names.length, records },
-    null,
-    2,
-  ),
+  JSON.stringify({ arcCommit: sha, assetCount, records }, null, 2),
 );
 console.log(
-  JSON.stringify(
-    { out, arcCommit: sha, assetCount: names.length, records },
-    null,
-    2,
-  ),
+  JSON.stringify({ out, arcCommit: sha, assetCount, records }, null, 2),
 );

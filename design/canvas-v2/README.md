@@ -1,6 +1,6 @@
-# Canvas v2 — review draft
+# Canvas v2
 
-Status: proposed design, pending user review. These assets revise the viewer's navigation, layout and inspection experience. They do not change the installed application. The earlier `design/gallery.svg` remains the approved v1 reference until this proposal is accepted.
+Status: approved and implemented. These SVGs are the reference for content-sized collections, collapsible navigation, and frame inspection. The runtime adapts region widths and heights to the opened project's declared forms and frames.
 
 ## Review frames
 
@@ -31,24 +31,24 @@ The embedded SVG content comes from the retained ARC baseline at commit `963560b
 
 ## Navigation and basic controls
 
-| Control | Proposed behavior |
-| --- | --- |
-| Sidebar toggle, top left | Completely hide/show the sidebar; remember the preference per device. Keep the world point at viewport center fixed. |
-| Directory dropdown | Open a directory or recent directory using the existing picker. |
-| Search / Cmd or Ctrl+F | Search filenames and declared frame names. Enter focuses a result; Escape restores the previous camera. A collapsed sidebar opens temporarily for search and returns to its prior state when search closes. |
-| Sidebar group row | Focus the group; its chevron expands/collapses the file list. |
-| Asset selection | One click selects; double-click or Enter focuses. Dragging pans and never also selects. |
-| Back / Escape | Restore the camera before the most recent focus action, including pan and zoom. Escape closes an open popup or inspector before navigating back. |
-| All designs / Fit all | Fit the full directory. Do not overload Escape to always reset to the whole project. |
-| Zoom percentage | Click to enter a percentage; menu provides Fit all, Fit group, Fit selection, and 100%. The percentage describes SVG units relative to CSS pixels. |
-| Minus / plus | Zoom around the viewport center. Pointer wheel/pinch remains anchored under the pointer. |
-| Bottom fit icon | Fit the current selection, or current group when nothing is selected. |
-| Theme icon | System, Light, Dark; this controls the SVG theme as well as the viewer. |
-| Canvas background | Dark, light, or neutral background independent of the SVG theme, for checking light/transparent artwork. |
-| Fullscreen icon | Enter/exit browser fullscreen. Sidebar collapse and fullscreen remain independent. |
-| Inspector icon | Toggle file path, dimensions, explicit frames, Full sheet, Copy path, and Reveal file. No editing controls. |
-| Map icon | Toggle a small overview map for spatial navigation; hidden by default. It is an overlay the user can close and is not part of asset layout. |
-| More menu | Arrange current group and keyboard shortcuts. Avoid persistent instructional copy on the canvas. |
+| Control                  | Behavior                                                                                                                                                                                                    |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sidebar toggle, top left | Completely hide/show the sidebar; remember the preference per device. Keep the world point at viewport center fixed.                                                                                        |
+| Directory dropdown       | Open a directory or recent directory using the existing picker.                                                                                                                                             |
+| Search / Cmd or Ctrl+F   | Search filenames and declared frame names. Enter focuses a result; Escape restores the previous camera. A collapsed sidebar opens temporarily for search and returns to its prior state when search closes. |
+| Sidebar group row        | Focus the group; its chevron expands/collapses the file list.                                                                                                                                               |
+| Asset selection          | One click selects; double-click or Enter focuses. Dragging pans and never also selects.                                                                                                                     |
+| Back / Escape            | Restore the camera before the most recent focus action, including pan and zoom. Escape closes an open popup or inspector before navigating back.                                                            |
+| All designs / Fit all    | Fit the full directory. Do not overload Escape to always reset to the whole project.                                                                                                                        |
+| Zoom percentage          | Click to enter a percentage; menu provides Fit all, Fit group, Fit selection, and 100%. The percentage describes SVG units relative to CSS pixels.                                                          |
+| Minus / plus             | Zoom around the viewport center. Pointer wheel/pinch remains anchored under the pointer.                                                                                                                    |
+| Bottom fit icon          | Fit the current selection, or current group when nothing is selected.                                                                                                                                       |
+| Theme icon               | System, Light, Dark; this controls the SVG theme as well as the viewer.                                                                                                                                     |
+| Canvas background        | Dark, light, or neutral background independent of the SVG theme, for checking light/transparent artwork.                                                                                                    |
+| Fullscreen icon          | Enter/exit browser fullscreen. Sidebar collapse and fullscreen remain independent.                                                                                                                          |
+| Inspector icon           | Toggle file path, dimensions, explicit frames, Full sheet, Copy path, and Reveal file. No editing controls.                                                                                                 |
+| Map icon                 | Toggle a small overview map for spatial navigation; hidden by default. It is an overlay the user can close and is not part of asset layout.                                                                 |
+| More menu                | Arrange current group and keyboard shortcuts. Avoid persistent instructional copy on the canvas.                                                                                                            |
 
 Copy path uses the full local source path. Reveal file opens the owning file manager. Selecting a frame changes the view only. Persist theme, sidebar state, directory camera, and inspector visibility locally; grouping and SVG content stay in the project.
 

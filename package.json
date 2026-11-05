@@ -1,6 +1,6 @@
 {
   "name": "@whzxc/svg-design-gallery",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local SVG design browser",
   "type": "module",
   "license": "MIT",
@@ -13,7 +13,6 @@
   "files": [
     "src",
     "public",
-    "docs",
     "LICENSE",
     "README.md"
   ],

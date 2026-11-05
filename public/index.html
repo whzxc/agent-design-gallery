@@ -10,39 +10,114 @@
   <body>
     <div class="gallery">
       <header>
-        <h1>SVG Design Gallery</h1>
-        <span id="directory"></span><button id="open">Open directory</button>
+        <button
+          id="sidebar-toggle"
+          aria-label="Toggle sidebar"
+          aria-expanded="true"
+        >
+          ◧
+        </button>
+        <h1>SDG</h1>
+        <button id="directory" title="Open directory"></button>
         <div id="themes" role="group" aria-label="Theme">
           <button data-theme="system">System</button
           ><button data-theme="light">Light</button
           ><button data-theme="dark">Dark</button>
         </div>
-        <button id="fit">Fit all</button>
+        <button id="fullscreen" aria-label="Toggle fullscreen">⛶</button>
+        <button id="more" popovertarget="more-menu" aria-label="More options">
+          ⋯
+        </button>
       </header>
-      <nav aria-label="Design modules" id="modules"></nav>
-      <main
-        class="gallery-viewport"
-        tabindex="0"
-        aria-label="Design canvas"
-        aria-describedby="controls"
-      >
-        <canvas aria-hidden="true"></canvas>
-        <div id="asset-access" class="sr"></div>
-        <div id="empty" hidden>No SVG files in this directory.</div>
-      </main>
-      <div id="source" hidden>
-        <button id="reveal" title="Reveal source file"></button>
+      <aside id="sidebar">
+        <input
+          id="search"
+          type="search"
+          placeholder="Find assets…"
+          aria-label="Find assets"
+        /><button id="all">All designs</button>
+        <nav aria-label="Design modules" id="modules"></nav>
+        <button id="open">Open directory</button>
+      </aside>
+      <section class="workspace">
+        <div class="context">
+          <button id="back" aria-label="Back" disabled>←</button
+          ><span id="breadcrumb">All designs</span
+          ><button id="fit">Fit all</button
+          ><button id="inspect" aria-label="Toggle inspector">ⓘ</button>
+        </div>
+        <main
+          class="gallery-viewport"
+          tabindex="0"
+          aria-label="Design canvas"
+          aria-describedby="controls"
+        >
+          <canvas aria-hidden="true"></canvas>
+          <div id="asset-access" class="sr"></div>
+          <div id="empty" hidden>No SVG files in this directory.</div>
+        </main>
+        <aside id="source" hidden>
+          <div class="dialog-header">
+            <h2 id="source-name"></h2>
+            <button id="close-inspector" aria-label="Close inspector">×</button>
+          </div>
+          <p id="source-path"></p>
+          <p id="dimensions"></p>
+          <label for="forms">Frame / form</label
+          ><select id="forms"></select
+          ><button id="full-sheet">Full sheet</button
+          ><button id="copy-path">Copy path</button
+          ><button id="reveal">Reveal file</button>
+        </aside>
+        <div class="zoom" aria-label="Canvas zoom">
+          <button id="minus" aria-label="Zoom out">−</button
+          ><input
+            id="zoom-value"
+            aria-label="Zoom percentage"
+            value="100%"
+          /><button
+            id="zoom-options"
+            popovertarget="zoom-menu"
+            aria-label="Zoom options"
+          >
+            ⌄</button
+          ><output class="sr" aria-label="Zoom">100%</output
+          ><button id="plus" aria-label="Zoom in">+</button
+          ><button id="actual">100%</button
+          ><button id="fit-current" aria-label="Fit selection or group">
+            ⊡
+          </button>
+        </div>
+        <button id="map-toggle" aria-label="Toggle overview map">◫</button
+        ><canvas id="minimap" hidden aria-label="Overview map"></canvas>
+      </section>
+      <div id="zoom-menu" popover>
+        <button id="zoom-fit-all">Fit all</button
+        ><button id="zoom-fit-group">Fit group</button
+        ><button id="zoom-fit-selection">Fit selection</button
+        ><button id="zoom-actual">100%</button>
       </div>
-      <div class="zoom" aria-label="Canvas zoom">
-        <button id="minus" aria-label="Zoom out">−</button
-        ><output aria-label="Zoom">100%</output
-        ><button id="plus" aria-label="Zoom in">+</button
-        ><button id="actual">100%</button>
+      <div id="more-menu" popover>
+        <button id="arrange">Arrange current group</button
+        ><label for="background">Canvas background</label
+        ><select id="background">
+          <option value="theme">Follow theme</option>
+          <option value="#171715">Dark</option>
+          <option value="#f5f3ef">Light</option>
+          <option value="#808080">Neutral</option></select
+        ><button id="shortcuts">Keyboard shortcuts</button>
       </div>
+      <dialog id="keys">
+        <h2>Keyboard shortcuts</h2>
+        <p>Drag / scroll: pan · Ctrl/⌘ + scroll: zoom</p>
+        <p>Ctrl/⌘ + F: search · Enter: focus · Escape: back</p>
+        <p>0: fit all · 1: actual size · + / −: zoom</p>
+        <form method="dialog"><button>Close</button></form>
+      </dialog>
       <p id="controls" class="sr">
         Drag or scroll to pan. Pinch or Control or Command scroll to zoom. Arrow
-        keys pan; plus and minus zoom; zero or Escape fits all; one sets 100%.
-        Select an asset to focus it.
+        keys pan; plus and minus zoom; zero fits all; Escape goes back; one sets
+        100%. Click to select; double-click or Enter to focus.
       </p>
       <div id="error" role="alert" hidden></div>
       <dialog id="directories" aria-labelledby="open-title">
