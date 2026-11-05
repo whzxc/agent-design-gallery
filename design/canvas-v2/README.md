@@ -4,7 +4,7 @@ Status: proposed design, pending user review. These assets revise the viewer's n
 
 ## Review frames
 
-1. `01-component-board.svg`: expanded asset sidebar and eight representative ARC components at one shared 64% scale. Long strips, small controls, and large collections occupy different amounts of canvas space. The selection is a review fixture, not an inventory of the full ARC component library.
+1. `01-component-board.svg`: expanded sidebar and eight representative ARC components arranged in bounded, aligned preview regions at a shared 80% content scale. Headers and gutters have consistent dimensions; region widths and row heights follow their contents. The 1440 × 960 review frame shows the complete collection without squeezing the bottom row. The selection is a review fixture, not an inventory of the full ARC component library.
 2. `02-expanded-canvas.svg`: completely collapsed sidebar; five ARC files displayed as eight explicitly declared frames/component sheets at one shared 60% scale. A tall overview panel, short empty state, and compact slider preserve their relative sizes.
 3. `03-frame-inspection.svg`: one explicit panel frame at 83%, with an optional source/frame inspector. Its parent sheet and sibling frame remain accessible.
 
@@ -19,6 +19,15 @@ The embedded SVG content comes from the retained ARC baseline at commit `963560b
 - Where an SVG explicitly declares frames, allow those frames to be arranged separately while keeping their file association. Never infer frames from arbitrary nested groups. A generic SVG remains one sheet.
 - Use content bounds to avoid spending preview space on an empty artboard. Preserve annotations that identify forms and meaningful graphic content, include filter/shadow padding, and keep Full sheet available. Never rewrite or crop the source file. The component draft uses declared component bounds to demonstrate the proposed compact layout; annotation handling remains part of implementation review.
 - A file save updates its content and dimensions without moving the camera. Preserve the selected item and keyboard focus. Retain unrelated item positions; an explicit Arrange action may compact the current group after structural changes.
+
+## Small-component collection
+
+- Give each source file one clearly bounded preview region with a consistent 40 px header, aligned rows, 16 px gutters, and at least 16 px content clearance. Keep header contrast subtle and use a continuous preview background, so tiny isolated controls do not float among unrelated labels.
+- Allocate wider regions to long button groups and input fields, narrower regions to icon buttons and switches, and a full row to larger container forms. These regions share alignment and chrome, not a uniform artwork size. Center compact previews within their region while preserving a common SVG content scale.
+- Show compact sibling forms together. The card example places Default and Reply on the same baseline at the same scale, preserving their form names and source association.
+- For a collection with a much larger form, use an explicitly identified compact preview. SingleChoice shows Pills with `1 / 5`; the form menu exposes all five forms. Choosing a form opens its inspection view. Returning restores the collection and its compact preview. The navigation-list form remains fully available without stretching every neighboring preview.
+- Only declared forms may be separated or selected this way. A generic SVG with no form metadata retains its complete sheet. Never infer or silently discard arbitrary source content.
+- The surface board and individual-frame inspection retain their existing compositions. Component collection chrome is used for groups of small controls; it is not imposed on every full-page surface.
 
 ## Navigation and basic controls
 
