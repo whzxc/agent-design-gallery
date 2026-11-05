@@ -1,0 +1,32 @@
+{
+  "name": "@whzxc/svg-design-gallery",
+  "version": "0.1.0",
+  "description": "Local SVG design browser",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "sdg": "src/cli.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "src",
+    "public",
+    "docs",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.leow.top",
+    "access": "restricted"
+  },
+  "scripts": {
+    "start": "node src/cli.mjs",
+    "benchmark": "node tooling/benchmark.mjs",
+    "compare": "node tooling/compare.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
+  }
+}

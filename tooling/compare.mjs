@@ -1,0 +1,165 @@
+import { execFileSync, spawn } from "node:child_process";
+import { mkdir, readFile, writeFile, symlink } from "node:fs/promises";
+import path from "node:path";
+import { createServer } from "node:net";
+const [arc, destination = `output/comparison-${Date.now()}`, count = "3"] =
+  process.argv.slice(2);
+if (!arc)
+  throw new Error(
+    "Usage: node tooling/compare.mjs <ARC checkout> [output-directory] [runs]",
+  );
+const root = process.cwd(),
+  out = path.resolve(destination),
+  snapshot = path.join(out, "arc");
+await mkdir(snapshot, { recursive: true });
+const sha = execFileSync("git", ["-C", arc, "rev-parse", "HEAD"], {
+  encoding: "utf8",
+}).trim();
+execFileSync("tar", ["-x", "-C", snapshot], {
+  input: execFileSync("git", ["-C", arc, "archive", sha], {
+    maxBuffer: 128 * 1024 * 1024,
+  }),
+});
+await symlink(
+  path.join(path.resolve(arc), "node_modules"),
+  path.join(snapshot, "node_modules"),
+);
+const source = await readFile(
+  path.join(snapshot, "ui/design-gallery.tsx"),
+  "utf8",
+);
+const names = execFileSync(
+  "git",
+  ["-C", arc, "ls-tree", "-r", "--name-only", sha, "design"],
+  { encoding: "utf8" },
+)
+  .trim()
+  .split("\n")
+  .filter((x) => x.endsWith(".svg"));
+const groups = [
+  ...source.matchAll(/title: '([^']+)', names: \[([^\]]+)\]/g),
+].map(([, title, list]) => ({
+  title,
+  assets: [...list.matchAll(/'([^']+)'/g)].flatMap(([, n]) =>
+    names.filter((p) => path.basename(p, ".svg") === n).map((p) => p.slice(7)),
+  ),
+}));
+if (!groups.length)
+  throw new Error("ARC grouping format changed; update the benchmark adapter.");
+await writeFile(
+  path.join(snapshot, "design/gallery.json"),
+  JSON.stringify({ groups }, null, 2),
+);
+const freePort = () =>
+  new Promise((resolve) => {
+    const s = createServer();
+    s.listen(0, "127.0.0.1", () => {
+      const p = s.address().port;
+      s.close(() => resolve(p));
+    });
+  });
+async function start(command, args, env) {
+  const start = performance.now(),
+    child = spawn(command, args, {
+      cwd: root,
+      env: { ...process.env, ...env },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  let log = "";
+  const ready = await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("Server startup timed out. " + log));
+    }, 60000);
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      clearTimeout(timeout);
+      reject(new Error(`Server exited ${code}: ${log}`));
+    });
+    child.stderr.on("data", (b) => (log += b));
+    child.stdout.on("data", (b) => {
+      log += b;
+      const match = log.match(/(?:DESIGN|SDG): (http:\/\/[^\s]+)/);
+      if (match) {
+        clearTimeout(timeout);
+        resolve({ url: match[1], startupMs: performance.now() - start });
+      }
+    });
+  });
+  return {
+    ...ready,
+    child,
+    get log() {
+      return log;
+    },
+  };
+}
+const records = [];
+for (let run = 1; run <= Number(count); run++)
+  for (const implementation of ["arc", "sdg"]) {
+    const port = await freePort();
+    const server = await start(
+      process.execPath,
+      implementation === "arc"
+        ? [path.join(snapshot, "tooling/design-server.mjs")]
+        : [
+            "src/cli.mjs",
+            path.join(snapshot, "design"),
+            "--no-open",
+            "--port",
+            String(port),
+            "--state-dir",
+            path.join(out, `state-${run}`),
+          ],
+      { ARC_DESIGN_PORT: String(port) },
+    );
+    const file = path.join(out, `${implementation}-${run}.json`);
+    try {
+      await new Promise((resolve, reject) => {
+        const p = spawn(
+          process.execPath,
+          [
+            "tooling/benchmark.mjs",
+            server.url,
+            file,
+            path.join(snapshot, "design"),
+          ],
+          { stdio: "inherit" },
+        );
+        p.on("error", reject);
+        p.on("exit", (code) =>
+          code === 0
+            ? resolve()
+            : reject(new Error(`Benchmark exited ${code}`)),
+        );
+      });
+      records.push({
+        implementation,
+        run,
+        startupMs: server.startupMs,
+        result: path.basename(file),
+      });
+    } finally {
+      server.child.kill("SIGTERM");
+      await new Promise((resolve) => server.child.on("exit", resolve));
+      await writeFile(
+        path.join(out, `${implementation}-${run}-server.log`),
+        server.log,
+      );
+    }
+  }
+await writeFile(
+  path.join(out, "comparison.json"),
+  JSON.stringify(
+    { arcCommit: sha, assetCount: names.length, records },
+    null,
+    2,
+  ),
+);
+console.log(
+  JSON.stringify(
+    { out, arcCommit: sha, assetCount: names.length, records },
+    null,
+    2,
+  ),
+);

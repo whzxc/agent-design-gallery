@@ -1,0 +1,329 @@
+:root {
+  color-scheme: dark;
+  --canvas: #181714;
+  --surface: #24221e;
+  --raised: #35322c;
+  --text: #eae8e4;
+  --muted: #a7a39b;
+  --border: #696459;
+  --accent: #db9a57;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--canvas);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --canvas: #f5f3ef;
+  --surface: #fffefa;
+  --raised: #eae6df;
+  --text: #292620;
+  --muted: #716a60;
+  --border: #b4ab9e;
+  --accent: #a95716;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+html,
+body,
+.gallery {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.gallery {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  grid-template-rows: 64px minmax(0, 1fr);
+}
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+button {
+  border: 0;
+  border-radius: 18px;
+  background: var(--raised);
+  padding: 8px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+button:hover {
+  filter: brightness(1.12);
+}
+button:focus-visible,
+input:focus-visible,
+.gallery-viewport:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+header {
+  grid-column: 1/-1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  background: var(--surface);
+}
+h1 {
+  font-size: 17px;
+  white-space: nowrap;
+  margin: 0;
+}
+#directory {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+#themes {
+  display: flex;
+  border-radius: 20px;
+  background: var(--raised);
+  padding: 3px;
+}
+#themes button {
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--muted);
+}
+#themes button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+}
+nav {
+  padding: 20px 12px;
+  background: var(--surface);
+  overflow: auto;
+}
+nav button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 10px;
+  text-align: left;
+  background: transparent;
+  border-radius: 10px;
+}
+nav button[aria-current] {
+  background: var(--raised);
+}
+nav span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+nav small {
+  color: var(--muted);
+}
+.gallery-viewport {
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+.gallery-viewport:active {
+  cursor: grabbing;
+}
+canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.zoom {
+  position: fixed;
+  right: 24px;
+  bottom: 22px;
+  background: var(--surface);
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  gap: 6px;
+}
+.zoom button {
+  background: transparent;
+  padding: 6px 10px;
+}
+.zoom output {
+  min-width: 50px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+#source {
+  position: fixed;
+  bottom: 24px;
+  left: 234px;
+  max-width: calc(100vw - 500px);
+}
+#source button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--surface);
+  font-size: 12px;
+}
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+#empty {
+  position: absolute;
+  inset: 45% 0 auto;
+  text-align: center;
+  color: var(--muted);
+}
+#error {
+  position: fixed;
+  right: 24px;
+  top: 76px;
+  max-width: 500px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 12px 16px;
+  border-radius: 10px;
+}
+dialog {
+  width: 500px;
+  max-width: calc(100vw - 32px);
+  border: 0;
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 24px;
+}
+dialog::backdrop {
+  background: #0008;
+}
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+h2 {
+  font-size: 17px;
+  margin: 0;
+}
+.dialog-header button {
+  background: transparent;
+  padding: 0 8px;
+  font-size: 20px;
+}
+label,
+h3 {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+input {
+  width: 100%;
+  height: 40px;
+  padding: 8px 12px;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+h3 {
+  margin-top: 28px;
+}
+#recent {
+  max-height: 220px;
+  overflow: auto;
+}
+#recent button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+.primary {
+  background: var(--accent);
+  color: var(--canvas);
+}
+#open-error {
+  color: var(--text);
+  font-size: 13px;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 800px) {
+  .gallery {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
+  header {
+    gap: 8px;
+    padding: 0 12px;
+  }
+  h1 {
+    font-size: 14px;
+  }
+  #directory {
+    display: none;
+  }
+  #themes button {
+    padding: 6px 8px;
+  }
+  #source {
+    left: 176px;
+  }
+  nav {
+    padding-inline: 4px;
+  }
+  nav button {
+    font-size: 12px;
+  }
+}
+@media (max-width: 570px) {
+  .gallery {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+  header h1 {
+    display: none;
+  }
+  header {
+    justify-content: space-between;
+  }
+  #source {
+    left: 122px;
+    max-width: calc(100vw - 340px);
+  }
+}

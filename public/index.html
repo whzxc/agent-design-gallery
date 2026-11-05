@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SVG Design Gallery</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div class="gallery">
+      <header>
+        <h1>SVG Design Gallery</h1>
+        <span id="directory"></span><button id="open">Open directory</button>
+        <div id="themes" role="group" aria-label="Theme">
+          <button data-theme="system">System</button
+          ><button data-theme="light">Light</button
+          ><button data-theme="dark">Dark</button>
+        </div>
+        <button id="fit">Fit all</button>
+      </header>
+      <nav aria-label="Design modules" id="modules"></nav>
+      <main
+        class="gallery-viewport"
+        tabindex="0"
+        aria-label="Design canvas"
+        aria-describedby="controls"
+      >
+        <canvas aria-hidden="true"></canvas>
+        <div id="asset-access" class="sr"></div>
+        <div id="empty" hidden>No SVG files in this directory.</div>
+      </main>
+      <div id="source" hidden>
+        <button id="reveal" title="Reveal source file"></button>
+      </div>
+      <div class="zoom" aria-label="Canvas zoom">
+        <button id="minus" aria-label="Zoom out">−</button
+        ><output aria-label="Zoom">100%</output
+        ><button id="plus" aria-label="Zoom in">+</button
+        ><button id="actual">100%</button>
+      </div>
+      <p id="controls" class="sr">
+        Drag or scroll to pan. Pinch or Control or Command scroll to zoom. Arrow
+        keys pan; plus and minus zoom; zero or Escape fits all; one sets 100%.
+        Select an asset to focus it.
+      </p>
+      <div id="error" role="alert" hidden></div>
+      <dialog id="directories" aria-labelledby="open-title">
+        <form id="directory-form">
+          <div class="dialog-header">
+            <h2 id="open-title">Open directory</h2>
+            <button type="button" id="close" aria-label="Close">×</button>
+          </div>
+          <label for="path">Directory path</label
+          ><input
+            id="path"
+            placeholder="/path/to/design"
+            required
+            autocomplete="off"
+          />
+          <h3>Recent directories</h3>
+          <div id="recent"></div>
+          <p id="open-error" role="alert" hidden></p>
+          <footer><button class="primary" type="submit">Open</button></footer>
+        </form>
+      </dialog>
+    </div>
+  </body>
+</html>
