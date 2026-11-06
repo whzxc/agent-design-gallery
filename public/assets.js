@@ -1,3 +1,4 @@
+import { blockForAsset, layoutWorld } from "./layout.js";
 // Measure declared SVG content in an isolated, script-disabled document.
 export async function prepare(asset, theme) {
   const response = await fetch(
@@ -55,42 +56,16 @@ export async function prepare(asset, theme) {
         ].map(([x, y]) => new DOMPoint(x, y).matrixTransform(m));
         const x = Math.min(...points.map((p) => p.x)),
           y = Math.min(...points.map((p) => p.y));
-        let padding = 12;
-        for (const element of [
-          e,
-          ...e.querySelectorAll('[filter], [style*="filter"]'),
-        ]) {
-          const match = frame.contentWindow
-            .getComputedStyle(element)
-            .filter.match(/#([^"')]+)/);
-          const filter =
-            match && frame.contentDocument.getElementById(match[1]);
-          if (!filter) continue;
-          let blur = 0,
-            offset = 0;
-          for (const node of filter.querySelectorAll("feGaussianBlur"))
-            blur = Math.max(
-              blur,
-              ...node.getAttribute("stdDeviation").split(/\s+/).map(Number),
-            );
-          for (const node of filter.querySelectorAll("feOffset"))
-            offset = Math.max(
-              offset,
-              Math.abs(Number(node.getAttribute("dx"))),
-              Math.abs(Number(node.getAttribute("dy"))),
-            );
-          padding = Math.max(padding, blur * 3 + offset);
-        }
         return {
           id: String(index),
           name: e.dataset.form || e.dataset.part.replace(/^frame-/, ""),
-          x: x - padding,
-          y: y - padding,
-          width: Math.max(...points.map((p) => p.x)) - x + padding * 2,
-          height: Math.max(...points.map((p) => p.y)) - y + padding * 2,
+          x,
+          y,
+          width: Math.max(...points.map((p) => p.x)) - x,
+          height: Math.max(...points.map((p) => p.y)) - y,
         };
       })
-      .filter((p) => p.width > 24 && p.height > 24);
+      .filter((p) => p.width > 0 && p.height > 0);
     return {
       ...asset,
       source,
@@ -160,146 +135,19 @@ export function arrange(data) {
     rest.get(parent).push(a);
   }
   for (const [title, assets] of rest) grouped.push({ title, assets });
-  const groups = [],
-    items = [];
-  let groupY = 0,
-    bandHeight = 0;
-  grouped.forEach((g, gi) => {
-    if (gi && gi % 3 === 0) {
-      groupY += bandHeight + 160;
-      bandHeight = 0;
-    }
-    const capacity = g.assets.some((a) => !a.component) ? 2800 : 1400;
-    const group = {
-      ...g,
-      x: (gi % 3) * 1600,
-      y: groupY,
-      width: capacity + 40,
-      height: 0,
-    };
-    let row = [],
-      rowWidth = 0,
-      y = 88;
-    function flush() {
-      if (!row.length) return;
-      const h = Math.max(...row.map((a) => a.height)),
-        extra = (capacity - rowWidth) / row.length;
-      let x = 20;
-      for (const a of row) {
-        a.x = group.x + x;
-        a.y = group.y + y;
-        a.width += a.chrome && capacity === 1400 ? extra : 0;
-        a.height = h;
-        items.push(a);
-        x += a.width + 20;
+  const sections = layoutWorld(grouped.map(g => ({ ...g, blocks: g.assets.map(blockForAsset) })));
+  const groups = sections.map(s => ({ ...s, width: s.w, height: s.h }));
+  const items = [];
+  for (const [group, section] of groups.entries()) {
+    for (const block of section.blocks) {
+      const asset = section.assets.find(a => a.path === block.asset);
+      const frames = block.kind === 'set' ? [{ id: 'overview', name: 'All forms', x: block.x, y: block.y, crop: block.crop }] : block.frames;
+      for (const frame of frames) {
+        const crop = { ...frame.crop, width: frame.crop.w, height: frame.crop.h, id: frame.id, name: frame.name };
+        items.push({ ...asset, id: block.kind === 'set' ? asset.path : `${asset.path}#${frame.id}`, kind: block.kind,
+          group, x: frame.x, y: frame.y, width: crop.width, height: crop.height, shown: [crop], rows: [[crop]], chrome: false, compact: false });
       }
-      y += h + 20;
-      row = [];
-      rowWidth = 0;
     }
-    for (const asset of g.assets) {
-      const parts = asset.parts.length
-        ? asset.parts
-        : [{ ...asset.full, id: "full", name: "Full sheet" }];
-      if (asset.component) {
-        const compact =
-          parts.length > 1 &&
-          Math.max(...parts.map((p) => p.height)) >
-            Math.max(240, Math.min(...parts.map((p) => p.height)) * 3);
-        const bounds = {
-          x: Math.min(...parts.map((p) => p.x)),
-          y: Math.min(...parts.map((p) => p.y)),
-        };
-        bounds.width = Math.max(...parts.map((p) => p.x + p.width)) - bounds.x;
-        bounds.height =
-          Math.max(...parts.map((p) => p.y + p.height)) - bounds.y;
-        const keepSheet = !compact && parts.length > 1 && bounds.height < 240;
-        const shown = compact
-          ? [parts.reduce((a, b) => (a.height <= b.height ? a : b))]
-          : keepSheet
-            ? [{ ...bounds, id: "overview", name: "All forms" }]
-            : parts;
-        const total =
-          shown.reduce((n, p) => n + p.width, 0) +
-          Math.max(0, shown.length - 1) * 20;
-        // Compact forms share a baseline. Large families wrap within one source region.
-        const rows = [];
-        let r = [],
-          rw = 0;
-        for (const p of shown) {
-          if (r.length && rw + p.width > 1300) {
-            rows.push(r);
-            r = [];
-            rw = 0;
-          }
-          r.push(p);
-          rw += p.width + 20;
-        }
-        if (r.length) rows.push(r);
-        const a = {
-          ...asset,
-          id: asset.path,
-          group: gi,
-          compact,
-          shown,
-          rows,
-          chrome: true,
-          width: Math.min(1400, Math.max(compact ? 680 : 300, total + 56)),
-          height: Math.max(
-            160,
-            rows.reduce(
-              (n, r) => n + Math.max(...r.map((p) => p.height)) + 28,
-              0,
-            ) + 72,
-          ),
-        };
-        if (row.length && rowWidth + a.width + 20 > capacity) flush();
-        row.push(a);
-        rowWidth += a.width + (row.length > 1 ? 20 : 0);
-      } else
-        for (const p of parts) {
-          const a = {
-            ...asset,
-            id: asset.path + "#" + p.id,
-            group: gi,
-            shown: [p],
-            rows: [[p]],
-            chrome: false,
-            width: p.width + 40,
-            height: p.height + 52,
-          };
-          if (row.length && rowWidth + a.width + 20 > capacity) flush();
-          row.push(a);
-          rowWidth += a.width + (row.length > 1 ? 20 : 0);
-          if (a.width > capacity) flush();
-        }
-    }
-    flush();
-    group.height = y + 20;
-    group.width = Math.max(
-      capacity + 40,
-      ...items
-        .filter((a) => a.group === gi)
-        .map((a) => a.x - group.x + a.width + 20),
-    );
-    groups.push(group);
-    bandHeight = Math.max(bandHeight, group.height);
-  });
-  // Wide generic sheets get their own horizontal room without overlapping adjacent groups.
-  for (let i = 0; i < groups.length; i++) {
-    const g = groups[i],
-      offset = i % 3 ? groups[i - 1].x + groups[i - 1].width + 160 - g.x : 0;
-    g.x += offset;
-    for (const a of items.filter((a) => a.group === i)) a.x += offset;
   }
-  return {
-    groups,
-    items,
-    world: {
-      x: 0,
-      y: 0,
-      width: Math.max(1, ...groups.map((g) => g.x + g.width)),
-      height: Math.max(1, ...groups.map((g) => g.y + g.height)),
-    },
-  };
+  return { groups, items, world: { x: 0, y: 0, width: Math.max(1, ...groups.map(g => g.x + g.width)), height: Math.max(1, ...groups.map(g => g.y + g.height)) } };
 }

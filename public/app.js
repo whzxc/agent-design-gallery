@@ -1,3 +1,4 @@
+import { fitArea, fitView } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
 import { prepare, imageURL, arrange } from "./assets.js";
@@ -316,17 +317,8 @@ function selection() {
   }
   requestDraw();
 }
-function frame(box) {
-  const available = inspector && selected ? Math.max(240, width - 304) : width;
-  const scale = clamp(
-    Math.min((available - 64) / box.width, (height - 88) / box.height),
-  );
-  commit({
-    scale,
-    x: (available - box.width * scale) / 2 - box.x * scale,
-    y: (height - 48 - box.height * scale) / 2 - box.y * scale,
-  });
-}
+function cameraArea() { return fitArea(width, height, sidebar, inspector && !!selected); }
+function frame(box, padding = 0) { commit(fitView(box, cameraArea(), padding)); }
 function fit() {
   remember();
   inspection = null;
@@ -349,7 +341,7 @@ function focusAsset(a) {
   active = a.group;
   expanded.add(active);
   selection();
-  frame(a);
+  frame(a, 24);
 }
 function inspectForm(a, p) {
   if (!a || !p) return;
@@ -375,7 +367,7 @@ function inspectForm(a, p) {
   frame(inspection);
   save();
 }
-function zoom(scale, x = width / 2, y = height / 2) {
+function zoom(scale, x = cameraArea().x + cameraArea().width / 2, y = cameraArea().y + cameraArea().height / 2) {
   const next = clamp(scale);
   commit({
     scale: next,
