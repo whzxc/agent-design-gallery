@@ -179,6 +179,26 @@ test('theme region follows explicit theme before system; DOM extraction handles 
     assert.ok(!result.texts.some(t => /Clipped|Hidden/.test(t.text)));
   } finally { await browser.close(); }
 });
+test('compare ignores aria-hidden on the capture target and ancestors but excludes hidden descendants', async () => {
+  const browser = await launch();
+  try {
+    const page = await browser.newPage();
+    for (const [targetHidden, ancestorHidden] of [[true, false], [false, true], [true, true]]) {
+      await page.setContent(`<section ${ancestorHidden ? 'aria-hidden="true"' : ''}>
+        <div role="dialog" ${targetHidden ? 'aria-hidden="true"' : ''}><span>Visible dialog text</span><span aria-hidden="true">Decorative text</span></div>
+      </section>`);
+      const dialog = page.locator('[role="dialog"]');
+      assert.deepEqual((await dialog.evaluate(implementationTexts)).texts.map(t => t.text), ['Visible dialog text']);
+      await dialog.evaluate(el => el.insertAdjacentHTML('beforeend', `<input placeholder="Visible field" style="display:block">
+        <div aria-hidden="true"><span>Nested decoration</span><input placeholder="Hidden field"></div>
+        <span style="display:none">Not rendered</span>`));
+      assert.deepEqual((await dialog.evaluate(implementationTexts)).texts.map(t => t.text), ['Visible dialog text', 'Visible field']);
+      await dialog.evaluate(el => el.parentElement.style.display = 'none');
+      assert.deepEqual((await dialog.evaluate(implementationTexts)).texts, []);
+    }
+  } finally { await browser.close(); }
+});
+
 test('compare reads centered clipped labels and one value or placeholder per text field', async () => {
   const browser = await launch();
   try {

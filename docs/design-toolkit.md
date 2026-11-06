@@ -138,7 +138,7 @@ Each `--click` activates the first visible element with that exact accessible na
 
 After the clicks, `compare` waits until the capture target has the same texts and text boxes for 300ms, up to 5s. This includes entries returned by `texts`. It then captures and records `settled: true` in `report.json`. On timeout it captures anyway and records `settled: false`; settling alone does not change the exit code. The same wait applies when no clicks are supplied. Fixtures do not need fixed sleeps for delayed labels or text reflow.
 
-It reads one text per rendered line, including the placeholders of empty fields, skips text clipped outside the captured element, and pairs texts by content. Positions are relative to the frame's shell, the first component container in the frame, and to the captured element. It reports anchored-edge, vertical-center and width differences above 2px, plus texts missing from either side. It does not compare shapes, so review the overlay as well.
+It reads one text per rendered line, including the placeholders of empty fields, skips text clipped outside the captured element, and pairs texts by content. Text extraction ignores `aria-hidden="true"` on the capture target and its ancestors, so an explicitly selected visible target remains readable. Descendant subtrees inside the target with `aria-hidden="true"` stay excluded. CSS visibility checks still apply to the target and all ancestors. Positions are relative to the frame's shell, the first component container in the frame, and to the captured element. It reports anchored-edge, vertical-center and width differences above 2px, plus texts missing from either side. It does not compare shapes, so review the overlay as well.
 
 `output/design/compare/<asset>-<frame>-<fixture>/` receives `design.png`, `implementation.png`, `overlay.png`, `report.json` and `index.html`. A nonzero exit means it found differences. Treat them as a review list, not a zero gate. Missing or extra texts, wrong order or grouping, and one offset shared by many texts point to real defects, such as a lost font rule or a leftover border. An isolated offset of a few pixels can stay.
 
@@ -146,7 +146,7 @@ The project describes how to run its implementation in `sdg.config.mjs`:
 
 ```js
 export default {
-  requires: '>=0.3.2',
+  requires: '>=0.3.3',
   design: 'design',
   output: 'output/design',
   compare: {

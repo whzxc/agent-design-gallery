@@ -132,7 +132,8 @@ export function implementationTexts(root, clip) {
       const style = getComputedStyle(el);
       if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
     }
-    return !owner.closest('script, style, .sr-only, [aria-hidden="true"]');
+    const hidden = owner.closest('[aria-hidden="true"]');
+    return (!hidden || hidden === root || !root.contains(hidden)) && !owner.closest('script, style, .sr-only');
   };
   const inside = (box, owner) => {
     let left = origin.left, right = origin.right, top = origin.top, bottom = origin.bottom;
