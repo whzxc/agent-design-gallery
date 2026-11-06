@@ -41,6 +41,8 @@ let history = [],
   searchReturn = null;
 const expanded = new Set(),
   prepared = new Map();
+const fixtureName = new URL(location.href).searchParams.get("fixture");
+let fixtureState = null, fixtureApplied = false;
 const currentItem = () => inspection || assets.find((a) => a.id === selectedId);
 function remember() {
   history.push({
@@ -113,10 +115,12 @@ window.__sdg = {
 };
 const clamp = (s) => Math.max(0.025, Math.min(32, s));
 function error(message) {
+  if(fixtureState && message) document.documentElement.dataset.fixtureError=message;
   $("#error").textContent = message;
   $("#error").hidden = !message;
 }
 async function api(url, data) {
+  if(fixtureName && ["/manifest","/open"].includes(url)) url += `?fixture=${encodeURIComponent(fixtureName)}`;
   const response = await fetch(
     url,
     data
@@ -132,6 +136,7 @@ async function api(url, data) {
   return result;
 }
 function save() {
+  if(fixtureState) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(
     () =>
@@ -473,6 +478,7 @@ function draw() {
   if (document.activeElement !== $("#zoom-value")) $("#zoom-value").textContent = `${Math.round(view.scale * 100)}%`;
   $("output").value = `${Math.round(view.scale * 100)}%`;
   window.__sdg.ready = !!manifest && manifest.renderTheme === effectiveTheme && ready === count && !moving;
+  if(fixtureState && fixtureApplied && window.__sdg.ready) document.documentElement.dataset.fixtureReady=fixtureState.name;
   window.__sdg.revision = manifest?.revision;
   window.__sdg.visibleReady = ready; window.__sdg.visibleCount = count;
   drawMap();
@@ -832,7 +838,7 @@ async function open(directory) {
   const button = $("#directory-form button[type=submit]");
   button.disabled = true;
   try {
-    await api("/preferences", { directory: manifest?.directory, view, theme });
+    if(!fixtureState) await api("/preferences", { directory: manifest?.directory, view, theme });
     const data = await api("/open", { directory });
     await applyManifest(data);
     $("#directories").close();
@@ -851,6 +857,7 @@ async function applyManifest(data, force = false) {
   if (!force && !changedRoot && !first && manifest.revision === data.revision)
     return;
   if (first) {
+    fixtureState=data.fixture ?? null;
     theme = data.theme;
     applyTheme();
     toggleSidebar(data.sidebar);
@@ -959,6 +966,34 @@ for(const dialog of document.querySelectorAll('dialog')) dialog.addEventListener
 document.addEventListener('keydown',event=>{
   if(event.key==='?'&&!event.target.matches('input,textarea')&&!document.querySelector('dialog[open]')) {event.preventDefault();hideTooltip();$("#keys").showModal()}
 });
+async function applyFixture() {
+  const state=fixtureState;if(!state)return;
+  fixtureApplied=false;delete document.documentElement.dataset.fixtureReady;
+  sidebar=state.sidebar;inspector=!!state.inspector;history=[];inspection=null;selected=null;selectedId=null;selectedForm=null;expanded.clear();
+  active=state.group ? groups.findIndex(g=>g.title===state.group) : null;
+  if(active===-1) throw new Error(`Fixture group not found: ${state.group}`);
+  if(active!==null) expanded.add(active);
+  if(state.asset) {
+    const source=manifest.assets.find(a=>a.path===state.asset),form=state.form?source?.parts.find(p=>p.name===state.form):null;
+    const item=assets.find(a=>a.path===state.asset && (!form || a.component || a.shown[0].id===form.id));
+    if(!item)throw new Error(`Fixture asset/form not found: ${state.asset} ${state.form??''}`);
+    selected=item.path;selectedId=item.id;selectedForm=form?.id??item.parts[0]?.id;
+  }
+  $("#search").value=state.query??'';$("#minimap").hidden=!state.minimap;$("#map-toggle").setAttribute('aria-pressed',String(!!state.minimap));
+  selection();
+  if(state.camera==='origin') commit({scale:state.scale,x:state.origin[0]-groups[active].x*state.scale,y:state.origin[1]-groups[active].y*state.scale});
+  else if(state.camera==='group') frame(groups[active]);
+  else if(state.camera==='selection') frame(currentItem(),24);
+  else frame(world);
+  if(state.scale && state.camera!=='origin') zoom(state.scale);
+  // Fixtures retain a useful Back button just as a user navigating from the overview would.
+  if(state.asset){history=[{view:fitView(world,fitArea(width,height,state.sidebar,false)),active:null,selected:null,selectedId:null,selectedForm:null,inspection:null,inspector:false}];$("#back").disabled=false}
+  if(state.menu){positionZoomMenu();$("#"+state.menu).showPopover()}
+  if(state.dialog==='directories') showOpen();
+  else if(state.dialog) $("#"+state.dialog).showModal();
+  if(state.submit){$("#path").value=state.submit;await open(state.submit)}
+  fixtureApplied=true;requestDraw();
+}
 let fetching = false,
   pending = false;
 async function refresh(force = false) {
@@ -981,7 +1016,8 @@ async function refresh(force = false) {
   }
 }
 await refresh();
-if (!manifest?.directory) showOpen();
+if(fixtureState) { try { await applyFixture(); } catch(e) { error(e.message); } }
+else if (!manifest?.directory) showOpen();
 const events = new EventSource("/events");
 events.onmessage = (e) => {
   const data = JSON.parse(e.data);

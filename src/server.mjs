@@ -23,6 +23,7 @@ export async function startServer({
   directory,
   port = 0,
   stateDirectory = defaultState,
+  fixtures = null,
 } = {}) {
   let state = { recent: [], views: {}, theme: "system" };
   const statePath = path.join(stateDirectory, "state.json");
@@ -44,6 +45,7 @@ export async function startServer({
     touched = new Set();
   let writes = Promise.resolve();
   const persist = () => {
+    if (fixtures) return Promise.resolve();
     const data = JSON.stringify(state, null, 2);
     writes = writes
       .catch(() => {})
@@ -211,6 +213,15 @@ export async function startServer({
     sidebar: state.sidebar ?? true,
     inspector: state.inspector ?? false,
   });
+  function fixtureManifest(name) {
+    const data = manifest();
+    if (!fixtures || !name) return data;
+    const preset = fixtures.states[name];
+    if (!preset) throw new Error(`Unknown fixture ${name}; choose a declared SDG fixture.`);
+    return { ...data, ...(preset.empty ? { directory: null, assets: [], groups: [] } : {}),
+      label: 'agent-remote-control', recent: fixtures.recent, view: null, theme: preset.themeChoice ?? preset.theme,
+      sidebar: preset.sidebar, inspector: !!preset.inspector, fixture: { name, ...preset } };
+  }
   async function svg(name, theme, chain = []) {
     if (chain.includes(name))
       throw new Error(`Circular SVG reference: ${name}`);
@@ -301,7 +312,7 @@ export async function startServer({
         if (url.pathname === "/open") {
           if (typeof data.directory !== "string")
             throw new Error("Enter a directory path.");
-          await openDirectory(data.directory);
+          await openDirectory(fixtures && url.searchParams.has("fixture") ? fixtures.paths[data.directory] ?? root : data.directory);
         } else if (url.pathname === "/preferences") {
           for (const key of ["sidebar", "inspector"])
             if (typeof data[key] === "boolean") state[key] = data[key];
@@ -346,7 +357,7 @@ export async function startServer({
           return;
         }
         response.writeHead(200, { "Content-Type": "application/json" });
-        response.end(JSON.stringify(manifest()));
+        response.end(JSON.stringify(fixtureManifest(url.searchParams.get("fixture"))));
         return;
       }
       if (!["GET", "HEAD"].includes(request.method)) {
@@ -369,7 +380,7 @@ export async function startServer({
         content = await readFile(new URL("../design/tokens.css", import.meta.url));
         type = "text/css";
       } else if (url.pathname === "/manifest") {
-        content = JSON.stringify(manifest());
+        content = JSON.stringify(fixtureManifest(url.searchParams.get("fixture")));
         type = "application/json";
       } else if (url.pathname.startsWith("/asset/")) {
         const name = decodeURIComponent(url.pathname.slice(7));
