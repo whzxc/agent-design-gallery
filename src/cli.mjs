@@ -53,7 +53,7 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd()) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().then(code => { process.exitCode = code; }).catch(error => {
     const message = String(error.message).replace(/\s+/g, ' ').trim();
-    console.error(`sdg: ${message}; review sdg ${commands.includes(process.argv[2]) ? process.argv[2] : 'open'} --help and the named configuration/path`);
+    console.error(`sdg: ${message}`);
     process.exitCode = 2;
   });
 }

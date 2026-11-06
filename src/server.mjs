@@ -110,9 +110,12 @@ export async function startServer({
     }
   }
   async function openDirectory(input) {
-    const next = await realpath(
-      path.resolve(input.replace(/^~(?=$|[\\/])/, os.homedir())),
-    );
+    let next;
+    try { next = await realpath(path.resolve(input.replace(/^~(?=$|[\\/])/, os.homedir()))); }
+    catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') throw new Error(`Directory not found: ${input}; choose an existing directory.`);
+      throw error;
+    }
     if (!(await stat(next)).isDirectory())
       throw new Error("Choose a directory containing SVG files.");
     const nextFiles = await collect(next),

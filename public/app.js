@@ -230,7 +230,7 @@ function layout(data, preserve = false) {
       return b;
     }),
   );
-  $("#empty").hidden = !!assets.length;
+  $("#empty").hidden = !!assets.length || !data.directory;
 }
 function makeRow(name, label, count, className = 'tree-row') {
   const button = document.createElement('button'); button.className = className;
@@ -302,7 +302,11 @@ function selection() {
 }
 
 function cameraArea() { return fitArea(width, height, sidebar, inspector && !!selected); }
-function frame(box, padding = 0) { commit(fitView(box, cameraArea(), padding)); }
+function frame(box, padding = 0) {
+  const target=box===world?'all':groups.includes(box)?'group':'selection';
+  for(const name of ['all','group','selection']) $("#zoom-fit-"+name).setAttribute('aria-current',String(name===target));
+  commit(fitView(box, cameraArea(), padding));
+}
 function fit() {
   remember();
   inspection = null;
@@ -657,8 +661,8 @@ function up(e) {
 }
 for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
   viewport.addEventListener(event, up);
-viewport.addEventListener("keydown", (e) => {
-  if (e.target !== viewport) return;
+document.addEventListener("keydown", (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.target.matches("input,textarea,[contenteditable]") || document.querySelector("dialog[open], :popover-open")) return;
   const v = view;
   if (e.key === "+" || e.key === "=") zoom(v.scale * 1.25);
   else if (e.key === "-") zoom(v.scale / 1.25);
