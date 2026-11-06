@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>SVG Design Gallery</title>
+    <link rel="stylesheet" href="/tokens.css" />
     <link rel="stylesheet" href="/style.css" />
     <script type="module" src="/app.js"></script>
   </head>
@@ -15,7 +16,7 @@
           aria-label="Toggle sidebar"
           aria-expanded="true"
         >
-          ◧
+          <span data-icon="panel-left"></span>
         </button>
         <h1>SDG</h1>
         <button id="directory" title="Open directory"></button>
@@ -24,9 +25,9 @@
           ><button data-theme="light">Light</button
           ><button data-theme="dark">Dark</button>
         </div>
-        <button id="fullscreen" aria-label="Toggle fullscreen">⛶</button>
+        <button id="fullscreen" aria-label="Toggle fullscreen"><span data-icon="maximize"></span></button>
         <button id="more" popovertarget="more-menu" aria-label="More options">
-          ⋯
+          <span data-icon="ellipsis"></span>
         </button>
       </header>
       <aside id="sidebar">
@@ -41,10 +42,10 @@
       </aside>
       <section class="workspace">
         <div class="context">
-          <button id="back" aria-label="Back" disabled>←</button
+          <button id="back" aria-label="Back" disabled><span data-icon="arrow-left"></span></button
           ><span id="breadcrumb">All designs</span
           ><button id="fit">Fit all</button
-          ><button id="inspect" aria-label="Toggle inspector">ⓘ</button>
+          ><button id="inspect" aria-label="Toggle inspector"><span data-icon="panel-right"></span></button>
         </div>
         <main
           class="gallery-viewport"
@@ -59,7 +60,7 @@
         <aside id="source" hidden>
           <div class="dialog-header">
             <h2 id="source-name"></h2>
-            <button id="close-inspector" aria-label="Close inspector">×</button>
+            <button id="close-inspector" aria-label="Close inspector"><span data-icon="x"></span></button>
           </div>
           <p id="source-path"></p>
           <p id="dimensions"></p>
@@ -70,7 +71,7 @@
           ><button id="reveal">Reveal file</button>
         </aside>
         <div class="zoom" aria-label="Canvas zoom">
-          <button id="minus" aria-label="Zoom out">−</button
+          <button id="minus" aria-label="Zoom out"><span data-icon="minus"></span></button
           ><input
             id="zoom-value"
             aria-label="Zoom percentage"
@@ -80,15 +81,15 @@
             popovertarget="zoom-menu"
             aria-label="Zoom options"
           >
-            ⌄</button
+            <span data-icon="chevron-down"></span></button
           ><output class="sr" aria-label="Zoom">100%</output
-          ><button id="plus" aria-label="Zoom in">+</button
+          ><button id="plus" aria-label="Zoom in"><span data-icon="plus"></span></button
           ><button id="actual">100%</button
           ><button id="fit-current" aria-label="Fit selection or group">
-            ⊡
+            <span data-icon="scan"></span>
           </button>
         </div>
-        <button id="map-toggle" aria-label="Toggle overview map">◫</button
+        <button id="map-toggle" aria-label="Toggle overview map"><span data-icon="map"></span></button
         ><canvas id="minimap" hidden aria-label="Overview map"></canvas>
       </section>
       <div id="zoom-menu" popover>
@@ -111,7 +112,7 @@
         <h2>Keyboard shortcuts</h2>
         <p>Drag / scroll: pan · Ctrl/⌘ + scroll: zoom</p>
         <p>Ctrl/⌘ + F: search · Enter: focus · Escape: back</p>
-        <p>0: fit all · 1: actual size · + / −: zoom</p>
+        <p>0: fit all · 1: actual size · + / <span data-icon="minus"></span>: zoom</p>
         <form method="dialog"><button>Close</button></form>
       </dialog>
       <p id="controls" class="sr">
@@ -124,7 +125,7 @@
         <form id="directory-form">
           <div class="dialog-header">
             <h2 id="open-title">Open directory</h2>
-            <button type="button" id="close" aria-label="Close">×</button>
+            <button type="button" id="close" aria-label="Close"><span data-icon="x"></span></button>
           </div>
           <label for="path">Directory path</label
           ><input

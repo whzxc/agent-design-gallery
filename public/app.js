@@ -1,3 +1,5 @@
+import { icon, hydrateIcons } from "./icons.js";
+hydrateIcons();
 import { prepare, imageURL, arrange } from "./assets.js";
 // ARC's gallery layout and camera model, decoupled from its React runtime.
 const $ = (selector) => document.querySelector(selector);
@@ -217,7 +219,7 @@ function renderNav() {
         chevron = document.createElement("button"),
         b = document.createElement("button");
       row.className = "group-row";
-      chevron.textContent = expanded.has(i) || query ? "⌄" : "›";
+      chevron.innerHTML = icon(expanded.has(i) || query ? "chevron-down" : "chevron-right", 12);
       chevron.dataset.navkey = `toggle:${g.title}`;
       chevron.setAttribute("aria-label", `Toggle ${g.title}`);
       chevron.setAttribute("aria-expanded", String(expanded.has(i) || !!query));
@@ -619,8 +621,8 @@ function draw() {
     ctx.textAlign = "right";
     ctx.fillText(
       a.compact
-        ? `${a.shown[0].name} · ${a.parts.indexOf(a.shown[0]) + 1} / ${a.parts.length} ⌄`
-        : "⛶",
+        ? `${a.shown[0].name} · ${a.parts.indexOf(a.shown[0]) + 1} / ${a.parts.length}`
+        : "",
       x + w - 14,
       y + Math.max(14, 25 * view.scale),
     );
@@ -676,6 +678,8 @@ function applyTheme() {
       (k) => [k, css.getPropertyValue("--" + k).trim()],
     ),
   );
+  palette.raised = css.getPropertyValue("--surface-sunken").trim();
+  palette.muted = css.getPropertyValue("--text-secondary").trim();
   for (const b of $("#themes").children)
     b.setAttribute("aria-pressed", String(b.dataset.theme === theme));
   requestDraw();

@@ -364,7 +364,10 @@ export async function startServer({
         return;
       }
       let content, type, etag;
-      if (url.pathname === "/manifest") {
+      if (url.pathname === "/tokens.css") {
+        content = await readFile(new URL("../design/tokens.css", import.meta.url));
+        type = "text/css";
+      } else if (url.pathname === "/manifest") {
         content = JSON.stringify(manifest());
         type = "application/json";
       } else if (url.pathname.startsWith("/asset/")) {
@@ -389,6 +392,7 @@ export async function startServer({
           "/": "index.html",
           "/app.js": "app.js",
           "/assets.js": "assets.js",
+          "/icons.js": "icons.js",
           "/style.css": "style.css",
         }[url.pathname];
         if (!file) {
@@ -401,6 +405,7 @@ export async function startServer({
           "index.html": "text/html",
           "app.js": "text/javascript",
           "assets.js": "text/javascript",
+          "icons.js": "text/javascript",
           "style.css": "text/css",
         }[file];
       }

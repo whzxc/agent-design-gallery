@@ -14,7 +14,8 @@
     "src",
     "public",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "design/tokens.css"
   ],
   "publishConfig": {
     "registry": "https://npm.leow.top",

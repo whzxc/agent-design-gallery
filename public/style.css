@@ -1,32 +1,8 @@
-:root {
-  color-scheme: dark;
-  --canvas: #181714;
-  --surface: #24221e;
-  --raised: #35322c;
-  --text: #eae8e4;
-  --muted: #a7a39b;
-  --border: #696459;
-  --accent: #db9a57;
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  font-size: 14px;
-  color: var(--text);
-  background: var(--canvas);
-}
-:root[data-theme="light"] {
-  color-scheme: light;
-  --canvas: #f5f3ef;
-  --surface: #fffefa;
-  --raised: #eae6df;
-  --text: #292620;
-  --muted: #716a60;
-  --border: #b4ab9e;
-  --accent: #a95716;
-}
+:root { color-scheme: light; font-family:var(--font-ui); font-size:var(--text-body); color:var(--text); background:var(--canvas); }
+:root[data-theme="dark"] { color-scheme:dark; }
+.icon { display:inline-block; flex:none; vertical-align:middle; pointer-events:none; }
+
+
 * {
   box-sizing: border-box;
 }
@@ -84,13 +60,13 @@ h1 {
 #themes {
   display: flex;
   border-radius: 20px;
-  background: var(--raised);
+  background: var(--surface-sunken);
   padding: 3px;
 }
 #themes button {
   padding: 6px 12px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 #themes button[aria-pressed="true"] {
   background: var(--surface);
@@ -142,7 +118,7 @@ canvas {
   position: absolute;
   inset: 45% 0 auto;
   text-align: center;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 #error {
   position: fixed;
@@ -164,7 +140,7 @@ dialog {
   padding: 24px;
 }
 dialog::backdrop {
-  background: #0008;
+  background: color-mix(in srgb, var(--canvas) 60%, transparent);
 }
 .dialog-header {
   display: flex;
@@ -186,7 +162,7 @@ h3 {
   display: block;
   font-size: 12px;
   font-weight: 400;
-  color: var(--muted);
+  color: var(--text-secondary);
   margin: 0 0 12px;
 }
 input {
@@ -230,15 +206,7 @@ footer {
   display: none !important;
 }
 /* Canvas v2 */
-:root {
-  --canvas: #171715;
-  --surface: #22221f;
-  --raised: #34312b;
-  --border: #373731;
-  --text: #eeede8;
-  --muted: #a7a69c;
-  --accent: #e6b477;
-}
+
 .gallery {
   grid-template-columns: 240px minmax(0, 1fr);
   grid-template-rows: 56px minmax(0, 1fr);
@@ -267,7 +235,7 @@ button {
   padding: 8px 12px;
 }
 button:hover {
-  background: var(--raised);
+  background: var(--surface-sunken);
   filter: none;
 }
 header #directory {
@@ -331,7 +299,7 @@ nav button {
   display: block;
 }
 nav .file {
-  color: var(--muted);
+  color: var(--text-secondary);
   padding-left: 40px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -346,7 +314,7 @@ nav .form-result {
 }
 nav button[aria-current="location"],
 nav .file[aria-current="true"] {
-  background: #e6b47718;
+  background: var(--surface-sunken);
   color: var(--accent);
 }
 .workspace {
@@ -366,7 +334,7 @@ nav .file[aria-current="true"] {
 }
 #breadcrumb {
   flex: 1;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
   overflow: hidden;
   white-space: nowrap;
@@ -404,7 +372,7 @@ nav .file[aria-current="true"] {
   font-size: 12px;
 }
 .zoom button {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 18px;
 }
 .zoom #actual {
@@ -424,7 +392,7 @@ nav .file[aria-current="true"] {
   border: 1px solid var(--border);
   padding: 18px;
   border-radius: 10px;
-  box-shadow: 0 12px 36px #0003;
+  box-shadow: var(--shadow-float);
 }
 #source .dialog-header {
   margin-bottom: 14px;
@@ -434,7 +402,7 @@ nav .file[aria-current="true"] {
 }
 #source p {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 #source button {
@@ -461,7 +429,7 @@ select {
   right: 24px;
   bottom: 18px;
   font-size: 22px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 #minimap {
   position: absolute;
@@ -495,7 +463,7 @@ select {
 }
 #keys p {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text-secondary);
   line-height: 1.7;
 }
 @media (max-width: 800px) {
