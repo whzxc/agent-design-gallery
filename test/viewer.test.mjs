@@ -41,7 +41,7 @@ test('icons preserve rendered stroke and label collisions include both axes', ()
   assert.equal(overlaps({x:0,y:0,width:10,height:10},{x:10,y:0,width:5,height:5}),false);
 });
 test('server serves the packaged token source and ignores fixture queries in normal use', async t => {
-  const temporaryRoot=await temporary(t), server=await startServer({directory:path.join(root,'fixtures/arc-sample'),stateDirectory:temporaryRoot});
+  const temporaryRoot=await temporary(t), server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot});
   t.after(()=>server.close());
   const tokens=await fetch(new URL('/tokens.css',server.url));
   assert.equal(tokens.status,200);assert.equal(await tokens.text(),await readFile(path.join(root,'design/tokens.css'),'utf8'));
@@ -61,9 +61,9 @@ test('missing directory CLI errors name the path on one plain line', async t => 
     assert.doesNotMatch(error.stderr,/ENOENT|review sdg/);return true;
   });
 });
-test('all fixture states reach drawn readiness without screenshots or persisted preferences', {timeout:30000}, async t => {
+test('all fixture states reach drawn readiness without screenshots or persisted preferences', {timeout:90000}, async t => {
   const temporaryRoot=await temporary(t),empty=path.join(temporaryRoot,'empty');await mkdir(empty);
-  const server=await startServer({directory:path.join(root,'fixtures/arc-sample'),stateDirectory:temporaryRoot,fixtures:{states,recent,paths:{'~/projects/empty':empty}}});
+  const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot,fixtures:{states,recent,paths:{'~/projects/empty':empty}}});
   const browser=await launch();
   try {
     for(const [name,state] of Object.entries(states)) {
@@ -75,7 +75,7 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
         assert.equal(await page.evaluate(()=>window.__sdg.ready),true,name);
         assert.equal(await page.locator('html').getAttribute('data-theme'),state.theme,name);
         assert.equal(await page.locator('#sidebar').isVisible(),state.sidebar&&!state.empty,name);
-        if(state.asset) assert.equal(await page.locator('#source-name').textContent(),path.basename(state.asset,'.svg'),name);
+        if(state.asset) assert.equal(await page.locator('#source-name').textContent(),path.basename(state.asset,'.tsx'),name);
         if(state.menu) assert.equal(await page.locator('#'+state.menu).evaluate(el=>el.matches(':popover-open')),true,name);
         if(state.inspector) assert.equal(await page.locator('#source').isVisible(),true,name);
         if(state.dialog) assert.equal(await page.locator('#'+state.dialog).evaluate(el=>el.open),true,name);
@@ -86,6 +86,17 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
           const box=el.getBoundingClientRect(), origin=document.querySelector(parent).getBoundingClientRect();
           return [box.x-origin.x,box.y-origin.y,box.width,box.height];
         }, parent);
+        if(name==='sample-overview') {
+          const actual=await page.evaluate(async()=>{
+            const {prepare,arrange}=await import('/assets.js');
+            const manifest=await(await fetch('/manifest')).json();
+            const assets=await Promise.all(manifest.assets.map(a=>prepare(a,'light')));
+            return {paths:manifest.assets.map(a=>a.path),sections:arrange({...manifest,assets}).groups.map(({title,x,y,w,h,blocks})=>({title,x,y,w,h,blocks}))};
+          });
+          const reference=JSON.parse(await readFile(path.join(root,'fixtures/arc-sample.layout.json'),'utf8'));
+          assert.equal(actual.paths.length,51);assert.ok(actual.paths.every(p=>p.endsWith('.tsx')));
+          assert.deepEqual(actual.sections,reference.sections);
+        }
         if(name==='sample-zoomed') {
           for(const caption of ['regular','compact']) assert.equal(await page.locator('#labels .canvas-label:not([hidden])').filter({hasText:new RegExp(`^${caption}$`)}).count(),1);
         }
@@ -127,9 +138,9 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
   } finally { await browser.close();await server.close(); }
 });
 
-test('camera pans retain labels, while scale, settle and viewport changes refresh them', {timeout:15000}, async t => {
+test('camera pans retain labels, while scale, settle and viewport changes refresh them', {timeout:30000}, async t => {
   const temporaryRoot=await temporary(t);
-  const server=await startServer({directory:path.join(root,'fixtures/arc-sample'),stateDirectory:temporaryRoot,fixtures:{states,recent}});
+  const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot,fixtures:{states,recent}});
   const browser=await launch();
   try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});
@@ -222,4 +233,31 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
   }finally{await browser.close();await server.close();}
   await writeFile(path.join(directory,'gallery.json'),JSON.stringify({groups:[{title:'Helpers',assets:['scenes/sizes.tsx']}]}));
   await assert.rejects(startServer({directory,stateDirectory:path.join(temporaryRoot,'state')}),/gallery.json: Invalid source scenes\/sizes.tsx/);
+});
+
+test('dedicated legacy SVG sheets retain measurement, form crops and renderable previews', async t => {
+  const server = await startServer({directory:path.join(root,'fixtures/legacy-svg'),stateDirectory:await temporary(t)});
+  const browser = await launch();
+  try {
+    const page=await browser.newPage();await page.goto(server.url);await page.waitForFunction(()=>window.__sdg?.ready);
+    const result=await page.evaluate(async()=>{
+      const {prepare,arrange,imageURL}=await import('/assets.js');
+      const manifest=await(await fetch('/manifest')).json();
+      const assets=await Promise.all(manifest.assets.map(a=>prepare(a,'light')));
+      const world=arrange({...manifest,assets}), previews=[];
+      for(const item of world.items) {
+        const url=imageURL(item,item.shown[0]);
+        const image=new Image();image.src=url;await image.decode();
+        const document=new DOMParser().parseFromString(await(await fetch(url)).text(),'image/svg+xml');
+        previews.push({notes:document.querySelectorAll('text.note').length,frames:document.querySelectorAll('[data-part]').length});URL.revokeObjectURL(url);
+      }
+      return {parts:assets.map(a=>a.parts),blocks:world.groups.flatMap(g=>g.blocks).map(b=>[b.kind,b.w,b.h]),previews};
+    });
+    assert.deepEqual(result.parts.map(parts=>parts.map(({name,x,y,width,height})=>[name,x,y,width,height])),[
+      [['primary',40,62,100,34],['secondary',180,62,70,34]],
+      [['ready',20,30,100,60],['empty',20,130,200,80]],
+    ]);
+    assert.deepEqual(result.blocks,[['set',258,94],['flow',428,112]]);
+    assert.deepEqual(result.previews,[{notes:0,frames:0},{notes:0,frames:1},{notes:0,frames:1}]);
+  } finally {await browser.close();await server.close();}
 });

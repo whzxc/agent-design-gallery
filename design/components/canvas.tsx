@@ -12,11 +12,12 @@ const labelClasses: Record<string,string> = {
 export function Drawing({ nodes }: { nodes: any[] }): unknown {
   return nodes.map(({ at:[x,y], size:[width,height], kind, selected, outline=true, preview, labels=[], children=[] }) =>
     <g transform={`translate(${x} ${y})`}>
-      <rect width={width} height={height} rx={kind==='section'?16:6} class={kind==='section'?'fill-surface-section stroke-border':selected?'fill-none stroke-accent stroke-[2]':outline?'fill-none stroke-border':'fill-none'}/>
-      {preview && <svg x="1" y="1" width={width-2} height={height-2} viewBox={preview.crop}>
+      {kind==='section' && <rect width={width} height={height} rx={16} class="fill-surface-section stroke-border"/>}
+      {preview && <svg width={width} height={height} viewBox={preview.crop} class="overflow-hidden rounded-[6px]">
         <image width={preview.size[0]} height={preview.size[1]} href={preview.light} class="dark:hidden"/>
         <image width={preview.size[0]} height={preview.size[1]} href={preview.dark} class="hidden dark:inline"/>
       </svg>}
+      {kind!=='section' && outline && <rect width={width} height={height} rx={Math.min(6,width/2,height/2)} class={selected?'fill-none stroke-accent stroke-[2]':'fill-none stroke-border'}/>}
       {labels.map(([x,y,role,text]:any)=><text x={x} y={y} dominant-baseline="central" class={labelClasses[role]}>{text}</text>)}
       <Drawing nodes={children}/>
     </g>);

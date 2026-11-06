@@ -36,3 +36,19 @@ test('skyline fills the lowest available slot and fit respects floating chrome',
   assert.equal(view.x + 60*view.scale,698);
   assert.deepEqual(layoutWorld([]), []);
 });
+
+test('ARC TSX reference packs component forms in source order and flows from frame sizes', () => {
+  const {sections,sources}=JSON.parse(readFileSync(new URL('../fixtures/arc-sample.layout.json',import.meta.url)));
+  assert.equal(sources.length,51);
+  for(const source of sources) {
+    let x=0,y=0,rowHeight=0;
+    for(const part of source.parts) {
+      if(source.component && x && x+part.width>1600) {x=0;y+=rowHeight+48;rowHeight=0;}
+      assert.deepEqual([part.x,part.y],[x,y],source.path+' '+part.name);
+      x+=part.width+32;rowHeight=Math.max(rowHeight,part.height);
+    }
+    const block=blockForAsset(source),expected=sections.flatMap(s=>s.blocks).find(b=>b.asset===source.path);
+    assert.deepEqual([block.kind,block.w,block.h],[expected.kind,expected.w,expected.h]);
+    if(block.frames) assert.deepEqual(block.frames.map(f=>f.name),source.parts.map(p=>p.name));
+  }
+});

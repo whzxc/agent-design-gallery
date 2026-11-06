@@ -53,10 +53,10 @@ const frames = [
         "active": null
       },
       {
-        "left": 585,
+        "left": 587,
         "top": 840,
         "kind": "zoom",
-        "label": "16%",
+        "label": "7%",
         "active": false
       },
       {
@@ -82,6 +82,7 @@ const frames = [
       "origin": "440 218"
     },
     "chrome": [
+      { "kind": "scrim" },
       {
         "left": 60,
         "top": 40,

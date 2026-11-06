@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="140" data-design="component" style="--canvas:#fff">
+  <text class="note" x="16" y="16">Legacy component sheet</text>
+  <g data-component="button" data-form="primary" transform="translate(40 62)"><rect width="100" height="34" fill="#222"/></g>
+  <g data-component="button" data-form="secondary" transform="translate(180 62)"><rect width="70" height="34" fill="#ddd"/></g>
+</svg>

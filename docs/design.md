@@ -35,7 +35,7 @@ Geometry, in CSS pixels at a 1440 × 900 viewport:
 
 ## Canvas layout
 
-The world is laid out in SVG units and never changes while panning, zooming or collapsing the sidebar. Groups come from `gallery.json`, or from directories without one. `fixtures/arc-sample.layout.json` is the reference result for `fixtures/arc-sample/`.
+The world is laid out in SVG units and never changes while panning, zooming or collapsing the sidebar. Groups come from `gallery.json`, or from directories without one. `fixtures/arc-sample.layout.json` is the reference result for `fixtures/arc-sample/design/`.
 
 - **Sets.** A component source is one set. Its forms run left to right in source order with a 32 gap and wrap before 1600, with 48 between rows. The set's bounds are its forms padded 24 at the sides, 36 at the top and 24 at the bottom.
 - **Flows.** A surface source is one flow. Each frame takes its size plus 16 on every side. Frames run left to right with a 64 gap and wrap before 3600, with 112 between lines.
@@ -55,7 +55,7 @@ Labels draw at constant screen size. Each label is drawn only when it fits its s
 
 ## Frames and fixtures
 
-Every surface frame declares its fixture and a page capture at a 1440 × 900 viewport. Canvas and inspector frames, plus the empty/open dialog frames, cover the viewport. Menu, tooltip, shortcuts and error frames retain their local crop sizes and origins in `Frame.capture`. Fixtures open `fixtures/arc-sample/` with isolated preferences.
+Every surface frame declares its fixture and a page capture at a 1440 × 900 viewport. Canvas and inspector frames, plus the empty/open dialog frames, cover the viewport. Menu, tooltip, shortcuts and error frames retain their local crop sizes and origins in `Frame.capture`. Fixtures open `fixtures/arc-sample/design/` with isolated preferences.
 
 | Asset | Frame | Theme | State |
 | --- | --- | --- | --- |
@@ -82,6 +82,8 @@ Every surface frame declares its fixture and a page capture at a 1440 × 900 vie
 
 ## TSX conversion
 
-Ordinary controls use flex/grid layout and shared component functions. Only the free-form drawing canvas and floating chrome positions use coordinates, under `data-free`. Panels and lists follow content through padding and gaps; buttons size from their label and icon. The scene modules hold section, asset, crop and label data for loop-based drawing. The retained ARC preview pictures in `design/art/arc-previews/` are individual SVG fixture images, imported with `?url` only by scenes that display them; their original palettes are independent of SDG chrome. They are not package contents.
+Ordinary controls use flex/grid layout and shared component functions. Only the free-form drawing canvas and floating chrome positions use coordinates, under `data-free`. Panels and lists follow content through padding and gaps; buttons size from their label and icon. The scene modules hold section, asset, crop and label data for loop-based drawing. The ARC preview pictures in `design/art/arc-previews/` are light/dark PNG renders of the TSX fixture artboards, imported as data URLs only by scenes that display them; their palettes are independent of SDG chrome. `node fixtures/refresh-arc-scenes.mjs` regenerates these images and the scene data from the local fixture and its layout reference. Preview resolution is twice the largest specimen scale, capped at 4096 pixels. They are not package contents.
+
+The ARC snapshot at `b9e18beb` contains 51 sources (31 components and 20 surfaces), 94 artboards and six sections: Essentials (8), Agents & quota (6), Tasks & interactions (5), Connections & MCP (6), components (14) and surfaces (12). The four curated groups retain their source order; the final two contain unlisted sources. Fit all is about 7% at the declared viewport. The MCP inspector includes the source frame notes and its empty frame is 960 × 434.
 
 Full sheet is removed from both the inspector and design frames. The shorter component inspector exposes the adjacent icon-button set label. Token names and light/dark theme selection are unchanged. Browser text metrics can differ from SVG central-baseline metrics by about one pixel.

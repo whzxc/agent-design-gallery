@@ -1,1000 +1,3302 @@
-import image0 from "../art/arc-previews/arc-dark-components-button.svg?url";
-import image1 from "../art/arc-previews/arc-dark-components-card.svg?url";
-import image2 from "../art/arc-previews/arc-dark-components-copy-field.svg?url";
-import image3 from "../art/arc-previews/arc-dark-components-effort-slider.svg?url";
-import image4 from "../art/arc-previews/arc-dark-components-field.svg?url";
-import image5 from "../art/arc-previews/arc-dark-components-icon-button.svg?url";
-import image6 from "../art/arc-previews/arc-dark-components-notice.svg?url";
-import image7 from "../art/arc-previews/arc-dark-components-quota-card.svg?url";
-import image8 from "../art/arc-previews/arc-dark-components-search.svg?url";
-import image9 from "../art/arc-previews/arc-dark-components-setup-choice.svg?url";
-import image10 from "../art/arc-previews/arc-dark-components-single-choice.svg?url";
-import image11 from "../art/arc-previews/arc-dark-components-state-pill.svg?url";
-import image12 from "../art/arc-previews/arc-dark-components-switch.svg?url";
-import image13 from "../art/arc-previews/arc-dark-components-tag.svg?url";
-import image14 from "../art/arc-previews/arc-dark-components-task-bubble.svg?url";
-import image15 from "../art/arc-previews/arc-dark-components-task-message.svg?url";
-import image16 from "../art/arc-previews/arc-dark-components-tile.svg?url";
-import image17 from "../art/arc-previews/arc-dark-surfaces-agent-panel.svg?url";
-import image18 from "../art/arc-previews/arc-dark-surfaces-approval.svg?url";
-import image19 from "../art/arc-previews/arc-dark-surfaces-connections.svg?url";
-import image20 from "../art/arc-previews/arc-dark-surfaces-mcp-hub.svg?url";
-import image21 from "../art/arc-previews/arc-dark-surfaces-platforms.svg?url";
-import image22 from "../art/arc-previews/arc-dark-surfaces-quota-overview.svg?url";
-import image23 from "../art/arc-previews/arc-dark-surfaces-relay-hosting.svg?url";
-import image24 from "../art/arc-previews/arc-dark-surfaces-task-detail.svg?url";
-import image25 from "../art/arc-previews/arc-light-components-button.svg?url";
-import image26 from "../art/arc-previews/arc-light-components-card.svg?url";
-import image27 from "../art/arc-previews/arc-light-components-copy-field.svg?url";
-import image28 from "../art/arc-previews/arc-light-components-effort-slider.svg?url";
-import image29 from "../art/arc-previews/arc-light-components-field.svg?url";
-import image30 from "../art/arc-previews/arc-light-components-icon-button.svg?url";
-import image31 from "../art/arc-previews/arc-light-components-notice.svg?url";
-import image32 from "../art/arc-previews/arc-light-components-quota-card.svg?url";
-import image33 from "../art/arc-previews/arc-light-components-search.svg?url";
-import image34 from "../art/arc-previews/arc-light-components-setup-choice.svg?url";
-import image35 from "../art/arc-previews/arc-light-components-single-choice.svg?url";
-import image36 from "../art/arc-previews/arc-light-components-state-pill.svg?url";
-import image37 from "../art/arc-previews/arc-light-components-switch.svg?url";
-import image38 from "../art/arc-previews/arc-light-components-tag.svg?url";
-import image39 from "../art/arc-previews/arc-light-components-task-bubble.svg?url";
-import image40 from "../art/arc-previews/arc-light-components-task-message.svg?url";
-import image41 from "../art/arc-previews/arc-light-components-tile.svg?url";
-import image42 from "../art/arc-previews/arc-light-surfaces-agent-panel.svg?url";
-import image43 from "../art/arc-previews/arc-light-surfaces-approval.svg?url";
-import image44 from "../art/arc-previews/arc-light-surfaces-connections.svg?url";
-import image45 from "../art/arc-previews/arc-light-surfaces-mcp-hub.svg?url";
-import image46 from "../art/arc-previews/arc-light-surfaces-platforms.svg?url";
-import image47 from "../art/arc-previews/arc-light-surfaces-quota-overview.svg?url";
-import image48 from "../art/arc-previews/arc-light-surfaces-relay-hosting.svg?url";
-import image49 from "../art/arc-previews/arc-light-surfaces-task-detail.svg?url";
+// Generated from fixtures/arc-sample.layout.json by fixtures/refresh-arc-scenes.mjs.
+import image0 from '../art/arc-previews/components-agent-icon-dark.png';
+import image1 from '../art/arc-previews/components-agent-icon-light.png';
+import image2 from '../art/arc-previews/components-board-header-dark.png';
+import image3 from '../art/arc-previews/components-board-header-light.png';
+import image4 from '../art/arc-previews/components-button-dark.png';
+import image5 from '../art/arc-previews/components-button-light.png';
+import image6 from '../art/arc-previews/components-card-dark.png';
+import image7 from '../art/arc-previews/components-card-light.png';
+import image8 from '../art/arc-previews/components-copy-field-dark.png';
+import image9 from '../art/arc-previews/components-copy-field-light.png';
+import image10 from '../art/arc-previews/components-dispatch-spec-dark.png';
+import image11 from '../art/arc-previews/components-dispatch-spec-light.png';
+import image12 from '../art/arc-previews/components-effort-gauge-dark.png';
+import image13 from '../art/arc-previews/components-effort-gauge-light.png';
+import image14 from '../art/arc-previews/components-effort-slider-dark.png';
+import image15 from '../art/arc-previews/components-effort-slider-light.png';
+import image16 from '../art/arc-previews/components-field-dark.png';
+import image17 from '../art/arc-previews/components-field-light.png';
+import image18 from '../art/arc-previews/components-icon-button-dark.png';
+import image19 from '../art/arc-previews/components-icon-button-light.png';
+import image20 from '../art/arc-previews/components-nav-capsule-dark.png';
+import image21 from '../art/arc-previews/components-nav-capsule-light.png';
+import image22 from '../art/arc-previews/components-notice-dark.png';
+import image23 from '../art/arc-previews/components-notice-light.png';
+import image24 from '../art/arc-previews/components-panel-dark.png';
+import image25 from '../art/arc-previews/components-panel-light.png';
+import image26 from '../art/arc-previews/components-prompt-dark.png';
+import image27 from '../art/arc-previews/components-prompt-light.png';
+import image28 from '../art/arc-previews/components-quota-card-dark.png';
+import image29 from '../art/arc-previews/components-quota-card-light.png';
+import image30 from '../art/arc-previews/components-request-routing-dark.png';
+import image31 from '../art/arc-previews/components-request-routing-light.png';
+import image32 from '../art/arc-previews/components-search-dark.png';
+import image33 from '../art/arc-previews/components-search-light.png';
+import image34 from '../art/arc-previews/components-settings-row-dark.png';
+import image35 from '../art/arc-previews/components-settings-row-light.png';
+import image36 from '../art/arc-previews/components-setup-choice-dark.png';
+import image37 from '../art/arc-previews/components-setup-choice-light.png';
+import image38 from '../art/arc-previews/components-single-choice-dark.png';
+import image39 from '../art/arc-previews/components-single-choice-light.png';
+import image40 from '../art/arc-previews/components-state-pill-dark.png';
+import image41 from '../art/arc-previews/components-state-pill-light.png';
+import image42 from '../art/arc-previews/components-switch-dark.png';
+import image43 from '../art/arc-previews/components-switch-light.png';
+import image44 from '../art/arc-previews/components-tag-dark.png';
+import image45 from '../art/arc-previews/components-tag-light.png';
+import image46 from '../art/arc-previews/components-task-bubble-dark.png';
+import image47 from '../art/arc-previews/components-task-bubble-light.png';
+import image48 from '../art/arc-previews/components-task-message-dark.png';
+import image49 from '../art/arc-previews/components-task-message-light.png';
+import image50 from '../art/arc-previews/components-task-relationships-dark.png';
+import image51 from '../art/arc-previews/components-task-relationships-light.png';
+import image52 from '../art/arc-previews/components-tile-dark.png';
+import image53 from '../art/arc-previews/components-tile-light.png';
+import image54 from '../art/arc-previews/components-tooltip-dark.png';
+import image55 from '../art/arc-previews/components-tooltip-light.png';
+import image56 from '../art/arc-previews/components-topology-mark-dark.png';
+import image57 from '../art/arc-previews/components-topology-mark-light.png';
+import image58 from '../art/arc-previews/components-topology-node-dark.png';
+import image59 from '../art/arc-previews/components-topology-node-light.png';
+import image60 from '../art/arc-previews/components-topology-scene-dark.png';
+import image61 from '../art/arc-previews/components-topology-scene-light.png';
+import image62 from '../art/arc-previews/surfaces-agent-panel-0-dark.png';
+import image63 from '../art/arc-previews/surfaces-agent-panel-0-light.png';
+import image64 from '../art/arc-previews/surfaces-agent-panel-1-dark.png';
+import image65 from '../art/arc-previews/surfaces-agent-panel-1-light.png';
+import image66 from '../art/arc-previews/surfaces-agent-platform-0-dark.png';
+import image67 from '../art/arc-previews/surfaces-agent-platform-0-light.png';
+import image68 from '../art/arc-previews/surfaces-agent-platform-1-dark.png';
+import image69 from '../art/arc-previews/surfaces-agent-platform-1-light.png';
+import image70 from '../art/arc-previews/surfaces-approval-0-dark.png';
+import image71 from '../art/arc-previews/surfaces-approval-0-light.png';
+import image72 from '../art/arc-previews/surfaces-approval-1-dark.png';
+import image73 from '../art/arc-previews/surfaces-approval-1-light.png';
+import image74 from '../art/arc-previews/surfaces-approval-2-dark.png';
+import image75 from '../art/arc-previews/surfaces-approval-2-light.png';
+import image76 from '../art/arc-previews/surfaces-connections-0-dark.png';
+import image77 from '../art/arc-previews/surfaces-connections-0-light.png';
+import image78 from '../art/arc-previews/surfaces-coordination-0-dark.png';
+import image79 from '../art/arc-previews/surfaces-coordination-0-light.png';
+import image80 from '../art/arc-previews/surfaces-coordination-1-dark.png';
+import image81 from '../art/arc-previews/surfaces-coordination-1-light.png';
+import image82 from '../art/arc-previews/surfaces-coordination-2-dark.png';
+import image83 from '../art/arc-previews/surfaces-coordination-2-light.png';
+import image84 from '../art/arc-previews/surfaces-coordination-3-dark.png';
+import image85 from '../art/arc-previews/surfaces-coordination-3-light.png';
+import image86 from '../art/arc-previews/surfaces-homepage-topology-accounts-0-dark.png';
+import image87 from '../art/arc-previews/surfaces-homepage-topology-accounts-0-light.png';
+import image88 from '../art/arc-previews/surfaces-homepage-topology-empty-0-dark.png';
+import image89 from '../art/arc-previews/surfaces-homepage-topology-empty-0-light.png';
+import image90 from '../art/arc-previews/surfaces-homepage-topology-portrait-0-dark.png';
+import image91 from '../art/arc-previews/surfaces-homepage-topology-portrait-0-light.png';
+import image92 from '../art/arc-previews/surfaces-homepage-topology-portrait-1-dark.png';
+import image93 from '../art/arc-previews/surfaces-homepage-topology-portrait-1-light.png';
+import image94 from '../art/arc-previews/surfaces-homepage-topology-portrait-2-dark.png';
+import image95 from '../art/arc-previews/surfaces-homepage-topology-portrait-2-light.png';
+import image96 from '../art/arc-previews/surfaces-homepage-topology-portrait-3-dark.png';
+import image97 from '../art/arc-previews/surfaces-homepage-topology-portrait-3-light.png';
+import image98 from '../art/arc-previews/surfaces-homepage-topology-portrait-4-dark.png';
+import image99 from '../art/arc-previews/surfaces-homepage-topology-portrait-4-light.png';
+import image100 from '../art/arc-previews/surfaces-homepage-topology-portrait-5-dark.png';
+import image101 from '../art/arc-previews/surfaces-homepage-topology-portrait-5-light.png';
+import image102 from '../art/arc-previews/surfaces-homepage-topology-studio-0-dark.png';
+import image103 from '../art/arc-previews/surfaces-homepage-topology-studio-0-light.png';
+import image104 from '../art/arc-previews/surfaces-homepage-topology-tasks-0-dark.png';
+import image105 from '../art/arc-previews/surfaces-homepage-topology-tasks-0-light.png';
+import image106 from '../art/arc-previews/surfaces-mcp-hub-0-dark.png';
+import image107 from '../art/arc-previews/surfaces-mcp-hub-0-light.png';
+import image108 from '../art/arc-previews/surfaces-mcp-hub-1-dark.png';
+import image109 from '../art/arc-previews/surfaces-mcp-hub-1-light.png';
+import image110 from '../art/arc-previews/surfaces-mcp-hub-2-dark.png';
+import image111 from '../art/arc-previews/surfaces-mcp-hub-2-light.png';
+import image112 from '../art/arc-previews/surfaces-pets-settings-0-dark.png';
+import image113 from '../art/arc-previews/surfaces-pets-settings-0-light.png';
+import image114 from '../art/arc-previews/surfaces-platforms-0-dark.png';
+import image115 from '../art/arc-previews/surfaces-platforms-0-light.png';
+import image116 from '../art/arc-previews/surfaces-platforms-1-dark.png';
+import image117 from '../art/arc-previews/surfaces-platforms-1-light.png';
+import image118 from '../art/arc-previews/surfaces-quota-overview-0-dark.png';
+import image119 from '../art/arc-previews/surfaces-quota-overview-0-light.png';
+import image120 from '../art/arc-previews/surfaces-quota-overview-1-dark.png';
+import image121 from '../art/arc-previews/surfaces-quota-overview-1-light.png';
+import image122 from '../art/arc-previews/surfaces-relay-hosting-0-dark.png';
+import image123 from '../art/arc-previews/surfaces-relay-hosting-0-light.png';
+import image124 from '../art/arc-previews/surfaces-settings-0-dark.png';
+import image125 from '../art/arc-previews/surfaces-settings-0-light.png';
+import image126 from '../art/arc-previews/surfaces-settings-1-dark.png';
+import image127 from '../art/arc-previews/surfaces-settings-1-light.png';
+import image128 from '../art/arc-previews/surfaces-settings-2-dark.png';
+import image129 from '../art/arc-previews/surfaces-settings-2-light.png';
+import image130 from '../art/arc-previews/surfaces-settings-3-dark.png';
+import image131 from '../art/arc-previews/surfaces-settings-3-light.png';
+import image132 from '../art/arc-previews/surfaces-settings-4-dark.png';
+import image133 from '../art/arc-previews/surfaces-settings-4-light.png';
+import image134 from '../art/arc-previews/surfaces-setup-0-dark.png';
+import image135 from '../art/arc-previews/surfaces-setup-0-light.png';
+import image136 from '../art/arc-previews/surfaces-setup-1-dark.png';
+import image137 from '../art/arc-previews/surfaces-setup-1-light.png';
+import image138 from '../art/arc-previews/surfaces-setup-10-dark.png';
+import image139 from '../art/arc-previews/surfaces-setup-10-light.png';
+import image140 from '../art/arc-previews/surfaces-setup-11-dark.png';
+import image141 from '../art/arc-previews/surfaces-setup-11-light.png';
+import image142 from '../art/arc-previews/surfaces-setup-12-dark.png';
+import image143 from '../art/arc-previews/surfaces-setup-12-light.png';
+import image144 from '../art/arc-previews/surfaces-setup-13-dark.png';
+import image145 from '../art/arc-previews/surfaces-setup-13-light.png';
+import image146 from '../art/arc-previews/surfaces-setup-14-dark.png';
+import image147 from '../art/arc-previews/surfaces-setup-14-light.png';
+import image148 from '../art/arc-previews/surfaces-setup-15-dark.png';
+import image149 from '../art/arc-previews/surfaces-setup-15-light.png';
+import image150 from '../art/arc-previews/surfaces-setup-16-dark.png';
+import image151 from '../art/arc-previews/surfaces-setup-16-light.png';
+import image152 from '../art/arc-previews/surfaces-setup-17-dark.png';
+import image153 from '../art/arc-previews/surfaces-setup-17-light.png';
+import image154 from '../art/arc-previews/surfaces-setup-2-dark.png';
+import image155 from '../art/arc-previews/surfaces-setup-2-light.png';
+import image156 from '../art/arc-previews/surfaces-setup-3-dark.png';
+import image157 from '../art/arc-previews/surfaces-setup-3-light.png';
+import image158 from '../art/arc-previews/surfaces-setup-4-dark.png';
+import image159 from '../art/arc-previews/surfaces-setup-4-light.png';
+import image160 from '../art/arc-previews/surfaces-setup-5-dark.png';
+import image161 from '../art/arc-previews/surfaces-setup-5-light.png';
+import image162 from '../art/arc-previews/surfaces-setup-6-dark.png';
+import image163 from '../art/arc-previews/surfaces-setup-6-light.png';
+import image164 from '../art/arc-previews/surfaces-setup-7-dark.png';
+import image165 from '../art/arc-previews/surfaces-setup-7-light.png';
+import image166 from '../art/arc-previews/surfaces-setup-8-dark.png';
+import image167 from '../art/arc-previews/surfaces-setup-8-light.png';
+import image168 from '../art/arc-previews/surfaces-setup-9-dark.png';
+import image169 from '../art/arc-previews/surfaces-setup-9-light.png';
+import image170 from '../art/arc-previews/surfaces-source-panel-0-dark.png';
+import image171 from '../art/arc-previews/surfaces-source-panel-0-light.png';
+import image172 from '../art/arc-previews/surfaces-source-panel-1-dark.png';
+import image173 from '../art/arc-previews/surfaces-source-panel-1-light.png';
+import image174 from '../art/arc-previews/surfaces-source-panel-2-dark.png';
+import image175 from '../art/arc-previews/surfaces-source-panel-2-light.png';
+import image176 from '../art/arc-previews/surfaces-task-detail-0-dark.png';
+import image177 from '../art/arc-previews/surfaces-task-detail-0-light.png';
+import image178 from '../art/arc-previews/surfaces-task-detail-1-dark.png';
+import image179 from '../art/arc-previews/surfaces-task-detail-1-light.png';
+import image180 from '../art/arc-previews/surfaces-task-detail-2-dark.png';
+import image181 from '../art/arc-previews/surfaces-task-detail-2-light.png';
+import image182 from '../art/arc-previews/surfaces-updates-0-dark.png';
+import image183 from '../art/arc-previews/surfaces-updates-0-light.png';
+import image184 from '../art/arc-previews/surfaces-updates-1-dark.png';
+import image185 from '../art/arc-previews/surfaces-updates-1-light.png';
+import image186 from '../art/arc-previews/surfaces-updates-2-dark.png';
+import image187 from '../art/arc-previews/surfaces-updates-2-light.png';
 
 export const scenes = {
   "components": [
     {
-      "at": [385.8, 100.0],
-      "size": [936.4, 716.0],
-      "kind": "section",
-      "labels": [
-        [2.0, -16.0, "section", "Essentials"],
-        [79.9, -16.0, "count", "8 assets"]
+      "at": [
+        360.47489823609226,
+        100
       ],
-      "children": [
-        {
-          "at": [29.6, 48.1],
-          "size": [288.2, 43.5],
-          "kind": "asset",
-          "preview": {
-            "crop": "18.2 28.2 618.7 89.7",
-            "size": [655.0, 136.0],
-            "light": image25,
-            "dark": image0
-          },
-          "labels": [
-            [0.0, -12.0, "set", "button"],
-            [42.8, -12.0, "count", "5 forms"]
-          ]
-        },
-        {
-          "at": [347.4, 48.1],
-          "size": [66.6, 43.5],
-          "kind": "asset",
-          "preview": {
-            "crop": "18.2 28.2 139.7 89.7",
-            "size": [320.0, 156.0],
-            "light": image30,
-            "dark": image5
-          },
-          "labels": [
-            [0.0, -12.0, "set", "icon-button"]
-          ]
-        },
-        {
-          "at": [443.6, 48.1],
-          "size": [77.7, 39.8],
-          "kind": "asset",
-          "preview": {
-            "crop": "18.2 28.2 163.7 81.7",
-            "size": [200.0, 128.0],
-            "light": image37,
-            "dark": image12
-          },
-          "labels": [
-            [0.0, -12.0, "set", "switch"],
-            [43.5, -12.0, "count", "2 forms"]
-          ]
-        },
-        {
-          "at": [550.9, 48.1],
-          "size": [133.2, 43.5],
-          "kind": "asset",
-          "preview": {
-            "crop": "18.2 28.2 283.7 89.7",
-            "size": [320.0, 136.0],
-            "light": image33,
-            "dark": image8
-          },
-          "labels": [
-            [0.0, -12.0, "set", "search"],
-            [45.0, -12.0, "count", "1 form"]
-          ]
-        },
-        {
-          "at": [29.6, 143.4],
-          "size": [295.8, 67.3],
-          "kind": "asset",
-          "selected": true,
-          "preview": {
-            "crop": "18.2 28.2 635.2 141.2",
-            "size": [672.0, 188.0],
-            "light": image29,
-            "dark": image4
-          },
-          "labels": [
-            [0.0, -12.0, "selected-set", "field"],
-            [31.1, -12.0, "count", "2 forms"]
-          ]
-        },
-        {
-          "at": [355.0, 143.4],
-          "size": [241.0, 94.4],
-          "kind": "asset",
-          "preview": {
-            "crop": "18.2 28.2 516.7 199.7",
-            "size": [553.0, 246.0],
-            "light": image38,
-            "dark": image13
-          },
-          "labels": [
-            [0.0, -12.0, "set", "tag"],
-            [24.4, -12.0, "count", "5 forms"]
-          ]
-        },
-        {
-          "at": [625.6, 143.4],
-          "size": [281.2, 179.5],
-          "kind": "asset",
-          "preview": {
-            "crop": "18.2 28.2 603.7 383.7",
-            "size": [640.0, 430.0],
-            "light": image26,
-            "dark": image1
-          },
-          "labels": [
-            [0.0, -12.0, "set", "card"],
-            [31.7, -12.0, "count", "2 forms"]
-          ]
-        },
-        {
-          "at": [29.6, 289.5],
-          "size": [426.5, 396.9],
-          "kind": "asset",
-          "preview": {
-            "crop": "18.2 28.2 917.7 853.7",
-            "size": [960.0, 900.0],
-            "light": image35,
-            "dark": image10
-          },
-          "labels": [
-            [0.0, -12.0, "set", "single-choice"],
-            [84.2, -12.0, "count", "5 forms"]
-          ]
-        }
+      "size": [
+        987.0502035278155,
+        716
+      ],
+      "kind": "section"
+    },
+    {
+      "at": [
+        391.5630936227951,
+        150.51831750339213
+      ],
+      "size": [
+        302.6241519674356,
+        45.66078697421981
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 623 94",
+        "size": [
+          623,
+          94
+        ],
+        "light": image5,
+        "dark": image4
+      }
+    },
+    {
+      "at": [
+        725.2754409769335,
+        150.51831750339213
+      ],
+      "size": [
+        69.94843962008142,
+        45.66078697421981
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 144 94",
+        "size": [
+          144,
+          94
+        ],
+        "light": image19,
+        "dark": image18
+      }
+    },
+    {
+      "at": [
+        826.3120759837177,
+        150.51831750339213
+      ],
+      "size": [
+        81.60651289009498,
+        41.77476255088195
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 168 86",
+        "size": [
+          168,
+          86
+        ],
+        "light": image43,
+        "dark": image42
+      }
+    },
+    {
+      "at": [
+        939.0067842605156,
+        150.51831750339213
+      ],
+      "size": [
+        139.89687924016283,
+        45.66078697421981
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 288 94",
+        "size": [
+          288,
+          94
+        ],
+        "light": image33,
+        "dark": image32
+      }
+    },
+    {
+      "at": [
+        391.5630936227951,
+        250.58344640434194
+      ],
+      "size": [
+        310.8819538670285,
+        70.91994572591588
+      ],
+      "kind": "asset",
+      "selected": true,
+      "preview": {
+        "crop": "0 0 640 146",
+        "size": [
+          640,
+          146
+        ],
+        "light": image17,
+        "dark": image16
+      }
+    },
+    {
+      "at": [
+        733.5332428765264,
+        250.58344640434194
+      ],
+      "size": [
+        325.925118724559,
+        40.80325644504749
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 670.96875 84",
+        "size": [
+          670.96875,
+          84
+        ],
+        "light": image45,
+        "dark": image44
+      }
+    },
+    {
+      "at": [
+        733.5332428765264,
+        345.7910447761194
+      ],
+      "size": [
+        582.9036635006785,
+        87.43554952510176
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1200 180",
+        "size": [
+          1200,
+          180
+        ],
+        "light": image7,
+        "dark": image6
+      }
+    },
+    {
+      "at": [
+        391.5630936227951,
+        487.63093622795117
+      ],
+      "size": [
+        631.2588619402985,
+        297.280868385346
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1299.546875 612",
+        "size": [
+          1299.546875,
+          612
+        ],
+        "light": image39,
+        "dark": image38
+      }
+    },
+    {
+      "at": [
+        0,
+        0
+      ],
+      "size": [
+        0,
+        0
+      ],
+      "kind": "asset",
+      "outline": false,
+      "labels": [
+        [
+          360.4748840332031,
+          83.9984359741211,
+          "section",
+          "Essentials"
+        ],
+        [
+          437.7717590332031,
+          83.9984359741211,
+          "count",
+          "8 assets"
+        ],
+        [
+          391.5630798339844,
+          138.5136260986328,
+          "set",
+          "button"
+        ],
+        [
+          436.2349548339844,
+          138.5136260986328,
+          "count",
+          "5 forms"
+        ],
+        [
+          725.2754516601562,
+          138.5136260986328,
+          "set",
+          "icon-button"
+        ],
+        [
+          826.3120727539062,
+          138.5136260986328,
+          "set",
+          "switch"
+        ],
+        [
+          870.4214477539062,
+          138.5136260986328,
+          "count",
+          "2 forms"
+        ],
+        [
+          939.0067749023438,
+          138.5136260986328,
+          "set",
+          "search"
+        ],
+        [
+          984.3817749023438,
+          138.5136260986328,
+          "count",
+          "1 form"
+        ],
+        [
+          391.5630798339844,
+          238.57876586914062,
+          "selected-set",
+          "field"
+        ],
+        [
+          423.2974548339844,
+          238.57876586914062,
+          "count",
+          "2 forms"
+        ],
+        [
+          733.5332641601562,
+          238.57876586914062,
+          "set",
+          "tag"
+        ],
+        [
+          758.5801391601562,
+          238.57876586914062,
+          "count",
+          "5 forms"
+        ],
+        [
+          733.5332641601562,
+          333.7863464355469,
+          "set",
+          "card"
+        ],
+        [
+          765.6113891601562,
+          333.7863464355469,
+          "count",
+          "2 forms"
+        ],
+        [
+          391.5630798339844,
+          475.6262512207031,
+          "set",
+          "single-choice"
+        ],
+        [
+          476.7662048339844,
+          475.6262512207031,
+          "count",
+          "5 forms"
+        ]
       ]
     }
   ],
   "zoomed": [
     {
-      "at": [292.0, 112.0],
-      "size": [2024.5, 1548.0],
-      "kind": "section",
-      "labels": [
-        [2.0, -16.0, "section", "Essentials"],
-        [79.9, -16.0, "count", "8 assets"]
+      "at": [
+        292,
+        112
       ],
-      "children": [
-        {
-          "at": [64.0, 104.0],
-          "size": [623.0, 94.0],
-          "kind": "asset",
-          "preview": {
-            "crop": "17 27 621 92",
-            "size": [655.0, 136.0],
-            "light": image25,
-            "dark": image0
-          },
-          "labels": [
-            [0.0, -12.0, "set", "button"],
-            [42.8, -12.0, "count", "5 forms"],
-            [24.0, 26.5, "form", "primary"],
-            [175.0, 26.5, "form", "secondary"],
-            [313.0, 26.5, "form", "ghost"],
-            [403.0, 26.5, "form", "danger"],
-            [493.0, 26.5, "form", "pending"]
-          ]
-        },
-        {
-          "at": [751.0, 104.0],
-          "size": [144.0, 94.0],
-          "kind": "asset",
-          "preview": {
-            "crop": "17 27 142 92",
-            "size": [320.0, 156.0],
-            "light": image30,
-            "dark": image5
-          },
-          "labels": [
-            [0.0, -12.0, "set", "icon-button"],
-            [72.8, -12.0, "count", "2 forms"],
-            [24.0, 26.5, "form", "regular"],
-            [90.0, 26.5, "form", "compact"]
-          ]
-        },
-        {
-          "at": [959.0, 104.0],
-          "size": [168.0, 86.0],
-          "kind": "asset",
-          "preview": {
-            "crop": "17 27 166 84",
-            "size": [200.0, 128.0],
-            "light": image37,
-            "dark": image12
-          },
-          "labels": [
-            [0.0, -12.0, "set", "switch"],
-            [43.5, -12.0, "count", "2 forms"],
-            [24.0, 26.5, "form", "on"],
-            [100.0, 26.5, "form", "off"]
-          ]
-        },
-        {
-          "at": [64.0, 310.0],
-          "size": [639.5, 145.5],
-          "kind": "asset",
-          "selected": true,
-          "preview": {
-            "crop": "17 27 637.5 143.5",
-            "size": [672.0, 188.0],
-            "light": image29,
-            "dark": image4
-          },
-          "labels": [
-            [0.0, -12.0, "selected-set", "field"],
-            [31.1, -12.0, "count", "2 forms"],
-            [24.0, 26.5, "form", "default"],
-            [335.0, 26.5, "form", "error"]
-          ]
-        },
-        {
-          "at": [767.5, 310.0],
-          "size": [521.0, 204.0],
-          "kind": "asset",
-          "preview": {
-            "crop": "17 27 519 202",
-            "size": [553.0, 246.0],
-            "light": image38,
-            "dark": image13
-          },
-          "labels": [
-            [0.0, -12.0, "set", "tag"],
-            [24.4, -12.0, "count", "5 forms"]
-          ]
-        },
-        {
-          "at": [64.0, 626.0],
-          "size": [922.0, 858.0],
-          "kind": "asset",
-          "preview": {
-            "crop": "17 27 920 856",
-            "size": [960.0, 900.0],
-            "light": image35,
-            "dark": image10
-          },
-          "labels": [
-            [0.0, -12.0, "set", "single-choice"],
-            [84.2, -12.0, "count", "5 forms"]
-          ]
-        }
+      "size": [
+        2032,
+        1474
+      ],
+      "kind": "section"
+    },
+    {
+      "at": [
+        356,
+        216
+      ],
+      "size": [
+        623,
+        94
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 623 94",
+        "size": [
+          623,
+          94
+        ],
+        "light": image5,
+        "dark": image4
+      }
+    },
+    {
+      "at": [
+        1043,
+        216
+      ],
+      "size": [
+        144,
+        94
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 144 94",
+        "size": [
+          144,
+          94
+        ],
+        "light": image19,
+        "dark": image18
+      }
+    },
+    {
+      "at": [
+        1251,
+        216
+      ],
+      "size": [
+        168,
+        86
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 168 86",
+        "size": [
+          168,
+          86
+        ],
+        "light": image43,
+        "dark": image42
+      }
+    },
+    {
+      "at": [
+        356,
+        422
+      ],
+      "size": [
+        640,
+        146
+      ],
+      "kind": "asset",
+      "selected": true,
+      "preview": {
+        "crop": "0 0 640 146",
+        "size": [
+          640,
+          146
+        ],
+        "light": image17,
+        "dark": image16
+      }
+    },
+    {
+      "at": [
+        1060,
+        422
+      ],
+      "size": [
+        670.96875,
+        84
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 670.96875 84",
+        "size": [
+          670.96875,
+          84
+        ],
+        "light": image45,
+        "dark": image44
+      }
+    },
+    {
+      "at": [
+        1060,
+        618
+      ],
+      "size": [
+        1200,
+        180
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1200 180",
+        "size": [
+          1200,
+          180
+        ],
+        "light": image7,
+        "dark": image6
+      }
+    },
+    {
+      "at": [
+        0,
+        0
+      ],
+      "size": [
+        0,
+        0
+      ],
+      "kind": "asset",
+      "outline": false,
+      "labels": [
+        [
+          292,
+          95.9984359741211,
+          "section",
+          "Essentials"
+        ],
+        [
+          369.296875,
+          95.9984359741211,
+          "count",
+          "8 assets"
+        ],
+        [
+          356,
+          203.9953155517578,
+          "set",
+          "button"
+        ],
+        [
+          400.671875,
+          203.9953155517578,
+          "count",
+          "5 forms"
+        ],
+        [
+          380,
+          242.5,
+          "form",
+          "primary"
+        ],
+        [
+          531,
+          242.5,
+          "form",
+          "secondary"
+        ],
+        [
+          669,
+          242.5,
+          "form",
+          "ghost"
+        ],
+        [
+          759,
+          242.5,
+          "form",
+          "danger"
+        ],
+        [
+          849,
+          242.5,
+          "form",
+          "pending"
+        ],
+        [
+          1043,
+          203.9953155517578,
+          "set",
+          "icon-button"
+        ],
+        [
+          1118.03125,
+          203.9953155517578,
+          "count",
+          "2 forms"
+        ],
+        [
+          1067,
+          242.5,
+          "form",
+          "regular"
+        ],
+        [
+          1133,
+          242.5,
+          "form",
+          "compact"
+        ],
+        [
+          1251,
+          203.9953155517578,
+          "set",
+          "switch"
+        ],
+        [
+          1295.109375,
+          203.9953155517578,
+          "count",
+          "2 forms"
+        ],
+        [
+          1275,
+          242.5,
+          "form",
+          "on"
+        ],
+        [
+          1351,
+          242.5,
+          "form",
+          "off"
+        ],
+        [
+          356,
+          409.99530029296875,
+          "selected-set",
+          "field"
+        ],
+        [
+          387.734375,
+          409.99530029296875,
+          "count",
+          "2 forms"
+        ],
+        [
+          380,
+          448.5,
+          "form",
+          "default"
+        ],
+        [
+          692,
+          448.5,
+          "form",
+          "error"
+        ],
+        [
+          1060,
+          409.99530029296875,
+          "set",
+          "tag"
+        ],
+        [
+          1085.046875,
+          409.99530029296875,
+          "count",
+          "5 forms"
+        ],
+        [
+          1060,
+          605.9953002929688,
+          "set",
+          "card"
+        ],
+        [
+          1092.078125,
+          605.9953002929688,
+          "count",
+          "2 forms"
+        ]
       ]
     }
   ],
   "surfaces": [
     {
-      "at": [-1005.2, 112.0],
-      "size": [1153.2, 555.0],
-      "kind": "section",
-      "children": [
-        {
-          "at": [681.6, 261.6],
-          "size": [452.4, 129.6],
-          "kind": "asset",
-          "outline": false,
-          "children": [
-            {
-              "at": [273.6, 0.0],
-              "size": [178.8, 109.5],
-              "kind": "asset",
-              "preview": {
-                "crop": "923.3 81.3 589.3 358.3",
-                "size": [1572.0, 524.0],
-                "light": image43,
-                "dark": image18
-              }
-            }
-          ]
-        }
-      ]
+      "at": [
+        -664.4000000000001,
+        112
+      ],
+      "size": [
+        812.4,
+        733.1999999999999
+      ],
+      "kind": "section"
     },
     {
-      "at": [292.0, 112.0],
-      "size": [1202.4, 774.6],
-      "kind": "section",
-      "labels": [
-        [2.0, -16.0, "section", "Connections & MCP"],
-        [145.5, -16.0, "count", "6 assets"]
+      "at": [
+        292,
+        112
       ],
-      "children": [
-        {
-          "at": [19.2, 31.2],
-          "size": [218.4, 30.0],
-          "kind": "asset",
-          "preview": {
-            "crop": "19.3 29.3 721.3 93.3",
-            "size": [760.0, 150.0],
-            "light": image27,
-            "dark": image2
-          },
-          "labels": [
-            [0.0, -12.0, "set", "copy-field"],
-            [64.4, -12.0, "count", "1 form"]
-          ]
-        },
-        {
-          "at": [256.8, 31.2],
-          "size": [218.4, 83.4],
-          "kind": "asset",
-          "preview": {
-            "crop": "19.3 29.3 721.3 271.3",
-            "size": [760.0, 330.0],
-            "light": image34,
-            "dark": image9
-          },
-          "labels": [
-            [0.0, -12.0, "set", "setup-choice"],
-            [82.2, -12.0, "count", "2 forms"]
-          ]
-        },
-        {
-          "at": [19.2, 174.6],
-          "size": [931.2, 283.2],
-          "kind": "asset",
-          "outline": false,
-          "labels": [
-            [0.0, -34.0, "flow", "mcp-hub"],
-            [59.1, -34.0, "count", "3 frames"]
-          ],
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [297.6, 208.2],
-              "kind": "asset",
-              "preview": {
-                "crop": "59.3 81.3 985.3 687.3",
-                "size": [1104.0, 2328.0],
-                "light": image45,
-                "dark": image20
-              },
-              "labels": [
-                [0.0, -12.0, "form", "ready"]
-              ]
-            },
-            {
-              "at": [316.8, 0.0],
-              "size": [297.6, 283.2],
-              "kind": "asset",
-              "selected": true,
-              "preview": {
-                "crop": "59.3 821.3 985.3 937.3",
-                "size": [1104.0, 2328.0],
-                "light": image45,
-                "dark": image20
-              },
-              "labels": [
-                [0.0, -12.0, "selected-frame", "failed"]
-              ]
-            },
-            {
-              "at": [633.6, 0.0],
-              "size": [297.6, 139.2],
-              "kind": "asset",
-              "preview": {
-                "crop": "59.3 1811.3 985.3 457.3",
-                "size": [1104.0, 2328.0],
-                "light": image45,
-                "dark": image20
-              },
-              "labels": [
-                [0.0, -12.0, "form", "empty"]
-              ]
-            }
-          ]
-        },
-        {
-          "at": [969.6, 174.6],
-          "size": [213.6, 146.4],
-          "kind": "asset",
-          "outline": false,
-          "labels": [
-            [0.0, -34.0, "flow", "connections"],
-            [77.7, -34.0, "count", "1 frame"]
-          ],
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [213.6, 146.4],
-              "kind": "asset",
-              "preview": {
-                "crop": "59.3 59.3 705.3 481.3",
-                "size": [824.0, 600.0],
-                "light": image44,
-                "dark": image19
-              },
-              "labels": [
-                [0.0, -12.0, "form", "overview"]
-              ]
-            }
-          ]
-        },
-        {
-          "at": [19.2, 517.8],
-          "size": [237.6, 69.6],
-          "kind": "asset",
-          "outline": false,
-          "labels": [
-            [0.0, -34.0, "flow", "relay-hosting"],
-            [83.1, -34.0, "count", "1 frame"]
-          ],
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [237.6, 69.6],
-              "kind": "asset",
-              "preview": {
-                "crop": "59.3 59.3 785.3 225.3",
-                "size": [904.0, 344.0],
-                "light": image48,
-                "dark": image23
-              },
-              "labels": [
-                [0.0, -12.0, "form", "empty"]
-              ]
-            }
-          ]
-        },
-        {
-          "at": [276.0, 517.8],
-          "size": [614.4, 237.6],
-          "kind": "asset",
-          "outline": false,
-          "labels": [
-            [0.0, -34.0, "flow", "platforms"],
-            [61.4, -34.0, "count", "2 frames"]
-          ],
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [297.6, 237.6],
-              "kind": "asset",
-              "preview": {
-                "crop": "59.3 81.3 985.3 785.3",
-                "size": [2136.0, 948.0],
-                "light": image46,
-                "dark": image21
-              },
-              "labels": [
-                [0.0, -12.0, "form", "connected"]
-              ]
-            },
-            {
-              "at": [316.8, 0.0],
-              "size": [297.6, 237.6],
-              "kind": "asset",
-              "preview": {
-                "crop": "1091.3 81.3 985.3 785.3",
-                "size": [2136.0, 948.0],
-                "light": image46,
-                "dark": image21
-              },
-              "labels": [
-                [0.0, -12.0, "form", "empty"]
-              ]
-            }
-          ]
-        }
+      "size": [
+        1142.3999999999999,
+        732
+      ],
+      "kind": "section"
+    },
+    {
+      "at": [
+        -231.20000000000027,
+        143.2
+      ],
+      "size": [
+        336,
+        41.4
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1120 138",
+        "size": [
+          1120,
+          138
+        ],
+        "light": image49,
+        "dark": image48
+      }
+    },
+    {
+      "at": [
+        -231.20000000000027,
+        218.2
+      ],
+      "size": [
+        360,
+        84.3
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1200 281",
+        "size": [
+          1200,
+          281
+        ],
+        "light": image23,
+        "dark": image22
+      }
+    },
+    {
+      "at": [
+        311.1999999999998,
+        143.2
+      ],
+      "size": [
+        218.4,
+        30
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 728 100",
+        "size": [
+          728,
+          100
+        ],
+        "light": image9,
+        "dark": image8
+      }
+    },
+    {
+      "at": [
+        548.7999999999997,
+        143.2
+      ],
+      "size": [
+        289.2,
+        40.8
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 964 136",
+        "size": [
+          964,
+          136
+        ],
+        "light": image37,
+        "dark": image36
+      }
+    },
+    {
+      "at": [
+        311.1999999999998,
+        244
+      ],
+      "size": [
+        297.59999999999997,
+        208.2
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 694",
+        "size": [
+          992,
+          694
+        ],
+        "light": image107,
+        "dark": image106
+      }
+    },
+    {
+      "at": [
+        628,
+        244
+      ],
+      "size": [
+        297.59999999999997,
+        283.2
+      ],
+      "kind": "asset",
+      "selected": true,
+      "preview": {
+        "crop": "0 0 992 944",
+        "size": [
+          992,
+          944
+        ],
+        "light": image109,
+        "dark": image108
+      }
+    },
+    {
+      "at": [
+        944.7999999999997,
+        244
+      ],
+      "size": [
+        297.59999999999997,
+        139.79999999999998
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 466",
+        "size": [
+          992,
+          466
+        ],
+        "light": image111,
+        "dark": image110
+      }
+    },
+    {
+      "at": [
+        311.1999999999998,
+        587.2
+      ],
+      "size": [
+        213.6,
+        146.4
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 488",
+        "size": [
+          712,
+          488
+        ],
+        "light": image77,
+        "dark": image76
+      }
+    },
+    {
+      "at": [
+        544,
+        587.2
+      ],
+      "size": [
+        237.6,
+        69.6
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 792 232",
+        "size": [
+          792,
+          232
+        ],
+        "light": image123,
+        "dark": image122
+      }
+    },
+    {
+      "at": [
+        800.7999999999997,
+        587.2
+      ],
+      "size": [
+        297.59999999999997,
+        237.6
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 792",
+        "size": [
+          992,
+          792
+        ],
+        "light": image115,
+        "dark": image114
+      }
+    },
+    {
+      "at": [
+        1117.6,
+        587.2
+      ],
+      "size": [
+        297.59999999999997,
+        237.6
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 792",
+        "size": [
+          992,
+          792
+        ],
+        "light": image117,
+        "dark": image116
+      }
+    },
+    {
+      "at": [
+        0,
+        0
+      ],
+      "size": [
+        0,
+        0
+      ],
+      "kind": "asset",
+      "outline": false,
+      "labels": [
+        [
+          292,
+          95.9984359741211,
+          "section",
+          "Connections & MCP"
+        ],
+        [
+          434.953125,
+          95.9984359741211,
+          "count",
+          "6 assets"
+        ],
+        [
+          311.20001220703125,
+          131.1953125,
+          "set",
+          "copy-field"
+        ],
+        [
+          376.63751220703125,
+          131.1953125,
+          "count",
+          "1 form"
+        ],
+        [
+          548.7999877929688,
+          131.1953125,
+          "set",
+          "setup-choice"
+        ],
+        [
+          632.1749877929688,
+          131.1953125,
+          "count",
+          "2 forms"
+        ],
+        [
+          311.20001220703125,
+          209.9953155517578,
+          "flow",
+          "mcp-hub"
+        ],
+        [
+          370.90313720703125,
+          209.9953155517578,
+          "count",
+          "3 frames"
+        ],
+        [
+          311.20001220703125,
+          231.99374389648438,
+          "form",
+          "ready"
+        ],
+        [
+          628,
+          231.99374389648438,
+          "selected-frame",
+          "failed"
+        ],
+        [
+          944.7999877929688,
+          231.99374389648438,
+          "form",
+          "empty"
+        ],
+        [
+          311.20001220703125,
+          553.1953125,
+          "flow",
+          "connections"
+        ],
+        [
+          389.60626220703125,
+          553.1953125,
+          "count",
+          "1 frame"
+        ],
+        [
+          311.20001220703125,
+          575.1937255859375,
+          "form",
+          "overview"
+        ],
+        [
+          544,
+          553.1953125,
+          "flow",
+          "relay-hosting"
+        ],
+        [
+          628.890625,
+          553.1953125,
+          "count",
+          "1 frame"
+        ],
+        [
+          544,
+          575.1937255859375,
+          "form",
+          "empty"
+        ],
+        [
+          800.7999877929688,
+          553.1953125,
+          "flow",
+          "platforms"
+        ],
+        [
+          863.9562377929688,
+          553.1953125,
+          "count",
+          "2 frames"
+        ],
+        [
+          800.7999877929688,
+          575.1937255859375,
+          "form",
+          "connected"
+        ],
+        [
+          1117.5999755859375,
+          575.1937255859375,
+          "form",
+          "empty"
+        ]
       ]
     }
   ],
   "overview": [
     {
-      "at": [71.0, 100.0],
-      "size": [314.4, 240.4],
-      "kind": "section",
-      "labels": [
-        [2.0, -16.0, "section", "Essentials"],
-        [79.9, -16.0, "count", "8 assets"]
+      "at": [
+        173.5134068404567,
+        100
       ],
-      "children": [
-        {
-          "at": [9.9, 16.2],
-          "size": [96.8, 14.6],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 610.1 81.1",
-            "size": [655.0, 136.0],
-            "light": image25,
-            "dark": image0
-          }
-        },
-        {
-          "at": [116.6, 16.2],
-          "size": [22.4, 14.6],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 131.1 81.1",
-            "size": [320.0, 156.0],
-            "light": image30,
-            "dark": image5
-          }
-        },
-        {
-          "at": [148.9, 16.2],
-          "size": [26.1, 13.4],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 155.1 73.1",
-            "size": [200.0, 128.0],
-            "light": image37,
-            "dark": image12
-          }
-        },
-        {
-          "at": [185.0, 16.2],
-          "size": [44.7, 14.6],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 275.1 81.1",
-            "size": [320.0, 136.0],
-            "light": image33,
-            "dark": image8
-          }
-        },
-        {
-          "at": [9.9, 48.1],
-          "size": [99.3, 22.6],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 626.6 132.6",
-            "size": [672.0, 188.0],
-            "light": image29,
-            "dark": image4
-          }
-        },
-        {
-          "at": [119.2, 48.1],
-          "size": [80.9, 31.7],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 508.1 191.1",
-            "size": [553.0, 246.0],
-            "light": image38,
-            "dark": image13
-          }
-        },
-        {
-          "at": [210.1, 48.1],
-          "size": [94.4, 60.3],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 595.1 375.1",
-            "size": [640.0, 430.0],
-            "light": image26,
-            "dark": image1
-          }
-        },
-        {
-          "at": [9.9, 97.2],
-          "size": [143.2, 133.3],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 909.1 845.1",
-            "size": [960.0, 900.0],
-            "light": image35,
-            "dark": image10
-          }
-        }
-      ]
+      "size": [
+        147.0053551581287,
+        106.63675861372133
+      ],
+      "kind": "section"
     },
     {
-      "at": [459.9, 100.0],
-      "size": [336.7, 236.7],
-      "kind": "section",
-      "labels": [
-        [2.0, -16.0, "section", "Agents & quota"],
-        [114.4, -16.0, "count", "6 assets"]
+      "at": [
+        355.24443644538746,
+        100
       ],
-      "children": [
-        {
-          "at": [9.9, 16.2],
-          "size": [68.3, 44.1],
-          "kind": "asset",
-          "preview": {
-            "crop": "30.4 30.4 427.1 271.1",
-            "size": [488.0, 340.0],
-            "light": image32,
-            "dark": image7
-          }
-        },
-        {
-          "at": [88.2, 16.2],
-          "size": [23.7, 15.5],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 139.6 87.1",
-            "size": [184.0, 142.0],
-            "light": image41,
-            "dark": image16
-          }
-        },
-        {
-          "at": [121.8, 16.2],
-          "size": [78.6, 13.0],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 493.1 71.1",
-            "size": [538.0, 126.0],
-            "light": image36,
-            "dark": image11
-          }
-        },
-        {
-          "at": [210.4, 16.2],
-          "size": [50.9, 14.9],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 315.1 83.1",
-            "size": [360.0, 138.0],
-            "light": image28,
-            "dark": image3
-          }
-        },
-        {
-          "at": [9.9, 91.3],
-          "size": [150.3, 135.4],
-          "kind": "asset",
-          "outline": false,
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [70.2, 135.4],
-              "kind": "asset",
-              "preview": {
-                "crop": "62.4 84.4 439.1 859.1",
-                "size": [1056.0, 1006.0],
-                "light": image42,
-                "dark": image17
-              }
-            },
-            {
-              "at": [80.1, 0.0],
-              "size": [70.2, 54.7],
-              "kind": "asset",
-              "preview": {
-                "crop": "554.4 84.4 439.1 339.1",
-                "size": [1056.0, 1006.0],
-                "light": image42,
-                "dark": image17
-              }
-            }
-          ]
-        },
-        {
-          "at": [170.2, 91.3],
-          "size": [156.6, 55.9],
-          "kind": "asset",
-          "outline": false,
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [73.3, 55.9],
-              "kind": "asset",
-              "preview": {
-                "crop": "62.4 84.4 459.1 347.1",
-                "size": [1096.0, 494.0],
-                "light": image47,
-                "dark": image22
-              }
-            },
-            {
-              "at": [83.2, 0.0],
-              "size": [73.3, 40.1],
-              "kind": "asset",
-              "preview": {
-                "crop": "574.4 84.4 459.1 245.1",
-                "size": [1096.0, 494.0],
-                "light": image47,
-                "dark": image22
-              }
-            }
-          ]
-        }
-      ]
+      "size": [
+        156.8442962513893,
+        110.25401636859654
+      ],
+      "kind": "section"
     },
     {
-      "at": [71.0, 415.0],
-      "size": [597.0, 287.3],
-      "kind": "section",
-      "labels": [
-        [2.0, -16.0, "section", "Tasks & interactions"],
-        [148.1, -16.0, "count", "5 assets"]
+      "at": [
+        546.8144071435788,
+        100
       ],
-      "children": [
-        {
-          "at": [9.9, 16.2],
-          "size": [94.4, 88.2],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 595.1 555.1",
-            "size": [640.0, 610.0],
-            "light": image39,
-            "dark": image14
-          }
-        },
-        {
-          "at": [114.3, 16.2],
-          "size": [88.2, 39.4],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 555.1 241.1",
-            "size": [600.0, 302.0],
-            "light": image40,
-            "dark": image15
-          }
-        },
-        {
-          "at": [212.5, 16.2],
-          "size": [94.4, 73.6],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 595.1 461.1",
-            "size": [640.0, 516.0],
-            "light": image31,
-            "dark": image6
-          }
-        },
-        {
-          "at": [9.9, 135.4],
-          "size": [333.0, 142.0],
-          "kind": "asset",
-          "outline": false,
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [104.4, 142.0],
-              "kind": "asset",
-              "preview": {
-                "crop": "62.4 84.4 659.1 901.1",
-                "size": [2208.0, 1076.0],
-                "light": image49,
-                "dark": image24
-              }
-            },
-            {
-              "at": [114.3, 0.0],
-              "size": [104.4, 119.3],
-              "kind": "asset",
-              "preview": {
-                "crop": "774.4 84.4 659.1 755.1",
-                "size": [2208.0, 1076.0],
-                "light": image49,
-                "dark": image24
-              }
-            },
-            {
-              "at": [228.6, 0.0],
-              "size": [104.4, 104.7],
-              "kind": "asset",
-              "preview": {
-                "crop": "1486.4 84.4 659.1 661.1",
-                "size": [2208.0, 1076.0],
-                "light": image49,
-                "dark": image24
-              }
-            }
-          ]
-        },
-        {
-          "at": [352.9, 135.4],
-          "size": [234.2, 67.1],
-          "kind": "asset",
-          "outline": false,
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [60.9, 49.4],
-              "kind": "asset",
-              "preview": {
-                "crop": "62.4 84.4 379.1 305.1",
-                "size": [1572.0, 524.0],
-                "light": image43,
-                "dark": image18
-              }
-            },
-            {
-              "at": [70.8, 0.0],
-              "size": [60.9, 67.1],
-              "kind": "asset",
-              "preview": {
-                "crop": "494.4 84.4 379.1 419.1",
-                "size": [1572.0, 524.0],
-                "light": image43,
-                "dark": image18
-              }
-            },
-            {
-              "at": [141.6, 0.0],
-              "size": [92.6, 56.7],
-              "kind": "asset",
-              "preview": {
-                "crop": "926.4 84.4 583.1 352.1",
-                "size": [1572.0, 524.0],
-                "light": image43,
-                "dark": image18
-              }
-            }
-          ]
-        }
-      ]
+      "size": [
+        195.9106800040416,
+        176.81155905830047
+      ],
+      "kind": "section"
     },
     {
-      "at": [742.5, 415.0],
-      "size": [622.5, 401.0],
-      "kind": "section",
-      "labels": [
-        [2.0, -16.0, "section", "Connections & MCP"],
-        [145.5, -16.0, "count", "6 assets"]
+      "at": [
+        777.4507615944225,
+        100
       ],
-      "children": [
-        {
-          "at": [9.9, 16.2],
-          "size": [113.1, 15.5],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 715.1 87.1",
-            "size": [760.0, 150.0],
-            "light": image27,
-            "dark": image2
-          }
-        },
-        {
-          "at": [132.9, 16.2],
-          "size": [113.1, 43.2],
-          "kind": "asset",
-          "preview": {
-            "crop": "22.4 32.4 715.1 265.1",
-            "size": [760.0, 330.0],
-            "light": image34,
-            "dark": image9
-          }
-        },
-        {
-          "at": [9.9, 90.4],
-          "size": [482.1, 146.6],
-          "kind": "asset",
-          "outline": false,
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [154.1, 107.8],
-              "kind": "asset",
-              "preview": {
-                "crop": "62.4 84.4 979.1 681.1",
-                "size": [1104.0, 2328.0],
-                "light": image45,
-                "dark": image20
-              }
-            },
-            {
-              "at": [164.0, 0.0],
-              "size": [154.1, 146.6],
-              "kind": "asset",
-              "preview": {
-                "crop": "62.4 824.4 979.1 931.1",
-                "size": [1104.0, 2328.0],
-                "light": image45,
-                "dark": image20
-              }
-            },
-            {
-              "at": [328.0, 0.0],
-              "size": [154.1, 72.1],
-              "kind": "asset",
-              "preview": {
-                "crop": "62.4 1814.4 979.1 451.1",
-                "size": [1104.0, 2328.0],
-                "light": image45,
-                "dark": image20
-              }
-            }
-          ]
-        },
-        {
-          "at": [502.0, 90.4],
-          "size": [110.6, 75.8],
-          "kind": "asset",
-          "outline": false,
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [110.6, 75.8],
-              "kind": "asset",
-              "preview": {
-                "crop": "62.4 62.4 699.1 475.1",
-                "size": [824.0, 600.0],
-                "light": image44,
-                "dark": image19
-              }
-            }
-          ]
-        },
-        {
-          "at": [9.9, 268.1],
-          "size": [123.0, 36.0],
-          "kind": "asset",
-          "outline": false,
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [123.0, 36.0],
-              "kind": "asset",
-              "preview": {
-                "crop": "62.4 62.4 779.1 219.1",
-                "size": [904.0, 344.0],
-                "light": image48,
-                "dark": image23
-              }
-            }
-          ]
-        },
-        {
-          "at": [142.9, 268.1],
-          "size": [318.1, 123.0],
-          "kind": "asset",
-          "outline": false,
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [154.1, 123.0],
-              "kind": "asset",
-              "preview": {
-                "crop": "62.4 84.4 979.1 779.1",
-                "size": [2136.0, 948.0],
-                "light": image46,
-                "dark": image21
-              }
-            },
-            {
-              "at": [164.0, 0.0],
-              "size": [154.1, 123.0],
-              "kind": "asset",
-              "preview": {
-                "crop": "1094.4 84.4 979.1 779.1",
-                "size": [2136.0, 948.0],
-                "light": image46,
-                "dark": image21
-              }
-            }
-          ]
-        }
+      "size": [
+        275.4903506112963,
+        176.52217843791047
+      ],
+      "kind": "section"
+    },
+    {
+      "at": [
+        1087.6667866525208,
+        100
+      ],
+      "size": [
+        174.81980650702232,
+        120.16530261695463
+      ],
+      "kind": "section"
+    },
+    {
+      "at": [
+        173.5134068404567,
+        311.53723350510256
+      ],
+      "size": [
+        765.1223603112054,
+        504.46276649489744
+      ],
+      "kind": "section"
+    },
+    {
+      "at": [
+        178.14349676669698,
+        107.52389613014044
+      ],
+      "size": [
+        45.07103162574517,
+        6.800444579165403
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 623 94",
+        "size": [
+          623,
+          94
+        ],
+        "light": image5,
+        "dark": image4
+      }
+    },
+    {
+      "at": [
+        227.84461831868242,
+        107.52389613014044
+      ],
+      "size": [
+        10.417702334040618,
+        6.800444579165403
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 144 94",
+        "size": [
+          144,
+          94
+        ],
+        "light": image19,
+        "dark": image18
+      }
+    },
+    {
+      "at": [
+        242.8924105789633,
+        107.52389613014044
+      ],
+      "size": [
+        12.15398605638072,
+        6.221683338385369
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 168 86",
+        "size": [
+          168,
+          86
+        ],
+        "light": image43,
+        "dark": image42
+      }
+    },
+    {
+      "at": [
+        259.6764865615843,
+        107.52389613014044
+      ],
+      "size": [
+        20.835404668081235,
+        6.800444579165403
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 288 94",
+        "size": [
+          288,
+          94
+        ],
+        "light": image33,
+        "dark": image32
+      }
+    },
+    {
+      "at": [
+        178.14349676669698,
+        122.42699808022633
+      ],
+      "size": [
+        46.300899262402744,
+        10.562392644235626
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 640 146",
+        "size": [
+          640,
+          146
+        ],
+        "light": image17,
+        "dark": image16
+      }
+    },
+    {
+      "at": [
+        229.07448595533998,
+        122.42699808022633
+      ],
+      "size": [
+        48.54133828432858,
+        6.07699302819036
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 670.96875 84",
+        "size": [
+          670.96875,
+          84
+        ],
+        "light": image45,
+        "dark": image44
+      }
+    },
+    {
+      "at": [
+        229.07448595533998,
+        136.60664847933717
+      ],
+      "size": [
+        86.81418611700515,
+        13.022127917550772
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1200 180",
+        "size": [
+          1200,
+          180
+        ],
+        "light": image7,
+        "dark": image6
+      }
+    },
+    {
+      "at": [
+        178.14349676669698,
+        157.73143376780843
+      ],
+      "size": [
+        94.01592022835202,
+        44.27523491967263
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1299.546875 612",
+        "size": [
+          1299.546875,
+          612
+        ],
+        "light": image39,
+        "dark": image38
+      }
+    },
+    {
+      "at": [
+        359.8745263716278,
+        107.52389613014044
+      ],
+      "size": [
+        31.831868242901887,
+        20.54602404769122
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 440 284",
+        "size": [
+          440,
+          284
+        ],
+        "light": image29,
+        "dark": image28
+      }
+    },
+    {
+      "at": [
+        396.3364845407699,
+        107.52389613014044
+      ],
+      "size": [
+        10.996463574820652,
+        7.2345155097504295
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 152 100",
+        "size": [
+          152,
+          100
+        ],
+        "light": image53,
+        "dark": image52
+      }
+    },
+    {
+      "at": [
+        411.9630380418308,
+        107.52389613014044
+      ],
+      "size": [
+        36.606648479337174,
+        6.07699302819036
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 506 84",
+        "size": [
+          506,
+          84
+        ],
+        "light": image41,
+        "dark": image40
+      }
+    },
+    {
+      "at": [
+        453.1997764474083,
+        107.52389613014044
+      ],
+      "size": [
+        23.729210871981408,
+        6.945134889360412
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 328 96",
+        "size": [
+          328,
+          96
+        ],
+        "light": image15,
+        "dark": image14
+      }
+    },
+    {
+      "at": [
+        359.8745263716278,
+        142.53895119733252
+      ],
+      "size": [
+        32.70001010407194,
+        63.08497524502374
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 452 872",
+        "size": [
+          452,
+          872
+        ],
+        "light": image63,
+        "dark": image62
+      }
+    },
+    {
+      "at": [
+        397.20462640194,
+        142.53895119733252
+      ],
+      "size": [
+        32.70001010407194,
+        25.46549459432151
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 452 352",
+        "size": [
+          452,
+          352
+        ],
+        "light": image65,
+        "dark": image64
+      }
+    },
+    {
+      "at": [
+        434.53472643225217,
+        142.53895119733252
+      ],
+      "size": [
+        34.14691320602203,
+        26.044255835101545
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 472 360",
+        "size": [
+          472,
+          360
+        ],
+        "light": image119,
+        "dark": image118
+      }
+    },
+    {
+      "at": [
+        473.31172956451445,
+        142.53895119733252
+      ],
+      "size": [
+        34.14691320602203,
+        18.66505001515611
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 472 258",
+        "size": [
+          472,
+          258
+        ],
+        "light": image121,
+        "dark": image120
+      }
+    },
+    {
+      "at": [
+        551.4444970698191,
+        107.52389613014044
+      ],
+      "size": [
+        95.20622410831565,
+        21.197130443568756
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1316 293",
+        "size": [
+          1316,
+          293
+        ],
+        "light": image47,
+        "dark": image46
+      }
+    },
+    {
+      "at": [
+        651.2808111043751,
+        107.52389613014044
+      ],
+      "size": [
+        81.02657370920481,
+        9.983631403455592
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1120 138",
+        "size": [
+          1120,
+          138
+        ],
+        "light": image49,
+        "dark": image48
+      }
+    },
+    {
+      "at": [
+        651.2808111043751,
+        125.61018490451652
+      ],
+      "size": [
+        86.81418611700515,
+        20.328988582398704
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1200 281",
+        "size": [
+          1200,
+          281
+        ],
+        "light": image23,
+        "dark": image22
+      }
+    },
+    {
+      "at": [
+        551.4444970698191,
+        160.4082045064161
+      ],
+      "size": [
+        48.61594422552288,
+        66.05112660402142
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 672 913",
+        "size": [
+          672,
+          913
+        ],
+        "light": image177,
+        "dark": image176
+      }
+    },
+    {
+      "at": [
+        604.6905312215822,
+        160.4082045064161
+      ],
+      "size": [
+        48.61594422552288,
+        55.48873395978579
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 672 767",
+        "size": [
+          672,
+          767
+        ],
+        "light": image179,
+        "dark": image178
+      }
+    },
+    {
+      "at": [
+        657.9365653733455,
+        160.4082045064161
+      ],
+      "size": [
+        48.61594422552288,
+        48.76063453571789
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 672 674",
+        "size": [
+          672,
+          674
+        ],
+        "light": image181,
+        "dark": image180
+      }
+    },
+    {
+      "at": [
+        551.4444970698191,
+        240.92836212993836
+      ],
+      "size": [
+        28.359300798221682,
+        23.005759321006366
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 392 318",
+        "size": [
+          392,
+          318
+        ],
+        "light": image71,
+        "dark": image70
+      }
+    },
+    {
+      "at": [
+        584.4338877942811,
+        240.92836212993836
+      ],
+      "size": [
+        28.359300798221682,
+        31.253107002121855
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 392 432",
+        "size": [
+          392,
+          432
+        ],
+        "light": image73,
+        "dark": image72
+      }
+    },
+    {
+      "at": [
+        617.423278518743,
+        240.92836212993836
+      ],
+      "size": [
+        43.117712438112555,
+        26.405981610589066
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 596 365",
+        "size": [
+          596,
+          365
+        ],
+        "light": image75,
+        "dark": image74
+      }
+    },
+    {
+      "at": [
+        782.0808515206628,
+        107.52389613014044
+      ],
+      "size": [
+        52.66727291098312,
+        7.2345155097504295
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 728 100",
+        "size": [
+          728,
+          100
+        ],
+        "light": image9,
+        "dark": image8
+      }
+    },
+    {
+      "at": [
+        839.3782143578862,
+        107.52389613014044
+      ],
+      "size": [
+        69.74072951399414,
+        9.838941093260583
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 964 136",
+        "size": [
+          964,
+          136
+        ],
+        "light": image37,
+        "dark": image36
+      }
+    },
+    {
+      "at": [
+        782.0808515206628,
+        131.8318682429019
+      ],
+      "size": [
+        71.76639385672425,
+        50.207537637667976
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 694",
+        "size": [
+          992,
+          694
+        ],
+        "light": image107,
+        "dark": image106
+      }
+    },
+    {
+      "at": [
+        858.4773353036273,
+        131.8318682429019
+      ],
+      "size": [
+        71.76639385672425,
+        68.29382641204406
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 944",
+        "size": [
+          992,
+          944
+        ],
+        "light": image109,
+        "dark": image108
+      }
+    },
+    {
+      "at": [
+        934.8738190865919,
+        131.8318682429019
+      ],
+      "size": [
+        71.76639385672425,
+        33.712842275437
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 466",
+        "size": [
+          992,
+          466
+        ],
+        "light": image111,
+        "dark": image110
+      }
+    },
+    {
+      "at": [
+        782.0808515206628,
+        214.5947256744468
+      ],
+      "size": [
+        51.50975042942306,
+        35.30443568758209
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 488",
+        "size": [
+          712,
+          488
+        ],
+        "light": image77,
+        "dark": image76
+      }
+    },
+    {
+      "at": [
+        838.2206918763261,
+        214.5947256744468
+      ],
+      "size": [
+        57.297362837223396,
+        16.784075982620994
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 792 232",
+        "size": [
+          792,
+          232
+        ],
+        "light": image123,
+        "dark": image122
+      }
+    },
+    {
+      "at": [
+        900.1481446397897,
+        214.5947256744468
+      ],
+      "size": [
+        71.76639385672425,
+        57.297362837223396
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 792",
+        "size": [
+          992,
+          792
+        ],
+        "light": image115,
+        "dark": image114
+      }
+    },
+    {
+      "at": [
+        976.5446284227543,
+        214.5947256744468
+      ],
+      "size": [
+        71.76639385672425,
+        57.297362837223396
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 792",
+        "size": [
+          992,
+          792
+        ],
+        "light": image117,
+        "dark": image116
+      }
+    },
+    {
+      "at": [
+        1092.2968765787612,
+        107.52389613014044
+      ],
+      "size": [
+        24.30797211276144,
+        7.813276750530464
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 336 108",
+        "size": [
+          336,
+          108
+        ],
+        "light": image1,
+        "dark": image0
+      }
+    },
+    {
+      "at": [
+        1121.234938617763,
+        107.52389613014044
+      ],
+      "size": [
+        40.513286854602406,
+        10.707082954430636
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 560 148",
+        "size": [
+          560,
+          148
+        ],
+        "light": image3,
+        "dark": image2
+      }
+    },
+    {
+      "at": [
+        1166.3783153986055,
+        107.52389613014044
+      ],
+      "size": [
+        12.76665908861271,
+        6.07699302819036
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 176.46875 84",
+        "size": [
+          176.46875,
+          84
+        ],
+        "light": image11,
+        "dark": image10
+      }
+    },
+    {
+      "at": [
+        1183.7750644134585,
+        107.52389613014044
+      ],
+      "size": [
+        25.46549459432151,
+        10.128321713650601
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 352 140",
+        "size": [
+          352,
+          140
+        ],
+        "light": image13,
+        "dark": image12
+      }
+    },
+    {
+      "at": [
+        1213.8706489340202,
+        107.52389613014044
+      ],
+      "size": [
+        12.732747297160754,
+        7.523896130140447
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 176 104",
+        "size": [
+          176,
+          104
+        ],
+        "light": image21,
+        "dark": image20
+      }
+    },
+    {
+      "at": [
+        1213.8706489340202,
+        123.15044963120137
+      ],
+      "size": [
+        43.98585429928261,
+        21.703546529251287
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 608 300",
+        "size": [
+          608,
+          300
+        ],
+        "light": image25,
+        "dark": image24
+      }
+    },
+    {
+      "at": [
+        1166.3783153986055,
+        125.75487521471153
+      ],
+      "size": [
+        41.09204809538244,
+        9.26017985248055
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 568 128",
+        "size": [
+          568,
+          128
+        ],
+        "light": image27,
+        "dark": image26
+      }
+    },
+    {
+      "at": [
+        1092.2968765787612,
+        143.11771243811256
+      ],
+      "size": [
+        105.9008727392139,
+        9.549560472870567
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1463.828125 132",
+        "size": [
+          1463.828125,
+          132
+        ],
+        "light": image31,
+        "dark": image30
+      }
+    },
+    {
+      "at": [
+        1202.8278392442153,
+        152.95665353137315
+      ],
+      "size": [
+        49.77346670708295,
+        10.779428109528139
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 688 149",
+        "size": [
+          688,
+          149
+        ],
+        "light": image35,
+        "dark": image34
+      }
+    },
+    {
+      "at": [
+        1092.2968765787612,
+        160.7699302819036
+      ],
+      "size": [
+        85.94604425583509,
+        41.96018995655249
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1188 580",
+        "size": [
+          1188,
+          580
+        ],
+        "light": image51,
+        "dark": image50
+      }
+    },
+    {
+      "at": [
+        1182.8730107608367,
+        160.7699302819036
+      ],
+      "size": [
+        9.549560472870567,
+        6.511063958775386
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 132 90",
+        "size": [
+          132,
+          90
+        ],
+        "light": image55,
+        "dark": image54
+      }
+    },
+    {
+      "at": [
+        1197.0526611599475,
+        171.83873901182176
+      ],
+      "size": [
+        40.513286854602406,
+        22.28230777003132
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 560 308",
+        "size": [
+          560,
+          308
+        ],
+        "light": image57,
+        "dark": image56
+      }
+    },
+    {
+      "at": [
+        1242.1960379407901,
+        171.83873901182176
+      ],
+      "size": [
+        11.430534505405678,
+        9.838941093260583
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 158 136",
+        "size": [
+          158,
+          136
+        ],
+        "light": image59,
+        "dark": image58
+      }
+    },
+    {
+      "at": [
+        1182.8730107608367,
+        202.22370415277356
+      ],
+      "size": [
+        38.19824189148227,
+        13.311508537940789
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 528 184",
+        "size": [
+          528,
+          184
+        ],
+        "light": image61,
+        "dark": image60
+      }
+    },
+    {
+      "at": [
+        178.14349676669698,
+        319.061129635243
+      ],
+      "size": [
+        37.0407194099222,
+        44.99868647064767
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 512 622",
+        "size": [
+          512,
+          622
+        ],
+        "light": image67,
+        "dark": image66
+      }
+    },
+    {
+      "at": [
+        219.81430610285943,
+        319.061129635243
+      ],
+      "size": [
+        37.0407194099222,
+        44.99868647064767
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 512 622",
+        "size": [
+          512,
+          622
+        ],
+        "light": image69,
+        "dark": image68
+      }
+    },
+    {
+      "at": [
+        261.4851154390219,
+        319.061129635243
+      ],
+      "size": [
+        61.63807214307366,
+        85.07790239466505
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 852 1176",
+        "size": [
+          852,
+          1176
+        ],
+        "light": image79,
+        "dark": image78
+      }
+    },
+    {
+      "at": [
+        327.7532775083358,
+        319.061129635243
+      ],
+      "size": [
+        61.63807214307366,
+        51.50975042942306
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 852 712",
+        "size": [
+          852,
+          712
+        ],
+        "light": image81,
+        "dark": image80
+      }
+    },
+    {
+      "at": [
+        394.02143957764974,
+        319.061129635243
+      ],
+      "size": [
+        61.63807214307366,
+        51.50975042942306
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 852 712",
+        "size": [
+          852,
+          712
+        ],
+        "light": image83,
+        "dark": image82
+      }
+    },
+    {
+      "at": [
+        460.2896016469637,
+        319.061129635243
+      ],
+      "size": [
+        61.63807214307366,
+        57.297362837223396
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 852 792",
+        "size": [
+          852,
+          792
+        ],
+        "light": image85,
+        "dark": image84
+      }
+    },
+    {
+      "at": [
+        526.5577637162776,
+        319.061129635243
+      ],
+      "size": [
+        94.91684348792563,
+        60.19116904112357
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1312 832",
+        "size": [
+          1312,
+          832
+        ],
+        "light": image87,
+        "dark": image86
+      }
+    },
+    {
+      "at": [
+        626.1046971304436,
+        319.061129635243
+      ],
+      "size": [
+        94.91684348792563,
+        60.19116904112357
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1312 832",
+        "size": [
+          1312,
+          832
+        ],
+        "light": image89,
+        "dark": image88
+      }
+    },
+    {
+      "at": [
+        725.6516305446095,
+        319.061129635243
+      ],
+      "size": [
+        48.61594422552288,
+        60.19116904112357
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 672 832",
+        "size": [
+          672,
+          832
+        ],
+        "light": image91,
+        "dark": image90
+      }
+    },
+    {
+      "at": [
+        778.8976646963725,
+        319.061129635243
+      ],
+      "size": [
+        48.61594422552288,
+        60.19116904112357
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 672 832",
+        "size": [
+          672,
+          832
+        ],
+        "light": image93,
+        "dark": image92
+      }
+    },
+    {
+      "at": [
+        832.1436988481357,
+        319.061129635243
+      ],
+      "size": [
+        48.61594422552288,
+        60.19116904112357
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 672 832",
+        "size": [
+          672,
+          832
+        ],
+        "light": image95,
+        "dark": image94
+      }
+    },
+    {
+      "at": [
+        885.3897329998989,
+        319.061129635243
+      ],
+      "size": [
+        48.61594422552288,
+        60.19116904112357
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 672 832",
+        "size": [
+          672,
+          832
+        ],
+        "light": image97,
+        "dark": image96
+      }
+    },
+    {
+      "at": [
+        725.6516305446095,
+        387.35495604728703
+      ],
+      "size": [
+        48.61594422552288,
+        60.19116904112357
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 672 832",
+        "size": [
+          672,
+          832
+        ],
+        "light": image99,
+        "dark": image98
+      }
+    },
+    {
+      "at": [
+        778.8976646963725,
+        387.35495604728703
+      ],
+      "size": [
+        48.61594422552288,
+        74.66020006062443
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 672 1032",
+        "size": [
+          672,
+          1032
+        ],
+        "light": image101,
+        "dark": image100
+      }
+    },
+    {
+      "at": [
+        178.14349676669698,
+        476.4841871274123
+      ],
+      "size": [
+        94.91684348792563,
+        60.19116904112357
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1312 832",
+        "size": [
+          1312,
+          832
+        ],
+        "light": image103,
+        "dark": image102
+      }
+    },
+    {
+      "at": [
+        277.6904301808629,
+        476.4841871274123
+      ],
+      "size": [
+        94.91684348792563,
+        60.19116904112357
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 1312 832",
+        "size": [
+          1312,
+          832
+        ],
+        "light": image105,
+        "dark": image104
+      }
+    },
+    {
+      "at": [
+        377.2373635950288,
+        476.4841871274123
+      ],
+      "size": [
+        71.76639385672425,
+        57.297362837223396
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 792",
+        "size": [
+          992,
+          792
+        ],
+        "light": image113,
+        "dark": image112
+      }
+    },
+    {
+      "at": [
+        453.63384737799333,
+        476.4841871274123
+      ],
+      "size": [
+        54.40355663332323,
+        90.64847933717287
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 752 1253",
+        "size": [
+          752,
+          1253
+        ],
+        "light": image125,
+        "dark": image124
+      }
+    },
+    {
+      "at": [
+        512.6674939375569,
+        476.4841871274123
+      ],
+      "size": [
+        54.40355663332323,
+        18.809740325351115
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 752 260",
+        "size": [
+          752,
+          260
+        ],
+        "light": image127,
+        "dark": image126
+      }
+    },
+    {
+      "at": [
+        571.7011404971204,
+        476.4841871274123
+      ],
+      "size": [
+        54.40355663332323,
+        17.21814691320602
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 752 238",
+        "size": [
+          752,
+          238
+        ],
+        "light": image129,
+        "dark": image128
+      }
+    },
+    {
+      "at": [
+        630.7347870566838,
+        476.4841871274123
+      ],
+      "size": [
+        54.40355663332323,
+        67.71506517126402
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 752 936",
+        "size": [
+          752,
+          936
+        ],
+        "light": image131,
+        "dark": image130
+      }
+    },
+    {
+      "at": [
+        453.63384737799333,
+        575.2353238355057
+      ],
+      "size": [
+        54.40355663332323,
+        49.77346670708295
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 752 688",
+        "size": [
+          752,
+          688
+        ],
+        "light": image133,
+        "dark": image132
+      }
+    },
+    {
+      "at": [
+        689.7684336162473,
+        476.4841871274123
+      ],
+      "size": [
+        51.50975042942306,
+        34.72567444680206
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 480",
+        "size": [
+          712,
+          480
+        ],
+        "light": image135,
+        "dark": image134
+      }
+    },
+    {
+      "at": [
+        745.9082739719106,
+        476.4841871274123
+      ],
+      "size": [
+        51.50975042942306,
+        52.95665353137314
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 732",
+        "size": [
+          712,
+          732
+        ],
+        "light": image137,
+        "dark": image136
+      }
+    },
+    {
+      "at": [
+        802.048114327574,
+        476.4841871274123
+      ],
+      "size": [
+        51.50975042942306,
+        30.67434576134182
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 424",
+        "size": [
+          712,
+          424
+        ],
+        "light": image155,
+        "dark": image154
+      }
+    },
+    {
+      "at": [
+        858.1879546832373,
+        476.4841871274123
+      ],
+      "size": [
+        51.50975042942306,
+        25.176113973931493
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 348",
+        "size": [
+          712,
+          348
+        ],
+        "light": image157,
+        "dark": image156
+      }
+    },
+    {
+      "at": [
+        689.7684336162473,
+        537.5434980297059
+      ],
+      "size": [
+        51.50975042942306,
+        18.230979084571082
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 252",
+        "size": [
+          712,
+          252
+        ],
+        "light": image159,
+        "dark": image158
+      }
+    },
+    {
+      "at": [
+        745.9082739719106,
+        537.5434980297059
+      ],
+      "size": [
+        51.50975042942306,
+        34.00222289582702
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 470",
+        "size": [
+          712,
+          470
+        ],
+        "light": image161,
+        "dark": image160
+      }
+    },
+    {
+      "at": [
+        802.048114327574,
+        537.5434980297059
+      ],
+      "size": [
+        51.50975042942306,
+        34.00222289582702
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 470",
+        "size": [
+          712,
+          470
+        ],
+        "light": image163,
+        "dark": image162
+      }
+    },
+    {
+      "at": [
+        858.1879546832373,
+        537.5434980297059
+      ],
+      "size": [
+        51.50975042942306,
+        27.346468626856623
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 378",
+        "size": [
+          712,
+          378
+        ],
+        "light": image165,
+        "dark": image164
+      }
+    },
+    {
+      "at": [
+        689.7684336162473,
+        579.6483782964535
+      ],
+      "size": [
+        51.50975042942306,
+        40.65797716479741
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 562",
+        "size": [
+          712,
+          562
+        ],
+        "light": image167,
+        "dark": image166
+      }
+    },
+    {
+      "at": [
+        745.9082739719106,
+        579.6483782964535
+      ],
+      "size": [
+        51.50975042942306,
+        35.4491259977771
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 490",
+        "size": [
+          712,
+          490
+        ],
+        "light": image169,
+        "dark": image168
+      }
+    },
+    {
+      "at": [
+        802.048114327574,
+        579.6483782964535
+      ],
+      "size": [
+        51.50975042942306,
+        30.240274830756793
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 418",
+        "size": [
+          712,
+          418
+        ],
+        "light": image139,
+        "dark": image138
+      }
+    },
+    {
+      "at": [
+        858.1879546832373,
+        579.6483782964535
+      ],
+      "size": [
+        51.50975042942306,
+        19.822572496716177
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 274",
+        "size": [
+          712,
+          274
+        ],
+        "light": image141,
+        "dark": image140
+      }
+    },
+    {
+      "at": [
+        689.7684336162473,
+        628.4090128321714
+      ],
+      "size": [
+        51.50975042942306,
+        30.67434576134182
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 424",
+        "size": [
+          712,
+          424
+        ],
+        "light": image143,
+        "dark": image142
+      }
+    },
+    {
+      "at": [
+        745.9082739719106,
+        628.4090128321714
+      ],
+      "size": [
+        51.50975042942306,
+        55.05466302920077
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 761",
+        "size": [
+          712,
+          761
+        ],
+        "light": image145,
+        "dark": image144
+      }
+    },
+    {
+      "at": [
+        802.048114327574,
+        628.4090128321714
+      ],
+      "size": [
+        51.50975042942306,
+        44.63696069516015
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 617",
+        "size": [
+          712,
+          617
+        ],
+        "light": image147,
+        "dark": image146
+      }
+    },
+    {
+      "at": [
+        858.1879546832373,
+        628.4090128321714
+      ],
+      "size": [
+        51.50975042942306,
+        34.58098413660705
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 478",
+        "size": [
+          712,
+          478
+        ],
+        "light": image149,
+        "dark": image148
+      }
+    },
+    {
+      "at": [
+        689.7684336162473,
+        691.5663332322925
+      ],
+      "size": [
+        51.50975042942306,
+        32.989390724461956
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 456",
+        "size": [
+          712,
+          456
+        ],
+        "light": image151,
+        "dark": image150
+      }
+    },
+    {
+      "at": [
+        745.9082739719106,
+        691.5663332322925
+      ],
+      "size": [
+        51.50975042942306,
+        32.844700414266946
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 712 454",
+        "size": [
+          712,
+          454
+        ],
+        "light": image153,
+        "dark": image152
+      }
+    },
+    {
+      "at": [
+        178.14349676669698,
+        739.0247549762554
+      ],
+      "size": [
+        37.0407194099222,
+        42.82833181772254
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 512 592",
+        "size": [
+          512,
+          592
+        ],
+        "light": image171,
+        "dark": image170
+      }
+    },
+    {
+      "at": [
+        219.81430610285943,
+        739.0247549762554
+      ],
+      "size": [
+        37.0407194099222,
+        72.34515509750429
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 512 1000",
+        "size": [
+          512,
+          1000
+        ],
+        "light": image173,
+        "dark": image172
+      }
+    },
+    {
+      "at": [
+        261.4851154390219,
+        739.0247549762554
+      ],
+      "size": [
+        37.0407194099222,
+        42.82833181772254
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 512 592",
+        "size": [
+          512,
+          592
+        ],
+        "light": image175,
+        "dark": image174
+      }
+    },
+    {
+      "at": [
+        303.1559247751844,
+        739.0247549762554
+      ],
+      "size": [
+        39.934525613822366,
+        18.66505001515611
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 552 258",
+        "size": [
+          552,
+          258
+        ],
+        "light": image183,
+        "dark": image182
+      }
+    },
+    {
+      "at": [
+        347.72054031524704,
+        739.0247549762554
+      ],
+      "size": [
+        39.934525613822366,
+        18.66505001515611
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 552 258",
+        "size": [
+          552,
+          258
+        ],
+        "light": image185,
+        "dark": image184
+      }
+    },
+    {
+      "at": [
+        392.28515585530965,
+        739.0247549762554
+      ],
+      "size": [
+        54.40355663332323,
+        20.980094978276245
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 752 290",
+        "size": [
+          752,
+          290
+        ],
+        "light": image187,
+        "dark": image186
+      }
+    },
+    {
+      "at": [
+        0,
+        0
+      ],
+      "size": [
+        0,
+        0
+      ],
+      "kind": "asset",
+      "outline": false,
+      "labels": [
+        [
+          173.51341247558594,
+          83.9984359741211,
+          "section",
+          "Essentials"
+        ],
+        [
+          250.81028747558594,
+          83.9984359741211,
+          "count",
+          "8 assets"
+        ],
+        [
+          546.8143920898438,
+          83.9984359741211,
+          "section",
+          "Tasks & interactions"
+        ],
+        [
+          692.6581420898438,
+          83.9984359741211,
+          "count",
+          "5 assets"
+        ],
+        [
+          777.4507446289062,
+          83.9984359741211,
+          "section",
+          "Connections & MCP"
+        ],
+        [
+          920.4038696289062,
+          83.9984359741211,
+          "count",
+          "6 assets"
+        ],
+        [
+          1087.666748046875,
+          83.9984359741211,
+          "section",
+          "components"
+        ],
+        [
+          1180.541748046875,
+          83.9984359741211,
+          "count",
+          "14 assets"
+        ],
+        [
+          173.51341247558594,
+          295.5356750488281,
+          "section",
+          "surfaces"
+        ],
+        [
+          240.98216247558594,
+          295.5356750488281,
+          "count",
+          "12 assets"
+        ]
       ]
     }
   ]

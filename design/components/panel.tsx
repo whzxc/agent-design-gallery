@@ -13,7 +13,8 @@ const shortcuts = [
   ['Focus selection', ['Enter']], ['Back or close', ['Esc']],
 ] as const;
 const sampleRows = [{form:'item-selected',label:'state-pill',meta:'5 forms',icon:'component'}];
-const frameRows = ['ready','failed','empty'].map((label,i)=>({label,form:i===1?'item-selected':'item',icon:'app-window',meta:`960 × ${[662,912,432][i]}`}));
+const frameNote = 'The implementation uses full workspace height. Its shell follows the viewport; the older content-fit heights (662, 912 and 432px) are not capture-size requirements.';
+const frameRows = ['ready','failed','empty'].map((label,i)=>({label,form:i===1?'item-selected':'item',icon:'app-window',meta:`960 × ${[662,912,434][i]}`,note:frameNote}));
 export function Panel({ form = 'sidebar', width = 260, height, children }: { form?: string; width?: number; height?: number; children?: unknown }) {
   return <section class={`flex flex-col bg-surface ${form === 'menu' ? 'rounded-menu shadow-menu' : form === 'dialog' ? 'rounded-dialog shadow-menu' : 'rounded-panel shadow-float'}`} style={{ width, height }}>{children}</section>;
 }
@@ -31,7 +32,7 @@ export function Sidebar({ rows = sampleRows, search = false, height, specimen = 
     </div>
   </Panel>;
 }
-export function Inspector({ title='mcp-hub', path='surfaces/mcp-hub.svg', heading='Frames', rows=frameRows, actions=true }:any) {
+export function Inspector({ title='mcp-hub', path='surfaces/mcp-hub.tsx', heading='Frames', rows=frameRows, actions=true }:any) {
   return <Panel width={300}>
     <div class={`px-4 pt-[10px] ${actions?'pb-4':'pb-3'}`}>
       <div class="flex items-center justify-between -mr-[6px]"><h2 class="text-title leading-5 font-[650]">{title}</h2><IconButton icon="x"/></div>
@@ -39,7 +40,7 @@ export function Inspector({ title='mcp-hub', path='surfaces/mcp-hub.svg', headin
       {actions && <div class="flex gap-2 mt-[11px]"><Button form="secondary" label="Copy path" icon="copy"/><Button form="secondary" label="Reveal file" icon="folder-open"/></div>}
     </div>
     <div class="h-px bg-border mx-4"/><h3 class="text-meta text-text-tertiary font-[550] leading-4 mt-[13px] mb-[6px] mx-4">{heading}</h3>
-    <div class={`px-2 ${actions?'pb-[10px]':'pb-3'}`}>{rows.map((row:any)=><TreeRow {...row} width={284} indent={-2}/>)}</div>
+    <div class={`px-2 ${actions?'pb-[10px]':'pb-3'}`}>{rows.map((row:any)=><div><TreeRow {...row} width={284} indent={-2}/>{row.note && <p class="mx-2 mt-1 mb-2 text-body leading-[1.2] text-text-secondary">{row.note}</p>}</div>)}</div>
   </Panel>;
 }
 export function Menu({ rows, width=220 }:any) {

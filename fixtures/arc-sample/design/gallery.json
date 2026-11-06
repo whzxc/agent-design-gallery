@@ -1,0 +1,49 @@
+{
+  "groups": [
+    {
+      "title": "Essentials",
+      "assets": [
+        "components/button.tsx",
+        "components/icon-button.tsx",
+        "components/switch.tsx",
+        "components/search.tsx",
+        "components/field.tsx",
+        "components/tag.tsx",
+        "components/card.tsx",
+        "components/single-choice.tsx"
+      ]
+    },
+    {
+      "title": "Agents & quota",
+      "assets": [
+        "components/quota-card.tsx",
+        "components/tile.tsx",
+        "components/state-pill.tsx",
+        "components/effort-slider.tsx",
+        "surfaces/agent-panel.tsx",
+        "surfaces/quota-overview.tsx"
+      ]
+    },
+    {
+      "title": "Tasks & interactions",
+      "assets": [
+        "components/task-bubble.tsx",
+        "components/task-message.tsx",
+        "components/notice.tsx",
+        "surfaces/task-detail.tsx",
+        "surfaces/approval.tsx"
+      ]
+    },
+    {
+      "title": "Connections & MCP",
+      "assets": [
+        "components/copy-field.tsx",
+        "components/setup-choice.tsx",
+        "surfaces/mcp-hub.tsx",
+        "surfaces/connections.tsx",
+        "surfaces/relay-hosting.tsx",
+        "surfaces/platforms.tsx"
+      ]
+    }
+  ]
+}

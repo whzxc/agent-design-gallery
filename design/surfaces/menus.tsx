@@ -79,7 +79,7 @@ const frames = [
     },
     "chrome": [
       {
-        "left": 73,
+        "left": 72,
         "top": 250,
         "kind": "zoom",
         "label": "48%",

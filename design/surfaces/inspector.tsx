@@ -23,7 +23,7 @@ const frames = [
           {
             "form": "root",
             "label": "All designs",
-            "meta": "25",
+            "meta": "51",
             "icon": "layout-grid"
           },
           {
@@ -79,6 +79,18 @@ const frames = [
             "form": "item",
             "label": "platforms",
             "icon": "app-window"
+          },
+          {
+            "form": "group",
+            "label": "components",
+            "meta": "14",
+            "icon": "chevron-right"
+          },
+          {
+            "form": "group",
+            "label": "surfaces",
+            "meta": "12",
+            "icon": "chevron-right"
           }
         ],
         "height": 876
@@ -90,7 +102,7 @@ const frames = [
         "active": "panel-right"
       },
       {
-        "left": 565,
+        "left": 564,
         "top": 840,
         "kind": "zoom",
         "label": "71%",
@@ -101,25 +113,28 @@ const frames = [
         "top": 64,
         "kind": "inspector",
         "title": "mcp-hub",
-        "path": "surfaces/mcp-hub.svg",
+        "path": "surfaces/mcp-hub.tsx",
         "rows": [
           {
             "form": "item",
             "label": "ready",
             "meta": "960 × 662",
-            "icon": "app-window"
+            "icon": "app-window",
+            "note": "The implementation uses full workspace height. Its shell follows the viewport; the older content-fit heights (662, 912 and 432px) are not capture-size requirements."
           },
           {
             "form": "item-selected",
             "label": "failed",
             "meta": "960 × 912",
-            "icon": "app-window"
+            "icon": "app-window",
+            "note": "The implementation uses full workspace height. Its shell follows the viewport; the older content-fit heights (662, 912 and 432px) are not capture-size requirements."
           },
           {
             "form": "item",
             "label": "empty",
-            "meta": "960 × 432",
-            "icon": "app-window"
+            "meta": "960 × 434",
+            "icon": "app-window",
+            "note": "The implementation uses full workspace height. Its shell follows the viewport; the older content-fit heights (662, 912 and 432px) are not capture-size requirements."
           }
         ],
         "heading": "Frames"
@@ -146,7 +161,7 @@ const frames = [
           {
             "form": "root",
             "label": "All designs",
-            "meta": "25",
+            "meta": "51",
             "icon": "layout-grid"
           },
           {
@@ -212,6 +227,18 @@ const frames = [
             "label": "Connections & MCP",
             "meta": "6",
             "icon": "chevron-right"
+          },
+          {
+            "form": "group",
+            "label": "components",
+            "meta": "14",
+            "icon": "chevron-right"
+          },
+          {
+            "form": "group",
+            "label": "surfaces",
+            "meta": "12",
+            "icon": "chevron-right"
           }
         ],
         "height": 876
@@ -223,7 +250,7 @@ const frames = [
         "active": "panel-right"
       },
       {
-        "left": 561,
+        "left": 559,
         "top": 840,
         "kind": "zoom",
         "label": "125%",
@@ -234,7 +261,7 @@ const frames = [
         "top": 64,
         "kind": "inspector",
         "title": "button",
-        "path": "components/button.svg",
+        "path": "components/button.tsx",
         "rows": [
           {
             "form": "item-selected",

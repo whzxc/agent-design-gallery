@@ -133,3 +133,42 @@ Set `requires: '>=0.4.0'`. Replace all top-level component/surface SVG sources b
 - `sdg compare --all`: all 15 frames have the same counts as 0.3.3; exit 1 records the retained findings above. Local log: `output/authoring-compare-final.log`.
 - Unit tests cover fractional class/style/frame lengths, disallowed layout styles, inherited `data-free`, allowed width/height/custom properties, art URL boundaries/dependencies/declarations and content-sized Frames.
 - `npm test` ran once: 31/32 passed. The fixture-coverage test now reads built Frames instead of scanning JSX attributes. Its targeted recheck and the content-sizing test using SDG's actual Button both passed (2/2). Logs: `output/authoring-npm-test.log` and `output/authoring-targeted-tests.log`.
+
+## ARC TSX fixture refresh
+
+The fixture now contains all 51 sources from ARC `b9e18beb`, with 94 artboards in six sections. All 87 copied files match that commit; the local gallery preserves the four curated groups. The remaining sources use directory groups. The layout reference, scene data and 188 theme-specific PNG previews are regenerated from this snapshot. Legacy SVG coverage uses two standalone sheets.
+
+`sdg check` passed for all 18 SDG sources. Changed frames were rendered and visually reviewed in both themes on macOS, including the canvas, inspector, menus, open-directory and their changed components. `npm test` ran once: 41/41 passed.
+
+`sdg compare --all` completed all 15 frames; every capture settled. Counts are offsets above 2px / missing / extra.
+
+| Source / frame | 0.4.0 | ARC TSX snapshot |
+| --- | --- | --- |
+| canvas / components | 1 / 0 / 0 | 0 / 0 / 0 |
+| canvas / zoomed | 2 / 0 / 0 | 0 / 0 / 0 |
+| canvas / surfaces | 1 / 0 / 0 | 0 / 0 / 0 |
+| canvas / overview | 5 / 0 / 0 | 0 / 0 / 0 |
+| inspector / frame | 0 / 0 / 0 | 0 / 0 / 0 |
+| inspector / component | 0 / 0 / 0 | 0 / 0 / 0 |
+| menus / display | 0 / 0 / 1 | 0 / 0 / 0 |
+| menus / zoom | 0 / 0 / 0 | 0 / 0 / 0 |
+| menus / more | 0 / 0 / 0 | 0 / 0 / 0 |
+| menus / search | 0 / 0 / 0 | 0 / 0 / 0 |
+| menus / tooltip | 0 / 0 / 0 | 0 / 0 / 0 |
+| menus / shortcuts | 1 / 0 / 0 | 1 / 0 / 0 |
+| open-directory / empty | 0 / 0 / 0 | 0 / 0 / 0 |
+| open-directory / dialog | 4 / 2 / 0 | 0 / 0 / 0 |
+| open-directory / error | 0 / 0 / 0 | 0 / 0 / 0 |
+
+Totals are **1 / 0 / 0**, down from **14 / 2 / 1**. No frame got worse. Regenerated canvas labels eliminate the previous section/count offsets and covered-dialog labels. The new layout leaves no canvas label in the display menu crop. The retained shortcut finding is the same isolated `←` key horizontal offset of 2.6875px; compare exits 1 for that finding. Preview bounds, selection outlines, minimap geometry and inspector source notes were also checked in the overlays.
+
+One informational benchmark ran on a separate copy of the new fixture; this snapshot replaces the old one, so it is not a before/after performance gate. Environment: macOS arm64, Apple M4 Pro, Node 24.22.0, Chromium 156.0.8078.4, 1440 × 900 at DPR 2. First browse: **1295.3ms**.
+
+| Phase | Frame p95 (ms) | Maximum (ms) | Task time (ms) | Heap (MiB) |
+| --- | ---: | ---: | ---: | ---: |
+| pan | 16.7 | 16.8 | 225.7 | 6.47 |
+| zoom | 16.8 | 16.8 | 611.1 | 4.63 |
+| trackpad-pan | 16.8 | 16.8 | 164.7 | 3.09 |
+| theme | 16.7 | 16.7 | 214.6 | 32.69 |
+
+All phases recorded zero long tasks and zero frames above 33.4ms. Saving the shared TSX button refreshed 22 dependent asset requests in **1376.5ms**, with the camera unchanged and no page errors. The benchmark save probe accepts TSX and retains SVG support. Raw logs, render review sheets and the benchmark JSON remain local in `output/arc-refresh/`; compare reports are in `output/design/compare/`.

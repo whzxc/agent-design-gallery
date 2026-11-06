@@ -1,173 +1,355 @@
-import image0 from "../art/arc-previews/arc-dark-components-button.svg?url";
-import image1 from "../art/arc-previews/arc-dark-components-field.svg?url";
-import image2 from "../art/arc-previews/arc-dark-components-icon-button.svg?url";
-import image3 from "../art/arc-previews/arc-dark-components-switch.svg?url";
-import image4 from "../art/arc-previews/arc-dark-components-tag.svg?url";
-import image5 from "../art/arc-previews/arc-dark-surfaces-mcp-hub.svg?url";
-import image6 from "../art/arc-previews/arc-light-components-button.svg?url";
-import image7 from "../art/arc-previews/arc-light-components-field.svg?url";
-import image8 from "../art/arc-previews/arc-light-components-icon-button.svg?url";
-import image9 from "../art/arc-previews/arc-light-components-switch.svg?url";
-import image10 from "../art/arc-previews/arc-light-components-tag.svg?url";
-import image11 from "../art/arc-previews/arc-light-surfaces-mcp-hub.svg?url";
+// Generated from fixtures/arc-sample.layout.json by fixtures/refresh-arc-scenes.mjs.
+import image0 from '../art/arc-previews/components-button-dark.png';
+import image1 from '../art/arc-previews/components-button-light.png';
+import image2 from '../art/arc-previews/components-field-dark.png';
+import image3 from '../art/arc-previews/components-field-light.png';
+import image4 from '../art/arc-previews/components-icon-button-dark.png';
+import image5 from '../art/arc-previews/components-icon-button-light.png';
+import image6 from '../art/arc-previews/components-switch-dark.png';
+import image7 from '../art/arc-previews/components-switch-light.png';
+import image8 from '../art/arc-previews/components-tag-dark.png';
+import image9 from '../art/arc-previews/components-tag-light.png';
+import image10 from '../art/arc-previews/surfaces-mcp-hub-0-dark.png';
+import image11 from '../art/arc-previews/surfaces-mcp-hub-0-light.png';
+import image12 from '../art/arc-previews/surfaces-mcp-hub-1-dark.png';
+import image13 from '../art/arc-previews/surfaces-mcp-hub-1-light.png';
+import image14 from '../art/arc-previews/surfaces-mcp-hub-2-dark.png';
+import image15 from '../art/arc-previews/surfaces-mcp-hub-2-light.png';
 
 export const scenes = {
   "frame": [
     {
-      "at": [-445.5, -287.8],
-      "size": [2836.2, 1827.1],
-      "kind": "section",
-      "children": [
-        {
-          "at": [45.3, 411.8],
-          "size": [2196.5, 668.0],
-          "kind": "asset",
-          "outline": false,
-          "children": [
-            {
-              "at": [0.0, 0.0],
-              "size": [702.0, 491.1],
-              "kind": "asset",
-              "preview": {
-                "crop": "57.4 79.4 989.2 691.2",
-                "size": [1104.0, 2328.0],
-                "light": image11,
-                "dark": image5
-              }
-            },
-            {
-              "at": [747.3, 0.0],
-              "size": [702.0, 668.0],
-              "kind": "asset",
-              "selected": true,
-              "preview": {
-                "crop": "57.4 819.4 989.2 941.2",
-                "size": [1104.0, 2328.0],
-                "light": image11,
-                "dark": image5
-              },
-              "labels": [
-                [0.0, -12.0, "selected-frame", "failed"]
-              ]
-            },
-            {
-              "at": [1494.5, 0.0],
-              "size": [702.0, 328.3],
-              "kind": "asset",
-              "preview": {
-                "crop": "57.4 1809.4 989.2 461.2",
-                "size": [1104.0, 2328.0],
-                "light": image11,
-                "dark": image5
-              },
-              "labels": [
-                [0.0, -12.0, "form", "empty"]
-              ]
-            }
-          ]
-        },
-        {
-          "at": [45.3, 1221.4],
-          "size": [560.4, 164.2],
-          "kind": "asset",
-          "outline": false
-        },
-        {
-          "at": [651.0, 1221.4],
-          "size": [1449.2, 560.4],
-          "kind": "asset",
-          "outline": false
-        }
+      "at": [
+        -445.5254237288136,
+        -187.35593220338978
+      ],
+      "size": [
+        2694.64406779661,
+        1726.6101694915255
+      ],
+      "kind": "section"
+    },
+    {
+      "at": [
+        -400.2372881355932,
+        124.00000000000006
+      ],
+      "size": [
+        701.9661016949152,
+        491.09322033898303
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 694",
+        "size": [
+          992,
+          694
+        ],
+        "light": image11,
+        "dark": image10
+      }
+    },
+    {
+      "at": [
+        347.0169491525421,
+        124.00000000000006
+      ],
+      "size": [
+        701.9661016949152,
+        668
+      ],
+      "kind": "asset",
+      "selected": true,
+      "preview": {
+        "crop": "0 0 992 944",
+        "size": [
+          992,
+          944
+        ],
+        "light": image13,
+        "dark": image12
+      }
+    },
+    {
+      "at": [
+        1094.2711864406774,
+        124.00000000000006
+      ],
+      "size": [
+        701.9661016949152,
+        329.7542372881356
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 992 466",
+        "size": [
+          992,
+          466
+        ],
+        "light": image15,
+        "dark": image14
+      }
+    },
+    {
+      "at": [
+        0,
+        0
+      ],
+      "size": [
+        0,
+        0
+      ],
+      "kind": "asset",
+      "outline": false,
+      "labels": [
+        [
+          347.0169372558594,
+          111.9937515258789,
+          "selected-frame",
+          "failed"
+        ],
+        [
+          1094.271240234375,
+          111.9937515258789,
+          "form",
+          "empty"
+        ]
       ]
     }
   ],
   "component": [
     {
-      "at": [228.6, 269.3],
-      "size": [2530.6, 1935.0],
-      "kind": "section",
-      "children": [
-        {
-          "at": [80.0, 130.0],
-          "size": [778.8, 117.5],
-          "kind": "asset",
-          "selected": true,
-          "preview": {
-            "crop": "16.8 26.8 621.4 92.4",
-            "size": [655.0, 136.0],
-            "light": image6,
-            "dark": image0
-          },
-          "labels": [
-            [0.0, -12.0, "selected-set", "button"],
-            [42.8, -12.0, "count", "5 forms"],
-            [30.0, 35.5, "form", "primary"],
-            [218.8, 35.5, "form", "secondary"],
-            [391.3, 35.5, "form", "ghost"],
-            [503.8, 35.5, "form", "danger"],
-            [616.3, 35.5, "form", "pending"]
-          ]
-        },
-        {
-          "at": [938.8, 130.0],
-          "size": [180.0, 117.5],
-          "kind": "asset",
-          "preview": {
-            "crop": "16.8 26.8 142.4 92.4",
-            "size": [320.0, 156.0],
-            "light": image8,
-            "dark": image2
-          },
-          "labels": [
-            [30.0, 35.5, "form", "regular"],
-            [112.5, 35.5, "form", "compact"],
-            [0.0, -12.0, "set", "icon-button"],
-            [74.9, -12.0, "count", "2 forms"]
-          ]
-        },
-        {
-          "at": [1198.8, 130.0],
-          "size": [210.0, 107.5],
-          "kind": "asset",
-          "preview": {
-            "crop": "16.8 26.8 166.4 84.4",
-            "size": [200.0, 128.0],
-            "light": image9,
-            "dark": image3
-          }
-        },
-        {
-          "at": [80.0, 387.5],
-          "size": [799.4, 181.9],
-          "kind": "asset",
-          "preview": {
-            "crop": "16.8 26.8 637.9 143.9",
-            "size": [672.0, 188.0],
-            "light": image7,
-            "dark": image1
-          },
-          "labels": [
-            [0.0, -12.0, "set", "field"],
-            [31.1, -12.0, "count", "2 forms"],
-            [30.0, 35.5, "form", "default"],
-            [418.8, 35.5, "form", "error"]
-          ]
-        },
-        {
-          "at": [959.4, 387.5],
-          "size": [651.3, 255.0],
-          "kind": "asset",
-          "preview": {
-            "crop": "16.8 26.8 519.4 202.4",
-            "size": [553.0, 246.0],
-            "light": image10,
-            "dark": image4
-          },
-          "labels": [
-            [0.0, -12.0, "set", "tag"],
-            [24.4, -12.0, "count", "5 forms"]
-          ]
-        }
+      "at": [
+        228.62499999999994,
+        269.25
+      ],
+      "size": [
+        2540,
+        1842.5
+      ],
+      "kind": "section"
+    },
+    {
+      "at": [
+        308.62499999999994,
+        399.25
+      ],
+      "size": [
+        778.75,
+        117.5
+      ],
+      "kind": "asset",
+      "selected": true,
+      "preview": {
+        "crop": "0 0 623 94",
+        "size": [
+          623,
+          94
+        ],
+        "light": image1,
+        "dark": image0
+      }
+    },
+    {
+      "at": [
+        1167.375,
+        399.25
+      ],
+      "size": [
+        180,
+        117.5
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 144 94",
+        "size": [
+          144,
+          94
+        ],
+        "light": image5,
+        "dark": image4
+      }
+    },
+    {
+      "at": [
+        1427.375,
+        399.25
+      ],
+      "size": [
+        210,
+        107.5
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 168 86",
+        "size": [
+          168,
+          86
+        ],
+        "light": image7,
+        "dark": image6
+      }
+    },
+    {
+      "at": [
+        308.62499999999994,
+        656.75
+      ],
+      "size": [
+        800,
+        182.5
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 640 146",
+        "size": [
+          640,
+          146
+        ],
+        "light": image3,
+        "dark": image2
+      }
+    },
+    {
+      "at": [
+        1188.625,
+        656.75
+      ],
+      "size": [
+        838.7109375,
+        105
+      ],
+      "kind": "asset",
+      "selected": false,
+      "preview": {
+        "crop": "0 0 670.96875 84",
+        "size": [
+          670.96875,
+          84
+        ],
+        "light": image9,
+        "dark": image8
+      }
+    },
+    {
+      "at": [
+        0,
+        0
+      ],
+      "size": [
+        0,
+        0
+      ],
+      "kind": "asset",
+      "outline": false,
+      "labels": [
+        [
+          308.625,
+          387.24530029296875,
+          "selected-set",
+          "button"
+        ],
+        [
+          353.296875,
+          387.24530029296875,
+          "count",
+          "5 forms"
+        ],
+        [
+          338.625,
+          434.75,
+          "form",
+          "primary"
+        ],
+        [
+          527.375,
+          434.75,
+          "form",
+          "secondary"
+        ],
+        [
+          699.875,
+          434.75,
+          "form",
+          "ghost"
+        ],
+        [
+          812.375,
+          434.75,
+          "form",
+          "danger"
+        ],
+        [
+          924.875,
+          434.75,
+          "form",
+          "pending"
+        ],
+        [
+          1167.375,
+          387.24530029296875,
+          "set",
+          "icon-button"
+        ],
+        [
+          1242.40625,
+          387.24530029296875,
+          "count",
+          "2 forms"
+        ],
+        [
+          1197.375,
+          434.75,
+          "form",
+          "regular"
+        ],
+        [
+          1279.875,
+          434.75,
+          "form",
+          "compact"
+        ],
+        [
+          308.625,
+          644.7453002929688,
+          "set",
+          "field"
+        ],
+        [
+          340.359375,
+          644.7453002929688,
+          "count",
+          "2 forms"
+        ],
+        [
+          338.625,
+          692.25,
+          "form",
+          "default"
+        ],
+        [
+          728.625,
+          692.25,
+          "form",
+          "error"
+        ],
+        [
+          1188.625,
+          644.7453002929688,
+          "set",
+          "tag"
+        ],
+        [
+          1213.671875,
+          644.7453002929688,
+          "count",
+          "5 forms"
+        ]
       ]
     }
   ]

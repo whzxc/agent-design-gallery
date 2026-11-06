@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile, access } from "node:fs/promises";
 import os from "node:os";
 const [url, destination = "output/benchmark.json", fixtureRoot] =
   process.argv.slice(2);
@@ -191,8 +191,9 @@ await fit();
 await page.waitForTimeout(250);
 let update;
 if (fixtureRoot) {
-  const file = fixtureRoot + "/components/button.svg",
-    original = await readFile(file, "utf8");
+  let file = fixtureRoot + "/components/button.tsx";
+  try { await access(file); } catch { file = fixtureRoot + "/components/button.svg"; }
+  const original = await readFile(file, "utf8"), sourcePath = file.slice(fixtureRoot.length + 1);
   const camera = () =>
     page.evaluate(
       () =>
@@ -211,11 +212,11 @@ if (fixtureRoot) {
   const image = page.waitForResponse(
     (r) =>
       r.url().includes("/asset/") &&
-      decodeURIComponent(r.url()).includes("components/button.svg"),
+      decodeURIComponent(r.url()).includes(sourcePath),
   );
   const start = performance.now();
   try {
-    await writeFile(file, original + "\n<!-- benchmark file save -->\n");
+    await writeFile(file, original + (file.endsWith(".tsx") ? "\n// benchmark file save\n" : "\n<!-- benchmark file save -->\n"));
     const changed = await (await updatedManifest).json();
     await image;
     await page.waitForFunction(
