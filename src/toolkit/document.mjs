@@ -1,132 +1,8 @@
-// Functions executed in Chromium. Adapted from ARC (MIT; see LICENSE).
-export function inspectDocument(tokenNames) {
-  const visible = el => {
-    if (el.closest('defs')) return false;
-    for (let node = el; node; node = node.parentElement) {
-      const style = getComputedStyle(node);
-      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
-    }
-    return true;
-  };
-  const svg = document.documentElement;
-  const problems = [];
-  const defined = new Set(tokenNames);
-  const generated = new Set();
-  let inRegion = false;
-  for (const child of svg.childNodes) {
-    if (child.nodeType === Node.COMMENT_NODE && child.textContent.trim() === 'design:tokens') inRegion = true;
-    if (inRegion) generated.add(child);
-    if (child.nodeType === Node.COMMENT_NODE && child.textContent.trim() === '/design:tokens') inRegion = false;
-  }
-  const label = el => {
-    const owner = el.closest('[data-component]');
-    const where = owner ? `${owner.dataset.component}/${owner.dataset.form ?? '?'} ` : '';
-    const text = el.tagName === 'text' ? ` "${el.textContent.trim().slice(0, 32)}"` : '';
-    return `${where}<${el.tagName}${text}>`;
-  };
-  const paints = ['fill', 'stroke', 'stop-color', 'flood-color', 'color'];
-  for (const el of [svg, ...svg.querySelectorAll('*')]) {
-    if (!el.closest('[data-design-tokens]')) {
-      const raw = el.tagName === 'style' ? el.textContent : [...el.attributes].map(a => a.value).join(' ');
-      for (const match of raw.matchAll(/var\(\s*(--[\w-]+)/g)) {
-        if (!defined.has(match[1])) problems.push(`${label(el)} references undefined token ${match[1]}`);
-      }
-    }
-    if (el.tagName === 'style' && !generated.has(el)) {
-      const inspectRules = rules => {
-        for (const rule of rules) {
-          if (rule.cssRules) inspectRules(rule.cssRules);
-          if (!rule.style || !rule.selectorText) continue;
-          let targets;
-          try { targets = [...svg.querySelectorAll(rule.selectorText)]; if (svg.matches(rule.selectorText)) targets.unshift(svg); } catch { continue; }
-          if (!targets.some(target => !target.closest('[data-brand]'))) continue;
-          for (const property of paints) {
-            const value = rule.style.getPropertyValue(property).trim();
-            if (value && !/^(none|transparent|currentcolor|inherit)$/i.test(value) && !/^(var|url)\(/.test(value)) problems.push(`<style> paints ${property} with literal ${value}; use a token`);
-          }
-        }
-      };
-      const sheet = [...document.styleSheets].find(sheet => sheet.ownerNode === el);
-      if (sheet) inspectRules(sheet.cssRules);
-    }
-    if (el.closest('style, [data-design-tokens], [data-brand]')) continue;
-    for (const property of paints) {
-      for (const raw of [el.getAttribute(property), el.style.getPropertyValue(property)]) {
-        const value = raw?.trim();
-        if (!value || /^(none|transparent|currentcolor|inherit)$/i.test(value) || value.startsWith('url(')) continue;
-        if (!/^var\(--[\w-]+\)$/.test(value)) problems.push(`${label(el)} paints ${property} with literal ${value}; use a token`);
-      }
-    }
-  }
-  const canvas = svg.getBoundingClientRect();
-  const texts = [...svg.querySelectorAll('text')].filter(t => !t.closest('[data-brand], defs') && visible(t));
-  const boxes = texts.map(t => t.getBoundingClientRect());
-  texts.forEach((t, i) => {
-    const b = boxes[i];
-    if (b.left < canvas.left - 0.5 || b.right > canvas.right + 0.5 || b.top < canvas.top - 0.5 || b.bottom > canvas.bottom + 0.5) problems.push(`${label(t)} extends outside the canvas`);
-    for (let j = i + 1; j < texts.length; j++) {
-      const o = boxes[j];
-      if (Math.min(b.right, o.right) - Math.max(b.left, o.left) > 0.5 && Math.min(b.bottom, o.bottom) - Math.max(b.top, o.top) > 0.5) problems.push(`${label(t)} overlaps ${label(texts[j])}`);
-    }
-  });
-  const instances = [];
-  for (const group of svg.querySelectorAll('[data-component]')) {
-    if (group.closest('defs') || !visible(group)) continue;
-    const container = [...group.children].find(child => child.tagName === 'rect');
-    const own = [...group.querySelectorAll('text')].filter(t => t.closest('[data-component]') === group && visible(t));
-    if (container) {
-      const r = container.getBoundingClientRect();
-      for (const t of own) {
-        const b = t.getBoundingClientRect(), middle = (b.top + b.bottom) / 2;
-        if (middle < r.top || middle > r.bottom) continue;
-        if (b.left < r.left - 0.5 || b.right > r.right + 0.5 || b.top < r.top - 0.5 || b.bottom > r.bottom + 0.5) problems.push(`${label(t)} overflows its ${group.dataset.component} container`);
-      }
-    }
-    instances.push({
-      component: group.dataset.component,
-      form: group.dataset.form,
-      nested: !!group.parentElement.closest('[data-component]'),
-      at: `${group.dataset.component}/${group.dataset.form ?? '?'} at ${group.getAttribute('transform') ?? 'origin'}`,
-      signature: {
-        container: container ? { height: container.getAttribute('height'), fluid: container.getAttribute('data-fluid') === 'height', rx: getComputedStyle(container).rx, fill: getComputedStyle(container).fill, stroke: getComputedStyle(container).stroke, filter: getComputedStyle(container).filter.replace(/url\(.*#/, 'url(#') } : null,
-        text: [...new Set(own.map(t => [getComputedStyle(t).fill, getComputedStyle(t).fontSize, getComputedStyle(t).fontWeight, getComputedStyle(t).fontFamily].join(' ')))].sort(),
-      },
-    });
-  }
-  for (const frame of svg.querySelectorAll('[data-part^="frame-"]')) {
-    const component = frame.querySelector('[data-component]');
-    const shell = component?.firstElementChild;
-    if (!shell || shell.tagName !== 'rect') problems.push(`${frame.dataset.part} has no component shell; make the first component start with a container rect`);
-    if (frame.hasAttribute('data-viewport') || frame.hasAttribute('data-origin')) {
-      const viewport = frame.dataset.viewport?.match(/^([1-9]\d*)x([1-9]\d*)$/);
-      const origin = frame.dataset.origin?.trim().split(/\s+/).map(Number);
-      const box = shell?.getBoundingClientRect();
-      if (!viewport || origin?.length !== 2 || !origin.every(Number.isFinite) || origin.some(n => n < 0) || !box ||
-          origin[0] + box.width > Number(viewport[1]) + 0.5 || origin[1] + box.height > Number(viewport[2]) + 0.5) {
-        problems.push(`${frame.dataset.part} origin and size do not fit declared viewport; set data-viewport and data-origin to contain the frame shell`);
-      }
-    }
-  }
-  return { problems, instances };
-}
-
-export function designFrame(part) {
-  const frame = [...document.querySelectorAll('[data-part]')].find(el => el.dataset.part === part);
-  if (!frame) return null;
-  const shell = frame.querySelector('[data-component]')?.firstElementChild;
-  if (!shell || shell.tagName !== 'rect') throw new Error('Frame needs a component shell; add its container rect');
-  const origin = shell.getBoundingClientRect();
-  const texts = [...frame.querySelectorAll('text')].filter(t => !t.classList.contains('note') && t.textContent.trim() && t.getBoundingClientRect().width > 0 && getComputedStyle(t).visibility !== 'hidden').map(t => {
-    const b = t.getBoundingClientRect();
-    return { text: t.textContent.replace(/\s+/g, ' ').trim(), x: b.left - origin.left, y: b.top - origin.top, width: b.width, height: b.height, anchor: getComputedStyle(t).textAnchor };
-  });
-  return { box: { x: origin.left, y: origin.top, width: origin.width, height: origin.height }, texts, fixture: frame.dataset.fixture, viewport: frame.dataset.viewport, origin: frame.dataset.origin };
-}
-
 export function implementationTexts(root, clip) {
   const bounds = root.getBoundingClientRect();
   const origin = clip ? { left: clip.x - scrollX, top: clip.y - scrollY, right: clip.x - scrollX + clip.width, bottom: clip.y - scrollY + clip.height } : bounds;
   const texts = [];
+  const measure = document.createElement('canvas').getContext('2d');
   const visible = owner => {
     for (let el = owner; el; el = el.parentElement) {
       const style = getComputedStyle(el);
@@ -147,12 +23,10 @@ export function implementationTexts(root, clip) {
   const push = (text, box, owner, style = getComputedStyle(owner)) => {
     if (!inside(box, owner)) return;
     texts.push({ text, x: box.left - origin.left, y: box.top - origin.top, width: box.right - box.left, height: box.bottom - box.top,
-      fill: style.color, size: style.fontSize, weight: style.fontWeight, family: style.fontFamily });
+      space: (measure.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`, measure.measureText(' ').width), anchor: style.textAlign === 'center' ? 'middle' : style.textAlign === 'right' ? 'end' : 'start', fill: style.color, size: style.fontSize, weight: style.fontWeight, family: style.fontFamily });
   };
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    const owner = node.parentElement;
-    if (!node.textContent.trim() || !owner || owner.closest('input, textarea') || !visible(owner)) continue;
+  const linesFor = node => {
+    const result=[];
     const range = document.createRange(), lines = [];
     for (let index = 0; index < node.length; index++) {
       range.setStart(node, index); range.setEnd(node, index + 1);
@@ -169,21 +43,43 @@ export function implementationTexts(root, clip) {
       if (!content) continue;
       const chars = line.chars.filter(({ index }) => !/\s/.test(node.data[index]));
       const box = { left: Math.min(...chars.map(c => c.rect.left)), right: Math.max(...chars.map(c => c.rect.right)), top: line.top, bottom: line.bottom };
-      push(content, box, owner);
+      result.push({content,box});
     }
+    return result;
+  };
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const owner=node.parentElement;
+    if (!node.textContent.trim() || !owner || owner.closest('input,textarea') || !visible(owner)) continue;
+    for (const {content,box} of linesFor(node)) push(content,box,owner);
   }
   const canvas = document.createElement('canvas').getContext('2d');
-  for (const input of root.querySelectorAll('input:not([type]), input[type=text], input[type=search], input[type=email], input[type=url], input[type=tel], input[type=number], textarea')) {
+  const fields='input:not([type]), input[type=text], input[type=search], input[type=email], input[type=url], input[type=tel], input[type=number], textarea';
+  for (const input of [...(root.matches(fields) ? [root] : []), ...root.querySelectorAll(fields)]) {
     if (!visible(input)) continue;
-    const content = (input.value || input.placeholder || '').replace(/\s+/g, ' ').trim();
+    const raw = input.value || input.placeholder || '';
+    const content = raw.replace(/\s+/g, ' ').trim();
     if (!content) continue;
     const rect = input.getBoundingClientRect(), style = getComputedStyle(input, input.value ? null : '::placeholder');
     if (rect.width < 1) continue;
+    if (input.tagName === 'TEXTAREA') {
+      const box=getComputedStyle(input), mirror=document.createElement('div');
+      Object.assign(mirror.style,{position:'fixed',visibility:'hidden',left:(rect.left+parseFloat(box.borderLeftWidth)+parseFloat(box.paddingLeft)-input.scrollLeft)+'px',top:(rect.top+parseFloat(box.borderTopWidth)+parseFloat(box.paddingTop)-input.scrollTop)+'px',width:(input.clientWidth-parseFloat(box.paddingLeft)-parseFloat(box.paddingRight))+'px',fontFamily:style.fontFamily,fontSize:style.fontSize,fontWeight:style.fontWeight,lineHeight:style.lineHeight,letterSpacing:style.letterSpacing,whiteSpace:input.wrap==='off'?'pre':'pre-wrap',overflowWrap:'break-word'});
+      mirror.textContent=raw;document.body.append(mirror);
+      for (const {content,box} of linesFor(mirror.firstChild)) push(content,box,input,style);
+      mirror.remove();continue;
+    }
     canvas.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
     const box = getComputedStyle(input), height = parseFloat(style.fontSize) * 1.2;
     const left = rect.left + parseFloat(box.borderLeftWidth) + parseFloat(box.paddingLeft);
     const top = input.tagName === 'TEXTAREA' ? rect.top + parseFloat(box.borderTopWidth) + parseFloat(box.paddingTop) : rect.top + rect.height / 2 - height / 2;
     push(content, { left, right: left + canvas.measureText(content).width, top, bottom: top + height }, input, style);
   }
-  return { box: { x: origin.left + scrollX, y: origin.top + scrollY, width: origin.right - origin.left, height: origin.bottom - origin.top }, texts };
+  const merged = [];
+  for (const item of texts.sort((a,b) => a.y - b.y || a.x - b.x)) {
+    const previous = merged.findLast(p => Math.abs(p.y + p.height/2 - item.y - item.height/2) < 1 && item.x >= p.x + p.width - .5 && item.x - p.x - p.width < Math.max(p.space, item.space) - .1);
+    if (previous) { const gap = item.x - previous.x - previous.width; previous.text += (gap > .5 ? ' ' : '') + item.text; previous.width = item.x + item.width - previous.x; }
+    else merged.push({...item});
+  }
+  return { box: { x: origin.left + scrollX, y: origin.top + scrollY, width: origin.right - origin.left, height: origin.bottom - origin.top }, texts: merged };
 }

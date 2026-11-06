@@ -2,3 +2,10 @@ node_modules/
 output/
 *.tgz
 .DS_Store
+
+/design/.sdg/
+
+/output/design/
+
+**/.sdg/
+/public/tokens.css

@@ -1,68 +1,72 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { parseTokens, tokenRegion, syncSvg } from './tokens.mjs';
-
+import { parseTokens } from './tokens.mjs';
 export const starterTokens = `:root {
   --font-ui: system-ui, sans-serif;
   --font-mono: ui-monospace, monospace;
-  --text-caption: 11px;
-  --text-tertiary: #737373;
   --canvas: #ffffff;
+  --text: #171717;
 }
 :root[data-theme="dark"] {
-  --text-tertiary: #a3a3a3;
   --canvas: #171717;
+  --text: #ffffff;
 }
 `;
+export function refreshTypes(config) {
+  mkdirSync(path.join(config.design, '.sdg'), { recursive: true });
+  const runtime = readFileSync(new URL('./runtime.d.ts', import.meta.url), 'utf8');
+  writeFileSync(path.join(config.design, '.sdg/runtime.d.ts'), runtime);
+  writeFileSync(path.join(config.design, '.sdg/assets.d.ts'), `declare module '*.svg' { const Art: (props: Record<string, unknown>) => any; export default Art; }\n${['png','jpg','jpeg','webp'].map(ext => `declare module '*.${ext}' { const url: string; export default url; }`).join('\n')}\n`);
+}
+export const tsconfig = { compilerOptions: { target: 'ESNext', module: 'ESNext', moduleResolution: 'Bundler', jsx: 'react-jsx', jsxImportSource: 'sdg', noEmit: true, strict: true, paths: { sdg: ['./.sdg/runtime.d.ts'], 'sdg/jsx-runtime': ['./.sdg/runtime.d.ts'] } }, include: ['**/*.tsx', '**/*.ts', '.sdg/*.d.ts'] };
 export function init(config, log = console.log) {
+  config.design ??= path.join(config.root, 'design');
+  refreshTypes(config); rejectLegacy(config);
   for (const [file, content] of [
-    ['sdg.config.mjs', "export default { requires: '>=0.3.0', design: 'design', output: 'output/design' };\n"],
-    ['design/tokens.css', starterTokens], ['design/components/', null], ['design/surfaces/', null],
+    [path.join(config.root, 'sdg.config.mjs'), "export default { requires: '>=0.4.0', design: 'design', output: 'output/design' };\n"],
+    [path.join(config.design, 'tokens.css'), starterTokens],
+    ...['components', 'surfaces', 'art'].map(name => [path.join(config.design, name), null]),
+    [path.join(config.design, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2) + '\n'],
   ]) {
-    const target = path.join(config.root, file);
-    if (existsSync(target)) { log(`skipped ${file}`); continue; }
-    if (content === null) mkdirSync(target, { recursive: true });
-    else { mkdirSync(path.dirname(target), { recursive: true }); writeFileSync(target, content, { flag: 'wx' }); }
-    log(`created ${file}`);
+    if (existsSync(file)) { log(`skipped ${relative(config, file)}`); continue; }
+    mkdirSync(content === null ? file : path.dirname(file), { recursive: true });
+    if (content !== null) writeFileSync(file, content);
+    log(`created ${relative(config, file)}`);
   }
+  const ignore = path.join(config.root, '.gitignore');
+  let text = existsSync(ignore) ? readFileSync(ignore, 'utf8') : '';
+  for (const entry of [`/${relative(config, config.design)}/.sdg/`, `/${relative(config, config.output ?? path.join(config.root, 'output/design'))}/`]) if (!text.split('\n').includes(entry)) text += `\n${entry}\n`;
+  writeFileSync(ignore, text);
+  refreshTypes(config);
   return 0;
 }
-export function listAssets(directory) {
+export function listSources(directory) {
   if (!existsSync(directory)) return [];
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    if (entry.name.startsWith('.')) return [];
     const file = path.join(directory, entry.name);
-    return entry.isDirectory() ? listAssets(file) : entry.isFile() && entry.name.endsWith('.svg') ? [file] : [];
+    return entry.isDirectory() ? listSources(file) : entry.isFile() && entry.name.endsWith('.tsx') ? [file] : [];
   }).sort();
 }
-export function selectAssets(config, args) {
-  if (!args.length) return listAssets(config.design);
+export function rejectLegacy(config) {
+  for (const dir of ['components', 'surfaces']) {
+    const base = path.join(config.design, dir);
+    for (const name of existsSync(base) ? readdirSync(base) : []) if (/\.svg$/i.test(name)) throw Error(`${relative(config, path.join(base, name))}: convert this SVG source to TSX; move artwork to design/art/`);
+  }
+}
+export function selectSources(config, args = []) {
+  refreshTypes(config); rejectLegacy(config);
+  if (!args.length) return listSources(config.design);
   return args.map(arg => {
     const fromRoot = path.resolve(config.root, arg);
-    const file = path.isAbsolute(arg) || fromRoot.startsWith(config.design + path.sep) ? fromRoot : path.resolve(config.design, arg);
-    if (!file.startsWith(config.design + path.sep) || !file.endsWith('.svg') || !existsSync(file)) throw new Error(`Invalid asset ${arg}; name an existing SVG under ${config.design}`);
+    let file = path.isAbsolute(arg) || fromRoot.startsWith(config.design + path.sep) ? fromRoot : path.resolve(config.design, arg);
+    if (!file.endsWith('.tsx')) file += '.tsx';
+    if (!file.startsWith(config.design + path.sep) || !existsSync(file)) throw Error(`Invalid source ${arg}; name a TSX file under ${config.design}`);
     return file;
   });
 }
 export const relative = (config, file) => path.relative(config.root, file).split(path.sep).join('/');
 export function loadTokens(config) {
   try { return parseTokens(readFileSync(path.join(config.design, 'tokens.css'), 'utf8')); }
-  catch (error) { throw new Error(`${error.message}; fix ${path.join(config.design, 'tokens.css')} or run sdg init`); }
-}
-export function sync(config, log = console.log) {
-  const region = tokenRegion(loadTokens(config));
-  let changed = 0;
-  for (const file of listAssets(config.design)) {
-    const before = readFileSync(file, 'utf8'), after = syncSvg(before, region);
-    if (before !== after) { writeFileSync(file, after); changed++; log(`synced ${relative(config, file)}`); }
-  }
-  log(`${changed} asset${changed === 1 ? '' : 's'} updated.`);
-  return 0;
-}
-export function svgSize(svg) {
-  const root = svg.match(/<svg\b[^>]*>/)?.[0];
-  const number = key => Number(root?.match(new RegExp(`\\b${key}=["'](\\d+(?:\\.\\d+)?)["']`))?.[1]);
-  const width = number('width'), height = number('height');
-  const viewBox = root?.match(/\bviewBox=["']([^"']+)["']/)?.[1].trim().split(/[\s,]+/).map(Number);
-  if (!(width > 0 && height > 0) || viewBox?.length !== 4 || !viewBox.every(Number.isFinite) || viewBox[2] <= 0 || viewBox[3] <= 0) throw new Error('Asset needs numeric width, height and viewBox; fix its <svg> root');
-  return { width: Math.ceil(width), height: Math.ceil(height) };
+  catch (error) { throw Error(`${error.message}; fix design/tokens.css or run sdg init`); }
 }

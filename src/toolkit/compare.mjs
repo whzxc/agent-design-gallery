@@ -1,10 +1,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { launch, loadSvg } from './browser.mjs';
-import { designFrame, implementationTexts } from './document.mjs';
+import { launch, loadFrame } from './browser.mjs';
+import { implementationTexts } from './document.mjs';
 import { matchTexts, textDelta } from './text.mjs';
-import { selectAssets, relative } from './project.mjs';
+import { selectSources, relative } from './project.mjs';
+import { buildSource } from './build.mjs';
 import { viewport } from './config.mjs';
 
 export function compareReport(asset, frame, fixture, design, implementation) {
@@ -58,19 +59,22 @@ async function settle(read) {
   }
 }
 export async function compare(config, args, options) {
-  const file = selectAssets(config, args)[0], adapter = config.compare;
+  if (options.all) return compareAll(config);
+  const file = selectSources(config, args)[0], adapter = config.compare;
   if (!adapter.fixture) throw new Error('Compare needs compare.fixture(name); add it to sdg.config.mjs');
-  if (options.region && options.selector) throw new Error('Choose either --region or --selector');
-  const frame = options.frame.startsWith('frame-') ? options.frame : `frame-${options.frame}`;
+  if ([options.region,options.selector,options.page].filter(Boolean).length > 1) throw Error('Choose --region, --selector or --page');
+  const frame = options.frame;
+  const built = await buildSource(config,file), definition = built.frames.find(f=>f.name===frame);
+  if (!definition) throw Error(`Unknown frame ${frame}; choose a declared frame`);
+  const settings = {...definition.capture};
+  if (options.region || options.selector || options.page) { delete settings.region; delete settings.selector; delete settings.page; }
+  for (const key of ['region','selector','page','origin','viewport']) if (options[key] !== undefined) settings[key] = options[key];
+  settings.clicks = options.click ?? settings.clicks ?? [];
   const browser = await launch();
   let stop;
   try {
-    const sheet = await browser.newPage();
-    await loadSvg(sheet, file, 'light');
-    let design = await sheet.evaluate(designFrame, frame);
-    if (!design) throw new Error(`${relative(config, file)} has no ${frame}; choose an existing --frame`);
-    const fixtureName = options.fixture ?? design.fixture;
-    if (!fixtureName) throw new Error('Frame has no data-fixture; supply --fixture or declare data-fixture');
+    const fixtureName = options.fixture ?? definition.fixture;
+    if (!fixtureName) throw Error('Frame needs a fixture; supply --fixture or Frame fixture');
     const fixture = await adapter.fixture(fixtureName);
     if (!fixture || typeof fixture.url !== 'string' || !['light', 'dark'].includes(fixture.theme) || typeof fixture.locale !== 'string' || !fixture.locale || !Number.isFinite(Date.parse(fixture.clock))) throw new Error('compare.fixture must return url, theme (light/dark), locale and a valid clock; fix sdg.config.mjs');
     if (fixture.timezone !== undefined) {
@@ -79,10 +83,13 @@ export async function compare(config, args, options) {
         new Intl.DateTimeFormat('en-US', { timeZone: fixture.timezone });
       } catch { throw new Error('compare.fixture timezone must be a valid IANA time zone such as Asia/Shanghai; fix sdg.config.mjs'); }
     }
-    const size = viewport(design.viewport ?? options.viewport ?? adapter.viewport);
-    const origin = design.origin?.trim().split(/\s+/).map(Number);
-    if (design.viewport && (origin?.length !== 2 || !origin.every(Number.isFinite) || origin.some(n => n < 0) || origin[0] + design.box.width > size.width || origin[1] + design.box.height > size.height)) throw new Error('Frame does not fit its declared viewport; fix data-origin and the shell size');
-    if (!design.viewport && !options.region && !options.selector) throw new Error('Frame has no data-viewport; supply --region or --selector');
+    const sheet = await browser.newPage({colorScheme:fixture.theme,locale:fixture.locale,timezoneId:fixture.timezone,reducedMotion:'reduce'});
+    const frameBox = await loadFrame(sheet,definition,fixture.theme);
+    let design = await sheet.locator('[data-sdg-frame] > :first-child').evaluate(implementationTexts);
+    const size = viewport(settings.viewport ?? adapter.viewport);
+    const origin = (settings.origin ?? '0 0').trim().split(/\s+/).map(Number);
+    if (settings.page && (origin.length !== 2 || !origin.every(Number.isFinite) || origin.some(n=>n<0) || origin[0]+frameBox.width>size.width || origin[1]+frameBox.height>size.height)) throw Error('Frame does not fit capture viewport; fix origin or viewport');
+    if (!settings.page && !settings.region && !settings.selector) throw Error('Frame needs capture; supply --page, --region or --selector');
     const absolute = /^https?:\/\//.test(fixture.url);
     if (!adapter.start && !absolute) throw new Error('Relative fixture URL needs compare.start; add it or return an absolute URL');
     const url = new URL(fixture.url, `http://127.0.0.1:${adapter.port}`).href;
@@ -93,10 +100,10 @@ export async function compare(config, args, options) {
     }
     await sheet.emulateMedia({ colorScheme: fixture.theme, reducedMotion: 'reduce' });
     await sheet.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), fixture.theme);
-    design = await sheet.evaluate(designFrame, frame);
-    const target = path.join(config.output, 'compare', `${path.basename(file, '.svg')}-${safeName(frame.replace(/^frame-/, ''))}-${safeName(fixtureName)}`);
+    design = await sheet.locator('[data-sdg-frame] > :first-child').evaluate(implementationTexts);
+    const target = path.join(config.output, 'compare', `${path.relative(config.design,file).replace(/\.tsx$/, '').split(path.sep).join('-')}-${safeName(frame)}-${safeName(fixtureName)}`);
     mkdirSync(target, { recursive: true });
-    await sheet.screenshot({ path: path.join(target, 'design.png'), clip: design.box });
+    await sheet.screenshot({ path: path.join(target, 'design.png'), clip: frameBox });
     const app = await browser.newPage({ viewport: size, colorScheme: fixture.theme, reducedMotion: 'reduce', locale: fixture.locale, timezoneId: fixture.timezone });
     for (const pattern of adapter.block ?? []) await app.route(pattern, route => route.abort());
     await app.addInitScript(({ clock, theme }) => {
@@ -114,7 +121,7 @@ export async function compare(config, args, options) {
     }, { clock: fixture.clock, theme: fixture.theme });
     await app.goto(url, { waitUntil: 'load' });
     if (adapter.ready) await adapter.ready(app, fixtureName);
-    for (const name of options.click ?? []) {
+    for (const name of settings.clicks) {
       let control;
       for (const role of ['button', 'radio', 'tab', 'checkbox', 'switch', 'menuitem', 'menuitemradio', 'option', 'link']) {
         const candidate = app.getByRole(role, { name, exact: true }).filter({ visible: true }).first();
@@ -127,8 +134,8 @@ export async function compare(config, args, options) {
       await control.click();
     }
     await app.evaluate(() => document.fonts.ready);
-    const capture = design.viewport ? { x: origin[0], y: origin[1], width: design.box.width, height: design.box.height } : undefined;
-    const panel = capture ? app.locator('html') : options.selector ? app.locator(options.selector).first() : app.getByRole('region', { name: options.region, exact: true }).or(app.getByRole('dialog', { name: options.region, exact: true })).first();
+    const capture = settings.page ? { x: origin[0], y: origin[1], width: frameBox.width, height: frameBox.height } : undefined;
+    const panel = capture ? app.locator('html') : settings.selector ? app.locator(settings.selector).first() : app.getByRole('region', { name: settings.region, exact: true }).or(app.getByRole('dialog', { name: settings.region, exact: true })).first();
     if (!capture) await panel.scrollIntoViewIfNeeded();
     const { implementation, settled } = await settle(async () => {
       const result = await panel.evaluate(implementationTexts, capture);
@@ -144,7 +151,8 @@ export async function compare(config, args, options) {
     else await panel.screenshot(screenshot);
     const canvasPage = await browser.newPage();
     await overlay(canvasPage, target);
-    const report = { ...compareReport(relative(config, file), frame, fixtureName, design, implementation), settled };
+    const report = { ...compareReport(relative(config, file), frame, fixtureName, {...design,box:frameBox}, implementation), settled };
+    if (options.collect) options.collect.push({...report, report: path.relative(path.join(config.output,'compare'),path.join(target,'index.html'))});
     writeFileSync(path.join(target, 'report.json'), JSON.stringify(report, null, 2) + '\n');
     writeFileSync(path.join(target, 'index.html'), reportHtml(report));
     console.log(`${relative(config, path.join(target, 'index.html'))}: matched ${report.matched}, ${report.offBy2px.length} off by >2px, ${report.missing.length} missing, ${report.extra.length} extra.`);
@@ -152,4 +160,16 @@ export async function compare(config, args, options) {
   } finally {
     try { await browser.close(); } finally { if (typeof stop === 'function') await stop(); }
   }
+}
+
+async function compareAll(config) {
+  const files = selectSources(config), summary = []; let code = 0;
+  for (const file of files) {
+    const built = await buildSource(config,file);
+    for (const frame of built.frames.filter(f=>f.fixture)) code = Math.max(code,await compare(config,[file],{frame:frame.name,collect:summary}));
+  }
+  const target=path.join(config.output,'compare'); mkdirSync(target,{recursive:true});
+  writeFileSync(path.join(target,'summary.json'),JSON.stringify(summary,null,2)+'\n');
+  writeFileSync(path.join(target,'index.html'),`<!doctype html><meta charset="utf-8"><title>Design comparisons</title><table><tr><th>Source</th><th>Frame</th><th>Matched</th><th>Offsets</th><th>Missing</th><th>Extra</th></tr>${summary.map(r=>`<tr><td>${cell(r.asset)}</td><td><a href="${cell(r.report)}">${cell(r.frame)}</a></td><td>${r.matched}</td><td>${r.offBy2px.length}</td><td>${r.missing.length}</td><td>${r.extra.length}</td></tr>`).join('')}</table>`);
+  return code;
 }

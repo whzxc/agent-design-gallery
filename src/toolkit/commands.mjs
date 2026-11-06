@@ -1,101 +1,101 @@
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { tokenRegion, syncSvg } from './tokens.mjs';
-import { compareInstance } from './text.mjs';
-import { listAssets, selectAssets, relative, loadTokens, svgSize } from './project.mjs';
-import { launch, loadSvg } from './browser.mjs';
-import { inspectDocument } from './document.mjs';
-
-export async function check(config, args = [], options = {}, log = console.log, error = console.error) {
-  const tokens = loadTokens(config), region = tokenRegion(tokens), files = selectAssets(config, args);
-  const components = listAssets(path.join(config.design, 'components'));
-  const problems = new Set(), invalid = new Set();
-  const report = (file, message) => problems.add(`${relative(config, file)}: ${message}`);
-  for (const file of new Set([...files, ...components])) {
-    const source = readFileSync(file, 'utf8');
-    try {
-      svgSize(source);
-      if (files.includes(file) && syncSvg(source, region) !== source) report(file, 'token region is stale; run sdg sync');
-    } catch (error) { report(file, error.message); invalid.add(file); }
+import { buildSource } from './build.mjs';
+import { selectSources, relative, loadTokens } from './project.mjs';
+import { launch, loadFrame } from './browser.mjs';
+export function inspectFrame(tokenNames) {
+  const frame = document.querySelector('[data-sdg-frame]'), box = frame.getBoundingClientRect(), problems = new Set();
+  if (frame.children.length !== 1 || [...frame.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) problems.add('Frame needs exactly one root element');
+  const sample = document.createElement('i'); document.body.append(sample);
+  const colors = new Set(['rgba(0, 0, 0, 0)']);
+  for (const name of tokenNames) {
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    if (CSS.supports('color', value)) { sample.style.color = value; colors.add(getComputedStyle(sample).color); }
+    for (const color of value.match(/(?:rgba?|hsla?|oklch|oklab|color)\([^)]*\)|#[\da-f]{3,8}\b/gi) ?? []) { sample.style.color = color; colors.add(getComputedStyle(sample).color); }
   }
+  sample.remove();
+  const outside = r => r.left < box.left - 1 || r.right > box.right + 1 || r.top < box.top - 1 || r.bottom > box.bottom + 1;
+  const lines = [];
+  for (const el of [frame, ...frame.querySelectorAll('*')]) {
+    const s = getComputedStyle(el), r = el.getBoundingClientRect();
+    if (['STYLE','SCRIPT'].includes(el.tagName.toUpperCase())) problems.add(`Forbidden <${el.tagName.toLowerCase()}> in output`);
+    for (const attr of el.attributes) if (/^on/i.test(attr.name) || attr.name === 'classname') problems.add(`Forbidden attribute ${attr.name} in output`);
+    if (s.display === 'none' || s.visibility === 'hidden' || r.width === 0 || r.height === 0) continue;
+    const clipped = rect => {
+      let left=rect.left,right=rect.right,top=rect.top,bottom=rect.bottom;
+      for(let p=el.parentElement;p && p!==frame;p=p.parentElement) { const ps=getComputedStyle(p),pr=p.getBoundingClientRect(); if (/(hidden|clip|auto|scroll)/.test(ps.overflowX)) {left=Math.max(left,pr.left);right=Math.min(right,pr.right);} if (/(hidden|clip|auto|scroll)/.test(ps.overflowY)) {top=Math.max(top,pr.top);bottom=Math.min(bottom,pr.bottom);} }
+      return {left,right,top,bottom};
+    };
+    if (outside(clipped(r))) problems.add('Content overflows the frame');
+    if (!el.closest('[data-brand]')) {
+      const paints = [s.color, s.backgroundColor];
+      for (const side of ['Top','Right','Bottom','Left']) if (parseFloat(s[`border${side}Width`]) > 0) paints.push(s[`border${side}Color`]);
+      if (s.outlineStyle !== 'none') paints.push(s.outlineColor);
+      if (el instanceof SVGElement && /^(path|rect|circle|ellipse|polygon|polyline|line|text)$/.test(el.localName)) paints.push(s.fill, s.stroke);
+      paints.push(...((s.boxShadow+' '+s.textShadow+' '+s.backgroundImage).match(/(?:rgba?|hsla?|oklch|oklab|color)\([^)]*\)/g) ?? []));
+      for (const value of paints) if (value && !['none','transparent'].includes(value) && !value.startsWith('url(') && !colors.has(value)) problems.add(`Color ${value} matches no token`);
+    }
+    for (const node of el.childNodes) {
+      if (node.nodeType !== 3 || !node.textContent.trim()) continue;
+      const range = document.createRange(); range.selectNodeContents(node);
+      for (const rect of range.getClientRects()) {
+        if (rect.width < 1) continue;
+        const label = node.textContent.trim().replace(/\s+/g, ' ');
+        if (outside(clipped(rect))) problems.add(`Text leaves frame: ${label}`);
+        if ((rect.left < r.left - 1 || rect.right > r.right + 1 || (rect.top+rect.bottom)/2 < r.top - 1 || (rect.top+rect.bottom)/2 > r.bottom + 1) && s.textOverflow !== 'ellipsis') problems.add(`Text overflows its box: ${label}`);
+        lines.push({rect, label, el});
+      }
+    }
+  }
+  for (let i=0;i<lines.length;i++) for(let j=i+1;j<lines.length;j++) {
+    const a=lines[i], b=lines[j];
+    if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
+    if (Math.min(a.rect.right,b.rect.right)-Math.max(a.rect.left,b.rect.left)>1 && Math.min(a.rect.bottom,b.rect.bottom)-Math.max(a.rect.top,b.rect.top)>2) problems.add(`Text overlaps: ${a.label} / ${b.label}`);
+  }
+  return [...problems];
+}
+export async function check(config, args = [], options = {}, log = console.log, error = console.error) {
+  const files = selectSources(config,args), tokens = loadTokens(config), problems = new Set();
   const browser = await launch();
   try {
-    for (const theme of ['light', 'dark']) {
-      const page = await browser.newPage({ colorScheme: theme });
-      const results = new Map(), definitions = new Map();
-      for (const file of new Set([...components, ...files])) {
-        if (invalid.has(file)) continue;
-        try { await loadSvg(page, file, theme); } catch (error) {
-          if (!error.message.includes('Invalid SVG XML')) throw error;
-          report(file, 'Invalid SVG XML; fix the asset markup'); invalid.add(file); continue;
-        }
-        results.set(file, await page.evaluate(inspectDocument, [...tokens.light.keys(), ...[...tokens.light.keys()].filter(key => key.startsWith('--shadow-')).map(key => key.replace('--shadow-', '--elev-'))]));
+    const page = await browser.newPage();
+    for (const file of files) {
+      let built;
+      try { built = await buildSource(config,file); }
+      catch(e) { problems.add(`${relative(config,file)}: -: ${e.message.replace(/\s+/g,' ')}`); continue; }
+      for (const frame of built.frames) for (const theme of ['light','dark']) {
+        try {
+          await loadFrame(page,frame,theme);
+          for (const problem of await page.evaluate(inspectFrame,[...tokens.light.keys()])) problems.add(`${relative(config,file)}: ${frame.name}: ${theme}: ${problem}`);
+        } catch(e) { problems.add(`${relative(config,file)}: ${frame.name}: ${theme}: ${e.message.replace(/\s+/g,' ')}`); }
       }
-      for (const file of components) {
-        for (const item of results.get(file)?.instances ?? []) {
-          if (item.nested) continue;
-          const key = `${item.component}/${item.form}`;
-          if (!item.form) report(file, `${item.at} has no data-form`);
-          else if (definitions.has(key)) report(file, `form ${key} is defined twice`);
-          else definitions.set(key, item.signature);
-        }
-      }
-      for (const file of files) {
-        const result = results.get(file);
-        if (!result) continue;
-        for (const problem of result.problems) report(file, problem);
-        for (const item of result.instances) {
-          if (components.includes(file) && !item.nested) continue;
-          const definition = definitions.get(`${item.component}/${item.form}`);
-          if (!definition) { report(file, `${item.at} has no definition; declare the component/form in design/components/`); continue; }
-          for (const difference of compareInstance(definition, item.signature)) report(file, `${item.at}: ${difference}`);
-        }
-      }
-      await page.close();
     }
   } finally { await browser.close(); }
   for (const problem of problems) error(problem);
-  log(`Design check ${problems.size ? 'failed' : 'passed'} for ${files.length} asset${files.length === 1 ? '' : 's'}${problems.size ? `: ${problems.size} problems` : ''}.`);
+  log(`Design check ${problems.size ? 'failed' : 'passed'} for ${files.length} sources${problems.size ? `: ${problems.size} problems` : ''}.`);
   return problems.size ? 1 : 0;
 }
-
-export async function render(config, args, options) {
+export async function render(config, args = [], options = {}) {
   const scale = Number(options.scale ?? 2);
-  if (!Number.isFinite(scale) || scale <= 0) throw new Error('Invalid --scale; use a positive number');
-  const files = selectAssets(config, args), browser = await launch();
+  if (!(Number.isFinite(scale) && scale > 0)) throw Error('Invalid --scale; use a positive number');
+  const files = selectSources(config,args), browser = await launch();
+  let found = false;
   try {
-    for (const theme of ['light', 'dark']) {
-      const page = await browser.newPage({ deviceScaleFactor: scale, colorScheme: theme });
-      for (const file of files) {
-        await loadSvg(page, file, theme);
-        const target = path.join(config.output, path.relative(config.design, file).replace(/\.svg$/, `-${theme}.png`));
-        mkdirSync(path.dirname(target), { recursive: true });
-        await page.screenshot({ path: target });
-        console.log(relative(config, target));
+    const page = await browser.newPage({deviceScaleFactor:scale});
+    for (const file of files) {
+      const built = await buildSource(config,file);
+      for (const frame of built.frames.filter(f => !options.frame || f.name === options.frame)) {
+        found = true;
+        for (const theme of ['light','dark']) {
+          await loadFrame(page,frame,theme);
+          const target = path.join(config.output,path.relative(config.design,file).replace(/\.tsx$/,''),`${encodeURIComponent(frame.name)}-${theme}.png`);
+          mkdirSync(path.dirname(target),{recursive:true});
+          await page.locator('[data-sdg-frame]').screenshot({path:target});
+          console.log(relative(config,target));
+        }
       }
-      await page.close();
     }
-  } finally { await browser.close(); }
-  return 0;
-}
-export function measureFont(tokens, options) {
-  const size = options.size ?? '14';
-  const pixels = /^\d+(?:\.\d+)?(?:px)?$/.test(size) ? `${parseFloat(size)}px` : tokens.get(size.startsWith('--text-') ? size : `--text-${size}`);
-  if (!pixels || !/^\d+(?:\.\d+)?px$/.test(pixels) || parseFloat(pixels) <= 0) throw new Error(`Invalid --size ${size}; use positive pixels or a --text-* token suffix`);
-  const weight = options.weight ?? '400';
-  if (!/^\d+$/.test(weight) || Number(weight) < 1 || Number(weight) > 1000) throw new Error('Invalid --weight; use an integer from 1 to 1000');
-  return `${weight} ${pixels} ${tokens.get(options.mono ? '--font-mono' : '--font-ui')}`;
-}
-export async function measure(config, args, options) {
-  const font = measureFont(loadTokens(config).light, options), browser = await launch();
-  try {
-    const page = await browser.newPage();
-    const width = await page.evaluate(([value, spec]) => {
-      const context = document.createElement('canvas').getContext('2d');
-      context.font = spec;
-      return context.measureText(value).width;
-    }, [args[0], font]);
-    console.log(width.toFixed(1));
+    if (options.frame && !found) throw Error(`Unknown frame ${options.frame}; choose a declared frame`);
   } finally { await browser.close(); }
   return 0;
 }

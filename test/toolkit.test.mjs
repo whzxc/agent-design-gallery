@@ -1,76 +1,88 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, symlinkSync } from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,readdirSync,symlinkSync} from 'node:fs';
 import path from 'node:path';
-import { tmpdir } from 'node:os';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { parseTokens, shadowLayers, tokenRegion, syncSvg } from '../src/toolkit/tokens.mjs';
-import { compareInstance, matchTexts, textDelta } from '../src/toolkit/text.mjs';
-import { discoverRoot, loadConfig, satisfies, viewport } from '../src/toolkit/config.mjs';
-import { init, starterTokens, selectAssets, svgSize } from '../src/toolkit/project.mjs';
-import { parseCli, help } from '../src/cli.mjs';
-import { check, measureFont } from '../src/toolkit/commands.mjs';
-import { compare, compareReport } from '../src/toolkit/compare.mjs';
-import { launch } from '../src/toolkit/browser.mjs';
-import { implementationTexts } from '../src/toolkit/document.mjs';
+import {tmpdir} from 'node:os';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {jsx,jsxs,Fragment,Frame,Icon} from '../src/toolkit/runtime.mjs';
+import {parseTokens,themeCss} from '../src/toolkit/tokens.mjs';
+import {init,starterTokens,selectSources,refreshTypes} from '../src/toolkit/project.mjs';
+import {buildSource} from '../src/toolkit/build.mjs';
+import {loadConfig,discoverRoot,satisfies,viewport} from '../src/toolkit/config.mjs';
+import {check,inspectFrame} from '../src/toolkit/commands.mjs';
+import {compare,compareReport} from '../src/toolkit/compare.mjs';
+import {implementationTexts} from '../src/toolkit/document.mjs';
+import {launch,loadFrame} from '../src/toolkit/browser.mjs';
+import {matchTexts,textDelta} from '../src/toolkit/text.mjs';
+import {parseCli,help} from '../src/cli.mjs';
+const temporary=t=>{const root=mkdtempSync(path.join(tmpdir(),'sdg-v2-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
+async function project(t){const root=temporary(t);init({root},()=>{});return loadConfig(root);}
+const source=(body,props='')=>`import {Frame, Icon} from 'sdg'; export default()=> <Frame name="sample" width={200} height={100} ${props}>${body}</Frame>;`;
+const put=(c,name,body)=>{const f=path.join(c.design,name);mkdirSync(path.dirname(f),{recursive:true});writeFileSync(f,body);return f;};
 
-const temporary = t => { const root = mkdtempSync(path.join(tmpdir(), 'sdg-test-')); t.after(() => rmSync(root, { recursive: true, force: true })); return root; };
-const tokens = parseTokens(starterTokens), region = tokenRegion(tokens);
-const svg = body => syncSvg(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect data-canvas="" width="300" height="200" style="fill:var(--canvas)"/>${body}</svg>`, region);
-const text = (value, x = 10, y = 20, extra = '') => `<text x="${x}" y="${y}" style="fill:var(--text-tertiary);font-size:var(--text-caption);font-weight:400;${extra}">${value}</text>`;
-const component = (body = text('Sample'), rect = '') => `<g data-component="card" data-form="default"><rect width="200" height="50" rx="4" style="fill:var(--canvas)" ${rect}/>${body}</g>`;
+test('string runtime escapes text and attributes, flattens children, and emits void elements',()=>{
+  assert.equal(String(jsx('p',{title:'"<&',children:['<hello>',null,false,jsx('b',{children:'A&B'}),3]})),'<p title="&quot;&lt;&amp;">&lt;hello&gt;<b>A&amp;B</b>3</p>');
+  assert.equal(String(jsx('input',{disabled:true,value:'"',children:'ignored'})),'<input disabled="" value="&quot;">');
+  assert.equal(String(jsx(Fragment,{children:[jsx('br',{}),'tail']})),'<br>tail');
+  assert.match(String(jsx('div',{style:{width:22,opacity:.5,gridColumn:1}})),/width:22px;opacity:0.5;grid-column:1/);
+  assert.match(String(Icon({name:'x',size:14})),/stroke-width="3"/);
+  for(const [tag,props] of [['style',{}],['script',{}],['div',{onClick:'x'}],['div',{className:'x'}]])assert.throws(()=>jsx(tag,props),/Forbidden/);
+});
+test('build resolves sdg and relative modules; SVG props override root and raster imports become data URLs',async t=>{
+  const c=await project(t);put(c,'art/mark.svg','<svg width="12" viewBox="0 0 12 12"><path d="M0 0h12"/></svg>');
+  put(c,'art/pixel.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1kAAAAASUVORK5CYII=','base64'));
+  put(c,'components/item.ts','export const title="Built";');
+  const f=put(c,'surfaces/a.tsx',`import {Frame} from 'sdg';import {jsx} from 'sdg/jsx-runtime';import Art from '../art/mark.svg';import pixel from '../art/pixel.png';import {title} from '../components/item';export default()=> <Frame name="a"><div><Art width={24} data-brand class="fill-text"/><img src={pixel}/><span>{title}</span></div></Frame>;`);
+  const built=await buildSource(c,f);assert.match(built.frames[0].html,/<svg[^>]*width="24"/);assert.doesNotMatch(built.frames[0].html,/width="12"/);assert.match(built.frames[0].html,/src="data:image\/png;base64,/);assert.match(built.frames[0].html,/Built/);assert.equal(built.dependencies.length,5);
+  assert.ok(readFileSync(path.join(c.output,'surfaces/a/a.html'),'utf8').startsWith('<!doctype html>'));
+});
+test('imports reject npm, escaping relative paths and symlink escapes with source locations',async t=>{
+  const c=await project(t);writeFileSync(path.join(c.root,'outside.ts'),'export default 1');symlinkSync(path.join(c.root,'outside.ts'),path.join(c.design,'escape.ts'));
+  for(const spec of ['react','../../outside','../escape']){
+    const f=put(c,'surfaces/a.tsx',`import forbidden from '${spec}';\n${source('<div>{forbidden}</div>')}`);
+    await assert.rejects(buildSource(c,f),e=>/a.tsx:1/.test(e.message)&&/Bare import|leaves design/.test(e.message));
+  }
+  put(c,'art/bad.svg','<svg>\n<script>alert(1)</script></svg>');
+  await assert.rejects(buildSource(c,put(c,'surfaces/a.tsx',`import Art from '../art/bad.svg';${source('<Art/>')}`)),/bad.svg:2/);
+});
+test('Tailwind uses rendered classes, inline token aliases and no color, size, font, radius or shadow defaults',async t=>{
+  const c=await project(t);writeFileSync(path.join(c.design,'tokens.css'),starterTokens.replace('--canvas: #ffffff;','--canvas: #ffffff;\n  --surface: #eeeeee;\n  --text-body: 13px;\n  --radius-panel: 7px;\n  --shadow-card: 0 1px 3px #171717;').replace('--canvas: #171717;','--canvas: #171717;\n  --surface: #222222;'));
+  const f=put(c,'surfaces/theme.tsx',`const unused='bg-red-500';const role='surface';${source('<div class={`bg-${role} text-body font-ui rounded-panel shadow-card p-4 font-semibold`}>Theme</div>')}`);
+  const {frames,css}=await buildSource(c,f);assert.match(css,/background-color: var\(--surface\)/);assert.match(css,/font-size: var\(--text-body\)/);assert.match(css,/font-family: var\(--font-ui\)/);assert.match(css,/border-radius: var\(--radius-panel\)/);assert.doesNotMatch(css,/--font-ui:\s*var\(--font-ui\)/);assert.doesNotMatch(css,/\.bg-red-500|--color-red-/);assert.match(css,/--spacing: 0.25rem/);
+  const b=await launch();try {const p=await b.newPage();for(const [theme,color] of [['light','rgb(238, 238, 238)'],['dark','rgb(34, 34, 34)']]){await loadFrame(p,frames[0],theme);assert.deepEqual(await p.locator('[data-sdg-frame]>div').evaluate(e=>{const s=getComputedStyle(e);return[s.backgroundColor,s.fontSize,s.borderRadius,s.padding,s.fontWeight]}),[color,'13px','7px','16px','600']);}}finally{await b.close();}
+  const {compile}=await import('tailwindcss');const base=readFileSync(new URL('../node_modules/tailwindcss/theme.css',import.meta.url),'utf8');const compiler=await compile(base+themeCss(parseTokens(readFileSync(path.join(c.design,'tokens.css'),'utf8')))+'@tailwind utilities;');
+  const defaults=compiler.build(['bg-red-500','text-sm','font-sans','rounded-lg','shadow-sm']);for(const cls of ['bg-red-500','text-sm','font-sans','rounded-lg','shadow-sm'])assert.ok(!defaults.includes('.'+cls));
+});
+test('check has a failing source for every contract rule, including both themes and all paint channels',async t=>{
+  const c=await project(t);
+  const samples={
+    build:'export default () => <',render:source('<Missing/>'),duplicate:`import {Frame} from 'sdg';export default()=>[<Frame name="a"><div/></Frame>,<Frame name="a"><div/></Frame>];`,
+    shell:source('<><div/><div/></>'),capture:source('<div/>','capture={{page:true,region:"X"}}'),
+    text:source('<div class="text-[#ff0101]">Color</div>'),background:source('<div class="bg-[#ff0101]">Color</div>'),border:source('<div class="border border-[#ff0101]">Color</div>'),outline:source('<div class="outline outline-[#ff0101]">Color</div>'),fill:source('<svg width="20" height="20"><rect width="20" height="20" fill="#ff0101"/></svg>'),stroke:source('<svg width="20" height="20"><path d="M0 0L20 20" stroke="#ff0101"/></svg>'),shadow:source('<div class="shadow-[0_1px_3px_#ff0101]">Color</div>'),
+    box:source('<div class="w-4 whitespace-nowrap">Text outside box</div>'),leaves:source('<div class="relative"><span class="absolute left-[190px]">Outside</span></div>'),overlap:source('<div class="relative w-[200px] h-[100px]"><span class="absolute">First</span><span class="absolute">Second</span></div>'),content:source('<div class="w-[300px] h-[110px]"/>'),
+    style:source('<style/>'),script:source('<script/>'),event:source('<div onclick="x"/>'),className:source('<div className="x"/>'),dark:source('<div class="dark:bg-[#ff0101]">Dark</div>')
+  };
+  for(const [name,value]of Object.entries(samples))put(c,`surfaces/${name}.tsx`,value);
+  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),1);
+  for(const name of Object.keys(samples))assert.ok(problems.some(p=>p.startsWith(`design/surfaces/${name}.tsx:`)),name);
+  assert.ok(problems.some(p=>/dark.tsx: sample: dark:/.test(p)));assert.ok(!problems.some(p=>/dark.tsx: sample: light:/.test(p)));
+  for(const p of problems)assert.equal(p.split('\n').length,1);
+});
+test('check permits token paint, brand art, clipped content and intentional ellipses',async t=>{
+  const c=await project(t);put(c,'surfaces/a.tsx',source('<div class="w-[200px] h-[100px] overflow-hidden"><span data-brand class="text-[#ff0101]">Brand</span><div class="w-4 truncate">Clipped text</div></div>'));
+  const p=[];assert.equal(await check(c,[],{},()=>{},s=>p.push(s)),0,p.join('\n'));
+});
+test('legacy SVG source blocks check, render, compare and init with exit 2 and conversion path',async t=>{
+  const c=await project(t);put(c,'components/old.svg','<svg/>');
+  for(const args of [['check'],['render'],['compare','--all'],['init']])await assert.rejects(promisify(execFile)(process.execPath,[path.resolve('src/cli.mjs'),...args],{cwd:c.root}),e=>e.code===2&&e.stderr.includes('design/components/old.svg')&&e.stderr.includes('convert')&&e.stderr.trim().split('\n').length===1);
+});
+test('reader merges adjacent line segments and pairs duplicate content nearest-first',async()=>{
+  const b=await launch();try{const p=await b.newPage();await p.setContent('<div id="capture" style="font:16px/20px monospace;width:300px"><span>A</span><span>B</span><span style="margin-left:2px">C</span><div>Next</div><span aria-hidden="true">Hidden</span></div>');const r=await p.locator('#capture').evaluate(implementationTexts);assert.deepEqual(r.texts.map(t=>t.text),['AB C','Next']);}finally{await b.close();}
+  const box=(x,y,text='Same')=>({text,x,y,width:10,height:10});const a=box(0,0),near=box(100,0),i=box(99,1);const r=matchTexts([a,near],[i]);assert.deepEqual(r.pairs,[[near,i]]);assert.deepEqual(r.missing,[a]);assert.equal(matchTexts([a],[box(0,0,'Same suffix')]).pairs.length,0);
+  assert.deepEqual(textDelta({...a,anchor:'end'},{...a,x:3,width:12}),{dx:5,dy:0,dw:2});
+});
 
-test('tokens parse required light values and dark overrides', () => {
-  assert.equal(tokens.light.get('--text-caption'), '11px');
-  assert.equal(tokens.dark.get('--canvas'), '#171717');
-  assert.throws(() => parseTokens(starterTokens.replace('  --canvas: #ffffff;\n', '')), /missing --canvas/);
-  assert.throws(() => parseTokens(starterTokens + ':root {}'), /exactly/);
-  assert.throws(() => parseTokens(starterTokens.replace('11px;', '11px; --x: 2px;')), /own line/);
-  assert.throws(() => parseTokens(starterTokens.replace('--canvas: #171717', '--new: #171717')), /no light value/);
-});
-test('shadows split functional colors and reject spread/inset', () => {
-  assert.deepEqual(shadowLayers('0 1px 4px rgba(0, 0, 0, .2), -2 3 8 #000'), [{ dx: 0, dy: 1, blur: 4, color: 'rgba(0, 0, 0, .2)' }, { dx: -2, dy: 3, blur: 8, color: '#000' }]);
-  for (const value of ['0 1px 4px 2px red', 'inset 0 1px 4px red', '0 1px 4px red inset', '0 1 -1 red']) assert.throws(() => shadowLayers(value));
-});
-test('region includes theme visibility, fonts and both shadow filters', () => {
-  const input = parseTokens(starterTokens.replace('--canvas: #ffffff;', '--canvas: #ffffff;\n  --shadow-panel: 0 2px 8px #000;'));
-  const result = tokenRegion(input);
-  assert.match(result, /stdDeviation="4"/); assert.match(result, /elev-panel-dark/);
-  assert.match(result, /:root:not\(\[data-theme\]\) .only-light/);
-  assert.match(result, /dominant-baseline:central/);
-});
-test('sync inserts/replaces only its region and is idempotent', () => {
-  const raw = '<svg width="10"><rect/></svg>', synced = syncSvg(raw, region);
-  assert.equal(syncSvg(synced, region), synced);
-  assert.equal(synced.replace('\n' + region, ''), raw);
-  assert.equal(syncSvg(synced, 'replacement'), '<svg width="10">\nreplacement<rect/></svg>');
-  assert.throws(() => syncSvg('<svg><!-- design:tokens --></svg>', region), /markers/);
-});
-test('pairing follows content, reading order and ARC prefix fallback', () => {
-  const a = { text: 'A', x: 1, y: 2, width: 10, height: 10 };
-  const b = { ...a, text: 'B', y: 20 };
-  const result = matchTexts([b, a, { ...a, text: 'missing' }], [{ ...b, text: 'B suffix' }, a, { ...a, text: 'extra' }]);
-  assert.deepEqual(result.pairs.map(pair => pair[0].text), ['A', 'B']);
-  assert.equal(result.missing[0].text, 'missing'); assert.equal(result.extra[0].text, 'extra');
-  assert.deepEqual(textDelta({ ...a, anchor: 'end' }, { ...a, x: 3, width: 12 }), { dx: 4, dy: 0, dw: 2 });
-  const report = compareReport('a', 'frame-a', 'a', { box: a, texts: [a] }, { box: a, texts: [{ ...a, x: 3 }] });
-  assert.equal(report.offBy2px.length, 0);
-});
-test('fluid permits height only; text styles and other geometry still match', () => {
-  const base = { container: { height: '20', rx: '4', fill: 'red', stroke: '', filter: '', fluid: true }, text: ['a'] };
-  assert.deepEqual(compareInstance(base, { ...base, container: { ...base.container, height: '30' } }), []);
-  assert.equal(compareInstance(base, { container: { ...base.container, rx: '8' }, text: ['b'] }).length, 2);
-});
-test('CLI dispatch preserves directories and validates command options', () => {
-  assert.equal(parseCli(['project']).command, 'open');
-  assert.equal(parseCli(['open', 'check']).positionals[0], 'check');
-  assert.equal(parseCli(['check']).command, 'check');
-  assert.deepEqual(parseCli(['compare', 'a.svg', '--frame=a', '--click=A', '--click', 'B']).values.click, ['A', 'B']);
-  assert.throws(() => parseCli(['sync', '--scale=2']), /help/);
-  assert.throws(() => parseCli(['compare', 'a.svg']), /help/);
-  for (const name of ['open', 'init', 'sync', 'check', 'render', 'measure', 'compare']) assert.match(help(name), new RegExp(`Usage: sdg ${name}`));
-});
 test('root discovery prefers nearest config over package and defaults to nearest package', async t => {
   const root = temporary(t), nested = path.join(root, 'a/b'); mkdirSync(nested, { recursive: true });
   writeFileSync(path.join(root, 'package.json'), '{}'); writeFileSync(path.join(root, 'a/package.json'), '{}');
@@ -87,98 +99,7 @@ test('requires compares releases, prereleases and supported ranges explicitly', 
   assert.equal(satisfies('0.3.0-beta.2', '>=0.2.0'), false);
   assert.throws(() => satisfies('0.3.0', '0.3.x'), /Unsupported/);
 });
-test('asset arguments, viewport and measurement token sizes', t => {
-  const root = temporary(t); init({ root }, () => {}); const file = path.join(root, 'design/a.svg'); writeFileSync(file, svg(''));
-  const config = { root, design: path.join(root, 'design') };
-  assert.deepEqual(selectAssets(config, ['a.svg', 'design/a.svg']), [file, file]);
-  assert.throws(() => selectAssets(config, ['../outside.svg']));
-  assert.deepEqual(viewport('300x200'), { width: 300, height: 200 });
-  assert.throws(() => viewport('0x2'));
-  assert.deepEqual(svgSize(svg('')), { width: 300, height: 200 });
-  assert.throws(() => svgSize('<svg width="3px" height="2"/>'));
-  assert.match(measureFont(tokens.light, { size: 'caption', mono: true }), /11px ui-monospace/);
-  assert.match(measureFont(tokens.light, { size: '14px' }), /14px/);
-  assert.throws(() => measureFont(tokens.light, { size: 'unknown' }), /--size/);
-});
-test('CLI usage and requires failures return 2 with actionable single-line stderr', async t => {
-  const root = temporary(t); writeFileSync(path.join(root, 'sdg.config.mjs'), "export default { requires: '>=99.0.0' };");
-  const run = promisify(execFile), cli = path.resolve('src/cli.mjs');
-  await assert.rejects(run(process.execPath, [cli, 'sync'], { cwd: root }), error => error.code === 2 && error.stderr.trim().split('\n').length === 1 && error.stderr.includes('npm install -g @whzxc/svg-design-gallery'));
-  await assert.rejects(run(process.execPath, [cli, 'measure'], { cwd: root }), error => error.code === 2 && error.stderr.includes('--help'));
-});
-test('installed symlink runs version, init and failing requires', async t => {
-  const root = temporary(t), bin = path.join(root, 'sdg'), run = promisify(execFile);
-  symlinkSync(path.resolve('src/cli.mjs'), bin);
-  const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url))).version;
-  assert.equal((await run(bin, ['--version'], { cwd: root })).stdout.trim(), version);
-  const initialized = await run(bin, ['init'], { cwd: root });
-  assert.match(initialized.stdout, /created sdg.config.mjs/);
-  assert.ok(readFileSync(path.join(root, 'design/tokens.css'), 'utf8').includes('--canvas:'));
-  writeFileSync(path.join(root, 'sdg.config.mjs'), "export default { requires: '>=99.0.0' };");
-  await assert.rejects(run(bin, ['sync'], { cwd: root }), error => {
-    assert.equal(error.code, 2);
-    assert.equal(error.stdout, '');
-    assert.equal(error.stderr.trim().split('\n').length, 1);
-    assert.match(error.stderr, /does not satisfy requires >=99.0.0; run npm install -g @whzxc\/svg-design-gallery/);
-    return true;
-  });
-});
-test('init is non-destructive and a scaffold passes check', async t => {
-  const root = temporary(t), messages = []; init({ root }, line => messages.push(line));
-  assert.equal(messages.filter(x => x.startsWith('created')).length, 4);
-  init({ root }, line => messages.push(line)); assert.equal(messages.filter(x => x.startsWith('skipped')).length, 4);
-  assert.equal(readFileSync(path.join(root, 'design/tokens.css'), 'utf8'), starterTokens);
-  const config = await loadConfig(root);
-  writeFileSync(path.join(config.design, 'components/card.svg'), svg(component()));
-  writeFileSync(path.join(config.design, 'surfaces/valid.svg'), svg(`<g data-part="frame-valid" data-viewport="300x200" data-origin="20 20">${component()}</g>`));
-  assert.equal(await check(config, [], {}, () => {}, () => {}), 0);
-});
-test('check catches every contract rule on small synthetic assets in both themes', async t => {
-  const root = temporary(t); init({ root }, () => {}); const config = await loadConfig(root);
-  writeFileSync(path.join(config.design, 'components/card.svg'), svg(component()));
-  const samples = {
-    stale: '<svg width="300" height="200" viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg"/>',
-    css: svg('<style>:root{color:red}</style>'),
-    paint: svg('<rect width="2" height="2" fill="red"/>'),
-    undefined: svg('<rect width="2" height="2" fill="var(--absent)"/>'),
-    canvas: svg(text('Outside', 290)),
-    overlap: svg(text('First') + text('Second')),
-    overflow: svg(component(text('Too wide', 195))),
-    unknown: svg(component().replace('data-component="card"', 'data-component="absent"')),
-    form: svg(component().replace('data-form="default"', 'data-form="absent"')),
-    height: svg(component().replace('height="50"', 'height="51"')),
-    radius: svg(component().replace('rx="4"', 'rx="5"')),
-    fill: svg(component().replace('fill:var(--canvas)', 'fill:var(--text-tertiary)')),
-    stroke: svg(component().replace('fill:var(--canvas)', 'fill:var(--canvas);stroke:var(--text-tertiary)')),
-    filter: svg(component().replace('fill:var(--canvas)', 'fill:var(--canvas);filter:blur(1px)')),
-    style: svg(component(text('Sample', 10, 20, 'font-weight:600;'))),
-    shell: svg('<g data-part="frame-bad"><rect width="100" height="100"/></g>'),
-    viewport: svg(`<g data-part="frame-bad" data-viewport="100x100" data-origin="0 0">${component()}</g>`),
-    dark: svg(`<g class="only-dark">${text('Dark', 290)}</g>`),
-  };
-  for (const [name, source] of Object.entries(samples)) writeFileSync(path.join(config.design, 'surfaces', `${name}.svg`), source);
-  const problems = []; assert.equal(await check(config, [], {}, () => {}, line => problems.push(line)), 1);
-  for (const name of Object.keys(samples)) assert.ok(problems.some(line => line.startsWith(`design/surfaces/${name}.svg:`)), `${name} not caught`);
-  assert.ok(problems.some(line => /height .*should be/.test(line)));
-  assert.ok(problems.some(line => /text style/.test(line)));
-});
-test('theme region follows explicit theme before system; DOM extraction handles lines, clipping and placeholders', async () => {
-  const browser = await launch();
-  try {
-    const page = await browser.newPage({ colorScheme: 'dark' });
-    await page.setContent(svg('<g class="only-light"><text>Light</text></g><g class="only-dark"><text>Dark</text></g>'));
-    // Standalone SVG root selectors are tested in an SVG document, not an HTML wrapper.
-    await page.goto(`data:image/svg+xml,${encodeURIComponent(svg('<g class="only-light"><text>Light</text></g><g class="only-dark"><text>Dark</text></g>'))}`);
-    assert.equal(await page.locator('.only-light').evaluate(el => getComputedStyle(el).display), 'none');
-    await page.locator('svg').evaluate(el => el.dataset.theme = 'light');
-    assert.equal(await page.locator('.only-dark').evaluate(el => getComputedStyle(el).display), 'none');
-    await page.goto('about:blank');
-    await page.setContent('<div id="panel" style="width:200px;height:150px;overflow:hidden"><div style="width:50px;font:14px monospace">One two three four</div><input placeholder="Empty" style="width:100px"><div style="position:relative;left:300px">Clipped</div><span hidden>Hidden</span></div>');
-    const result = await page.locator('#panel').evaluate(implementationTexts);
-    assert.ok(result.texts.length >= 4); assert.ok(result.texts.some(t => t.text === 'Empty'));
-    assert.ok(!result.texts.some(t => /Clipped|Hidden/.test(t.text)));
-  } finally { await browser.close(); }
-});
+
 test('compare ignores aria-hidden on the capture target and ancestors but excludes hidden descendants', async () => {
   const browser = await launch();
   try {
@@ -220,174 +141,28 @@ Second line</textarea>
     });
     assert.ok(boxes[0] > boxes[1], 'the glyph box must exceed its clipping span');
     const result = await page.locator('#panel').evaluate(implementationTexts);
-    assert.deepEqual(result.texts.map(t=>t.text), ['Centered label','pill','~/projects/empty','Empty field','First line Second line','Empty textarea']);
+    assert.deepEqual(result.texts.map(t=>t.text), ['Centered label','pill','~/projects/empty','Empty field','First line','Second line','Empty textarea']);
   } finally { await browser.close(); }
 });
-test('compare runs a static adapter with clip/region/selector, fixed environment and exact output files', async t => {
-  const root = temporary(t); init({ root }, () => {});
-  const { createServer } = await import('node:net');
-  const probe = createServer(); await new Promise(resolve => probe.listen(0, '127.0.0.1', resolve));
-  const port = probe.address().port; await new Promise(resolve => probe.close(resolve));
-  const html = `<!doctype html><html><head><style>body{margin:0;font:11px system-ui}.panel{position:absolute;left:20px;top:20px;width:200px;height:50px}span{position:absolute;left:10px;top:10px}button{position:absolute;top:100px}</style></head><body><div role="region" aria-label="Panel" class="panel"><span>Hello</span></div><button onclick="window.order='A'">First</button><button style="left:100px" onclick="window.order+='B'">Second</button><script>fetch('/blocked').then(()=>window.blocked=false).catch(()=>window.blocked=true);setTimeout(()=>window.timer=true,1)</script></body></html>`;
-  writeFileSync(path.join(root, 'page.html'), html);
-  writeFileSync(path.join(root, 'sdg.config.mjs'), `
-import { createServer } from 'node:http';
-import { readFileSync, writeFileSync } from 'node:fs';
-import path from 'node:path';
-export default { compare: {
- port: ${port}, viewport: '300x200', block: ['**/blocked'],
- async start({port,root}) {
-  const server = createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end(readFileSync(path.join(root,'page.html')))});
-  await new Promise(resolve=>server.listen(port,'127.0.0.1',resolve));
-  return async()=>{await new Promise(resolve=>server.close(resolve));writeFileSync(path.join(root,'stopped'),'yes')};
- },
- fixture(name) { if (!['sample','override'].includes(name)) throw Error('wrong fixture'); return {url:'/',theme:'dark',locale:'fr-FR',clock:'2026-01-01T00:00:00Z'} },
- async ready(page) {
-  await page.waitForFunction(()=>window.blocked && window.timer);
-  if (!await page.evaluate(()=>Date.now()===1767225600000 && new Date().getTime()===1767225600000 && navigator.language==='fr-FR' && matchMedia('(prefers-reduced-motion: reduce)').matches && matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme==='dark')) throw Error('fixture environment failed');
- },
- async texts(page) { if (!await page.evaluate(()=>window.order==='AB')) throw Error('click order failed'); return [{text:'Canvas',x:40,y:30,width:20,height:10,fill:'black',size:'11px',weight:'400',family:'system-ui'}] }
-} };
-`);
-  const asset = name => path.join(root, 'design/surfaces', name + '.svg');
-  writeFileSync(asset('clip'), svg(`<g data-part="frame-demo" data-fixture="sample" data-viewport="300x200" data-origin="20 20">${component(text('Hello'))}</g>`));
-  writeFileSync(asset('panel'), svg(`<g data-part="frame-demo" data-fixture="sample">${component(text('Hello'))}</g>`));
-  const config = await loadConfig(root);
-  for (const [name, options] of [ ['clip', {}], ['panel', { region: 'Panel' }], ['panel', { selector: '.panel', fixture: 'override' }] ]) {
-    assert.equal(await compare(config, [`surfaces/${name}.svg`], { frame: 'demo', click: ['First', 'Second'], ...options }), 1);
-    const target = path.join(config.output, 'compare', `${name}-demo-${options.fixture ?? 'sample'}`);
-    assert.deepEqual(readdirSync(target).sort(), ['design.png', 'implementation.png', 'index.html', 'overlay.png', 'report.json']);
-    const report = JSON.parse(readFileSync(path.join(target, 'report.json')));
-    assert.equal(report.matched, 1); assert.ok(report.extra.includes('Canvas'));
-    assert.deepEqual(report.size.implementation, [200, 50]);
-    assert.equal(readFileSync(path.join(root, 'stopped'), 'utf8'), 'yes');
-    assert.equal(readFileSync(path.join(target, 'overlay.png')).subarray(1, 4).toString(), 'PNG');
-  }
+test('init preserves files and refreshes editor declarations; CLI accepts only v2 command flags',async t=>{
+  const c=await project(t);writeFileSync(path.join(c.design,'tsconfig.json'),'preserved');writeFileSync(path.join(c.design,'.sdg/runtime.d.ts'),'stale');init(c,()=>{});
+  assert.equal(readFileSync(path.join(c.design,'tsconfig.json'),'utf8'),'preserved');assert.match(readFileSync(path.join(c.design,'.sdg/runtime.d.ts'),'utf8'),/namespace JSX/);assert.match(readFileSync(path.join(c.root,'.gitignore'),'utf8'),/design\/\.sdg/);
+  const f=put(c,'surfaces/a.tsx',source('<div/>'));assert.deepEqual(selectSources(c,['surfaces/a','design/surfaces/a.tsx']),[f,f]);
+  assert.equal(parseCli(['compare','--all']).values.all,true);assert.equal(parseCli(['render','surfaces/a','--frame=sample']).values.frame,'sample');assert.throws(()=>parseCli(['compare','a']),/help/);assert.equal(parseCli(['open','check']).positionals[0],'check');assert.doesNotMatch(help(),/sdg sync|sdg measure/);assert.deepEqual(viewport('300x200'),{width:300,height:200});
 });
-
-async function compareFixture(t, html) {
-  const root = temporary(t); init({ root }, () => {});
-  const { createServer } = await import('node:http');
-  const server = createServer((req, res) => { res.setHeader('Content-Type', 'text/html'); res.end(html); });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise(resolve => server.close(resolve)));
-  const fixture = { url: `http://127.0.0.1:${server.address().port}`, theme: 'light', locale: 'en-US', clock: '2026-01-01T00:00:00Z' };
-  const config = await loadConfig(root);
-  config.compare.fixture = () => fixture;
-  const asset = path.join(config.design, 'surfaces/demo.svg');
-  const report = () => JSON.parse(readFileSync(path.join(config.output, 'compare/demo-demo-sample/report.json')));
-  return { root, config, fixture, asset, report };
-}
-
-test('compare clicks named controls in role priority and selects radio groups', { timeout: 15000 }, async t => {
-  const priority = ['button', 'radio', 'tab', 'checkbox', 'switch', 'menuitem', 'menuitemradio', 'option', 'link'];
-  const controls = [...priority].reverse().map(role => `<div role="${role}" aria-label="Shared" tabindex="0" onclick="window.order.push('${role}');this.remove()">${role}</div>`).join('');
-  const sample = await compareFixture(t, `<div id="panel" style="width:200px;height:50px"><span id="result">Pending</span></div>
-    <button aria-label="Shared" style="width:0;height:0;padding:0;border:0" onclick="window.order.push('hidden')"></button>
-    <button aria-label="Shared extra" onclick="window.order.push('partial')">Partial</button>
-    ${controls}<button aria-label="Shared" onclick="window.order.push('second button');this.remove()">Second button</button>
-    <button hidden>Activity</button>
-    <div role="radiogroup" aria-label="View">
-      <label><input type="radio" name="view" value="Summary" checked onchange="update()">Summary</label>
-      <label><input type="radio" name="view" value="Activity" onchange="update()">Activity</label>
-    </div>
-    <div role="radiogroup" aria-label="Provider">
-      <label><input type="radio" name="provider" value="Other" checked onchange="update()">Other</label>
-      <label><input type="radio" name="provider" value="Google" onchange="update()">Google</label>
-    </div>
-    <script>window.order=[];function update(){document.querySelector('#result').textContent=document.querySelector('input[name=view]:checked').value+' '+document.querySelector('input[name=provider]:checked').value}</script>`);
-  writeFileSync(sample.asset, svg(`<g data-part="frame-demo" data-fixture="sample">${component(text('Activity Google'))}</g>`));
-  sample.config.compare.texts = async page => {
-    assert.deepEqual(await page.evaluate(() => window.order), ['button', 'second button', ...priority.slice(1)]);
-    assert.equal(await page.getByRole('radio', { name: 'Activity', exact: true }).isChecked(), true);
-    assert.equal(await page.getByRole('radio', { name: 'Google', exact: true }).isChecked(), true);
-    return [];
-  };
-  await compare(sample.config, ['surfaces/demo.svg'], { frame: 'demo', selector: '#panel', click: [...Array(10).fill('Shared'), 'Activity', 'Google'] });
-  assert.equal(sample.report().matched, 1);
-  assert.deepEqual(sample.report().missing, []);
-  assert.deepEqual(sample.report().extra, []);
-});
-
-test('compare exits 1 with one line naming a click without a visible exact control', async t => {
-  const sample = await compareFixture(t, '<div id="panel"></div><button hidden>Activity</button><button>Activity extra</button><h1>Activity</h1>');
-  writeFileSync(sample.asset, svg(`<g data-part="frame-demo" data-fixture="sample">${component()}</g>`));
-  writeFileSync(path.join(sample.root, 'sdg.config.mjs'), `export default { compare: { fixture() { return ${JSON.stringify(sample.fixture)}; } } };`);
-  await assert.rejects(promisify(execFile)(process.execPath, [path.resolve('src/cli.mjs'), 'compare', 'surfaces/demo.svg', '--frame=demo', '--selector=#panel', '--click=Activity'], { cwd: sample.root }), error => {
-    assert.equal(error.code, 1);
-    assert.equal(error.stdout, '');
-    assert.equal(error.stderr, 'sdg: No visible control matches --click="Activity"\n');
-    return true;
-  });
-});
-
-test('compare applies fixture time zones and defaults to the system zone', async t => {
-  const sample = await compareFixture(t, `<div id="panel" style="width:200px;height:50px"></div><script>
-    document.querySelector('#panel').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone + ' ' + new Date().getHours();
-  </script>`);
-  for (const timezone of ['Asia/Shanghai', undefined]) {
-    sample.fixture.timezone = timezone;
-    const label = timezone ? 'Asia/Shanghai 8' : `${Intl.DateTimeFormat().resolvedOptions().timeZone} ${new Date(sample.fixture.clock).getHours()}`;
-    writeFileSync(sample.asset, svg(`<g data-part="frame-demo" data-fixture="sample">${component(text(label))}</g>`));
-    await compare(sample.config, ['surfaces/demo.svg'], { frame: 'demo', selector: '#panel' });
-    assert.equal(sample.report().matched, 1);
-    assert.deepEqual(sample.report().missing, []);
-    assert.deepEqual(sample.report().extra, []);
-    assert.equal(sample.report().settled, true);
-  }
-});
-
-test('compare rejects invalid fixture time zones with exit 2 and one stderr line', async t => {
-  const root = temporary(t); init({ root }, () => {});
-  writeFileSync(path.join(root, 'design/surfaces/demo.svg'), svg(`<g data-part="frame-demo" data-fixture="sample" data-viewport="300x200" data-origin="0 0">${component()}</g>`));
-  const run = promisify(execFile), cli = path.resolve('src/cli.mjs');
-  for (const timezone of ['Invalid/Zone', '+08:00', '', 8]) {
-    writeFileSync(path.join(root, 'sdg.config.mjs'), `export default { compare: { fixture() { return { url: 'http://127.0.0.1:1', theme: 'light', locale: 'en-US', clock: '2026-01-01', timezone: ${JSON.stringify(timezone)} }; } } };`);
-    await assert.rejects(run(process.execPath, [cli, 'compare', 'surfaces/demo.svg', '--frame=demo'], { cwd: root }), error => {
-      assert.equal(error.code, 2);
-      assert.equal(error.stdout, '');
-      assert.equal(error.stderr.trim().split('\n').length, 1);
-      assert.match(error.stderr, /timezone must be a valid IANA time zone.*fix sdg.config.mjs/);
-      return true;
-    });
-  }
-});
-
-test('compare settles delayed post-click text and reflow in clips, regions and selectors', async t => {
-  const sample = await compareFixture(t, `<style>
-    body{margin:0;font:11px system-ui}.panel{position:absolute;left:20px;top:20px;width:200px;height:50px}
-    #label{position:absolute;left:10px;top:10px}button{position:absolute;top:100px}#outside{position:absolute;top:150px}
-  </style><div class="panel" role="region" aria-label="Panel"><span id="label">Before</span></div>
-  <button onclick="window.clicked=performance.now();setTimeout(()=>label.textContent='After',200);setTimeout(()=>label.style.left='40px',400)">Open board</button>
-  <span id="outside"></span><script>setInterval(()=>outside.textContent=String(performance.now()),50)</script>`);
-  let elapsed;
-  sample.config.compare.texts = async page => { elapsed = await page.evaluate(() => performance.now() - window.clicked); return []; };
-  for (const options of [{}, { region: 'Panel' }, { selector: '.panel' }]) {
-    const clip = !options.region && !options.selector ? 'data-viewport="300x200" data-origin="20 20"' : '';
-    writeFileSync(sample.asset, svg(`<g data-part="frame-demo" data-fixture="sample" ${clip}>${component(text('After'))}</g>`));
-    await compare(sample.config, ['surfaces/demo.svg'], { frame: 'demo', click: ['Open board'], ...options });
-    const report = sample.report();
-    assert.equal(report.settled, true);
-    assert.equal(report.matched, 1);
-    assert.deepEqual(report.missing, []);
-    assert.deepEqual(report.extra, []);
-    assert.ok(report.offBy2px.some(row => row.text === 'After' && row.dx === 30), 'capture must use the final text box');
-    assert.ok(elapsed >= 690 && elapsed < 3000, `settled after ${elapsed}ms`);
-  }
-});
-
-test('compare captures after the settling timeout and reports settled false', { timeout: 15000 }, async t => {
-  const sample = await compareFixture(t, `<div id="panel" style="width:200px;height:50px"><span id="label">Before</span></div>
-    <button onclick="window.clicked=performance.now();setInterval(()=>label.textContent='Tick '+(++window.tick),75)">Open board</button><script>window.tick=0</script>`);
-  writeFileSync(sample.asset, svg(`<g data-part="frame-demo" data-fixture="sample">${component(text('Before'))}</g>`));
-  let elapsed;
-  sample.config.compare.texts = async page => { elapsed = await page.evaluate(() => performance.now() - window.clicked); return []; };
-  assert.equal(await compare(sample.config, ['surfaces/demo.svg'], { frame: 'demo', selector: '#panel', click: ['Open board'] }), 1);
-  const report = sample.report();
-  assert.equal(report.settled, false);
-  assert.ok(report.extra.some(label => /^Tick \d+$/.test(label)));
-  assert.ok(elapsed >= 4900 && elapsed < 7000, `captured after ${elapsed}ms`);
-  const destination = path.join(sample.config.output, 'compare/demo-demo-sample');
-  assert.deepEqual(readdirSync(destination).sort(), ['design.png', 'implementation.png', 'index.html', 'overlay.png', 'report.json']);
-  assert.equal(readFileSync(path.join(destination, 'implementation.png')).subarray(1, 4).toString(), 'PNG');
+test('compare uses Frame capture, flags override it, both sides share a reader, and --all writes linked summaries',async t=>{
+  const c=await project(t);const {createServer}=await import('node:http');
+  const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end(`<!doctype html><style>body{margin:0;font:16px/24px system-ui}.panel{width:200px;height:100px}button{margin-top:20px}</style><div class="panel" role="region" aria-label="Panel"><span>A</span><span>B</span></div><button onclick="setTimeout(()=>document.querySelector('.panel').innerHTML='<span>A</span><span>B</span>',100)">Go</button>`)});
+  await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
+  let environment;
+  c.compare.fixture=name=>{assert.ok(['sample','override'].includes(name));return{url:`http://127.0.0.1:${server.address().port}`,theme:'dark',locale:'fr-FR',timezone:'Asia/Shanghai',clock:'2026-01-01T00:00:00Z'}};
+  c.compare.ready=async p=>{environment=await p.evaluate(()=>[document.documentElement.dataset.theme,navigator.language,new Date().getHours(),matchMedia('(prefers-reduced-motion: reduce)').matches]);};
+  const f=put(c,'surfaces/demo.tsx',source('<div class="w-[200px] h-[100px]"><span>A</span><span>B</span></div>','fixture="sample" capture={{region:"Wrong",viewport:"300x200",clicks:["Go"]}}'));
+  const collected=[];assert.equal(await compare(c,[f],{frame:'sample',selector:'.panel',fixture:'override',collect:collected}),0);assert.deepEqual(environment,['dark','fr-FR',8,true]);assert.equal(collected[0].matched,1);assert.equal(collected[0].settled,true);
+  for(const name of ['design.png','implementation.png','overlay.png','report.json','index.html'])assert.ok(readFileSync(path.join(c.output,'compare/surfaces-demo-sample-override',name)).length);
+  put(c,'surfaces/demo.tsx',source('<div class="w-[200px] h-[100px]"><span>A</span><span>B</span></div>','fixture="sample" capture={{page:true,origin:"0 0",viewport:"300x200"}}'));
+  assert.equal(await compare(c,[],{all:true}),0);const summary=JSON.parse(readFileSync(path.join(c.output,'compare/summary.json')));assert.equal(summary.length,1);assert.match(readFileSync(path.join(c.output,'compare/index.html'),'utf8'),/surfaces-demo-sample-sample\/index.html/);
+  put(c,'surfaces/demo.tsx',source('<div class="w-[100px] h-[50px]"><span>A</span><span>B</span></div>','fixture="sample" capture={{page:true,viewport:"300x200"}}').replace('name="sample"','name="frame-sample"'));
+  const sizes=[];await compare(c,[f],{frame:'frame-sample',collect:sizes});assert.deepEqual(sizes[0].size.implementation,[200,100]);assert.match(sizes[0].report,/frame-sample/);
+  c.compare.fixture=()=>({url:'http://localhost',theme:'dark',locale:'en',timezone:'Invalid/Zone',clock:'2026-01-01'});await assert.rejects(compare(c,[f],{frame:'frame-sample'}),/timezone/);
 });

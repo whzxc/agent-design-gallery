@@ -1,7 +1,7 @@
 {
   "name": "@whzxc/svg-design-gallery",
-  "version": "0.3.3",
-  "description": "Local SVG design browser",
+  "version": "0.4.0",
+  "description": "Local TSX design toolkit and SVG viewer",
   "type": "module",
   "license": "MIT",
   "bin": {
@@ -14,8 +14,7 @@
     "src",
     "public",
     "LICENSE",
-    "README.md",
-    "design/tokens.css"
+    "README.md"
   ],
   "publishConfig": {
     "registry": "https://npm.leow.top",
@@ -25,9 +24,13 @@
     "start": "node src/cli.mjs",
     "benchmark": "node tooling/benchmark.mjs",
     "compare": "node tooling/compare.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "prepack": "node tooling/package.mjs"
   },
   "dependencies": {
-    "playwright": "1.64.1"
+    "esbuild": "0.28.2",
+    "lucide": "1.70.0",
+    "playwright": "1.64.1",
+    "tailwindcss": "4.3.4"
   }
 }

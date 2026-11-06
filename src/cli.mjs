@@ -4,21 +4,16 @@ import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 
-export const commands = ['open', 'init', 'sync', 'check', 'render', 'measure', 'compare'];
+export const commands = ['open', 'init', 'check', 'render', 'compare'];
 const usage = {
   open: '[directory] [--port=<n>] [--no-open] [--state-dir=<path>]',
-  init: '', sync: '', check: '[asset...]', render: '[asset...] [--scale=2]',
-  measure: '<text> [--size=<px|token>] [--weight=400] [--mono]',
-  compare: '<asset> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css>] [--click=<accessible-name>...] [--viewport=<w>x<h>]',
+  init: '', check: '[source...]', render: '[source...] [--frame=<name>] [--scale=2]',
+  compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
 };
 const details = {
-  open: 'Browse SVG designs. Omit directory to open recent directories. --port defaults to automatic; --no-open prints the URL; --state-dir isolates preferences.',
-  init: 'Create sdg.config.mjs, required tokens and component/surface directories. Existing paths are skipped.',
-  sync: 'Rewrite the generated token region in every asset from tokens.css.',
-  check: 'Check selected assets, or all assets, in both themes. Exit 1 means asset problems; run sdg sync for stale tokens.',
-  render: 'Write <asset>-light.png and <asset>-dark.png under the configured output directory. --scale defaults to 2.',
-  measure: 'Print text width in pixels. --size accepts pixels (14 or 14px) or a --text-* suffix (body). --mono uses --font-mono.',
-  compare: 'Compare one frame using the sdg.config.mjs adapter. --fixture defaults to data-fixture. Declared viewports capture a page clip; otherwise use --region or --selector. Each --click activates the first visible control with that exact accessible name, preferring roles in this order: button, radio, tab, checkbox, switch, menuitem, menuitemradio, option, link. Clicks run in order. Exit 1 means a click had no matching visible control, differences above 2px or unmatched texts.',
+  open: 'Browse TSX sources and legacy SVG designs.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
+  check: 'Build and check every selected frame in both themes.', render: 'Render each selected frame in both themes. Scale defaults to 2.',
+  compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
 };
 export function help(command) {
   if (command) return `Usage: sdg ${command} ${usage[command]}\n\n${details[command]}\n\n-h, --help  Show help\nExit codes: 0 success, 1 check/compare problems, 2 usage/configuration/environment error.`;
@@ -27,17 +22,17 @@ export function help(command) {
 export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' } };
-  const strings = { open: ['port', 'state-dir'], render: ['scale'], measure: ['size', 'weight'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport'] };
+  const strings = { open: ['port', 'state-dir'], render: ['scale', 'frame'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
-  if (command === 'measure') options.mono = { type: 'boolean' };
+  if (command === 'compare') { options.all = { type: 'boolean' }; options.page = { type: 'boolean' }; }
   if (command === 'compare') options.click = { type: 'string', multiple: true };
   let parsed;
   try { parsed = parseArgs({ args: explicit ? args.slice(1) : args, options, allowPositionals: true }); }
   catch (error) { throw new Error(`${error.message}; run sdg ${command} --help`); }
   const { values, positionals } = parsed;
   if (!values.help && !values.version) {
-    if ((['init', 'sync'].includes(command) && positionals.length) || (command === 'open' && positionals.length > 1) || (['measure', 'compare'].includes(command) && positionals.length !== 1) || (command === 'compare' && !values.frame)) throw new Error(`Invalid arguments; run sdg ${command} --help`);
+    if ((command === 'init' && positionals.length) || (command === 'open' && positionals.length > 1) || (command === 'compare' && (values.all ? positionals.length || values.frame : positionals.length !== 1 || !values.frame))) throw new Error(`Invalid arguments; run sdg ${command} --help`);
   }
   return { command, values, positionals, explicit };
 }
@@ -47,7 +42,7 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd()) {
   if (values.version) { console.log(VERSION); return 0; }
   if (command === 'open') return (await import('./open.mjs')).open(positionals, values);
   const config = await loadConfig(cwd);
-  if (command === 'init' || command === 'sync') return (await import('./toolkit/project.mjs'))[command](config);
+  if (command === 'init') return (await import('./toolkit/project.mjs'))[command](config);
   if (command === 'compare') return (await import('./toolkit/compare.mjs')).compare(config, positionals, values);
   return (await import('./toolkit/commands.mjs'))[command](config, positionals, values);
 }

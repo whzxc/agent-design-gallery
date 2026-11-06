@@ -1,8 +1,3 @@
-// Adapted from ARC tooling/design.mjs (MIT; see LICENSE).
-export const BEGIN = '<!-- design:tokens -->';
-export const END = '<!-- /design:tokens -->';
-const THEMES = ['light', 'dark'];
-
 export function parseTokens(css) {
   const source = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const blocks = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
@@ -19,68 +14,23 @@ export function parseTokens(css) {
     }
     return map;
   });
-  for (const key of ['--font-ui', '--font-mono', '--text-caption', '--text-tertiary', '--canvas']) {
+  for (const key of ['--font-ui', '--font-mono', '--canvas', '--text']) {
     if (!maps[0].has(key)) throw new Error(`tokens.css is missing ${key}; add it to :root`);
   }
   for (const key of maps[1].keys()) if (!maps[0].has(key)) throw new Error(`Dark token ${key} has no light value; add it to :root`);
   return { light: maps[0], dark: maps[1] };
 }
 
-// Splits a box-shadow list into SVG drop-shadow layers; spread and inset have no SVG filter equivalent.
-export function shadowLayers(value) {
-  const layers = [];
-  let depth = 0, current = '';
-  for (const char of value) {
-    if (char === '(') depth++;
-    if (char === ')') depth--;
-    if (char === ',' && depth === 0) { layers.push(current.trim()); current = ''; } else current += char;
-  }
-  if (depth !== 0) throw new Error('Unbalanced shadow color; close its parentheses in tokens.css');
-  layers.push(current.trim());
-  return layers.map(layer => {
-    const match = layer.match(/^(-?(?:\d+(?:\.\d+)?|\.\d+))(?:px)?\s+(-?(?:\d+(?:\.\d+)?|\.\d+))(?:px)?\s+((?:\d+(?:\.\d+)?|\.\d+))(?:px)?\s+(\S.*)$/);
-    if (!match || /^(?:inset\b|[-\d.]+(?:px)?(?:\s|$))/.test(match[4]) || /\binset\b/.test(layer)) throw new Error(`Shadow layer "${layer}" must be "<x> <y> <blur> <color>"; remove spread and inset`);
-    return { dx: +match[1], dy: +match[2], blur: +match[3], color: match[4] };
+const namedColors = new Set(('aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato transparent turquoise violet wheat white whitesmoke yellow yellowgreen').split(' '));
+export function themeCss(tokens) {
+  const color = (value, seen = new Set()) => {
+    const alias = /^var\((--[\w-]+)\)$/.exec(value);
+    if (alias) { if (seen.has(alias[1])) return false; seen.add(alias[1]); return color(tokens.light.get(alias[1]) ?? '', seen); }
+    return namedColors.has(value.toLowerCase()) || /^(#|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|color\(|color-mix\(|(?:transparent|black|white|red|blue|green|rebeccapurple|orange|purple|pink|gray|grey|yellow|cyan|magenta|currentColor)$)/i.test(value);
+  };
+  const declarations = [...tokens.light].flatMap(([key, value]) => {
+    const theme = color(value) ? '--color-' + key.slice(2) : /^(--font-|--radius-|--shadow-)/.test(key) || (key.startsWith('--text-') && /^[-.\d]+(?:px|rem|em|ch)$/.test(value)) ? key : null;
+    return theme ? [`${theme}:var(${key});`] : [];
   });
-}
-
-const shadowFilter = (id, value) => {
-  const layers = shadowLayers(value);
-  const primitives = layers.map(({ dx, dy, blur, color }, i) =>
-    `<feGaussianBlur in="SourceAlpha" stdDeviation="${blur / 2}"/><feOffset dx="${dx}" dy="${dy}" result="o${i}"/><feFlood style="flood-color:${color}"/><feComposite in2="o${i}" operator="in" result="s${i}"/>`).join('');
-  const merge = layers.map((_, i) => `<feMergeNode in="s${i}"/>`).join('');
-  return `<filter id="${id}" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">${primitives}<feMerge>${merge}<feMergeNode in="SourceGraphic"/></feMerge></filter>`;
-};
-
-export function tokenRegion(tokens) {
-  const shadows = [...tokens.light.keys()].filter(key => key.startsWith('--shadow-'));
-  const declarations = (map, theme) => [...map].map(([key, value]) => `${key}:${value}`)
-    .concat(shadows.map(key => `--elev-${key.slice('--shadow-'.length)}:url(#elev-${key.slice('--shadow-'.length)}-${theme})`)).join(';');
-  const dark = declarations(tokens.dark, 'dark');
-  const style = [
-    `:root{${declarations(tokens.light, 'light')}}`,
-    `:root[data-theme="dark"]{${dark}}`,
-    `@media (prefers-color-scheme: dark){:root:not([data-theme]){${dark}}}`,
-    'text{font-family:var(--font-ui);dominant-baseline:central}',
-    '.only-dark{display:none}',
-    ':root[data-theme="dark"] .only-light{display:none}:root[data-theme="dark"] .only-dark{display:inline}',
-    '@media (prefers-color-scheme: dark){:root:not([data-theme]) .only-light{display:none}:root:not([data-theme]) .only-dark{display:inline}}',
-    '.mono{font-family:var(--font-mono)}',
-    '.note{font-family:var(--font-mono);font-size:var(--text-caption);fill:var(--text-tertiary)}',
-  ].join('\n');
-  const filters = THEMES.flatMap(theme => shadows.map(key => {
-    const value = tokens[theme].get(key) ?? tokens.light.get(key);
-    return shadowFilter(`elev-${key.slice('--shadow-'.length)}-${theme}`, value);
-  })).join('\n');
-  return `${BEGIN}\n<style>\n${style}\n</style>\n<defs data-design-tokens="">\n${filters}\n</defs>\n${END}`;
-}
-
-export function syncSvg(svg, region) {
-  const start = svg.indexOf(BEGIN), end = svg.indexOf(END);
-  if ((start >= 0) !== (end >= 0) || (end >= 0 && end < start)) throw new Error('Broken token markers; restore both design:tokens comments before running sdg sync');
-  if (start >= 0 && end > start) return svg.slice(0, start) + region + svg.slice(end + END.length);
-  const root = svg.search(/<svg\b/);
-  const open = root < 0 ? -1 : svg.indexOf('>', root);
-  if (open < 0) throw new Error('Asset has no <svg> root');
-  return `${svg.slice(0, open + 1)}\n${region}${svg.slice(open + 1)}`;
+  return `@theme { --color-*:initial; --text-*:initial; --font-*:initial; --radius-*:initial; --shadow-*:initial; --inset-shadow-*:initial; --drop-shadow-*:initial; --text-shadow-*:initial; }\n@theme inline reference { ${declarations.join('\n')} }`;
 }

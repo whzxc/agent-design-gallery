@@ -1,7 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
 import { UPDATE } from './config.mjs';
-import { svgSize } from './project.mjs';
 
 export async function launch() {
   let chromium;
@@ -13,12 +10,12 @@ export async function launch() {
     throw new Error(`Cannot launch Chromium: ${error.message.split('\n')[0]}; check your Playwright installation`);
   }
 }
-export async function loadSvg(page, file, theme) {
-  await page.setViewportSize(svgSize(readFileSync(file, 'utf8')));
-  await page.goto(pathToFileURL(file).href);
-  await page.evaluate(theme => {
-    if (document.querySelector('parsererror')) throw new Error('Invalid SVG XML; fix the asset markup');
-    document.documentElement.setAttribute('data-theme', theme);
-  }, theme);
+export async function loadFrame(page, frame, theme = 'light') {
+  await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: Math.ceil(frame.width ?? 1600), height: Math.ceil(frame.height ?? 1200) });
+  await page.setContent(frame.document(theme));
   await page.evaluate(() => document.fonts.ready);
+  const box = await page.locator('[data-sdg-frame]').boundingBox();
+  await page.setViewportSize({ width: Math.max(1, Math.ceil(box.width)), height: Math.max(1, Math.ceil(box.height)) });
+  return box;
 }
