@@ -77,6 +77,13 @@ test('check permits whole-pixel dimensions, custom properties and inherited free
   const c=await project(t);put(c,'surfaces/free.tsx',source('<div style={{width:100,height:60,"--gap":"4px"}}><div data-free class="relative"><div class="absolute left-[1.5px]" style={{top:2.5}}>Free</div></div></div>'));
   const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),0,problems.join('\n'));
 });
+test('frames without dimensions follow their content, including a changed button label',async t=>{
+  const c=await project(t);put(c,'components/button.tsx',readFileSync(new URL('../design/components/button.tsx',import.meta.url),'utf8'));
+  const f=put(c,'components/content.tsx',`import {Frame} from 'sdg';import {Button} from './button';const labels=['Open','Open a design directory'];export default()=>labels.map((label,i)=><Frame name={String(i)}><Button label={label}/></Frame>);`);
+  const {frames}=await buildSource(c,f),browser=await launch();
+  try {const page=await browser.newPage(),widths=[];for(const frame of frames){const size=await loadFrame(page,frame,'light');widths.push(size.width);assert.equal(size.height,32);}assert.ok(widths[1]>widths[0]+50);}
+  finally{await browser.close();}
+});
 test('Tailwind uses rendered classes, inline token aliases and no color, size, font, radius or shadow defaults',async t=>{
   const c=await project(t);writeFileSync(path.join(c.design,'tokens.css'),starterTokens.replace('--canvas: #ffffff;','--canvas: #ffffff;\n  --surface: #eeeeee;\n  --text-body: 13px;\n  --radius-panel: 7px;\n  --shadow-card: 0 1px 3px #171717;').replace('--canvas: #171717;','--canvas: #171717;\n  --surface: #222222;'));
   const f=put(c,'surfaces/theme.tsx',`const unused='bg-red-500';const role='surface';${source('<div class={`bg-${role} text-body font-ui rounded-panel shadow-card p-4 font-semibold`}>Theme</div>')}`);

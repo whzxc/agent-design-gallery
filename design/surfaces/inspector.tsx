@@ -1,96 +1,278 @@
-import { Frame, Icon } from 'sdg';
-import { Button } from "../components/button";
-import { Field } from "../components/field";
-import { IconButton } from "../components/icon-button";
-import { Kbd } from "../components/kbd";
-import { MenuItem } from "../components/menu-item";
-import { TreeRow } from "../components/tree-row";
-import { Tooltip } from "../components/tooltip";
-import { Panel } from "../components/panel";
-import { Toolbar } from "../components/toolbar";
-import { Minimap } from '../components/minimap';
-import { Canvas, Geometry } from '../components/canvas';
+import { Frame } from 'sdg';
+import { Screen } from '../components/canvas';
+import { scenes } from '../scenes/inspector';
 
-const definitions = [["image",{"id":"arc-light-components-button","width":"655","height":"136","image":"arc-light-components-button"},[]],["image",{"id":"arc-dark-components-button","width":"655","height":"136","image":"arc-dark-components-button"},[]],["image",{"id":"arc-light-components-icon-button","width":"320","height":"156","image":"arc-light-components-icon-button"},[]],["image",{"id":"arc-dark-components-icon-button","width":"320","height":"156","image":"arc-dark-components-icon-button"},[]],["image",{"id":"arc-light-components-switch","width":"200","height":"128","image":"arc-light-components-switch"},[]],["image",{"id":"arc-dark-components-switch","width":"200","height":"128","image":"arc-dark-components-switch"},[]],["image",{"id":"arc-light-components-search","width":"320","height":"136","image":"arc-light-components-search"},[]],["image",{"id":"arc-dark-components-search","width":"320","height":"136","image":"arc-dark-components-search"},[]],["image",{"id":"arc-light-components-field","width":"672","height":"188","image":"arc-light-components-field"},[]],["image",{"id":"arc-dark-components-field","width":"672","height":"188","image":"arc-dark-components-field"},[]],["image",{"id":"arc-light-components-tag","width":"553","height":"246","image":"arc-light-components-tag"},[]],["image",{"id":"arc-dark-components-tag","width":"553","height":"246","image":"arc-dark-components-tag"},[]],["image",{"id":"arc-light-components-card","width":"640","height":"430","image":"arc-light-components-card"},[]],["image",{"id":"arc-dark-components-card","width":"640","height":"430","image":"arc-dark-components-card"},[]],["image",{"id":"arc-light-components-single-choice","width":"960","height":"900","image":"arc-light-components-single-choice"},[]],["image",{"id":"arc-dark-components-single-choice","width":"960","height":"900","image":"arc-dark-components-single-choice"},[]],["image",{"id":"arc-light-surfaces-approval","width":"1572","height":"524","image":"arc-light-surfaces-approval"},[]],["image",{"id":"arc-dark-surfaces-approval","width":"1572","height":"524","image":"arc-dark-surfaces-approval"},[]],["image",{"id":"arc-light-components-copy-field","width":"760","height":"150","image":"arc-light-components-copy-field"},[]],["image",{"id":"arc-dark-components-copy-field","width":"760","height":"150","image":"arc-dark-components-copy-field"},[]],["image",{"id":"arc-light-components-setup-choice","width":"760","height":"330","image":"arc-light-components-setup-choice"},[]],["image",{"id":"arc-dark-components-setup-choice","width":"760","height":"330","image":"arc-dark-components-setup-choice"},[]],["image",{"id":"arc-light-surfaces-mcp-hub","width":"1104","height":"2328","image":"arc-light-surfaces-mcp-hub"},[]],["image",{"id":"arc-dark-surfaces-mcp-hub","width":"1104","height":"2328","image":"arc-dark-surfaces-mcp-hub"},[]],["image",{"id":"arc-light-surfaces-connections","width":"824","height":"600","image":"arc-light-surfaces-connections"},[]],["image",{"id":"arc-dark-surfaces-connections","width":"824","height":"600","image":"arc-dark-surfaces-connections"},[]],["image",{"id":"arc-light-surfaces-relay-hosting","width":"904","height":"344","image":"arc-light-surfaces-relay-hosting"},[]],["image",{"id":"arc-dark-surfaces-relay-hosting","width":"904","height":"344","image":"arc-dark-surfaces-relay-hosting"},[]],["image",{"id":"arc-light-surfaces-platforms","width":"2136","height":"948","image":"arc-light-surfaces-platforms"},[]],["image",{"id":"arc-dark-surfaces-platforms","width":"2136","height":"948","image":"arc-dark-surfaces-platforms"},[]],["image",{"id":"arc-light-components-quota-card","width":"488","height":"340","image":"arc-light-components-quota-card"},[]],["image",{"id":"arc-dark-components-quota-card","width":"488","height":"340","image":"arc-dark-components-quota-card"},[]],["image",{"id":"arc-light-components-tile","width":"184","height":"142","image":"arc-light-components-tile"},[]],["image",{"id":"arc-dark-components-tile","width":"184","height":"142","image":"arc-dark-components-tile"},[]],["image",{"id":"arc-light-components-state-pill","width":"538","height":"126","image":"arc-light-components-state-pill"},[]],["image",{"id":"arc-dark-components-state-pill","width":"538","height":"126","image":"arc-dark-components-state-pill"},[]],["image",{"id":"arc-light-components-effort-slider","width":"360","height":"138","image":"arc-light-components-effort-slider"},[]],["image",{"id":"arc-dark-components-effort-slider","width":"360","height":"138","image":"arc-dark-components-effort-slider"},[]],["image",{"id":"arc-light-surfaces-agent-panel","width":"1056","height":"1006","image":"arc-light-surfaces-agent-panel"},[]],["image",{"id":"arc-dark-surfaces-agent-panel","width":"1056","height":"1006","image":"arc-dark-surfaces-agent-panel"},[]],["image",{"id":"arc-light-surfaces-quota-overview","width":"1096","height":"494","image":"arc-light-surfaces-quota-overview"},[]],["image",{"id":"arc-dark-surfaces-quota-overview","width":"1096","height":"494","image":"arc-dark-surfaces-quota-overview"},[]],["image",{"id":"arc-light-components-task-bubble","width":"640","height":"610","image":"arc-light-components-task-bubble"},[]],["image",{"id":"arc-dark-components-task-bubble","width":"640","height":"610","image":"arc-dark-components-task-bubble"},[]],["image",{"id":"arc-light-components-task-message","width":"600","height":"302","image":"arc-light-components-task-message"},[]],["image",{"id":"arc-dark-components-task-message","width":"600","height":"302","image":"arc-dark-components-task-message"},[]],["image",{"id":"arc-light-components-notice","width":"640","height":"516","image":"arc-light-components-notice"},[]],["image",{"id":"arc-dark-components-notice","width":"640","height":"516","image":"arc-dark-components-notice"},[]],["image",{"id":"arc-light-surfaces-task-detail","width":"2208","height":"1076","image":"arc-light-surfaces-task-detail"},[]],["image",{"id":"arc-dark-surfaces-task-detail","width":"2208","height":"1076","image":"arc-dark-surfaces-task-detail"},[]]];
-export default () => [
-<Frame name="frame" width={1440.0} height={900.0} fixture="sample-inspect-frame" capture={{"page":true,"viewport":"1440x900","origin":"0 0"}}>
-<Canvas width={1440.0} height={900.0}>
-<svg width="0" height="0" class="absolute"><defs><Geometry nodes={definitions} /></defs></svg>
-<svg class="absolute inset-0 overflow-visible" width={1440.0} height={900.0}><Geometry nodes={[["g",{"transform":"translate(-445.5 -287.8)"},[["rect",{"width":"2836.2","height":"1827.1","rx":"16","class":"fill-surface-section stroke-border"},[]],["g",{"transform":"translate(45.3 411.8)"},[["rect",{"width":"2196.5","height":"668","class":"fill-none"},[]],["g",{"transform":"translate(0 0)"},[["rect",{"width":"702","height":"491.1","rx":"6","class":"fill-none stroke-border"},[]],["svg",{"x":"1","y":"1","width":"700","height":"489.1","viewBox":"57.4 79.4 989.2 691.2"},[["use",{"href":"#arc-light-surfaces-mcp-hub","class":" dark:hidden"},[]],["use",{"href":"#arc-dark-surfaces-mcp-hub","class":" hidden dark:inline"},[]]]]]],["g",{"transform":"translate(747.3 0)"},[["rect",{"width":"702","height":"668","rx":"6","class":"fill-none stroke-accent stroke-[2]"},[]],["svg",{"x":"1","y":"1","width":"700","height":"666","viewBox":"57.4 819.4 989.2 941.2"},[["use",{"href":"#arc-light-surfaces-mcp-hub","class":" dark:hidden"},[]],["use",{"href":"#arc-dark-surfaces-mcp-hub","class":" hidden dark:inline"},[]]]],["text",{"x":"0","y":"-12","class":"fill-text text-caption font-[550]","dominant-baseline":"central"},["failed"]]]],["g",{"transform":"translate(1494.5 0)"},[["rect",{"width":"702","height":"328.3","rx":"6","class":"fill-none stroke-border"},[]],["svg",{"x":"1","y":"1","width":"700","height":"326.3","viewBox":"57.4 1809.4 989.2 461.2"},[["use",{"href":"#arc-light-surfaces-mcp-hub","class":" dark:hidden"},[]],["use",{"href":"#arc-dark-surfaces-mcp-hub","class":" hidden dark:inline"},[]]]],["text",{"x":"0","y":"-12","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["empty"]]]]]],["g",{"transform":"translate(45.3 1221.4)"},[["rect",{"width":"560.4","height":"164.2","class":"fill-none"},[]]]],["g",{"transform":"translate(651 1221.4)"},[["rect",{"width":"1449.2","height":"560.4","class":"fill-none"},[]]]]]]]} /></svg>
-<div class="absolute" style={{left:12.0,top:12.0}}><Panel form="sidebar" width={260.0} height={876.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 42.0px 212.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"panel-left"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><span class="text-text text-section font-[650] whitespace-nowrap leading-[1.2]">{"SDG"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:10.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Field {...{"form":"picker","width":236.0,"height":32.0,"label":"agent-remote-control","icon":"folder"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:12.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Field {...{"form":"search","width":236.0,"height":32.0,"label":"Find assets…","icon":"search","meta":"⌘F"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:12.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"root","width":236.0,"height":28.0,"label":"All designs","icon":"layout-grid","meta":"25"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:1.0,marginTop:4.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><div class="shrink-0 bg-border" style={{width:236,height:1}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:7.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"group","width":236.0,"height":28.0,"label":"Essentials","icon":"chevron-right","meta":"8"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:2.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"group","width":236.0,"height":28.0,"label":"Agents & quota","icon":"chevron-right","meta":"6"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:2.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"group","width":236.0,"height":28.0,"label":"Tasks & interactions","icon":"chevron-right","meta":"5"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:2.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"group","width":236.0,"height":28.0,"label":"Connections & MCP","icon":"chevron-down","meta":"6"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:2.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"copy-field","icon":"component"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"setup-choice","icon":"component"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item-selected","indent":20,"width":236.0,"height":28.0,"label":"mcp-hub","icon":"app-window"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"connections","icon":"app-window"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"relay-hosting","icon":"app-window"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"platforms","icon":"app-window"}} /></div></div>
-</Panel></div>
-<div class="absolute" style={{left:1276.0,top:12.0}}><Toolbar form="floating" width={152.0} height={44.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 36.0px 36.0px 36.0px 38.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"sun-moon"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><IconButton {...{"form":"active","width":32.0,"height":32.0,"icon":"panel-right"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:4}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"maximize"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:5}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"ellipsis"}} /></div></div>
-</Toolbar></div>
-<div class="absolute" style={{left:565.1,top:840.0}}><Toolbar form="floating" width={269.7} height={44.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 40.0px 5.0px 36.0px 63.7px 40.0px 5.0px 36.0px 38.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"arrow-left"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><div class="shrink-0 bg-border" style={{width:1,height:20}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:4}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"minus"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:5}}><Button {...{"form":"zoom","width":59.7,"height":32.0,"label":"71%","icon":"chevron-down"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:6}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"plus"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:7}}><div class="shrink-0 bg-border" style={{width:1,height:20}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:8}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"scan"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:9}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"map"}} /></div></div>
-</Toolbar></div>
-<div class="absolute" style={{left:1128.0,top:64.0}}><Panel form="inspector" width={300.0} height={245.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:10.0,gridTemplateColumns:"16.0px 240.0px 44.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text text-title font-[650] whitespace-nowrap leading-[1.2]">{"mcp-hub"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"x"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:14.4,marginTop:-1.2,gridTemplateColumns:"16.0px 284.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-tertiary text-meta font-[400] font-mono whitespace-nowrap leading-[1.2]">{"surfaces/mcp-hub.svg"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:12.8,gridTemplateColumns:"16.0px 121.9px 162.1px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Button {...{"form":"secondary","width":113.9,"height":32.0,"label":"Copy path","icon":"copy"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><Button {...{"form":"secondary","width":113.9,"height":32.0,"label":"Reveal file","icon":"folder-open"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:1.0,marginTop:16.0,gridTemplateColumns:"16.0px 284.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><div class="shrink-0 bg-border" style={{width:268,height:1}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:14.4,marginTop:13.8,gridTemplateColumns:"16.0px 284.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-tertiary text-meta font-[550] whitespace-nowrap leading-[1.2]">{"Frames"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:6.8,gridTemplateColumns:"8.0px 292.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":-2,"width":284.0,"height":28.0,"label":"ready","icon":"app-window","meta":"960 × 662"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"8.0px 292.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item-selected","indent":-2,"width":284.0,"height":28.0,"label":"failed","icon":"app-window","meta":"960 × 912"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"8.0px 292.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":-2,"width":284.0,"height":28.0,"label":"empty","icon":"app-window","meta":"960 × 432"}} /></div></div>
-</Panel></div>
-</Canvas></Frame>,
-<Frame name="component" width={1440.0} height={900.0} fixture="sample-inspect-component" capture={{"page":true,"viewport":"1440x900","origin":"0 0"}}>
-<Canvas width={1440.0} height={900.0}>
-<svg width="0" height="0" class="absolute"><defs><Geometry nodes={definitions} /></defs></svg>
-<svg class="absolute inset-0 overflow-visible" width={1440.0} height={900.0}><Geometry nodes={[["g",{"transform":"translate(228.6 269.3)"},[["rect",{"width":"2530.6","height":"1935","rx":"16","class":"fill-surface-section stroke-border"},[]],["g",{"transform":"translate(80 130)"},[["rect",{"width":"778.8","height":"117.5","rx":"6","class":"fill-none stroke-accent stroke-[2]"},[]],["svg",{"x":"1","y":"1","width":"776.8","height":"115.5","viewBox":"16.8 26.8 621.4 92.4"},[["use",{"href":"#arc-light-components-button","class":" dark:hidden"},[]],["use",{"href":"#arc-dark-components-button","class":" hidden dark:inline"},[]]]],["text",{"x":"0","y":"-12","class":"fill-text text-meta font-[550]","dominant-baseline":"central"},["button"]],["text",{"x":"42.8","y":"-12","class":"fill-text-tertiary text-meta font-[400]","dominant-baseline":"central"},["5 forms"]],["text",{"x":"30","y":"35.5","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["primary"]],["text",{"x":"218.8","y":"35.5","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["secondary"]],["text",{"x":"391.3","y":"35.5","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["ghost"]],["text",{"x":"503.8","y":"35.5","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["danger"]],["text",{"x":"616.3","y":"35.5","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["pending"]]]],["g",{"transform":"translate(938.8 130)"},[["rect",{"width":"180","height":"117.5","rx":"6","class":"fill-none stroke-border"},[]],["svg",{"x":"1","y":"1","width":"178","height":"115.5","viewBox":"16.8 26.8 142.4 92.4"},[["use",{"href":"#arc-light-components-icon-button","class":" dark:hidden"},[]],["use",{"href":"#arc-dark-components-icon-button","class":" hidden dark:inline"},[]]]],["text",{"x":"30","y":"35.5","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["regular"]],["text",{"x":"112.5","y":"35.5","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["compact"]],["text",{"x":"0","y":"-12","class":"fill-text-secondary text-meta font-[550]","dominant-baseline":"central"},["icon-button"]],["text",{"x":"74.9","y":"-12","class":"fill-text-tertiary text-meta","dominant-baseline":"central"},["2 forms"]]]],["g",{"transform":"translate(1198.8 130)"},[["rect",{"width":"210","height":"107.5","rx":"6","class":"fill-none stroke-border"},[]],["svg",{"x":"1","y":"1","width":"208","height":"105.5","viewBox":"16.8 26.8 166.4 84.4"},[["use",{"href":"#arc-light-components-switch","class":" dark:hidden"},[]],["use",{"href":"#arc-dark-components-switch","class":" hidden dark:inline"},[]]]]]],["g",{"transform":"translate(80 387.5)"},[["rect",{"width":"799.4","height":"181.9","rx":"6","class":"fill-none stroke-border"},[]],["svg",{"x":"1","y":"1","width":"797.4","height":"179.9","viewBox":"16.8 26.8 637.9 143.9"},[["use",{"href":"#arc-light-components-field","class":" dark:hidden"},[]],["use",{"href":"#arc-dark-components-field","class":" hidden dark:inline"},[]]]],["text",{"x":"0","y":"-12","class":"fill-text-secondary text-meta font-[550]","dominant-baseline":"central"},["field"]],["text",{"x":"31.1","y":"-12","class":"fill-text-tertiary text-meta font-[400]","dominant-baseline":"central"},["2 forms"]],["text",{"x":"30","y":"35.5","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["default"]],["text",{"x":"418.8","y":"35.5","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["error"]]]],["g",{"transform":"translate(959.4 387.5)"},[["rect",{"width":"651.3","height":"255","rx":"6","class":"fill-none stroke-border"},[]],["svg",{"x":"1","y":"1","width":"649.3","height":"253","viewBox":"16.8 26.8 519.4 202.4"},[["use",{"href":"#arc-light-components-tag","class":" dark:hidden"},[]],["use",{"href":"#arc-dark-components-tag","class":" hidden dark:inline"},[]]]],["text",{"x":"0","y":"-12","class":"fill-text-secondary text-meta font-[550]","dominant-baseline":"central"},["tag"]],["text",{"x":"24.4","y":"-12","class":"fill-text-tertiary text-meta font-[400]","dominant-baseline":"central"},["5 forms"]]]]]]]} /></svg>
-<div class="absolute" style={{left:12.0,top:12.0}}><Panel form="sidebar" width={260.0} height={876.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 42.0px 212.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"panel-left"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><span class="text-text text-section font-[650] whitespace-nowrap leading-[1.2]">{"SDG"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:10.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Field {...{"form":"picker","width":236.0,"height":32.0,"label":"agent-remote-control","icon":"folder"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:12.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Field {...{"form":"search","width":236.0,"height":32.0,"label":"Find assets…","icon":"search","meta":"⌘F"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:12.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"root","width":236.0,"height":28.0,"label":"All designs","icon":"layout-grid","meta":"25"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:1.0,marginTop:4.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><div class="shrink-0 bg-border" style={{width:236,height:1}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:7.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"group","width":236.0,"height":28.0,"label":"Essentials","icon":"chevron-down","meta":"8"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:2.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item-selected","indent":20,"width":236.0,"height":28.0,"label":"button","icon":"component"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"icon-button","icon":"component"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"switch","icon":"component"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"search","icon":"component"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"field","icon":"component"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"tag","icon":"component"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"card","icon":"component"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":20,"width":236.0,"height":28.0,"label":"single-choice","icon":"component"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:6.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"group","width":236.0,"height":28.0,"label":"Agents & quota","icon":"chevron-right","meta":"6"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:2.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"group","width":236.0,"height":28.0,"label":"Tasks & interactions","icon":"chevron-right","meta":"5"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:2.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"group","width":236.0,"height":28.0,"label":"Connections & MCP","icon":"chevron-right","meta":"6"}} /></div></div>
-</Panel></div>
-<div class="absolute" style={{left:1276.0,top:12.0}}><Toolbar form="floating" width={152.0} height={44.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 36.0px 36.0px 36.0px 38.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"sun-moon"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><IconButton {...{"form":"active","width":32.0,"height":32.0,"icon":"panel-right"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:4}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"maximize"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:5}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"ellipsis"}} /></div></div>
-</Toolbar></div>
-<div class="absolute" style={{left:560.8,top:840.0}}><Toolbar form="floating" width={278.4} height={44.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 40.0px 5.0px 36.0px 72.4px 40.0px 5.0px 36.0px 38.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"arrow-left"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><div class="shrink-0 bg-border" style={{width:1,height:20}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:4}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"minus"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:5}}><Button {...{"form":"zoom","width":68.4,"height":32.0,"label":"125%","icon":"chevron-down"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:6}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"plus"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:7}}><div class="shrink-0 bg-border" style={{width:1,height:20}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:8}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"scan"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:9}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"map"}} /></div></div>
-</Toolbar></div>
-<div class="absolute" style={{left:1128.0,top:64.0}}><Panel form="inspector" width={300.0} height={301.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:10.0,gridTemplateColumns:"16.0px 240.0px 44.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text text-title font-[650] whitespace-nowrap leading-[1.2]">{"button"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"x"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:14.4,marginTop:-1.2,gridTemplateColumns:"16.0px 284.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-tertiary text-meta font-[400] font-mono whitespace-nowrap leading-[1.2]">{"components/button.svg"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:12.8,gridTemplateColumns:"16.0px 121.9px 162.1px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Button {...{"form":"secondary","width":113.9,"height":32.0,"label":"Copy path","icon":"copy"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><Button {...{"form":"secondary","width":113.9,"height":32.0,"label":"Reveal file","icon":"folder-open"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:1.0,marginTop:16.0,gridTemplateColumns:"16.0px 284.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><div class="shrink-0 bg-border" style={{width:268,height:1}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:14.4,marginTop:13.8,gridTemplateColumns:"16.0px 284.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-tertiary text-meta font-[550] whitespace-nowrap leading-[1.2]">{"Forms"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:6.8,gridTemplateColumns:"8.0px 292.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item-selected","indent":-2,"width":284.0,"height":28.0,"label":"primary","icon":"component","meta":"119 × 34"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"8.0px 292.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":-2,"width":284.0,"height":28.0,"label":"secondary","icon":"component","meta":"106 × 34"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"8.0px 292.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":-2,"width":284.0,"height":28.0,"label":"ghost","icon":"component","meta":"58 × 34"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"8.0px 292.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":-2,"width":284.0,"height":28.0,"label":"danger","icon":"component","meta":"58 × 34"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"8.0px 292.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","indent":-2,"width":284.0,"height":28.0,"label":"pending","icon":"component","meta":"106 × 34"}} /></div></div>
-</Panel></div>
-</Canvas></Frame>
-];
+const frames = [
+  {
+    "name": "frame",
+    "width": 1440,
+    "height": 900,
+    "fixture": "sample-inspect-frame",
+    "capture": {
+      "page": true,
+      "viewport": "1440x900",
+      "origin": "0 0"
+    },
+    "chrome": [
+      {
+        "left": 12,
+        "top": 12,
+        "kind": "sidebar",
+        "search": false,
+        "rows": [
+          {
+            "form": "root",
+            "label": "All designs",
+            "meta": "25",
+            "icon": "layout-grid"
+          },
+          {
+            "form": "group",
+            "label": "Essentials",
+            "meta": "8",
+            "icon": "chevron-right"
+          },
+          {
+            "form": "group",
+            "label": "Agents & quota",
+            "meta": "6",
+            "icon": "chevron-right"
+          },
+          {
+            "form": "group",
+            "label": "Tasks & interactions",
+            "meta": "5",
+            "icon": "chevron-right"
+          },
+          {
+            "form": "group",
+            "label": "Connections & MCP",
+            "meta": "6",
+            "icon": "chevron-down"
+          },
+          {
+            "form": "item",
+            "label": "copy-field",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "setup-choice",
+            "icon": "component"
+          },
+          {
+            "form": "item-selected",
+            "label": "mcp-hub",
+            "icon": "app-window"
+          },
+          {
+            "form": "item",
+            "label": "connections",
+            "icon": "app-window"
+          },
+          {
+            "form": "item",
+            "label": "relay-hosting",
+            "icon": "app-window"
+          },
+          {
+            "form": "item",
+            "label": "platforms",
+            "icon": "app-window"
+          }
+        ],
+        "height": 876
+      },
+      {
+        "left": 1276,
+        "top": 12,
+        "kind": "tools",
+        "active": "panel-right"
+      },
+      {
+        "left": 565,
+        "top": 840,
+        "kind": "zoom",
+        "label": "71%",
+        "active": false
+      },
+      {
+        "left": 1128,
+        "top": 64,
+        "kind": "inspector",
+        "title": "mcp-hub",
+        "path": "surfaces/mcp-hub.svg",
+        "rows": [
+          {
+            "form": "item",
+            "label": "ready",
+            "meta": "960 × 662",
+            "icon": "app-window"
+          },
+          {
+            "form": "item-selected",
+            "label": "failed",
+            "meta": "960 × 912",
+            "icon": "app-window"
+          },
+          {
+            "form": "item",
+            "label": "empty",
+            "meta": "960 × 432",
+            "icon": "app-window"
+          }
+        ],
+        "heading": "Frames"
+      }
+    ]
+  },
+  {
+    "name": "component",
+    "width": 1440,
+    "height": 900,
+    "fixture": "sample-inspect-component",
+    "capture": {
+      "page": true,
+      "viewport": "1440x900",
+      "origin": "0 0"
+    },
+    "chrome": [
+      {
+        "left": 12,
+        "top": 12,
+        "kind": "sidebar",
+        "search": false,
+        "rows": [
+          {
+            "form": "root",
+            "label": "All designs",
+            "meta": "25",
+            "icon": "layout-grid"
+          },
+          {
+            "form": "group",
+            "label": "Essentials",
+            "meta": "8",
+            "icon": "chevron-down"
+          },
+          {
+            "form": "item-selected",
+            "label": "button",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "icon-button",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "switch",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "search",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "field",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "tag",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "card",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "single-choice",
+            "icon": "component"
+          },
+          {
+            "form": "group",
+            "label": "Agents & quota",
+            "meta": "6",
+            "icon": "chevron-right"
+          },
+          {
+            "form": "group",
+            "label": "Tasks & interactions",
+            "meta": "5",
+            "icon": "chevron-right"
+          },
+          {
+            "form": "group",
+            "label": "Connections & MCP",
+            "meta": "6",
+            "icon": "chevron-right"
+          }
+        ],
+        "height": 876
+      },
+      {
+        "left": 1276,
+        "top": 12,
+        "kind": "tools",
+        "active": "panel-right"
+      },
+      {
+        "left": 561,
+        "top": 840,
+        "kind": "zoom",
+        "label": "125%",
+        "active": false
+      },
+      {
+        "left": 1128,
+        "top": 64,
+        "kind": "inspector",
+        "title": "button",
+        "path": "components/button.svg",
+        "rows": [
+          {
+            "form": "item-selected",
+            "label": "primary",
+            "meta": "119 × 34",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "secondary",
+            "meta": "106 × 34",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "ghost",
+            "meta": "58 × 34",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "danger",
+            "meta": "58 × 34",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "pending",
+            "meta": "106 × 34",
+            "icon": "component"
+          }
+        ],
+        "heading": "Forms"
+      }
+    ]
+  }
+] as const;
+
+export default () => frames.map(({ chrome, ...frame }) =>
+  <Frame {...frame}><Screen width={frame.width} height={frame.height} scene={scenes[frame.name]} chrome={chrome} /></Frame>
+);

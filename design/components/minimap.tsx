@@ -1,8 +1,8 @@
 import { Frame } from 'sdg';
-import { Geometry, type Shape } from './canvas';
-export function Minimap({nodes,width,height}: {nodes:Shape[];width:number;height:number}) {
-  return <svg width={width} height={height+0} class="overflow-visible"><g transform={`translate(0 0)`}><Geometry nodes={nodes}/></g></svg>;
+const sample = [[16,16,70,44],[94,16,90,60],[16,68,70,48]];
+const world = [[14,18.4,41.8,32],[65.7,18.4,44.8,31.5],[14,60.3,79.4,38.2],[103.3,60.3,82.7,53.3]];
+export function Minimap({ specimen=false }: { specimen?:boolean }) {
+  const boxes=specimen?sample:world;
+  return <svg data-free width={200} height={132} class="overflow-visible"><rect width="200" height="132" rx="12" class="fill-surface"/>{boxes.map(([x,y,width,height])=><rect x={x} y={y} width={width} height={height} rx={specimen?4:3} class="fill-surface-section stroke-border"/>)}<rect x={specimen?90:14} y={specimen?12:18.4} width={specimen?98:23.7} height={specimen?68:16.3} rx={specimen?4:3} class="fill-none stroke-accent" stroke-width="1.5"/></svg>;
 }
-export default () => [
-<Frame name="default" width={200.0} height={132.0}><Minimap nodes={[["g",{},[["rect",{"width":"200","height":"132","rx":"12","class":"fill-surface"},[]],["rect",{"x":"16","y":"16","width":"70","height":"44","rx":"4","class":"fill-surface-section stroke-border"},[]],["rect",{"x":"94","y":"16","width":"90","height":"60","rx":"4","class":"fill-surface-section stroke-border"},[]],["rect",{"x":"16","y":"68","width":"70","height":"48","rx":"4","class":"fill-surface-section stroke-border"},[]],["rect",{"x":"90","y":"12","width":"98","height":"68","rx":"4","class":"fill-none stroke-accent stroke-[1.5]"},[]]]]]} width={200.0} height={132.0} /></Frame>
-];
+export default () => <Frame name="default"><Minimap specimen/></Frame>;

@@ -1,11 +1,14 @@
 import { Frame } from 'sdg';
-import { Geometry, type Shape } from './canvas';
-export function Artboard({nodes,width,height,top=19.5}: {nodes:Shape[];width:number;height:number;top?:number}) {
-  return <svg width={width} height={height+top} class="overflow-visible"><g transform={`translate(0 ${top})`}><Geometry nodes={nodes}/></g></svg>;
-}
-export default () => [
-<Frame name="set" width={220.0} height={149.5}><Artboard nodes={[["g",{},[["rect",{"width":"220","height":"130","rx":"6","class":"fill-none stroke-border"},[]],["text",{"x":"0","y":"-12","class":"fill-text-secondary text-meta font-[550]","dominant-baseline":"central"},["button"]],["text",{"x":"42.8","y":"-12","class":"fill-text-tertiary text-meta font-[400]","dominant-baseline":"central"},["5 forms"]],["text",{"x":"16","y":"20","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["primary"]],["text",{"x":"116","y":"20","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["secondary"]]]]]} width={220.0} height={130.0} /></Frame>,
-<Frame name="set-selected" width={220.0} height={149.5}><Artboard nodes={[["g",{},[["rect",{"width":"220","height":"130","rx":"6","class":"fill-none stroke-accent stroke-[2]"},[]],["text",{"x":"0","y":"-12","class":"fill-text text-meta font-[550]","dominant-baseline":"central"},["field"]],["text",{"x":"31.1","y":"-12","class":"fill-text-tertiary text-meta font-[400]","dominant-baseline":"central"},["2 forms"]],["text",{"x":"16","y":"20","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["default"]],["text",{"x":"116","y":"20","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["error"]]]]]} width={220.0} height={130.0} /></Frame>,
-<Frame name="frame" width={220.0} height={148.5}><Artboard top={18.5} nodes={[["g",{},[["rect",{"width":"220","height":"130","rx":"6","class":"fill-none stroke-border"},[]],["text",{"x":"0","y":"-12","class":"fill-text-tertiary text-caption font-[400]","dominant-baseline":"central"},["ready"]]]]]} width={220.0} height={130.0} /></Frame>,
-<Frame name="frame-selected" width={220.0} height={148.5}><Artboard top={18.5} nodes={[["g",{},[["rect",{"width":"220","height":"130","rx":"6","class":"fill-none stroke-accent stroke-[2]"},[]],["text",{"x":"0","y":"-12","class":"fill-text text-caption font-[550]","dominant-baseline":"central"},["failed"]]]]]} width={220.0} height={130.0} /></Frame>
+const forms = [
+  {name:'set',title:'button',count:'5 forms',labels:['primary','secondary']},
+  {name:'set-selected',title:'field',count:'2 forms',labels:['default','error'],selected:true},
+  {name:'frame',title:'ready'}, {name:'frame-selected',title:'failed',selected:true},
 ];
+export function Artboard({title,count,labels=[],selected=false,width=220,height=130}:any) {
+  return <svg data-free width={width} height={height+20}>
+    <rect y="20" width={width} height={height} rx="6" class={selected?'fill-none stroke-accent':'fill-none stroke-border'} stroke-width={selected?2:1}/>
+    <text y="8" dominant-baseline="central" class={`${selected?'fill-text':'fill-text-secondary'} ${count?'text-meta font-[550]':'text-caption'}`}>{title}{count&&<tspan dx="6" class="fill-text-tertiary font-normal">{count}</tspan>}</text>
+    {labels.map((label:string,i:number)=><text x={16+i*100} y="40" dominant-baseline="central" class="text-caption fill-text-tertiary">{label}</text>)}
+  </svg>;
+}
+export default () => forms.map(({name,...props})=><Frame name={name}><Artboard {...props}/></Frame>);

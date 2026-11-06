@@ -1,20 +1,42 @@
-import { Frame, jsx } from 'sdg';
-import { previews } from '../art/arc-previews';
-export type Shape = [string, Record<string, unknown>, (Shape|string)[]];
-// The viewer's free-form canvas uses the fixture's retained drawing geometry.
-export function Geometry({nodes}: {nodes:(Shape|string)[]}): unknown {
-  return nodes.map(node => {
-    if (typeof node==='string') return node;
-    const [tag,attributes,children]=node;
-    const {image,...props}=attributes;
-    return jsx(tag,{...props,...(image?{href:previews[String(image)]}:{}),children:<Geometry nodes={children}/>});
-  });
+import { Frame } from 'sdg';
+import { Sidebar, Inspector, Menu, OpenDialog, Shortcuts } from './panel';
+import { Tools, AppBar, ZoomBar } from './toolbar';
+import { Tooltip } from './tooltip';
+import { Minimap } from './minimap';
+const labelClasses: Record<string,string> = {
+  section:'fill-text text-section font-[650]', set:'fill-text-secondary text-meta font-[550]',
+  'selected-set':'fill-text text-meta font-[550]', flow:'fill-text-secondary text-meta font-semibold',
+  count:'fill-text-tertiary text-meta', form:'fill-text-tertiary text-caption',
+  'selected-frame':'fill-text text-caption font-[550]',
+};
+export function Drawing({ nodes }: { nodes: any[] }): unknown {
+  return nodes.map(({ at:[x,y], size:[width,height], kind, selected, outline=true, preview, labels=[], children=[] }) =>
+    <g transform={`translate(${x} ${y})`}>
+      <rect width={width} height={height} rx={kind==='section'?16:6} class={kind==='section'?'fill-surface-section stroke-border':selected?'fill-none stroke-accent stroke-[2]':outline?'fill-none stroke-border':'fill-none'}/>
+      {preview && <svg x="1" y="1" width={width-2} height={height-2} viewBox={preview.crop}>
+        <image width={preview.size[0]} height={preview.size[1]} href={preview.light} class="dark:hidden"/>
+        <image width={preview.size[0]} height={preview.size[1]} href={preview.dark} class="hidden dark:inline"/>
+      </svg>}
+      {labels.map(([x,y,role,text]:any)=><text x={x} y={y} dominant-baseline="central" class={labelClasses[role]}>{text}</text>)}
+      <Drawing nodes={children}/>
+    </g>);
 }
-export function Canvas({width=280,height=150,children}: {width?:number;height?:number;children?:unknown}) {
-  return <div class="relative overflow-hidden bg-canvas" style={{width,height}}>
-    <svg class="absolute inset-0" width={width} height={height} aria-hidden="true"><defs><pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" class="fill-dot"/></pattern></defs><rect width={width} height={height} fill="url(#dots)"/></svg>{children}
+export function Canvas({ width = 280, height = 150, children }: { width?: number; height?: number; children?: unknown }) {
+  return <div class="relative overflow-hidden bg-canvas" style={{ width, height }}>
+    <svg data-free class="absolute inset-0" width={width} height={height} aria-hidden="true"><defs><pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" class="fill-dot" /></pattern></defs><rect width={width} height={height} fill="url(#dots)" /></svg>{children}
   </div>;
 }
-export default () => [
-<Frame name="dots" width={280.0} height={150.0}><Canvas width={280} height={150} /></Frame>
-];
+const chromeComponents: Record<string,(props:any)=>unknown> = { sidebar: Sidebar, inspector: Inspector, menu: Menu, dialog: OpenDialog, shortcuts: Shortcuts, tools: Tools, app: AppBar, zoom: ZoomBar, tooltip: Tooltip, minimap: Minimap };
+export function Screen({ width, height, scene=[], chrome }: any) {
+  return <Canvas width={width} height={height}>
+    <div data-free class="absolute inset-0">
+    <svg class="absolute inset-0 overflow-visible" width={width} height={height}><Drawing nodes={scene}/></svg>
+    {chrome.map(({ kind, left, top, ...props }: any) => {
+      if (kind === 'scrim') return <div class="absolute inset-0 bg-canvas opacity-60"/>;
+      const Component = chromeComponents[kind];
+      return <div class="absolute" style={{left,top}}><Component {...props}/></div>;
+    })}
+    </div>
+  </Canvas>;
+}
+export default () => <Frame name="dots"><Canvas/></Frame>;

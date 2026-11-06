@@ -82,6 +82,6 @@ Every surface frame declares its fixture and a page capture at a 1440 × 900 vie
 
 ## TSX conversion
 
-Ordinary controls use flex/grid layout and shared component functions. Only the free-form drawing canvas and floating chrome positions use coordinates. The retained ARC preview pictures in `design/art/arc-previews.ts` are fixture artwork, shared across surfaces; their original palettes are independent of SDG chrome. They are not package contents.
+Ordinary controls use flex/grid layout and shared component functions. Only the free-form drawing canvas and floating chrome positions use coordinates, under `data-free`. Panels and lists follow content through padding and gaps; buttons size from their label and icon. The scene modules hold section, asset, crop and label data for loop-based drawing. The retained ARC preview pictures in `design/art/arc-previews/` are individual SVG fixture images, imported with `?url` only by scenes that display them; their original palettes are independent of SDG chrome. They are not package contents.
 
 Full sheet is removed from both the inspector and design frames. The shorter component inspector exposes the adjacent icon-button set label. Token names and light/dark theme selection are unchanged. Browser text metrics can differ from SVG central-baseline metrics by about one pixel.

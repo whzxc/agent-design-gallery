@@ -1,94 +1,234 @@
-import { Frame, Icon } from 'sdg';
-import { Button } from "../components/button";
-import { Field } from "../components/field";
-import { IconButton } from "../components/icon-button";
-import { Kbd } from "../components/kbd";
-import { MenuItem } from "../components/menu-item";
-import { TreeRow } from "../components/tree-row";
-import { Tooltip } from "../components/tooltip";
-import { Panel } from "../components/panel";
-import { Toolbar } from "../components/toolbar";
-import { Minimap } from '../components/minimap';
-import { Canvas, Geometry } from '../components/canvas';
+import { Frame } from 'sdg';
+import { Screen } from '../components/canvas';
 
-const definitions = [];
-export default () => [
-<Frame name="display" width={420.0} height={400.0} fixture="menu-display" capture={{"page":true,"viewport":"1440x900","origin":"1020 0"}}>
-<Canvas width={420.0} height={400.0}>
-<svg width="0" height="0" class="absolute"><defs><Geometry nodes={definitions} /></defs></svg>
-<div class="absolute" style={{left:256.0,top:12.0}}><Toolbar form="floating" width={152.0} height={44.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 36.0px 36.0px 36.0px 38.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"active","width":32.0,"height":32.0,"icon":"sun-moon"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"panel-right"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:4}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"maximize"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:5}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"ellipsis"}} /></div></div>
-</Toolbar></div>
-<div class="absolute" style={{left:188.0,top:62.0}}><Panel form="menu" width={220.0} height={279.0}>
-<div class="grid items-center shrink-0" style={{height:24.0,marginTop:6.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"label","width":208.0,"height":24.0,"label":"Theme"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"check","width":208.0,"height":30.0,"label":"System","icon":"check"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"option","width":208.0,"height":30.0,"label":"Light"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"option","width":208.0,"height":30.0,"label":"Dark"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:1.0,marginTop:4.0,gridTemplateColumns:"8.0px 212.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><div class="shrink-0 bg-border" style={{width:204,height:1}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:24.0,marginTop:4.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"label","width":208.0,"height":24.0,"label":"Canvas"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"check","width":208.0,"height":30.0,"label":"Match theme","icon":"check"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"option","width":208.0,"height":30.0,"label":"Light"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"option","width":208.0,"height":30.0,"label":"Dark"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"option","width":208.0,"height":30.0,"label":"Neutral"}} /></div></div>
-</Panel></div>
-</Canvas></Frame>,
-<Frame name="zoom" width={420.0} height={310.0} fixture="menu-zoom" capture={{"page":true,"viewport":"1440x900","origin":"646 590"}}>
-<Canvas width={420.0} height={310.0}>
-<svg width="0" height="0" class="absolute"><defs><Geometry nodes={definitions} /></defs></svg>
-<div class="absolute" style={{left:73.2,top:250.0}}><Toolbar form="floating" width={273.6} height={44.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 40.0px 5.0px 36.0px 67.6px 40.0px 5.0px 36.0px 38.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"arrow-left"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><div class="shrink-0 bg-border" style={{width:1,height:20}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:4}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"minus"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:5}}><Button {...{"form":"zoom-open","width":63.6,"height":32.0,"label":"48%","icon":"chevron-down"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:6}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"plus"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:7}}><div class="shrink-0 bg-border" style={{width:1,height:20}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:8}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"scan"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:9}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"map"}} /></div></div>
-</Toolbar></div>
-<div class="absolute" style={{left:92.0,top:101.0}}><Panel form="menu" width={200.0} height={141.0}>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:6.0,gridTemplateColumns:"6.0px 194.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"item","width":188.0,"height":30.0,"label":"Fit all","meta":"0"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 194.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"item-active","width":188.0,"height":30.0,"label":"Fit group"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 194.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"item","width":188.0,"height":30.0,"label":"Fit selection"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:1.0,marginTop:4.0,gridTemplateColumns:"8.0px 192.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><div class="shrink-0 bg-border" style={{width:184,height:1}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:4.0,gridTemplateColumns:"6.0px 194.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"item","width":188.0,"height":30.0,"label":"Zoom to 100%","meta":"1"}} /></div></div>
-</Panel></div>
-</Canvas></Frame>,
-<Frame name="more" width={420.0} height={180.0} fixture="menu-more" capture={{"page":true,"viewport":"1440x900","origin":"1020 0"}}>
-<Canvas width={420.0} height={180.0}>
-<svg width="0" height="0" class="absolute"><defs><Geometry nodes={definitions} /></defs></svg>
-<div class="absolute" style={{left:256.0,top:12.0}}><Toolbar form="floating" width={152.0} height={44.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 36.0px 36.0px 36.0px 38.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"sun-moon"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"panel-right"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:4}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"maximize"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:5}}><IconButton {...{"form":"active","width":32.0,"height":32.0,"icon":"ellipsis"}} /></div></div>
-</Toolbar></div>
-<div class="absolute" style={{left:168.0,top:62.0}}><Panel form="menu" width={240.0} height={72.0}>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:6.0,gridTemplateColumns:"6.0px 234.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"item","width":228.0,"height":30.0,"label":"Arrange current group"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 234.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"item","width":228.0,"height":30.0,"label":"Keyboard shortcuts","meta":"?"}} /></div></div>
-</Panel></div>
-</Canvas></Frame>,
-<Frame name="search" width={284.0} height={272.0} fixture="sidebar-search" capture={{"page":true,"viewport":"1440x900","origin":"0 0"}}>
-<Canvas width={284.0} height={272.0}>
-<svg width="0" height="0" class="absolute"><defs><Geometry nodes={definitions} /></defs></svg>
-<div class="absolute" style={{left:12.0,top:12.0}}><Panel form="sidebar" width={260.0} height={248.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 42.0px 212.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"panel-left"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><span class="text-text text-section font-[650] whitespace-nowrap leading-[1.2]">{"SDG"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:10.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Field {...{"form":"picker","width":236.0,"height":32.0,"label":"agent-remote-control","icon":"folder"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:12.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Field {...{"form":"search-active","width":236.0,"height":32.0,"label":"pill","icon":"search"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:14.4,marginTop:18.8,gridTemplateColumns:"14.0px 246.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-tertiary text-meta font-[550] whitespace-nowrap leading-[1.2]">{"2 results"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:6.8,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item-selected","width":236.0,"height":28.0,"label":"state-pill","icon":"component","meta":"5 forms"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","width":236.0,"height":28.0,"label":"single-choice · pills","icon":"component","meta":"form"}} /></div></div>
-</Panel></div>
-</Canvas></Frame>,
-<Frame name="tooltip" width={420.0} height={120.0} fixture="tooltip-inspector" capture={{"page":true,"viewport":"1440x900","origin":"1020 0"}}>
-<Canvas width={420.0} height={120.0}>
-<svg width="0" height="0" class="absolute"><defs><Geometry nodes={definitions} /></defs></svg>
-<div class="absolute" style={{left:256.0,top:12.0}}><Toolbar form="floating" width={152.0} height={44.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 36.0px 36.0px 36.0px 38.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"sun-moon"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"panel-right"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:4}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"maximize"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:5}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"ellipsis"}} /></div></div>
-</Toolbar></div>
-<div class="absolute" style={{left:279.3,top:62.0}}><Tooltip {...{"form":"default","width":69.4,"height":26.0,"label":"Inspector"}} /></div>
-</Canvas></Frame>,
-<Frame name="shortcuts" width={480.0} height={374.0} fixture="dialog-shortcuts" capture={{"page":true,"viewport":"1440x900","origin":"480 263"}}>
-<Canvas width={480.0} height={374.0}>
-<svg width="0" height="0" class="absolute"><defs><Geometry nodes={definitions} /></defs></svg>
-<div class="absolute" style={{left:50.0,top:30.0}}><Panel form="dialog" width={380.0} height={314.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:14.0,gridTemplateColumns:"20.0px 316.0px 44.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text text-title font-[650] whitespace-nowrap leading-[1.2]">{"Keyboard shortcuts"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"x"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:22.0,marginTop:18.0,gridTemplateColumns:"20.0px 311.6px 48.4px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-secondary text-body font-[400] whitespace-nowrap leading-[1.2]">{"Search"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><Kbd {...{"form":"default","width":28.4,"height":22.0,"label":"⌘F"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:22.0,marginTop:12.0,gridTemplateColumns:"20.0px 318.0px 42.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-secondary text-body font-[400] whitespace-nowrap leading-[1.2]">{"Fit all"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><Kbd {...{"form":"default","width":22.0,"height":22.0,"label":"0"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:22.0,marginTop:12.0,gridTemplateColumns:"20.0px 318.0px 42.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-secondary text-body font-[400] whitespace-nowrap leading-[1.2]">{"Zoom to 100%"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><Kbd {...{"form":"default","width":22.0,"height":22.0,"label":"1"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:22.0,marginTop:12.0,gridTemplateColumns:"20.0px 290.0px 28.0px 42.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-secondary text-body font-[400] whitespace-nowrap leading-[1.2]">{"Zoom in or out"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><Kbd {...{"form":"default","width":22.0,"height":22.0,"label":"+"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:4}}><Kbd {...{"form":"default","width":22.0,"height":22.0,"label":"−"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:22.0,marginTop:12.0,gridTemplateColumns:"20.0px 234.0px 28.0px 28.0px 28.0px 42.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-secondary text-body font-[400] whitespace-nowrap leading-[1.2]">{"Pan"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><Kbd {...{"form":"default","width":22.0,"height":22.0,"label":"←"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:4}}><Kbd {...{"form":"default","width":22.0,"height":22.0,"label":"↑"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:5}}><Kbd {...{"form":"default","width":22.0,"height":22.0,"label":"→"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:6}}><Kbd {...{"form":"default","width":22.0,"height":22.0,"label":"↓"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:22.0,marginTop:12.0,gridTemplateColumns:"20.0px 290.0px 70.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-secondary text-body font-[400] whitespace-nowrap leading-[1.2]">{"Focus selection"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><Kbd {...{"form":"default","width":50.0,"height":22.0,"label":"Enter"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:22.0,marginTop:12.0,gridTemplateColumns:"20.0px 304.4px 55.6px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-secondary text-body font-[400] whitespace-nowrap leading-[1.2]">{"Back or close"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><Kbd {...{"form":"default","width":35.6,"height":22.0,"label":"Esc"}} /></div></div>
-</Panel></div>
-</Canvas></Frame>
-];
+const frames = [
+  {
+    "name": "display",
+    "width": 420,
+    "height": 400,
+    "fixture": "menu-display",
+    "capture": {
+      "page": true,
+      "viewport": "1440x900",
+      "origin": "1020 0"
+    },
+    "chrome": [
+      {
+        "left": 256,
+        "top": 12,
+        "kind": "tools",
+        "active": "sun-moon"
+      },
+      {
+        "left": 188,
+        "top": 62,
+        "kind": "menu",
+        "width": 220,
+        "rows": [
+          {
+            "form": "label",
+            "label": "Theme"
+          },
+          {
+            "form": "check",
+            "label": "System",
+            "icon": "check"
+          },
+          {
+            "form": "option",
+            "label": "Light"
+          },
+          {
+            "form": "option",
+            "label": "Dark"
+          },
+          {
+            "form": "label",
+            "label": "Canvas"
+          },
+          {
+            "form": "check",
+            "label": "Match theme",
+            "icon": "check"
+          },
+          {
+            "form": "option",
+            "label": "Light"
+          },
+          {
+            "form": "option",
+            "label": "Dark"
+          },
+          {
+            "form": "option",
+            "label": "Neutral"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "zoom",
+    "width": 420,
+    "height": 310,
+    "fixture": "menu-zoom",
+    "capture": {
+      "page": true,
+      "viewport": "1440x900",
+      "origin": "646 590"
+    },
+    "chrome": [
+      {
+        "left": 73,
+        "top": 250,
+        "kind": "zoom",
+        "label": "48%",
+        "active": true
+      },
+      {
+        "left": 92,
+        "top": 101,
+        "kind": "menu",
+        "width": 200,
+        "rows": [
+          {
+            "form": "item",
+            "label": "Fit all",
+            "meta": "0"
+          },
+          {
+            "form": "item-active",
+            "label": "Fit group"
+          },
+          {
+            "form": "item",
+            "label": "Fit selection"
+          },
+          {
+            "form": "item",
+            "label": "Zoom to 100%",
+            "divider": true,
+            "meta": "1"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "more",
+    "width": 420,
+    "height": 180,
+    "fixture": "menu-more",
+    "capture": {
+      "page": true,
+      "viewport": "1440x900",
+      "origin": "1020 0"
+    },
+    "chrome": [
+      {
+        "left": 256,
+        "top": 12,
+        "kind": "tools",
+        "active": "ellipsis"
+      },
+      {
+        "left": 168,
+        "top": 62,
+        "kind": "menu",
+        "width": 240,
+        "rows": [
+          {
+            "form": "item",
+            "label": "Arrange current group"
+          },
+          {
+            "form": "item",
+            "label": "Keyboard shortcuts",
+            "meta": "?"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "search",
+    "width": 284,
+    "height": 272,
+    "fixture": "sidebar-search",
+    "capture": {
+      "page": true,
+      "viewport": "1440x900",
+      "origin": "0 0"
+    },
+    "chrome": [
+      {
+        "left": 12,
+        "top": 12,
+        "kind": "sidebar",
+        "search": true,
+        "rows": [
+          {
+            "form": "item-selected",
+            "label": "state-pill",
+            "meta": "5 forms",
+            "icon": "component"
+          },
+          {
+            "form": "item",
+            "label": "single-choice · pills",
+            "meta": "form",
+            "icon": "component"
+          }
+        ],
+        "height": 248
+      }
+    ]
+  },
+  {
+    "name": "tooltip",
+    "width": 420,
+    "height": 120,
+    "fixture": "tooltip-inspector",
+    "capture": {
+      "page": true,
+      "viewport": "1440x900",
+      "origin": "1020 0"
+    },
+    "chrome": [
+      {
+        "left": 256,
+        "top": 12,
+        "kind": "tools",
+        "active": null
+      },
+      {
+        "left": 279,
+        "top": 62,
+        "kind": "tooltip",
+        "label": "Inspector"
+      }
+    ]
+  },
+  {
+    "name": "shortcuts",
+    "width": 480,
+    "height": 374,
+    "fixture": "dialog-shortcuts",
+    "capture": {
+      "page": true,
+      "viewport": "1440x900",
+      "origin": "480 263"
+    },
+    "chrome": [
+      {
+        "left": 50,
+        "top": 30,
+        "kind": "shortcuts"
+      }
+    ]
+  }
+] as const;
+
+export default () => frames.map(({ chrome, ...frame }) =>
+  <Frame {...frame}><Screen width={frame.width} height={frame.height} chrome={chrome} /></Frame>
+);

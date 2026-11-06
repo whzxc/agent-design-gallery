@@ -1,8 +1,6 @@
 import { Frame, Icon } from 'sdg';
-export function IconButton({form='default',icon='panel-right',width=32,height=32}: {form?:string;icon?:string;width?:number;height?:number}) {
-  return <div class={`grid place-items-center rounded-row shrink-0 ${form==='active'?'bg-surface-sunken text-text':'text-text-secondary'}`} style={{width,height}}><Icon name={icon}/></div>;
+const forms = ['default', 'active'];
+export function IconButton({ form = 'default', icon = 'panel-right' }: { form?: string; icon?: string }) {
+  return <div class={`grid place-items-center rounded-row shrink-0 w-8 h-8 ${form === 'active' ? 'bg-surface-sunken text-text' : 'text-text-secondary'}`}><Icon name={icon} /></div>;
 }
-export default () => [
-<Frame name="default" width={32.0} height={32.0}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"panel-right"}} /></Frame>,
-<Frame name="active" width={32.0} height={32.0}><IconButton {...{"form":"active","width":32.0,"height":32.0,"icon":"panel-right"}} /></Frame>
-];
+export default () => forms.map(form => <Frame name={form}><IconButton form={form} /></Frame>);

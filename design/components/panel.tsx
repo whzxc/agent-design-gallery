@@ -4,37 +4,68 @@ import { Button } from './button';
 import { IconButton } from './icon-button';
 import { TreeRow } from './tree-row';
 import { MenuItem } from './menu-item';
-export function Panel({form='sidebar',width=260,height=200,children}: {form?:string;width?:number;height?:number;children?:unknown}) {
-  return <section class={`flex flex-col bg-surface ${form==='menu'?'rounded-menu shadow-menu':form==='dialog'?'rounded-dialog shadow-menu':'rounded-panel shadow-float'}`} style={{width,height}}>{children}</section>;
+import { Kbd } from './kbd';
+const menuRows = [{form:'label',label:'Theme'},{form:'check',label:'System'},{form:'option',label:'Light'}];
+const recent = ['arc', 'hub', 'gateway'];
+const shortcuts = [
+  ['Search', ['⌘F']], ['Fit all', ['0']], ['Zoom to 100%', ['1']],
+  ['Zoom in or out', ['+', '−']], ['Pan', ['←', '↑', '→', '↓']],
+  ['Focus selection', ['Enter']], ['Back or close', ['Esc']],
+] as const;
+const sampleRows = [{form:'item-selected',label:'state-pill',meta:'5 forms',icon:'component'}];
+const frameRows = ['ready','failed','empty'].map((label,i)=>({label,form:i===1?'item-selected':'item',icon:'app-window',meta:`960 × ${[662,912,432][i]}`}));
+export function Panel({ form = 'sidebar', width = 260, height, children }: { form?: string; width?: number; height?: number; children?: unknown }) {
+  return <section class={`flex flex-col bg-surface ${form === 'menu' ? 'rounded-menu shadow-menu' : form === 'dialog' ? 'rounded-dialog shadow-menu' : 'rounded-panel shadow-float'}`} style={{ width, height }}>{children}</section>;
+}
+export function Sidebar({ rows = sampleRows, search = false, height, specimen = false }: any) {
+  return <Panel height={search ? undefined : height}>
+    <div class="flex items-center gap-[10px] p-[6px]"><IconButton icon="panel-left" /><span class="text-section font-[650]">SDG</span></div>
+    <div class="flex flex-col gap-3 px-3 mt-1"><Field form="picker" label={specimen?'arc':'agent-remote-control'} /><Field form={search?'search-active':'search'} label={search?'pill':'Find assets…'} /></div>
+    <div class={`px-3 mt-3 ${search?(specimen?'pb-2':'pb-[22px]'):''}`}>
+      {search && <div class="text-meta text-text-tertiary font-[550] leading-4 mt-[6px] mb-[6px] ml-[2px]">2 results</div>}
+      {rows.map((row:any,i:number)=><>
+        <div class={row.form.startsWith('group')?'h-[30px]':''}><TreeRow {...row} indent={!search && row.form.startsWith('item')?20:0}/></div>
+        {row.form.startsWith('root') && <div class="h-px bg-border mt-1 mb-[7px]"/>}
+        {!search && row.form.startsWith('item') && !rows[i+1]?.form.startsWith('item') && <div class="h-[6px]"/>}
+      </>)}
+    </div>
+  </Panel>;
+}
+export function Inspector({ title='mcp-hub', path='surfaces/mcp-hub.svg', heading='Frames', rows=frameRows, actions=true }:any) {
+  return <Panel width={300}>
+    <div class={`px-4 pt-[10px] ${actions?'pb-4':'pb-3'}`}>
+      <div class="flex items-center justify-between -mr-[6px]"><h2 class="text-title leading-5 font-[650]">{title}</h2><IconButton icon="x"/></div>
+      <div class={`font-mono text-meta text-text-tertiary leading-[14px] ${actions?'mt-[1px]':''}`}>{path}</div>
+      {actions && <div class="flex gap-2 mt-[11px]"><Button form="secondary" label="Copy path" icon="copy"/><Button form="secondary" label="Reveal file" icon="folder-open"/></div>}
+    </div>
+    <div class="h-px bg-border mx-4"/><h3 class="text-meta text-text-tertiary font-[550] leading-4 mt-[13px] mb-[6px] mx-4">{heading}</h3>
+    <div class={`px-2 ${actions?'pb-[10px]':'pb-3'}`}>{rows.map((row:any)=><TreeRow {...row} width={284} indent={-2}/>)}</div>
+  </Panel>;
+}
+export function Menu({ rows, width=220 }:any) {
+  return <Panel form="menu" width={width}><div class="p-[6px]">{rows.map((row:any,i:number)=><>{i>0 && (row.form==='label' || row.divider) && <div class="h-px bg-border my-1 mx-[2px]"/>}<MenuItem {...row}/></>)}</div></Panel>;
+}
+export function OpenDialog({ error=false, close=true, specimen=false }:any) {
+  return <Panel form="dialog" width={specimen?360:440}>
+    <div class={specimen?"px-5 pt-5 pb-4":"px-6 pt-6 pb-[22px]"}>
+      <div class="flex items-center justify-between h-5"><h2 class="text-title leading-5 font-[650]">Open a design directory</h2>{close&&<div class="-mr-2"><IconButton icon="x"/></div>}</div>
+      <p class="text-body text-text-secondary leading-4 mt-2">Choose a folder that contains SVG designs.</p>
+      <div class={specimen?"mt-[14px]":"mt-4"}><Field form={error?'input-error':'input-empty'} label={error?'~/projects/empty':'/path/to/design'} width={specimen?320:392}/></div>
+      {error&&<div class="flex items-center gap-[6px] text-meta text-danger leading-[14px] mt-[10px]"><Icon name="circle-alert" size={14}/>No SVG files in this directory.</div>}
+      {specimen ? <footer class="flex items-start justify-between mt-[14px]"><h3 class="text-meta text-text-tertiary font-[550] leading-4">Recent</h3><div class="mt-1"><Button label="Open"/></div></footer> : <>
+        <h3 class="text-meta text-text-tertiary font-[550] leading-4 mt-4 mb-[6px]">Recent</h3>
+        <div class="flex flex-col gap-[2px] -mx-2">{recent.map((label,i)=><TreeRow form={i===0&&!error?'two-line-selected':'two-line'} label={label} meta={`~/projects/${label}/design`} icon="folder" width={408} height={44}/>)}</div>
+        <footer class="flex justify-end mt-4"><Button label="Open"/></footer>
+      </>}
+    </div>
+  </Panel>;
+}
+export function Shortcuts() {
+  return <Panel form="dialog" width={380}><div class="px-5 pt-5 pb-3"><div class="flex items-center justify-between h-5"><h2 class="text-title font-[650] leading-5">Keyboard shortcuts</h2><div class="-mr-2"><IconButton icon="x"/></div></div><div class="mt-6">{shortcuts.map(([label,keys])=><div class="flex items-start justify-between h-[34px] leading-[22px] text-body text-text-secondary"><span>{label}</span><div class="flex gap-[6px]">{keys.map(label=><Kbd label={label}/>)}</div></div>)}</div></div></Panel>;
 }
 export default () => [
-<Frame name="sidebar" width={260.0} height={200.0}><Panel form="sidebar" width={260.0} height={200.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:6.0,gridTemplateColumns:"6.0px 42.0px 212.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"panel-left"}} /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><span class="text-text text-section font-[650] whitespace-nowrap leading-[1.2]">{"SDG"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:10.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Field {...{"form":"picker","width":236.0,"height":32.0,"label":"arc","icon":"folder"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:12.0,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Field {...{"form":"search-active","width":236.0,"height":32.0,"label":"pill","icon":"search"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:14.4,marginTop:18.8,gridTemplateColumns:"14.0px 246.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-tertiary text-meta font-[550] whitespace-nowrap leading-[1.2]">{"2 results"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:6.8,gridTemplateColumns:"12.0px 248.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item-selected","width":236.0,"height":28.0,"label":"state-pill","icon":"component","meta":"5 forms"}} /></div></div>
-</Panel></Frame>,
-<Frame name="inspector" width={300.0} height={200.0}><Panel form="inspector" width={300.0} height={200.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:10.0,gridTemplateColumns:"16.0px 240.0px 44.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text text-title font-[650] whitespace-nowrap leading-[1.2]">{"mcp-hub"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"x"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:14.4,marginTop:-1.2,gridTemplateColumns:"16.0px 284.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-tertiary text-meta font-[400] font-mono whitespace-nowrap leading-[1.2]">{"surfaces/mcp-hub.svg"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:1.0,marginTop:12.8,gridTemplateColumns:"16.0px 284.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><div class="shrink-0 bg-border" style={{width:268,height:1}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:14.4,marginTop:13.8,gridTemplateColumns:"16.0px 284.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-tertiary text-meta font-[550] whitespace-nowrap leading-[1.2]">{"Frames"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:6.8,gridTemplateColumns:"8.0px 292.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","width":284.0,"height":28.0,"label":"ready","icon":"app-window","meta":"960 × 662"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"8.0px 292.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item-selected","width":284.0,"height":28.0,"label":"failed","icon":"app-window","meta":"960 × 912"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:28.0,marginTop:0.0,gridTemplateColumns:"8.0px 292.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><TreeRow {...{"form":"item","width":284.0,"height":28.0,"label":"empty","icon":"app-window","meta":"960 × 432"}} /></div></div>
-</Panel></Frame>,
-<Frame name="menu" width={220.0} height={108.0}><Panel form="menu" width={220.0} height={108.0}>
-<div class="grid items-center shrink-0" style={{height:24.0,marginTop:6.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"label","width":208.0,"height":24.0,"label":"Theme"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"check","width":208.0,"height":30.0,"label":"System","icon":"check"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:30.0,marginTop:0.0,gridTemplateColumns:"6.0px 214.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><MenuItem {...{"form":"option","width":208.0,"height":30.0,"label":"Light"}} /></div></div>
-</Panel></Frame>,
-<Frame name="dialog" width={360.0} height={200.0}><Panel form="dialog" width={360.0} height={200.0}>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:14.0,gridTemplateColumns:"20.0px 296.0px 44.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text text-title font-[650] whitespace-nowrap leading-[1.2]">{"Open a design directory"}</span></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><IconButton {...{"form":"default","width":32.0,"height":32.0,"icon":"x"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:15.6,marginTop:2.2,gridTemplateColumns:"20.0px 340.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-secondary text-body font-[400] whitespace-nowrap leading-[1.2]">{"Choose a folder that contains SVG designs."}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:14.2,gridTemplateColumns:"20.0px 340.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Field {...{"form":"input-error","width":320.0,"height":32.0,"label":"~/projects/empty"}} /></div></div>
-<div class="grid items-center shrink-0" style={{height:14.4,marginTop:9.8,gridTemplateColumns:"20.0px 20.0px 320.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Icon name="circle-alert" size={14.0} class="text-danger" /></div><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:3}}><span class="text-danger text-meta font-[400] whitespace-nowrap leading-[1.2]">{"No SVG files in this directory."}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:14.4,marginTop:14.6,gridTemplateColumns:"20.0px 340.0px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><span class="text-text-tertiary text-meta font-[550] whitespace-nowrap leading-[1.2]">{"Recent"}</span></div></div>
-<div class="grid items-center shrink-0" style={{height:32.0,marginTop:-11.2,gridTemplateColumns:"278.5px 81.5px"}}><div class="justify-self-start flex items-center" style={{gridRow:1,gridColumn:2}}><Button {...{"form":"primary","width":61.5,"height":32.0,"label":"Open"}} /></div></div>
-</Panel></Frame>
+  <Frame name="sidebar"><Sidebar search specimen /></Frame>,
+  <Frame name="inspector"><Inspector actions={false}/></Frame>,
+  <Frame name="menu"><Menu rows={menuRows}/></Frame>,
+  <Frame name="dialog"><OpenDialog error specimen /></Frame>,
 ];
