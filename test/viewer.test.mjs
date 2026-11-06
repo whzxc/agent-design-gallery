@@ -188,8 +188,13 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
   const {init}=await import('../src/toolkit/project.mjs');
   const temporaryRoot=await temporary(t);init({root:temporaryRoot},()=>{});
   const directory=path.join(temporaryRoot,'design');
-  await writeFile(path.join(directory,'sizes.ts'),'export const widths=[900,700,500];');
-  await writeFile(path.join(directory,'components/forms.tsx'),`import {Frame} from 'sdg';import {widths} from '../sizes';export default()=>widths.map((width,i)=><Frame name={'form-'+i} width={width} height={20+i*10} note={'Note '+i}><div class="bg-text text-canvas" style={{width,height:20+i*10}}>Form {i}</div></Frame>);`);
+  await mkdir(path.join(directory,'scenes'));
+  await writeFile(path.join(directory,'scenes/sizes.tsx'),'export const widths=[900,700,500];');
+  for(const name of ['helper.tsx','art/helper.tsx','components/nested/helper.tsx','surfaces/nested/helper.tsx']) {
+    await mkdir(path.dirname(path.join(directory,name)),{recursive:true});
+    await writeFile(path.join(directory,name),'imports only');
+  }
+  await writeFile(path.join(directory,'components/forms.tsx'),`import {Frame} from 'sdg';import {widths} from '../scenes/sizes';export default()=>widths.map((width,i)=><Frame name={'form-'+i} width={width} height={20+i*10} note={'Note '+i}><div class="bg-text text-canvas" style={{width,height:20+i*10}}>Form {i}</div></Frame>);`);
   await writeFile(path.join(directory,'surfaces/flow.tsx'),`import {Frame} from 'sdg';export default()=>['one','two'].map(name=><Frame name={name} width={100} height={50}><div class="w-[100px] h-[50px] bg-text">{name}</div></Frame>);`);
   const server=await startServer({directory,stateDirectory:path.join(temporaryRoot,'state')});const browser=await launch();
   try{
@@ -198,11 +203,12 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
       const {prepare,arrange,imageURL}=await import('/assets.js');const data=await(await fetch('/manifest')).json();const assets=await Promise.all(data.assets.map(a=>prepare(a,'light')));
       const set=assets.find(a=>a.component),flow=assets.find(a=>!a.component),world=arrange({...data,assets});
       const src=imageURL(set,{...set.full,id:'overview'});await new Promise((resolve,reject)=>{const img=new Image();img.onload=resolve;img.onerror=reject;img.src=src});URL.revokeObjectURL(src);
-      return {parts:set.parts,blocks:world.groups.flatMap(g=>g.blocks).map(b=>({kind:b.kind,w:b.w,h:b.h,frames:b.frames})),note:set.parts[0].note,version:data.assets.find(a=>a.path===set.path).version};
+      return {paths:data.assets.map(a=>a.path),parts:set.parts,blocks:world.groups.flatMap(g=>g.blocks).map(b=>({kind:b.kind,w:b.w,h:b.h,frames:b.frames})),note:set.parts[0].note,version:data.assets.find(a=>a.path===set.path).version};
     });
+    assert.deepEqual(result.paths,['components/forms.tsx','surfaces/flow.tsx']);
     assert.deepEqual(result.parts.map(p=>[p.x,p.y]),[[0,0],[0,68],[732,68]]);assert.equal(result.note,'Note 0');
     assert.deepEqual(result.blocks.map(b=>[b.kind,b.w,b.h]),[['set',1280,168],['flow',328,82]]);
-    await writeFile(path.join(directory,'sizes.ts'),'export const widths=[901,700,500];');
+    await writeFile(path.join(directory,'scenes/sizes.tsx'),'export const widths=[901,700,500];');
     await page.evaluate(async version=>{
       for(let i=0;i<100;i++) {
         const current=(await(await fetch('/manifest')).json()).assets.find(a=>a.path==='components/forms.tsx').version;
@@ -214,4 +220,6 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
     const rebuilt=await(await fetch(new URL('/asset/components%2Fforms.tsx?theme=light',server.url))).json();assert.equal(rebuilt.frames[0].width,901);
     assert.equal(await page.locator('#full-sheet').count(),0);
   }finally{await browser.close();await server.close();}
+  await writeFile(path.join(directory,'gallery.json'),JSON.stringify({groups:[{title:'Helpers',assets:['scenes/sizes.tsx']}]}));
+  await assert.rejects(startServer({directory,stateDirectory:path.join(temporaryRoot,'state')}),/gallery.json: Invalid source scenes\/sizes.tsx/);
 });

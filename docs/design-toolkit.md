@@ -29,6 +29,8 @@ A project may set `requires` in `sdg.config.mjs`, such as `'>=0.4.0'`. Older ver
 - `design/tsconfig.json` lets editors resolve the toolkit's types. `sdg init` writes it; every command refreshes the ignored `design/.sdg/` declarations it points to.
 - `output/design/` receives builds, renders and compare reports. Keep it and `design/.sdg/` out of Git.
 
+Other modules under `design/`, such as shared scene data, are imports, not sources.
+
 Commands run from any directory inside the project. They find the nearest `sdg.config.mjs` or, without one, the nearest `package.json`, and resolve paths from there.
 
 ## Tokens

@@ -23,7 +23,7 @@ The directory picker opens **Open a design directory**. Enter a path or select a
 
 ## Sources and layout
 
-Design sources are TSX modules. Import `Frame` and `Icon` from `sdg`, export reusable component functions, and default-export a function returning the declared frames. JSX builds static HTML and inline SVG without React or browser scripts. Tailwind v4 utilities resolve through the project's `design/tokens.css`; light and dark are selected by the document's `data-theme`.
+Design sources are TSX modules directly in `design/components/` and `design/surfaces/`. Other modules under `design/` are imports. Import `Frame` and `Icon` from `sdg`, export reusable component functions, and default-export a function returning the declared frames. JSX builds static HTML and inline SVG without React or browser scripts. Tailwind v4 utilities resolve through the project's `design/tokens.css`; light and dark are selected by the document's `data-theme`.
 
 A component source is one set: frames run in source order with 32px gaps, wrap before 1600px, and have 48px between rows. Sets pad forms by 24px at the sides and bottom and 36px at the top. A surface source is one flow: each frame receives 16px padding and follows the flow layout. Frame notes appear in the inspector, outside the drawing. Full sheet has been removed; choose a declared form or frame.
 
@@ -31,7 +31,7 @@ Legacy SVGs remain browsable with their existing geometric crops and relative em
 
 Sets and flows pack into sections, and sections into a stable world. Saving a source, imported component, artwork or tokens refreshes affected previews without moving the camera. Unchanged regions retain their positions; new or enlarged regions move below existing content. Use Arrange current group to compact after structural changes. Labels retain constant screen sizes and hide when they collide with chrome or other labels.
 
-Files group by directory unless `gallery.json` supplies project groups:
+Files group by directory unless `gallery.json` supplies project groups. Entries must point directly into `components/` or `surfaces/`:
 
 ```json
 {

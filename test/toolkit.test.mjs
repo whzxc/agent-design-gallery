@@ -10,7 +10,7 @@ import {parseTokens,themeCss} from '../src/toolkit/tokens.mjs';
 import {init,starterTokens,selectSources,refreshTypes} from '../src/toolkit/project.mjs';
 import {buildSource} from '../src/toolkit/build.mjs';
 import {loadConfig,discoverRoot,satisfies,viewport} from '../src/toolkit/config.mjs';
-import {check,inspectFrame} from '../src/toolkit/commands.mjs';
+import {check,inspectFrame,render} from '../src/toolkit/commands.mjs';
 import {compare,compareReport} from '../src/toolkit/compare.mjs';
 import {implementationTexts} from '../src/toolkit/document.mjs';
 import {launch,loadFrame} from '../src/toolkit/browser.mjs';
@@ -110,6 +110,33 @@ test('check has a failing source for every contract rule, including both themes 
 test('check permits token paint, brand art, clipped content and intentional ellipses',async t=>{
   const c=await project(t);put(c,'surfaces/a.tsx',source('<div class="w-[200px] h-[100px] overflow-hidden"><span data-brand class="text-[#ff0101]">Brand</span><div class="w-4 truncate">Clipped text</div></div>'));
   const p=[];assert.equal(await check(c,[],{},()=>{},s=>p.push(s)),0,p.join('\n'));
+});
+test('check and render discover only direct component and surface TSX sources',async t=>{
+  const c=await project(t);
+  put(c,'scenes/topology-screen.tsx','export const width=200;');
+  const component=put(c,'components/a.tsx',`import {width} from '../scenes/topology-screen';${source('<div style={{width,height:100}}/>')}`);
+  const surface=put(c,'surfaces/a.tsx',source('<div/>'));
+  for(const name of ['helper.tsx','art/helper.tsx','helpers/helper.tsx','components/nested/helper.tsx','surfaces/nested/helper.tsx','components/helper.ts'])put(c,name,'imports only');
+  writeFileSync(path.join(c.design,'gallery.json'),JSON.stringify({groups:[{title:'Sources',assets:['surfaces/a.tsx','components/a.tsx']}]}));
+  assert.deepEqual(selectSources(c),[component,surface]);
+  for(const name of ['scenes/topology-screen','design/helper.tsx','art/helper.tsx','components/nested/helper.tsx','surfaces/nested/helper.tsx','components/helper.ts']) {
+    assert.throws(()=>selectSources(c,[name]),/Invalid source.*directly/);
+  }
+  const logs=[],problems=[];
+  assert.equal(await check(c,[],{},s=>logs.push(s),s=>problems.push(s)),0,problems.join('\n'));
+  assert.deepEqual(logs,['Design check passed for 2 sources.']);
+  assert.equal(await render(c),0);
+  assert.deepEqual(readdirSync(c.output).sort(),['components','surfaces']);
+  for(const directory of ['components','surfaces']) for(const theme of ['light','dark']) assert.ok(readFileSync(path.join(c.output,directory,`a/sample-${theme}.png`)).length);
+});
+test('gallery entries cannot promote helper modules to sources',async t=>{
+  const c=await project(t);
+  put(c,'components/a.tsx',source('<div/>'));
+  for(const asset of ['scenes/helper.tsx','art/helper.tsx','helper.tsx','components/nested/helper.tsx','components/helper.ts','components/../helper.tsx']) {
+    writeFileSync(path.join(c.design,'gallery.json'),JSON.stringify({groups:[{title:'Invalid',assets:[asset]}]}));
+    assert.throws(()=>selectSources(c),/gallery.json: Invalid source/);
+    assert.throws(()=>selectSources(c,['components/a']),/gallery.json: Invalid source/);
+  }
 });
 test('check permits token opacity modifiers in both themes across paint channels',async t=>{
   const c=await project(t);
@@ -264,6 +291,7 @@ test('init preserves files and refreshes editor declarations; CLI accepts only v
 });
 test('compare uses Frame capture, flags override it, both sides share a reader, and --all writes linked summaries',async t=>{
   const c=await project(t);const {createServer}=await import('node:http');
+  put(c,'scenes/helper.tsx','export const data=[];');
   const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end(`<!doctype html><style>body{margin:0;font:16px/24px system-ui}.panel{width:200px;height:100px}button{margin-top:20px}</style><div class="panel" role="region" aria-label="Panel"><span>A</span><span>B</span></div><button onclick="setTimeout(()=>document.querySelector('.panel').innerHTML='<span>A</span><span>B</span>',100)">Go</button>`)});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
   let environment;

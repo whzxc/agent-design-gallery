@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 
 import { buildSource } from './toolkit/build.mjs';
-import { refreshTypes } from './toolkit/project.mjs';
+import { refreshTypes, isSourcePath, readGroups } from './toolkit/project.mjs';
 const publicRoot = fileURLToPath(new URL("../public/", import.meta.url));
 const defaultState = path.join(
   process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
@@ -68,7 +68,7 @@ export async function startServer({
       if (entry.name.startsWith(".") || entry.name === "node_modules" || (relative === "" && entry.name === "art")) continue;
       const name = path.posix.join(relative, entry.name);
       if (entry.isDirectory()) await collect(base, name, out);
-      else if (entry.isFile() && /\.(svg|tsx)$/i.test(name)) {
+      else if (entry.isFile() && (/\.svg$/i.test(name) || isSourcePath(name))) {
         const info = await stat(path.join(base, name));
         const version = `${info.mtimeMs}-${info.size}`;
         const old = base === root ? files.get(name) : undefined;
@@ -87,29 +87,6 @@ export async function startServer({
       }
     }
     return out;
-  }
-  async function readGroups(base) {
-    try {
-      const data = JSON.parse(
-        await readFile(path.join(base, "gallery.json"), "utf8"),
-      );
-      if (
-        !Array.isArray(data.groups) ||
-        data.groups.some(
-          (g) =>
-            typeof g.title !== "string" ||
-            !Array.isArray(g.assets) ||
-            g.assets.some((a) => typeof a !== "string"),
-        )
-      )
-        throw new Error(
-          "Expected groups with title and assets (relative SVG paths).",
-        );
-      return data.groups;
-    } catch (e) {
-      if (e.code === "ENOENT") return [];
-      throw new Error(`gallery.json: ${e.message}`);
-    }
   }
   async function openDirectory(input) {
     let next;
