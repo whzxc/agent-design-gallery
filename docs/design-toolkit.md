@@ -2,30 +2,32 @@
 
 [SDG design](design.md) · [Architecture](architecture.md) · [Performance](performance.md)
 
-SVG assets in a project's `design/` directory define how its UI looks. The implementation follows them. The `sdg` toolkit keeps assets consistent, renders them for review, and compares them with the running implementation. The viewer (`sdg <directory>`) browses the same files.
+A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `sdg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, and browses them in the viewer (`sdg <directory>`).
 
-This document is the format and command contract. A project's own design document keeps only its decisions: the forms it declares, its fixtures and its implementation notes.
+This document is the format and command contract. A project's own design document keeps only its decisions: the direction, the forms it declares and its implementation notes.
 
 ## Install
 
-`sdg` is installed once per machine and shared by every project. Projects do not list it in their dependencies. The package comes from the private registry configured for the `@whzxc` scope.
+`sdg` is installed once per machine and shared by every project. Projects do not list it in their dependencies.
 
 ```sh
 npm install -g @whzxc/svg-design-gallery
 ```
 
-Run the same install again to update. `check`, `render`, `measure` and `compare` launch Chromium through the Playwright that ships with `sdg`; the viewer and `sync` start without it. When Chromium is missing, those commands stop with the command that installs it for that Playwright version.
+The package comes from the private registry configured for the `@whzxc` scope. Run the same install again to update. `check`, `render` and `compare` launch Chromium through the Playwright that ships with `sdg`; the viewer and the build start without it. When Chromium is missing, those commands stop with the command that installs it for that Playwright version.
 
-A project may set `requires` in `sdg.config.mjs`, such as `'>=0.3.0'`. Older versions stop with exit code 2 and the update command, so every contributor checks with the same rules.
+A project may set `requires` in `sdg.config.mjs`, such as `'>=0.4.0'`. Older versions stop with exit code 2 and the update command, so every contributor checks with the same rules.
 
 ## Project layout
 
 - `sdg.config.mjs` at the project root configures paths and `compare`. Every field is optional.
 - `design/tokens.css` holds color, type, radius, size and shadow tokens for the light and dark themes.
-- `design/components/<name>.svg` holds one shared component. Each top-level `data-component` group in the file is one presentation form.
-- `design/surfaces/<name>.svg` holds a panel, dialog, page or screen composed from component instances. Each declared form is a `data-part="frame-<form>"` group whose first component is the surface shell. A frame may name its compare fixture with `data-fixture`. A frame that shows a whole page, or a crop of one, declares the page size with `data-viewport="<w>x<h>"` and its own top-left within the page with `data-origin="<x> <y>"`.
-- `design/gallery.json` optionally arranges assets into groups for the viewer.
-- `output/design/` receives renders and compare reports. Keep it out of Git.
+- `design/components/<name>.tsx` holds one shared component. It exports the functions other sources use, and its default export returns the component's declared forms as frames.
+- `design/surfaces/<name>.tsx` holds a panel, dialog, page or screen composed from components. Its default export returns its declared forms as frames.
+- `design/art/` holds SVG illustrations and brand artwork that sources import.
+- `design/gallery.json` optionally arranges sources into groups for the viewer.
+- `design/tsconfig.json` lets editors resolve the toolkit's types. `sdg init` writes it; every command refreshes the ignored `design/.sdg/` declarations it points to.
+- `output/design/` receives builds, renders and compare reports. Keep it and `design/.sdg/` out of Git.
 
 Commands run from any directory inside the project. They find the nearest `sdg.config.mjs` or, without one, the nearest `package.json`, and resolve paths from there.
 
@@ -33,61 +35,106 @@ Commands run from any directory inside the project. They find the nearest `sdg.c
 
 `design/tokens.css` has exactly two blocks, `:root { … }` for light and `:root[data-theme="dark"] { … }` for dark. Each declaration sits on its own line. The dark block overrides only the tokens that change.
 
-Assets require these tokens: `--font-ui`, `--font-mono`, `--text-caption`, `--text-tertiary` and `--canvas`. Name the rest by role, such as `--surface`, `--text-secondary` or `--radius-panel`.
+Sources require `--font-ui`, `--font-mono`, `--canvas` and `--text`. Name the rest by role, such as `--surface`, `--text-secondary`, `--text-body` or `--radius-panel`. A `--shadow-<name>` token is a CSS box-shadow list.
 
-A `--shadow-<name>` token is a comma-separated list of `<x> <y> <blur> <color>` layers. `sync` derives an `--elev-<name>` SVG filter for each theme. Spread and inset have no SVG equivalent and are rejected.
+## Sources
 
-## Asset format
+Sources are TSX modules that run at build time. JSX produces static markup: there is no React, state, effect or event handling, and the output contains no scripts or event attributes. A component is a plain function of its props. Use `class`, not `className`; other attribute names follow HTML and SVG.
 
-- Each file is a standalone SVG with numeric `width`, `height` and `viewBox`. A `data-canvas` rect paints `var(--canvas)` behind the content.
-- `sync` writes the region between `<!-- design:tokens -->` and `<!-- /design:tokens -->`. Do not edit that region by hand. It defines both themes, follows `data-theme` on the root and then the system theme, sets `font-family:var(--font-ui)` and `dominant-baseline:central` on text, styles `.mono` and `.note`, and shows `.only-light` or `.only-dark` content for the active theme.
-- Paint through tokens in `style`, for example `style="fill:var(--surface)"`. Literal colors are allowed only inside a `data-brand` group.
-- A tinted surface uses the token color with `fill-opacity`. A group can set `color:var(--token)` so its children paint with `currentColor`.
-- Elevation uses `style="filter:var(--elev-<name>)"`.
-- Text `y` is the vertical center. Set `font-size` through a `--text-*` token and `font-weight` in `style`. Add `class="mono"` for monospace text.
-- Geometry stays literal. Corner radii and heights follow the radius and size tokens.
-- A form or instance is `<g data-component="<name>" data-form="<form>" transform="translate(x y)">` with local coordinates. Its first `rect` child is the container.
-- Icons are `<g data-icon="<lucide-name>">` groups with Lucide geometry. They keep a 1.75px rendered stroke.
-- Form labels and other annotations use `class="note"` and stay outside component groups.
-- An embedded image is an `<image>` with a relative path inside the design directory or a `data:` URI. A drawing that embeds another project's assets as sample content embeds each theme once, as images rendered with `data-theme` set, and marks them `only-light` and `only-dark`.
-- An asset may animate with CSS or SMIL to show timing and easing. Interactive behavior stays in the project's UI conventions.
+```tsx
+import { Frame, Icon } from 'sdg';
 
-An instance matches its form's container height, radius, fill, stroke and elevation. It uses only text styles that the form uses, compared as fill, size, weight and family. Width and content may vary. A form whose container rect carries `data-fluid="height"` may also change height with its content.
+export function Panel(props: { title: string; children?: unknown }) {
+  return (
+    <section class="w-[420px] rounded-panel bg-surface p-4 shadow-md">
+      <h2 class="flex items-center gap-2 text-title font-semibold text-text">
+        <Icon name="plug" />
+        {props.title}
+      </h2>
+      {props.children}
+    </section>
+  );
+}
+
+export default () => [
+  <Frame name="ready" fixture="mcp-hub-ready" capture={{ region: 'MCP', viewport: '1280x1200' }}>
+    <Panel title="MCP" />
+  </Frame>,
+];
+```
+
+The specifier `sdg` resolves to the installed toolkit's runtime. Relative imports resolve within `design/`. Importing an `.svg` file under `design/` yields a component that inlines the drawing and passes its props to the drawing's root; importing a PNG, JPEG or WebP file yields a data URL. Packages from npm are not available to sources.
+
+Reuse components and pass parameters instead of copying markup between sources. Generate repeated geometry with ordinary functions and loops in the source.
+
+### Frame
+
+A `Frame` is one declared form of a component or surface.
+
+- `name` is the form name, unique within the source.
+- `width` and `height` are CSS pixels. Without `height`, the frame takes its content's height.
+- `fixture` names the compare fixture for this form.
+- `capture` tells `compare` what to capture in the implementation: `{ region }`, `{ selector }` or `{ page: true }`, each with optional `viewport` (`'<w>x<h>'`) and `clicks` (accessible names, in order). A page capture clips the page at `origin` (`'<x> <y>'`, default `'0 0'`) with the frame's size.
+- `note` is a caption that the viewer shows in the inspector. It is not part of the drawing.
+
+A frame contains exactly one root element, its shell. `compare` measures design positions from the shell's top-left. The frame paints `var(--canvas)` behind the shell.
+
+### Icon
+
+`<Icon name="<lucide-name>" />` renders Lucide geometry in `currentColor` with a 1.75px rendered stroke. `size` defaults to 16; `class` passes through.
+
+## Styling
+
+Style with Tailwind CSS v4 utility classes. The build compiles only the classes the sources use, against a theme generated from `design/tokens.css`:
+
+| Token | Theme variable | Example classes |
+| --- | --- | --- |
+| `--<name>` with a color value | `--color-<name>` | `bg-surface`, `text-text-secondary`, `border-border` |
+| `--text-<name>` with a length | `--text-<name>` (font size) | `text-body`, `text-meta` |
+| `--font-<name>` | `--font-<name>` | `font-ui`, `font-mono` |
+| `--radius-<name>` | `--radius-<name>` | `rounded-panel` |
+| `--shadow-<name>` | `--shadow-<name>` | `shadow-md` |
+| any other token | the token itself | `h-(--control-height)` |
+
+Tailwind's default colors, font sizes, font families, radii and shadows are removed, so those classes resolve only to project tokens. Spacing keeps Tailwind's 4px scale, and arbitrary lengths such as `w-[480px]` or `mt-[19px]` are allowed. Use a `style` attribute only for computed geometry. Sources contain no `<style>` elements.
+
+Paint resolves through tokens. A literal color is allowed only inside an element with `data-brand`. The build defines both token blocks and the root's `data-theme` selects one, so every frame renders in both themes without extra frames. Text uses `font-ui` unless a class says otherwise.
+
+A frame may animate with CSS to show timing and easing. `check`, `render` and `compare` run with motion reduced.
 
 ## Presentation forms
 
-- The user declares the forms each asset contains, such as three densities of one card.
+- The user declares the forms each source contains, such as three densities of one card.
 - Draw only declared forms. Do not add frames for combinations of theme, width, locale or interaction state.
-- Themes come from tokens. Every asset renders in both themes without extra frames.
-- Each asset shows one representative language.
+- Themes come from tokens. Every source renders in both themes without extra frames.
+- Each source shows one representative language.
 
 ## Check
 
-`check` loads every asset in Chromium in both themes and reports:
+`check` builds every source and loads each frame in Chromium in both themes. It reports:
 
-- a token region that differs from what `sync` would write;
-- a literal paint outside `data-brand`, or a `var()` that names no token;
-- text that leaves the canvas, overlaps other text, or overflows the container whose vertical middle it sits in;
-- an instance of an unknown component or form;
-- an instance whose container height, radius, fill, stroke or filter differs from its form, unless the form is fluid;
-- an instance text style that its form does not use;
-- a surface frame without a component shell, or a declared viewport that the frame's origin and size do not fit.
+- a build or render error, with its source location;
+- a duplicate frame name, a frame without exactly one root element, or an invalid `capture`;
+- a computed text, background, border, outline, fill, stroke or shadow color that matches no token value in the active theme, outside `data-brand`;
+- text that overflows its box without an ellipsis, leaves the frame, or overlaps other text;
+- content that overflows the frame's declared width or height;
+- a `<style>` element, script or event attribute in the output.
 
-Each problem is one line, `<path>: <problem>`. A nonzero exit means the asset is not ready.
+Each problem is one line, `<path>: <frame>: <problem>`. A nonzero exit means the source is not ready.
 
 ## Workflow
 
 1. Start from the user's request and the fixture data the frame will be compared against.
-2. Draw or update the asset. Use `measure` for text widths.
+2. Write or update the source, reusing components.
 3. Run `check` and fix every problem.
 4. Run `render` and review both theme renders against the layout review.
-5. Show the renders to the user and iterate until they approve the asset.
+5. Show the renders to the user and iterate until they approve them.
 6. Implement with the project's shared components and runtime tokens.
-7. Run `compare` against the matching fixture and review the overlay. Fix structural differences and systematic offsets. Accept small isolated offsets when the implementation reads as well as the asset.
+7. Run `compare` for the frame's fixture and review the overlay. Fix structural differences and systematic offsets. Accept small isolated offsets when the implementation reads as well as the design.
 
-A frame uses the language and text of its fixture, including dates under the fixture clock. Generate repetitive geometry with a script kept outside the repository, measure text with `measure`, and copy icon geometry from Lucide. A drafter may propose forms. Approving the renders approves those forms.
+A frame uses the language and text of its fixture, including dates under the fixture clock and time zone. A drafter may propose forms. Approving the renders approves those forms. Frames whose state the implementation cannot reach have no fixture; record them in the project's design doc as drift instead of forcing a capture.
 
-A new project starts with a visual direction before any asset: two or three specimen sheets that differ in palette, density and chrome, one chosen by the user. Then tokens, then the component sheets, then one pilot surface taken through implementation and `compare` before the remaining surfaces.
+A new project starts with a visual direction before any source: two or three specimen frames that differ in palette, density and chrome, one chosen by the user. Then tokens, then the component sources, then one pilot surface taken through implementation and `compare` before the remaining surfaces.
 
 ## Layout review
 
@@ -112,41 +159,35 @@ Review the composition of every frame before showing it. A frame that copies the
 ```sh
 sdg [open] [directory] [--port=<n>] [--no-open] [--state-dir=<path>]
 sdg init
-sdg sync
-sdg check [asset...]
-sdg render [asset...] [--scale=2]
-sdg measure <text> [--size=<px|token>] [--weight=400] [--mono]
-sdg compare <asset> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css>] [--click=<accessible-name>...] [--viewport=<w>x<h>]
+sdg check [source...]
+sdg render [source...] [--frame=<name>] [--scale=2]
+sdg compare <source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin=<x> <y>] [--click=<name>...] [--viewport=<w>x<h>]
+sdg compare --all
 ```
 
 A first argument that names a command runs it; any other argument is a directory to open. `sdg open check` opens a directory named `check`.
 
-- `init` creates `sdg.config.mjs`, `design/tokens.css` with the required tokens, `design/components/` and `design/surfaces/`. It never overwrites a file and lists what it created and skipped.
-- `sync` rewrites the token region of every asset and reports the files it changed.
-- `check` checks the named assets, or all of them.
-- `render` writes `output/design/<path>-light.png` and `-dark.png` at the given scale.
-- `measure` prints the rendered width in pixels. `--size` accepts pixels or a `--text-*` token suffix such as `body`.
-- `compare` renders one frame next to the implementation; see below.
+- `init` creates `sdg.config.mjs`, `design/tokens.css` with the required tokens, `design/components/`, `design/surfaces/`, `design/art/` and `design/tsconfig.json`. It never overwrites a file and lists what it created and skipped.
+- `check` checks the named sources, or all of them.
+- `render` writes `output/design/<path>/<frame>-light.png` and `-dark.png` at the given scale, for every frame or the one named.
+- `compare` compares one frame; its flags override the frame's `fixture` and `capture`.
+- `compare --all` compares every frame that has a fixture and writes `output/design/compare/summary.json` and `index.html`, one row per frame with its counts and report link.
 
-Asset arguments are paths under the design directory, with or without `design/`. Exit codes are 0 for success, 1 when `check` or `compare` found problems, and 2 for a usage, configuration or environment error, with one line on stderr naming the fix.
+Source arguments are paths under the design directory, with or without `design/` and `.tsx`. Exit codes are 0 for success, 1 when `check` or `compare` found problems, and 2 for a usage, configuration or environment error, with one line on stderr naming the fix.
 
 ## Compare
 
-`compare` renders one frame of an asset, the `data-part` group named by `--frame` (`failed` or `frame-failed`), and the implementation in the fixture's theme, locale, clock and optional time zone. Without `timezone`, the system time zone applies. An invalid IANA time zone exits with code 2 and one line on stderr. `--fixture` defaults to the frame's `data-fixture`. A frame with `data-viewport` sets that viewport and captures the page clip at `data-origin` with the frame's size. Otherwise `--region` captures the element with role `region` or `dialog` and that accessible name, and `--selector` captures the first element matching a CSS selector.
+`compare` builds the frame and renders it in Chromium beside the implementation in the fixture's theme, locale, time zone and clock. The capture comes from the frame's `capture`, overridden by flags. A page capture sets the viewport and clips the page at `origin` with the frame's size; `region` captures the element with role `region` or `dialog` and that accessible name; `selector` captures the first element matching a CSS selector. Each click activates the first visible control with that exact accessible name among buttons, radios, tabs, checkboxes, switches, menu items, options and links. After the clicks, `compare` waits until the captured texts and their boxes stay unchanged for 300ms, up to 5s.
 
-Each `--click` activates the first visible element with that exact accessible name, choosing roles in this priority: `button`, `radio`, `tab`, `checkbox`, `switch`, `menuitem`, `menuitemradio`, `option`, `link`. Within a role, the first visible match in document order wins. Clicks run in the supplied order before capture; for example, `--click=Activity --click=Google` prepares two radio selections. If a click has no matching visible control, `compare` exits with code 1 and one line on stderr naming that click.
+Both sides are read the same way. The reader takes one text per rendered line, including the placeholders of empty fields, and skips text clipped outside the captured element. Adjacent texts on one line with less than one space between them read as one text. `aria-hidden` on the capture target and its ancestors is ignored; `aria-hidden` subtrees inside it are skipped. Texts pair by content, and repeated texts pair with the nearest position first. Positions are relative to the frame's shell and to the captured element. It reports anchored-edge, vertical-center and width differences above 2px, plus texts missing from either side. It does not compare shapes, so review the overlay as well.
 
-After the clicks, `compare` waits until the capture target has the same texts and text boxes for 300ms, up to 5s. This includes entries returned by `texts`. It then captures and records `settled: true` in `report.json`. On timeout it captures anyway and records `settled: false`; settling alone does not change the exit code. The same wait applies when no clicks are supplied. Fixtures do not need fixed sleeps for delayed labels or text reflow.
-
-It reads one text per rendered line, including the placeholders of empty fields, skips text clipped outside the captured element, and pairs texts by content. Text extraction ignores `aria-hidden="true"` on the capture target and its ancestors, so an explicitly selected visible target remains readable. Descendant subtrees inside the target with `aria-hidden="true"` stay excluded. CSS visibility checks still apply to the target and all ancestors. Positions are relative to the frame's shell, the first component container in the frame, and to the captured element. It reports anchored-edge, vertical-center and width differences above 2px, plus texts missing from either side. It does not compare shapes, so review the overlay as well.
-
-`output/design/compare/<asset>-<frame>-<fixture>/` receives `design.png`, `implementation.png`, `overlay.png`, `report.json` and `index.html`. A nonzero exit means it found differences. Treat them as a review list, not a zero gate. Missing or extra texts, wrong order or grouping, and one offset shared by many texts point to real defects, such as a lost font rule or a leftover border. An isolated offset of a few pixels can stay.
+`output/design/compare/<source>-<frame>-<fixture>/` receives `design.png`, `implementation.png`, `overlay.png`, `report.json` and `index.html`. `report.json` records `settled: false` when the texts did not settle. A nonzero exit means it found differences. Treat them as a review list, not a zero gate. Missing or extra texts, wrong order or grouping, and one offset shared by many texts point to real defects, such as a lost font rule or a leftover border. An isolated offset of a few pixels can stay.
 
 The project describes how to run its implementation in `sdg.config.mjs`:
 
 ```js
 export default {
-  requires: '>=0.3.3',
+  requires: '>=0.4.0',
   design: 'design',
   output: 'output/design',
   compare: {
@@ -161,7 +202,7 @@ export default {
     },
     // Resolves a fixture name to the page to open and its environment.
     fixture(name) {
-      return { url: `/?scenario=${encodeURIComponent(name)}`, theme: 'light', locale: 'en-US', clock: '2026-01-01T00:00:00Z', timezone: 'Asia/Shanghai' };
+      return { url: `/?scenario=${encodeURIComponent(name)}`, theme: 'light', locale: 'en-US', timezone: 'Asia/Shanghai', clock: '2026-01-01T00:00:00Z' };
     },
     // Resolves once the page shows the fixture; throws to fail.
     async ready(page, name) {
@@ -176,16 +217,16 @@ export default {
 ```
 
 - `start` is optional when `url` values are absolute and the app already runs.
-- `fixture` returns `url`, relative to `http://127.0.0.1:<port>` or absolute, plus `theme` (`light` or `dark`), `locale` and `clock`. Optional `timezone` is an IANA name such as `Asia/Shanghai`, applied to the implementation browser context; omitting it uses the system time zone. A `clock` fixes `Date` and `Date.now()` while timers keep running. Motion is reduced.
-- `ready` defaults to the page's `load` event.
+- `fixture` returns `url`, relative to `http://127.0.0.1:<port>` or absolute, plus `theme` (`light` or `dark`), `locale`, optional `timezone` (an IANA name) and `clock`. A `clock` fixes `Date` and `Date.now()` while timers keep running. Motion is reduced.
+- `ready` defaults to the page's `load` event. A fixture name may stand for a scenario plus preparation steps that `ready` performs.
 - `texts` returns `{ text, x, y, width, height, fill, size, weight, family }` entries in page coordinates. They join the DOM texts inside the captured element.
 
 ## Viewer conventions
 
-The viewer reads the same files. A root with component forms shows one set per file; a surface shows its frames as a flow. `.note` captions are omitted from cropped previews. `gallery.json` lists groups of asset paths; unlisted assets stay in directory groups. See the [README](../README.md) for viewer controls.
+The viewer reads the same sources and rebuilds a source, and the sources that import it, when it is saved. A component source is one set of its forms; a surface source is one flow of its frames. Frame notes appear in the inspector. `gallery.json` lists groups of source paths; unlisted sources stay in directory groups. See the [README](../README.md) for viewer controls.
 
 ## Limits
 
-- Assets name the system font stack. Linux renders use fallback fonts, so final visual review runs on macOS.
-- SVG has no layout engine. Positions are explicit, and a geometry change to a form requires updating its instances. `check` lists the instances that no longer match.
-- Static assets do not show hover response, focus movement, dragging, springs or interruption.
+- Sources name the system font stack. Linux renders use fallback fonts, so final visual review runs on macOS.
+- Frames are static. They do not show hover response, focus movement, dragging, springs or interruption; a state the user declares is its own form.
+- `sdg` 0.4 reads TSX sources only. An `.svg` file directly in `design/components/` or `design/surfaces/` stops every command except the viewer with exit code 2 and names the file to convert; illustrations belong in `design/art/`.

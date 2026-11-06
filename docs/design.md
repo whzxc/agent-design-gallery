@@ -2,7 +2,7 @@
 
 [Design toolkit](design-toolkit.md) · [Architecture](architecture.md)
 
-The assets in `design/` define how the viewer looks. This document records the decisions the frames cannot show: the direction, the screen structure, the canvas layout algorithm and the fixtures each frame is compared against. Asset format and commands are in the [design toolkit](design-toolkit.md).
+The TSX sources in `design/` define how the viewer looks. This document records the decisions the frames cannot show: the direction, the screen structure, the canvas layout algorithm and the fixtures the frames are compared against. Source format and commands are in the [design toolkit](design-toolkit.md).
 
 ## Direction
 
@@ -37,8 +37,8 @@ Geometry, in CSS pixels at a 1440 × 900 viewport:
 
 The world is laid out in SVG units and never changes while panning, zooming or collapsing the sidebar. Groups come from `gallery.json`, or from directories without one. `fixtures/arc-sample.layout.json` is the reference result for `fixtures/arc-sample/`.
 
-- **Sets.** A component file is one set. Its bounds are the union of its outermost form groups' geometric bounds, padded 24 at the sides, 36 at the top and 24 at the bottom. The preview shows that crop of the original sheet, so forms keep their source arrangement.
-- **Flows.** A surface file is one flow. Each frame is cropped to its bounds plus 16 on every side. Frames run left to right with a 64 gap and wrap before 3600, with 112 between lines.
+- **Sets.** A component source is one set. Its forms run left to right in source order with a 32 gap and wrap before 1600, with 48 between rows. The set's bounds are its forms padded 24 at the sides, 36 at the top and 24 at the bottom.
+- **Flows.** A surface source is one flow. Each frame takes its size plus 16 on every side. Frames run left to right with a 64 gap and wrap before 3600, with 112 between lines.
 - **Sections.** Each group is one section. Sets pack first with skyline packing in group order: each set goes to the lowest available position, then the leftmost, with 64 between sets and 112 between rows. Flows follow 200 below the sets, packed in rows with 64 between flows and 200 between rows. The section's content width is the width from the widest block upward, in steps of 50, whose packed aspect ratio is closest to 1.6. The section pads its content 64 at the sides and bottom and 104 at the top.
 - **World.** Sections pack in rows with 480 between them. The row width is chosen in steps of 100 so the whole world's aspect ratio is closest to 1.5.
 - **Fit.** Fit places the target inside the canvas area inset 20 from the sidebar or left edge, 24 from the right edge or inspector, 100 from the top and 84 from the bottom, centered. Fit selection insets that area by 24 on every side. Zoom to 100% keeps the point at the center of that area.
@@ -55,7 +55,7 @@ Labels draw at constant screen size. Each label is drawn only when it fits its s
 
 ## Frames and fixtures
 
-Every frame declares a 1440 × 900 viewport and names its fixture with `data-fixture`. Fixtures open `fixtures/arc-sample/` with isolated preferences.
+Every surface frame is 1440 × 900 and declares its fixture and a page capture at a 1440 × 900 viewport. Fixtures open `fixtures/arc-sample/` with isolated preferences.
 
 | Asset | Frame | Theme | State |
 | --- | --- | --- | --- |
@@ -78,4 +78,4 @@ Every frame declares a 1440 × 900 viewport and names its fixture with `data-fix
 - The runtime theme uses `design/tokens.css` as its only token source.
 - Icons use Lucide geometry at a 1.75px stroke. Do not use Unicode glyphs as icons.
 - Canvas labels are positioned DOM text or reported through the compare `texts` hook, so `compare` reads them.
-- Form bounds for layout are geometric bounds without shadow padding; the set padding covers shadows.
+- Form bounds for layout are the frames' sizes without shadow padding; the set padding covers shadows.
