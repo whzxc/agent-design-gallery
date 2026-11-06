@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, symlinkSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
@@ -105,6 +105,23 @@ test('CLI usage and requires failures return 2 with actionable single-line stder
   const run = promisify(execFile), cli = path.resolve('src/cli.mjs');
   await assert.rejects(run(process.execPath, [cli, 'sync'], { cwd: root }), error => error.code === 2 && error.stderr.trim().split('\n').length === 1 && error.stderr.includes('npm install -g github:whzxc/svg-design-gallery'));
   await assert.rejects(run(process.execPath, [cli, 'measure'], { cwd: root }), error => error.code === 2 && error.stderr.includes('--help'));
+});
+test('installed symlink runs version, init and failing requires', async t => {
+  const root = temporary(t), bin = path.join(root, 'sdg'), run = promisify(execFile);
+  symlinkSync(path.resolve('src/cli.mjs'), bin);
+  const version = JSON.parse(readFileSync(new URL('../package.json', import.meta.url))).version;
+  assert.equal((await run(bin, ['--version'], { cwd: root })).stdout.trim(), version);
+  const initialized = await run(bin, ['init'], { cwd: root });
+  assert.match(initialized.stdout, /created sdg.config.mjs/);
+  assert.ok(readFileSync(path.join(root, 'design/tokens.css'), 'utf8').includes('--canvas:'));
+  writeFileSync(path.join(root, 'sdg.config.mjs'), "export default { requires: '>=99.0.0' };");
+  await assert.rejects(run(bin, ['sync'], { cwd: root }), error => {
+    assert.equal(error.code, 2);
+    assert.equal(error.stdout, '');
+    assert.equal(error.stderr.trim().split('\n').length, 1);
+    assert.match(error.stderr, /does not satisfy requires >=99.0.0; run npm install -g github:whzxc\/svg-design-gallery/);
+    return true;
+  });
 });
 test('init is non-destructive and a scaffold passes check', async t => {
   const root = temporary(t), messages = []; init({ root }, line => messages.push(line));

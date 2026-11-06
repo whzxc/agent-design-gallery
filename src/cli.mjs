@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
+import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 
 export const commands = ['open', 'init', 'sync', 'check', 'render', 'measure', 'compare'];
@@ -50,7 +51,7 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd()) {
   if (command === 'compare') return (await import('./toolkit/compare.mjs')).compare(config, positionals, values);
   return (await import('./toolkit/commands.mjs'))[command](config, positionals, values);
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   main().then(code => { process.exitCode = code; }).catch(error => {
     const message = String(error.message).replace(/\s+/g, ' ').trim();
     console.error(`sdg: ${message}`);
