@@ -1,33 +1,74 @@
 # SDG 0.4 migration review
 
-The v2 contract from `0f16871` is implemented on main. The package version is 0.4.0; release remains with the control source. No contract deviations are required. The previous design document's blanket 1440×900 statement was corrected to match the existing local crops and their origins.
+The v2 contract from `0f16871`, including structural authoring and art URL imports, is implemented on main. The package version is 0.4.0; release remains with the control source. No contract deviations are required. The previous design document's blanket 1440×900 statement was corrected to match the existing local crops and their origins.
 
 ## Visual parity
 
-Both themes were rendered for every declared frame and reviewed beside crops from `output/design-baseline-0.3.3/render`. Local review sheets are `output/migration/parity-*.png`.
+Both themes were rendered for every declared frame and reviewed beside crops from `output/design-baseline-0.3.3/render`. The authoring rework was rendered at scale 1 in both themes. Review sheets pair each new frame with its 0.3.3 crop under `output/authoring-parity/`.
 
 | Source | Result |
 | --- | --- |
 | components/artboard | Fine; geometric bounds include its label. |
-| components/button | Fine; HTML baseline differs from SVG central baseline by about one pixel. |
+| components/button | Fine; width follows label, icon, padding and gap. Zoom forms gain about 2px from whole-pixel spacing. |
 | components/canvas | Fine. |
 | components/field | Fine; CSS outlines stay inside the shell. |
 | components/flow | Fine. |
 | components/icon-button | Fine; pinned Lucide geometry and 1.75px rendered stroke. |
-| components/kbd | Fine. |
+| components/kbd | Fine; width follows text plus 7px padding on each side, with a 22px minimum. |
 | components/menu-item | Fine. |
 | components/minimap | Fine. |
-| components/panel | Fine; CSS box shadows replace SVG filters. |
+| components/panel | Sidebar, inspector and dialog samples retain their 200px content height. The three-row menu sample is 96px rather than 108px: content plus 6px padding removes 12px of old blank space. CSS shadows replace SVG filters. |
 | components/section | Fine. |
-| components/toolbar | Fine. |
-| components/tooltip | Fine. |
+| components/toolbar | Fine; app-bar title and picker follow flex gaps, with small intrinsic text-width differences. |
+| components/tooltip | Fine; intrinsic text width replaces the old fractional width. |
 | components/tree-row | Fine; selected icons follow the selected text color. |
 | surfaces/canvas | Fine, including the minimap and both ARC preview palettes. |
 | surfaces/inspector | Full sheet is removed as requested. The shorter panel exposes the adjacent icon-button label. Other geometry matches. |
 | surfaces/menus | Fine. |
 | surfaces/open-directory | Fine; retained fixture artwork remains independent of SDG's token palette. |
 
-Small text rasterization differences remain between HTML and SVG. These do not add comparison findings.
+Whole-pixel frame bounds for artboard, section and flow labels round the old fractional crop bounds by at most 1.5px. Text rasterization and natural text widths differ slightly between HTML and SVG. The menu sample's removed blank space is the only deliberate panel-size change in this rework; all fixture comparisons retain their baseline counts. Full sheet removal remains the previously approved inspector difference. No authoring-rule exceptions are needed.
+
+## Authoring size
+
+Components use flex/grid, padding and gaps. Fixture rows and forms are data arrays. The screen has one `data-free` layer for floating chrome; sections, assets, preview crops and labels are canvas data rendered by loops. Only the drawing data retains subpixel positions.
+
+Counts below describe authored TSX, not fractional dimensions produced by browser font metrics. A style object is a `style={{…}}` occurrence. All 603 old objects were outside an explicit `data-free` boundary; four remain outside that boundary, each setting only width and height. The fifth object positions chrome inside the free-form screen layer. The surface style count is 535 → 0.
+
+| Measure | Before rework | After rework |
+| --- | ---: | ---: |
+| Style objects outside `data-free` | 603 | 4 |
+| Decimal number occurrences in TSX (the review's count) | 1,214 | 19 |
+| TSX source bytes | 189,417 | 41,710 |
+| Extracted canvas data bytes | 0 | 51,785 |
+| TSX plus canvas data bytes | 189,417 | 93,495 |
+| Preview artwork bytes | 1,020,163 (one TS data-URL literal) | 762,713 (50 SVG files) |
+
+There are **zero authored fractional pixel lengths outside `data-free`**, checked in both themes. Of the 19 decimal occurrences remaining in TSX, 17 are free-form minimap geometry/stroke values and two are unitless `1.2` line heights. Decimal coordinates in `scenes/*.ts` belong to the free-form canvas; their bytes are included above, so moving data out of TSX is not counted as removal.
+
+| Source | Before bytes | After bytes | Styles outside `data-free` | Fractional px outside `data-free` |
+| --- | ---: | ---: | ---: | ---: |
+| components/artboard.tsx | 2,465 | 1,116 | 0 | 0 |
+| components/button.tsx | 1,371 | 1,032 | 0 | 0 |
+| components/canvas.tsx | 1,198 | 2,980 | 1 | 0 |
+| components/field.tsx | 2,152 | 1,860 | 1 | 0 |
+| components/flow.tsx | 1,290 | 816 | 0 | 0 |
+| components/icon-button.tsx | 683 | 458 | 0 | 0 |
+| components/kbd.tsx | 506 | 360 | 0 | 0 |
+| components/menu-item.tsx | 1,437 | 1,007 | 0 | 0 |
+| components/minimap.tsx | 989 | 824 | 0 | 0 |
+| components/panel.tsx | 8,313 | 5,948 | 1 | 0 |
+| components/section.tsx | 828 | 524 | 0 | 0 |
+| components/toolbar.tsx | 2,279 | 1,558 | 0 | 0 |
+| components/tooltip.tsx | 470 | 324 | 0 | 0 |
+| components/tree-row.tsx | 2,582 | 2,264 | 1 | 0 |
+| surfaces/canvas.tsx | 70,822 | 7,756 | 0 | 0 |
+| surfaces/inspector.tsx | 36,261 | 6,453 | 0 | 0 |
+| surfaces/menus.tsx | 19,185 | 4,573 | 0 | 0 |
+| surfaces/open-directory.tsx | 36,586 | 1,857 | 0 | 0 |
+| scenes/canvas.ts | — | 29,570 | 0 | 0 |
+| scenes/inspector.ts | — | 5,295 | 0 | 0 |
+| scenes/open-directory.ts | — | 16,920 | 0 | 0 |
 
 ## Comparison against 0.3.3
 
@@ -65,7 +106,7 @@ import ArcMark from '../art/arc-mark.svg';
 <ArcMark data-brand width={24} height={24} />
 ```
 
-The drawing is inlined and the props override its SVG root. Remove embedded style/script elements and event attributes from artwork; use SVG paint attributes for brand colors. PNG/JPEG/WebP imports return data URLs. Repeated geometry belongs in component functions and loops. Reuse imported components instead of copying a sheet's markup. Each source's default export returns its declared Frames; do not add light/dark copies.
+The drawing is inlined and the props override its SVG root. Remove embedded style/script elements and event attributes from artwork; use SVG paint attributes for brand colors. PNG/JPEG/WebP imports return data URLs. For a self-contained preview that should remain an image, use `import preview from '../art/preview.svg?url'` and `<img src={preview} />` (or SVG `<image href={preview} />`). Any file under `design/art/` supports `?url`; this also tracks the file for refresh. Sources import only the preview files they display. Repeated geometry belongs in component functions and loops. Use content-sized controls with padding and gap; do not pass measured label widths. Keep repeated fixture items in data arrays. Put screen placement and drawing geometry under `data-free`; outside it, styles are limited to width, height and custom properties and pixel lengths are whole numbers. Reuse imported components instead of copying a sheet's markup. Each source's default export returns its declared Frames; do not add light/dark copies.
 
 Map ARC's `docs/dev/design.md` frames table as follows:
 
@@ -87,8 +128,8 @@ Set `requires: '>=0.4.0'`. Replace all top-level component/surface SVG sources b
 
 ## Validation
 
-- `sdg check`: all 18 sources passed in both themes.
-- Per-frame light/dark renders: completed and visually reviewed.
-- `sdg compare --all`: all 15 frames are no worse than their 0.3.3 reports; exit 1 records the retained review findings above.
-- `npm test` ran once: 25 passed, 2 failed. The temporary-directory realpath output bug was fixed; the dependent-refresh test now awaits asynchronous polling correctly. Both failed cases passed targeted rechecks. The final theme and compare-boundary changes also passed their two targeted tests.
-- `npm pack --dry-run`: runtime, declarations and browser token copy are included; design sources, copied ARC artwork and output artifacts are excluded.
+- `sdg check`: all 18 sources passed in both themes, including the two authoring rules.
+- Per-frame light/dark renders at scale 1: completed and reviewed against the 0.3.3 crops for all 18 sources.
+- `sdg compare --all`: all 15 frames have the same counts as 0.3.3; exit 1 records the retained findings above. Local log: `output/authoring-compare-final.log`.
+- Unit tests cover fractional class/style/frame lengths, disallowed layout styles, inherited `data-free`, allowed width/height/custom properties, art URL boundaries/dependencies/declarations and content-sized Frames.
+- `npm test` ran once: 31/32 passed. The fixture-coverage test now reads built Frames instead of scanning JSX attributes. Its targeted recheck and the content-sizing test using SDG's actual Button both passed (2/2). Logs: `output/authoring-npm-test.log` and `output/authoring-targeted-tests.log`.
