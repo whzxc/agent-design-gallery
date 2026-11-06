@@ -43,7 +43,11 @@ const settle = () =>
       ),
   );
 async function fit() {
-  await page.getByRole("button", { name: "Fit all", exact: true }).click();
+  const zoomMenu = page.locator("#zoom-options");
+  if (await zoomMenu.count()) {
+    await zoomMenu.click();
+    await page.locator("#zoom-fit-all").click();
+  } else await page.getByRole("button", { name: "Fit all", exact: true }).click();
   await settle();
   await page.waitForTimeout(120);
 }
@@ -168,8 +172,11 @@ await phase("trackpad-pan", async () => {
 });
 await fit();
 await phase("theme", async () => {
-  const theme = page.getByRole("button", { name: "Light", exact: true });
-  if (await theme.count()) await theme.click();
+  const display = page.locator("#display");
+  if (await display.count()) await display.click();
+  const theme = page.locator("#themes button[data-theme=light]")
+    .or(page.getByRole("button", { name: "Light", exact: true }));
+  if (await theme.count()) await theme.first().click();
   else await page.getByRole("radio", { name: "Light", exact: true }).click();
   await page.waitForFunction(
     () =>
