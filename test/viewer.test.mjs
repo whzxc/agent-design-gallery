@@ -123,3 +123,59 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
     await assert.rejects(access(path.join(temporaryRoot,'state.json')), {code:'ENOENT'});
   } finally { await browser.close();await server.close(); }
 });
+
+test('camera pans retain labels, while scale, settle and viewport changes refresh them', {timeout:15000}, async t => {
+  const temporaryRoot=await temporary(t);
+  const server=await startServer({directory:path.join(root,'fixtures/arc-sample'),stateDirectory:temporaryRoot,fixtures:{states,recent}});
+  const browser=await launch();
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:900}});
+    await page.goto(new URL('/?fixture=sample-zoomed',server.url).href);
+    await config.compare.ready(page,'sample-zoomed');
+    const pan=await page.evaluate(async()=>{
+      const {Labels}=await import('/labels.js'), update=Labels.prototype.update;
+      const rect=Element.prototype.getBoundingClientRect;
+      window.labelWork={updates:0,chromeReads:0,childWrites:0};
+      Labels.prototype.update=function(...args){window.labelWork.updates++;return update.apply(this,args)};
+      Element.prototype.getBoundingClientRect=function(){
+        if(this.matches('.floating, [popover], dialog, #tooltip'))window.labelWork.chromeReads++;
+        return rect.call(this);
+      };
+      const layer=document.querySelector('.label-layer'), viewport=document.querySelector('.gallery-viewport');
+      const observer=new MutationObserver(records=>{window.labelWork.childWrites+=records.filter(r=>r.target!==layer).length});
+      observer.observe(layer,{subtree:true,attributes:true,childList:true,characterData:true});
+      const snapshot=()=>[...layer.children].filter(el=>!el.hidden).map(el=>[el.textContent,el.style.transform]);
+      const before=snapshot(), camera=window.__sdg.view;
+      // Keep each event inside the idle interval; one animation frame per move.
+      for(let i=0;i<12;i++) {
+        viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:2,deltaY:1,bubbles:true,cancelable:true}));
+        await new Promise(requestAnimationFrame);
+      }
+      await Promise.resolve();observer.disconnect();
+      return {before,after:snapshot(),camera,view:window.__sdg.view,work:{...window.labelWork},transform:layer.style.transform};
+    });
+    assert.ok(pan.before.length>0);
+    assert.deepEqual(pan.after,pan.before);
+    assert.deepEqual(pan.work,{updates:0,chromeReads:0,childWrites:0});
+    assert.equal(pan.view.x,pan.camera.x-24);assert.equal(pan.view.y,pan.camera.y-12);
+    assert.equal(pan.transform,'translate(-24px, -12px)');
+    await page.waitForFunction(()=>window.__sdg.ready);
+    assert.equal(await page.evaluate(()=>window.labelWork.updates),1);
+    assert.equal(await page.locator('.label-layer').evaluate(el=>el.style.transform),'translate(0px, 0px)');
+    const zoom=await page.evaluate(async()=>{
+      window.labelWork={updates:0,chromeReads:0,childWrites:0};
+      const viewport=document.querySelector('.gallery-viewport');
+      for(let i=0;i<3;i++) {
+        viewport.dispatchEvent(new WheelEvent('wheel',{deltaY:-5,ctrlKey:true,clientX:800,clientY:400,bubbles:true,cancelable:true}));
+        await new Promise(requestAnimationFrame);
+      }
+      return {...window.labelWork};
+    });
+    assert.equal(zoom.updates,3);assert.equal(zoom.chromeReads,0);
+    await page.waitForFunction(()=>window.__sdg.ready);
+    const updates=await page.evaluate(()=>window.labelWork.updates);
+    await page.setViewportSize({width:1200,height:800});
+    await page.waitForFunction(previous=>window.labelWork.updates>previous&&window.__sdg.ready,updates);
+    assert.ok(await page.evaluate(()=>window.labelWork.chromeReads)>0);
+  } finally {await browser.close();await server.close()}
+});

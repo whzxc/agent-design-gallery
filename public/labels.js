@@ -1,4 +1,4 @@
-// A small retained DOM layer: canvas gestures update only visible label positions.
+// Retain screen-sized text; pure pans translate one layer until the camera settles.
 export function overlaps(a, b) {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }
@@ -30,11 +30,22 @@ export function placeLabels(candidates, obstacles, width, height, measure) {
 export class Labels {
   constructor(root) {
     this.root = root;
+    this.layer = document.createElement('div');
+    this.layer.className = 'label-layer';
+    root.append(this.layer);
+    this.anchor = null;
     this.nodes = new Map();
     this.metrics = new Map();
     this.context = document.createElement('canvas').getContext('2d');
   }
-  update(candidates, obstacles, width, height, font) {
+  pan(view) {
+    if (!this.anchor || view.scale !== this.anchor.scale) return false;
+    this.layer.style.transform = `translate(${view.x - this.anchor.x}px,${view.y - this.anchor.y}px)`;
+    return true;
+  }
+  update(candidates, obstacles, width, height, font, view) {
+    this.anchor = { ...view };
+    this.layer.style.transform = 'translate(0px,0px)';
     const shown = new Set();
     const measure = part => {
       const spec = `${part.weight ?? 400} ${part.size}px ${font}`, key = spec + '|' + part.text;
@@ -44,7 +55,7 @@ export class Labels {
     for (const label of placeLabels(candidates, obstacles, width, height, measure)) {
       shown.add(label.id);
       let node = this.nodes.get(label.id);
-      if (!node) { node = document.createElement('div'); node.className = 'canvas-label'; this.nodes.set(label.id, node); this.root.append(node); }
+      if (!node) { node = document.createElement('div'); node.className = 'canvas-label'; this.nodes.set(label.id, node); this.layer.append(node); }
       const signature = JSON.stringify(label.parts);
       if (node.dataset.signature !== signature) {
         node.replaceChildren(...label.parts.map(part => {
@@ -54,11 +65,12 @@ export class Labels {
         }));
         node.dataset.signature = signature;
       }
-      node.hidden = false;
+      if (node.hidden) node.hidden = false;
       node.style.transform = `translate(${label.x}px,${label.y}px)`;
-      node.style.height = `${label.height}px`;
+      const height = `${label.height}px`;
+      if (node.style.height !== height) node.style.height = height;
     }
-    for (const [id, node] of this.nodes) if (!shown.has(id)) node.hidden = true;
+    for (const [id, node] of this.nodes) if (!shown.has(id) && !node.hidden) node.hidden = true;
   }
-  clear() { this.root.replaceChildren(); this.nodes.clear(); this.metrics.clear(); }
+  clear() { this.layer.replaceChildren(); this.nodes.clear(); this.metrics.clear(); this.anchor = null; }
 }

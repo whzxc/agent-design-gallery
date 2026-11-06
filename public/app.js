@@ -6,8 +6,10 @@ import { prepare, imageURL, arrange } from "./assets.js";
 // ARC's gallery layout and camera model, decoupled from its React runtime.
 const $ = (selector) => document.querySelector(selector);
 const viewport = $(".gallery-viewport"),
-  canvas = $(".gallery-viewport canvas"),
-  ctx = canvas.getContext("2d", { alpha: false });
+  canvas = $("#drawings"),
+  ctx = canvas.getContext("2d"),
+  background = $("#canvas-background"),
+  backgroundContext = background.getContext("2d", { alpha: false });
 let manifest,
   groups = [],
   assets = [],
@@ -28,6 +30,9 @@ let raf = 0,
   queued = [],
   palette = {};
 const labelLayer = new Labels($("#labels"));
+let labelsDirty = true, labelObstacles = null;
+let drawingDirty = true, drawingView = null, drawingMargin = 0, drawingReady = 0, drawingCount = 0;
+const zoomValue = $("#zoom-value"), zoomOutput = $("output");
 const cache = new Map(),
   pointers = new Map();
 let gesture = {};
@@ -361,23 +366,25 @@ function commit(next) {
   window.__sdg.ready = false;
   view = next;
   moving = true;
-  requestDraw();
+  requestDraw(false, false);
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     moving = false;
     requestDraw();
     save();
-  }, 100);
+  }, 150);
 }
-function requestDraw() {
+function requestDraw(labelsChanged = true, drawingChanged = true) {
+  drawingDirty ||= drawingChanged;
+  if (labelsChanged) { labelsDirty = true; labelObstacles = null; }
   if (!raf) raf = requestAnimationFrame(draw);
 }
-function visible(a) {
+function visible(a, margin = 0) {
   return (
-    view.x + (a.x + a.width) * view.scale > 0 &&
-    view.x + a.x * view.scale < width &&
-    view.y + (a.y + a.height) * view.scale > 0 &&
-    view.y + a.y * view.scale < height
+    view.x + (a.x + a.width) * view.scale > -margin &&
+    view.x + a.x * view.scale < width + margin &&
+    view.y + (a.y + a.height) * view.scale > -margin &&
+    view.y + a.y * view.scale < height + margin
   );
 }
 function rounded(x, y, w, h, r, fill) {
@@ -416,7 +423,7 @@ function pump() {
       URL.revokeObjectURL(url);
       e.state = "ready";
       loading--;
-      requestDraw();
+      requestDraw(false);
       pump();
     };
     img.onerror = () => {
@@ -424,77 +431,140 @@ function pump() {
       e.state = "error";
       loading--;
       error(`Cannot render ${e.asset.path}`);
-      requestDraw();
+      requestDraw(false);
       pump();
     };
     img.src = url;
   }
 }
 function thumbnail(e, upgrade = false) {
-  const scale = Math.min(2, Math.max(0.15, view.scale)) * dpr;
+  const scale = Math.min(2, view.scale) * dpr;
   if (e.bitmap && (!upgrade || e.bitmapScale >= scale)) return e.bitmap;
-  const c = document.createElement("canvas");
   const limit = Math.min(scale, 4096 / Math.max(e.part.width, e.part.height));
+  const c = document.createElement('canvas');
   c.width = Math.max(1, Math.ceil(e.part.width * limit));
   c.height = Math.max(1, Math.ceil(e.part.height * limit));
-  c.getContext("2d").drawImage(e.image, 0, 0, c.width, c.height);
+  const preview = c.getContext('2d', { alpha: false });
+  preview.fillStyle = e.asset.background || palette.canvas;
+  preview.fillRect(0, 0, c.width, c.height);
+  preview.drawImage(e.image, 0, 0, c.width, c.height);
   e.bitmap = c;
   e.bitmapScale = limit;
   return c;
 }
 function placements(a) { return a.shown.map(part => ({ part, x: a.x, y: a.y })); }
+// Rasterize the screen-space dots once instead of submitting thousands of arcs per frame.
+let backgroundKey;
+function drawBackground() {
+  const color = backgroundColor(), key = `${width}|${height}|${dpr}|${color}|${palette.dot}`;
+  if (key !== backgroundKey) {
+    const tile = document.createElement('canvas');
+    tile.width = tile.height = Math.round(20 * dpr);
+    const c = tile.getContext('2d');
+    c.scale(dpr, dpr);
+    c.fillStyle = color; c.fillRect(0, 0, 20, 20);
+    c.fillStyle = palette.dot; c.beginPath(); c.arc(1, 1, 1, 0, Math.PI * 2); c.fill();
+    const pattern = backgroundContext.createPattern(tile, 'repeat');
+    pattern.setTransform(new DOMMatrix().scale(1 / dpr));
+    background.width = Math.round(width * dpr); background.height = Math.round(height * dpr);
+    backgroundContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+    backgroundContext.fillStyle = pattern;
+    backgroundContext.fillRect(0, 0, width, height);
+    backgroundKey = key;
+  }
+}
 function draw() {
   raf = 0;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = backgroundColor();
-  ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = palette.dot;
-  ctx.beginPath();
-  for (let x = 1; x < width; x += 20) for (let y = 1; y < height; y += 20) { ctx.moveTo(x + 1, y); ctx.arc(x, y, 1, 0, Math.PI * 2); }
-  ctx.fill();
+  drawBackground();
+  if (!labelObstacles) readChromeBounds();
   const displayed = manifest?.renderTheme === effectiveTheme ? inspection ? [inspection] : assets : [];
-  ctx.save(); ctx.translate(view.x, view.y); ctx.scale(view.scale, view.scale);
-  if (!inspection) for (const g of groups) {
-    if (!visible(g)) continue;
-    rounded(g.x, g.y, g.width, g.height, 16 / view.scale, palette['surface-section']);
-    ctx.strokeStyle = palette.border; ctx.lineWidth = 1 / view.scale; ctx.stroke();
-  }
-  let ready = 0, count = 0;
-  for (const a of displayed) {
-    if (!visible(a)) continue;
-    rounded(a.x, a.y, a.width, a.height, Math.min(6 / view.scale, a.width / 2, a.height / 2), a.background || palette.canvas);
-    ctx.save(); ctx.clip();
-    for (const pos of placements(a)) {
-      count++;
-      const e = ensureImage(a, pos.part);
-      if (e.state !== 'ready') continue;
-      ready++;
-      const source = moving ? thumbnail(e) : view.scale < .8 ? thumbnail(e, true) : e.image;
-      ctx.drawImage(source, pos.x, pos.y, pos.part.width, pos.part.height);
+  // Keep a margin around a settled drawing. Pans can move that
+  // retained Canvas layer without replaying or resampling the entire scene.
+  const dx = view.x - (drawingView?.x ?? 0), dy = view.y - (drawingView?.y ?? 0);
+  const reuse = !drawingDirty && drawingView?.scale === view.scale &&
+    Math.abs(dx) <= drawingMargin && Math.abs(dy) <= drawingMargin;
+  if (!reuse) {
+    const zooming = moving && drawingView?.scale !== view.scale;
+    drawingMargin = zooming ? 0 : Math.ceil(Math.min(width, height) / 4);
+    const bufferWidth = Math.round((width + drawingMargin * 2) * dpr), bufferHeight = Math.round((height + drawingMargin * 2) * dpr);
+    if (canvas.width !== bufferWidth || canvas.height !== bufferHeight) {
+      canvas.width = bufferWidth; canvas.height = bufferHeight;
+      canvas.style.width = `${width + drawingMargin * 2}px`; canvas.style.height = `${height + drawingMargin * 2}px`;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width + drawingMargin * 2, height + drawingMargin * 2);
+    ctx.save(); ctx.translate(view.x + drawingMargin, view.y + drawingMargin); ctx.scale(view.scale, view.scale);
+    if (!inspection) for (const g of groups) {
+      if (!visible(g, drawingMargin)) continue;
+      rounded(g.x, g.y, g.width, g.height, 16 / view.scale, palette['surface-section']);
+      ctx.strokeStyle = palette.border; ctx.lineWidth = 1 / view.scale; ctx.stroke();
+    }
+    let ready = 0, count = 0;
+    for (const a of displayed) {
+      if (!visible(a, drawingMargin)) continue;
+      const parts = placements(a).map(pos => ({ ...pos, image: ensureImage(a, pos.part) }));
+      const raster = moving || view.scale < .8;
+      ctx.beginPath(); ctx.roundRect(a.x, a.y, a.width, a.height, Math.min(6 / view.scale, a.width / 2, a.height / 2));
+      // Cached previews already contain the asset background; avoid painting it twice.
+      if (!raster || parts.some(pos => pos.image.state !== 'ready')) {
+        ctx.fillStyle = a.background || palette.canvas; ctx.fill();
+      }
+      ctx.save(); ctx.clip();
+      const inViewport = visible(a);
+      for (const pos of parts) {
+        if (inViewport) count++;
+        const e = pos.image;
+        if (e.state !== 'ready') continue;
+        if (inViewport) ready++;
+        const source = moving ? thumbnail(e) : view.scale < .8 ? thumbnail(e, true) : e.image;
+        if (moving) {
+          const left = Math.max(pos.x, (-view.x - drawingMargin) / view.scale);
+          const top = Math.max(pos.y, (-view.y - drawingMargin) / view.scale);
+          const right = Math.min(pos.x + pos.part.width, (width + drawingMargin - view.x) / view.scale);
+          const bottom = Math.min(pos.y + pos.part.height, (height + drawingMargin - view.y) / view.scale);
+          const sx = source.width / pos.part.width, sy = source.height / pos.part.height;
+          ctx.drawImage(source, (left-pos.x)*sx, (top-pos.y)*sy, (right-left)*sx, (bottom-top)*sy, left, top, right-left, bottom-top);
+        } else ctx.drawImage(source, pos.x, pos.y, pos.part.width, pos.part.height);
+      }
+      ctx.restore();
+      const chosen = inspection ? true : selectedId === a.id;
+      ctx.strokeStyle = chosen ? palette.accent : palette.border;
+      ctx.lineWidth = (chosen ? 2 : 1) / view.scale; ctx.stroke();
     }
     ctx.restore();
-    ctx.beginPath(); ctx.roundRect(a.x, a.y, a.width, a.height, Math.min(6 / view.scale, a.width / 2, a.height / 2));
-    const chosen = inspection ? true : selectedId === a.id;
-    ctx.strokeStyle = chosen ? palette.accent : palette.border;
-    ctx.lineWidth = (chosen ? 2 : 1) / view.scale; ctx.stroke();
+    drawingReady = ready; drawingCount = count;
+    drawingView = { ...view }; drawingDirty = false;
   }
-  ctx.restore();
+  canvas.style.transform = `translate(${view.x - drawingView.x - drawingMargin}px,${view.y - drawingView.y - drawingMargin}px)`;
   drawLabels(displayed);
-  if (document.activeElement !== $("#zoom-value")) $("#zoom-value").textContent = `${Math.round(view.scale * 100)}%`;
-  $("output").value = `${Math.round(view.scale * 100)}%`;
-  window.__sdg.ready = !!manifest && manifest.renderTheme === effectiveTheme && ready === count && !moving;
+  const percentage = `${Math.round(view.scale * 100)}%`;
+  if (zoomValue.textContent !== percentage) zoomValue.textContent = percentage;
+  if (zoomOutput.value !== percentage) zoomOutput.value = percentage;
+  window.__sdg.ready = !!manifest && manifest.renderTheme === effectiveTheme && drawingReady === drawingCount && !moving;
   if(fixtureState && fixtureApplied && window.__sdg.ready) document.documentElement.dataset.fixtureReady=fixtureState.name;
   window.__sdg.revision = manifest?.revision;
-  window.__sdg.visibleReady = ready; window.__sdg.visibleCount = count;
+  window.__sdg.visibleReady = drawingReady; window.__sdg.visibleCount = drawingCount;
   drawMap();
   if (cache.size > 100) for (const e of [...cache.values()].sort((a,b) => a.used - b.used)) {
     if (cache.size <= 80) break;
-    if (!displayed.some(a => a.path === e.asset.path && visible(a))) cache.delete(e.key);
+    if (!displayed.some(a => a.path === e.asset.path && visible(a, drawingMargin))) cache.delete(e.key);
   }
 }
 function backgroundColor() { return backgroundChoice === 'theme' ? palette.canvas : backgroundColors[backgroundChoice]; }
 
+function readChromeBounds() {
+  const vr = viewport.getBoundingClientRect();
+  labelObstacles = [];
+  for (const el of document.querySelectorAll('.floating, :popover-open, dialog[open], #tooltip:not([hidden])')) {
+    if (el.hidden) continue;
+    const style = getComputedStyle(el);
+    if (style.visibility === 'hidden' || style.display === 'none') continue;
+    const r = el.getBoundingClientRect(), box = { x:r.x-vr.x, y:r.y-vr.y, width:r.width, height:r.height };
+    labelObstacles.push(box);
+  }
+}
 function drawLabels(displayed) {
+  if (!labelsDirty && labelLayer.pan(view)) return;
   const candidates = [], screen = box => ({ x: view.x + box.x * view.scale, y: view.y + box.y * view.scale });
   const caption = Number.parseFloat(palette['text-caption']), meta = Number.parseFloat(palette['text-meta']), section = Number.parseFloat(palette['text-section']);
   const part = (text, size, weight, color, gap = 0) => ({ text, size, weight, color, gap });
@@ -527,9 +597,8 @@ function drawLabels(displayed) {
       }
     }
   }
-  const vr = viewport.getBoundingClientRect();
-  const obstacles = [...document.querySelectorAll('.floating, :popover-open, dialog[open], #tooltip:not([hidden])')].filter(el => !el.hidden && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none').map(el => { const r=el.getBoundingClientRect();return {x:r.x-vr.x,y:r.y-vr.y,width:r.width,height:r.height}; });
-  labelLayer.update(candidates,obstacles,width,height,palette['font-ui']);
+  labelLayer.update(candidates,labelObstacles,width,height,palette['font-ui'],view);
+  labelsDirty = false;
 }
 function mapGeometry() {
   const scale=Math.min(168/world.width,100/world.height);
@@ -802,8 +871,7 @@ function resizeViewport() {
   width = viewport.clientWidth;
   height = viewport.clientHeight;
   dpr = devicePixelRatio;
-  canvas.width = Math.round(width * dpr);
-  canvas.height = Math.round(height * dpr);
+
   if (oldW)
     view = {
       ...view,
@@ -954,7 +1022,7 @@ for(const [id,trigger] of [['display-menu','display'],['zoom-menu','zoom-options
   });
 }
 let tooltipTimer;
-function hideTooltip() { clearTimeout(tooltipTimer);$("#tooltip").hidden=true; }
+function hideTooltip() { clearTimeout(tooltipTimer);if (!$("#tooltip").hidden) { $("#tooltip").hidden=true;requestDraw(); } }
 for(const button of document.querySelectorAll('[data-tooltip]')) {
   const show=()=>{clearTimeout(tooltipTimer);tooltipTimer=setTimeout(()=>{
     if(document.querySelector(':popover-open, dialog[open]'))return;
@@ -967,7 +1035,10 @@ for(const button of document.querySelectorAll('[data-tooltip]')) {
 }
 $("#keys-close").onclick=()=>$("#keys").close();
 $("#directories").addEventListener('cancel',event=>{if(!manifest?.directory)event.preventDefault()});
-for(const dialog of document.querySelectorAll('dialog')) dialog.addEventListener('close',()=>{viewport.focus({preventScroll:true});requestDraw()});
+for(const dialog of document.querySelectorAll('dialog')) {
+  dialog.addEventListener('toggle', () => requestDraw());
+  dialog.addEventListener('close',()=>{viewport.focus({preventScroll:true});requestDraw()});
+}
 document.addEventListener('keydown',event=>{
   if(event.key==='?'&&!event.target.matches('input,textarea')&&!document.querySelector('dialog[open]')) {event.preventDefault();hideTooltip();$("#keys").showModal()}
 });
