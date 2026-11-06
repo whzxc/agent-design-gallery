@@ -41,15 +41,15 @@ The world is laid out in SVG units and never changes while panning, zooming or c
 - **Flows.** A surface file is one flow. Each frame is cropped to its bounds plus 16 on every side. Frames run left to right with a 64 gap and wrap before 3600, with 112 between lines.
 - **Sections.** Each group is one section. Sets pack first with skyline packing in group order: each set goes to the lowest available position, then the leftmost, with 64 between sets and 112 between rows. Flows follow 200 below the sets, packed in rows with 64 between flows and 200 between rows. The section's content width is the width from the widest block upward, in steps of 50, whose packed aspect ratio is closest to 1.6. The section pads its content 64 at the sides and bottom and 104 at the top.
 - **World.** Sections pack in rows with 480 between them. The row width is chosen in steps of 100 so the whole world's aspect ratio is closest to 1.5.
-- **Fit.** Fit places the target inside the canvas area inset 20 from the sidebar or left edge, 24 from the right edge or inspector, 100 from the top and 84 from the bottom, centered. Fit selection adds 24 on every side. Zoom to 100% keeps the point at the center of that area.
+- **Fit.** Fit places the target inside the canvas area inset 20 from the sidebar or left edge, 24 from the right edge or inspector, 100 from the top and 84 from the bottom, centered. Fit selection insets that area by 24 on every side. Zoom to 100% keeps the point at the center of that area.
 
 ## Labels
 
 Labels draw at constant screen size. Each label is drawn only when it fits its slot and does not collide with floating chrome or another label; otherwise it is omitted.
 
 - Section title: `--text-section` 650 at 16 above the section's top-left, followed 8 later by the asset count in `--text-meta` tertiary.
-- Set name: `--text-meta` 550 secondary, or `--text` when selected, 12 above the artboard, followed 6 later by its form count. Shown from 20% zoom when the name fits the set width plus its gap.
-- Form names: `--text-caption` tertiary, 16 above each form inside the artboard. Shown from 75% zoom for sets with two or more forms, for all forms or none.
+- Set name: `--text-meta` 550 secondary, or `--text` when selected, 12 above the artboard, followed 6 later by its form count. Shown from 20% zoom when the name alone fits the set width plus its gap, minus 10 screen pixels. The count follows only when the name, 6px gap and count also fit.
+- Form names: `--text-caption` tertiary, with its center 9.5 above each form's top, inside the artboard. Shown from 75% zoom for sets with two or more forms, for all forms or none.
 - Flow name: `--text-meta` 600 secondary, 34 above the flow, followed by its frame count. Frame name: `--text-caption` tertiary, or 550 `--text` when selected, 12 above the frame. Both shown from 20% zoom.
 - Artboards have a 1px `--border` stroke, radius 6, and the asset's own canvas color. Selection replaces the stroke with a 2px `--accent` ring. Previews never stretch.
 

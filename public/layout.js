@@ -67,6 +67,6 @@ export function fitArea(width, height, sidebar = true, inspector = false) {
   return { x: left, y: 100, width: Math.max(1, right - left), height: Math.max(1, height - 184) };
 }
 export function fitView(box, area, padding = 0) {
-  const scale = Math.max(.025, Math.min(32, area.width / (box.width + padding * 2), area.height / (box.height + padding * 2)));
+  const scale = Math.max(.025, Math.min(32, Math.max(1, area.width - padding * 2) / box.width, Math.max(1, area.height - padding * 2) / box.height));
   return { scale, x: area.x + area.width / 2 - (box.x + box.width / 2) * scale, y: area.y + area.height / 2 - (box.y + box.height / 2) * scale };
 }

@@ -162,6 +162,30 @@ test('theme region follows explicit theme before system; DOM extraction handles 
     assert.ok(!result.texts.some(t => /Clipped|Hidden/.test(t.text)));
   } finally { await browser.close(); }
 });
+test('compare reads centered clipped labels and one value or placeholder per text field', async () => {
+  const browser = await launch();
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<div id="panel" style="width:600px;height:300px;font:13px/12px Arial">
+      <span id="label" style="display:block;width:120px;height:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Centered label</span>
+      <span style="display:block;width:10px;height:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Horizontal clipping</span>
+      <div style="height:4px;overflow:hidden"><span style="position:relative;top:8px">Below clip</span></div>
+      <input type="search" value="pill" placeholder="Find assets…" style="display:block;width:220px">
+      <input value="~/projects/empty" placeholder="/path/to/design" style="display:block;width:260px">
+      <input type="text" placeholder="Empty field" style="display:block;width:220px">
+      <textarea style="display:block;width:400px">First line
+Second line</textarea>
+      <textarea placeholder="Empty textarea" style="display:block;width:400px"></textarea>
+    </div>`);
+    const boxes = await page.locator('#label').evaluate(el => {
+      const range=document.createRange();range.selectNodeContents(el);
+      return [range.getBoundingClientRect().height,el.getBoundingClientRect().height];
+    });
+    assert.ok(boxes[0] > boxes[1], 'the glyph box must exceed its clipping span');
+    const result = await page.locator('#panel').evaluate(implementationTexts);
+    assert.deepEqual(result.texts.map(t=>t.text), ['Centered label','pill','~/projects/empty','Empty field','First line Second line','Empty textarea']);
+  } finally { await browser.close(); }
+});
 test('compare runs a static adapter with clip/region/selector, fixed environment and exact output files', async t => {
   const root = temporary(t); init({ root }, () => {});
   const { createServer } = await import('node:net');

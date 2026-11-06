@@ -29,7 +29,10 @@ test('skyline fills the lowest available slot and fit respects floating chrome',
   const area = fitArea(1440,900,true,true);
   assert.deepEqual(area, { x:292,y:100,width:812,height:716 });
   const view = fitView({ x:10,y:20,width:100,height:50 },area,24);
-  assert.equal(view.scale,812/148);
+  assert.equal(view.scale,764/100);
+  const selection = fitView({ x:0,y:0,width:992,height:944 },area,24);
+  assert.equal(Math.round(selection.scale * 100),71);
+  assert.equal(selection.y,124);
   assert.equal(view.x + 60*view.scale,698);
   assert.deepEqual(layoutWorld([]), []);
 });

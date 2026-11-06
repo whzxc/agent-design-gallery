@@ -79,7 +79,35 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
         if(state.empty) assert.equal(await page.locator('#close').isVisible(),false);
         if(state.submit) assert.equal(await page.locator('#open-error span:last-child').textContent(),'No SVG files in this directory.');
         if(state.query) { assert.equal(await page.locator('.search-result').count(),2);assert.match(await page.locator('.search-result').first().textContent(),/state-pill/); }
+        const relativeBox = async (selector, parent) => page.locator(selector).first().evaluate((el, parent) => {
+          const box=el.getBoundingClientRect(), origin=document.querySelector(parent).getBoundingClientRect();
+          return [box.x-origin.x,box.y-origin.y,box.width,box.height];
+        }, parent);
+        if(name==='sample-zoomed') {
+          for(const caption of ['regular','compact']) assert.equal(await page.locator('#labels .canvas-label:not([hidden])').filter({hasText:new RegExp(`^${caption}$`)}).count(),1);
+        }
+        if(name==='sample-inspect-frame') {
+          assert.equal(Math.round(await page.evaluate(()=>window.__sdg.view.scale)*100),71);
+          assert.equal((await relativeBox('.source-actions','#source'))[1],68);
+          assert.deepEqual(await relativeBox('#forms .tree-row','#source'),[8,152,284,28]);
+          assert.equal(await page.locator('#source-path').evaluate(el=>getComputedStyle(el).fontSize),'12px');
+        }
+        if(name==='sidebar-search') assert.equal((await relativeBox('.search-result','#sidebar'))[1],164);
+        if(name==='menu-zoom') {
+          const gap=await page.evaluate(()=>document.querySelector('.zoom').getBoundingClientRect().top-document.querySelector('#zoom-menu').getBoundingClientRect().bottom);
+          assert.equal(gap,8);
+        }
+        if(name==='dialog-shortcuts') assert.equal((await relativeBox('#keys dl','#keys'))[1],64);
+        if(name==='tooltip-inspector') {
+          assert.equal(await page.locator('#tooltip').evaluate(el=>el.getBoundingClientRect().height),26);
+          assert.equal(await page.locator('#tooltip').evaluate(el=>getComputedStyle(el).fontSize),'12px');
+        }
         if(name==='sample-components') {
+          assert.equal((await relativeBox('#all','#sidebar'))[1],136);
+          assert.equal((await relativeBox('#modules>.rule','#sidebar'))[1],168);
+          assert.deepEqual((await relativeBox('.group-name','#sidebar')).slice(0,2),[40,176]);
+          assert.equal(await page.locator('#labels .canvas-label:not([hidden])').filter({hasText:/^icon-button$/}).count(),1);
+          assert.equal(await page.locator('#search').getAttribute('placeholder'),'Find assets…');
           assert.ok(await page.locator('#labels .canvas-label:not([hidden])').count()>0);
           const view=await page.evaluate(()=>window.__sdg.view);
           await page.getByRole('button',{name:'Collapse sidebar',exact:true}).click();

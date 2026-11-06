@@ -141,7 +141,7 @@ export function implementationTexts(root, clip) {
       if (/(hidden|clip|auto|scroll)/.test(style.overflowX)) { left = Math.max(left, bounds.left); right = Math.min(right, bounds.right); }
       if (/(hidden|clip|auto|scroll)/.test(style.overflowY)) { top = Math.max(top, bounds.top); bottom = Math.min(bottom, bounds.bottom); }
     }
-    return box.left >= left - 0.5 && box.right <= right + 0.5 && box.top >= top - 0.5 && box.bottom <= bottom + 0.5;
+    return box.left >= left - 0.5 && box.right <= right + 0.5 && (box.top + box.bottom) / 2 >= top && (box.top + box.bottom) / 2 <= bottom;
   };
   const push = (text, box, owner, style = getComputedStyle(owner)) => {
     if (!inside(box, owner)) return;
@@ -151,7 +151,7 @@ export function implementationTexts(root, clip) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const owner = node.parentElement;
-    if (!node.textContent.trim() || !owner || !visible(owner)) continue;
+    if (!node.textContent.trim() || !owner || owner.closest('input, textarea') || !visible(owner)) continue;
     const range = document.createRange(), lines = [];
     for (let index = 0; index < node.length; index++) {
       range.setStart(node, index); range.setEnd(node, index + 1);
@@ -172,15 +172,17 @@ export function implementationTexts(root, clip) {
     }
   }
   const canvas = document.createElement('canvas').getContext('2d');
-  for (const input of root.querySelectorAll('input[placeholder]:placeholder-shown, textarea[placeholder]:placeholder-shown')) {
+  for (const input of root.querySelectorAll('input:not([type]), input[type=text], input[type=search], input[type=email], input[type=url], input[type=tel], input[type=number], textarea')) {
     if (!visible(input)) continue;
-    const rect = input.getBoundingClientRect(), style = getComputedStyle(input, '::placeholder');
+    const content = (input.value || input.placeholder || '').replace(/\s+/g, ' ').trim();
+    if (!content) continue;
+    const rect = input.getBoundingClientRect(), style = getComputedStyle(input, input.value ? null : '::placeholder');
     if (rect.width < 1) continue;
     canvas.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
     const box = getComputedStyle(input), height = parseFloat(style.fontSize) * 1.2;
     const left = rect.left + parseFloat(box.borderLeftWidth) + parseFloat(box.paddingLeft);
     const top = input.tagName === 'TEXTAREA' ? rect.top + parseFloat(box.borderTopWidth) + parseFloat(box.paddingTop) : rect.top + rect.height / 2 - height / 2;
-    push(input.placeholder.replace(/\s+/g, ' ').trim(), { left, right: left + canvas.measureText(input.placeholder).width, top, bottom: top + height }, input, style);
+    push(content, { left, right: left + canvas.measureText(content).width, top, bottom: top + height }, input, style);
   }
   return { box: { x: origin.left + scrollX, y: origin.top + scrollY, width: origin.right - origin.left, height: origin.bottom - origin.top }, texts };
 }
