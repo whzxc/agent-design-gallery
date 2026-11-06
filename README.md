@@ -7,7 +7,7 @@ npm install -g @whzxc/svg-design-gallery --registry https://npm.leow.top
 sdg /path/to/design
 ```
 
-Requires Node.js 22 or newer. The installed package has no runtime dependencies and starts without a build step. `sdg` opens a local server in your default browser. Use `--no-open` to print its URL, `--port 5200` to select a port, or omit the directory to open recent directories. Stop the server with Ctrl+C.
+Requires Node.js 22 or newer. The installed package starts without a build step. Browser toolkit commands use the bundled Playwright dependency; the viewer and sync do not load it. `sdg` opens a local server in your default browser. Use `--no-open` to print its URL, `--port 5200` to select a port, or omit the directory to open recent directories. Stop the server with Ctrl+C.
 
 Drag or scroll to pan. Pinch, or hold Control/Command while scrolling, to zoom around the pointer. Click a drawing to select it; double-click or press Enter to focus it. Group names focus their collection. **Fit all** or 0 returns to the overview. **Back** restores the previous camera; Escape closes the active search or inspector first, then goes back. Arrow keys pan; +/− zoom; 1 sets the canvas to 100%.
 
@@ -46,6 +46,11 @@ The viewer recognizes explicit SVG declarations:
 - Nested component instances inside a frame remain part of that frame. Arbitrary nested groups are not split. SVGs without these declarations retain their complete viewBox.
 
 Bounds are measured in SVG units with shadow padding. The viewer crops only its in-memory previews and preserves the original file. Top-level `.note` captions are omitted from cropped previews; form names are available through the inspector, while **Full sheet** retains all source annotations.
+
+## Design toolkit
+
+Install the shared CLI from GitHub with `npm install -g github:whzxc/svg-design-gallery`.
+Run `sdg init` to scaffold a project, `sdg sync` to embed tokens, and `sdg check` to validate assets in both themes. `render`, `measure`, and `compare` support design review and implementation comparison. See the [design toolkit contract](docs/design-toolkit.md) for asset rules, commands, and the project adapter.
 
 ## Development
 

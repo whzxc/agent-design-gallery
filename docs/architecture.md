@@ -1,6 +1,6 @@
 # Architecture
 
-`src/cli.mjs` starts an HTTP server on loopback, prints the URL, and opens the default browser. `src/server.mjs` reads an explicitly opened directory, serves SVGs, watches file changes, and persists local preferences. `public/` contains the standalone viewer. Installation supplies one shared CLI version across projects.
+`src/cli.mjs` dispatches commands; `src/open.mjs` starts an HTTP server on loopback, prints the URL, and opens the default browser. `src/server.mjs` reads an explicitly opened directory, serves SVGs, watches file changes, and persists local preferences. `public/` contains the standalone viewer. Installation supplies one shared CLI version across projects.
 
 The viewer uses explicit SVG form/frame bounds for stable content-sized layouts, a pointer-anchored camera, focus history, and theme presentation. Camera updates are coalesced into one animation frame. A Canvas 2D surface draws only visible groups and assets. During gestures it draws cached preview rasters; when settled it upgrades previews or draws the original SVG for detail. This avoids rebuilding a React tree or mounting large inline SVG trees on each input event. Accessible controls expose module and asset selection alongside the visual canvas.
 
@@ -8,4 +8,6 @@ SVGs are measured once per file revision and theme in temporary, script-disabled
 
 The local service reads assets and writes only its preferences. Asset paths come from the scanned directory; symlinks are not scanned. Open-directory, preferences, and reveal operations reject requests from another web origin. The service binds only to `127.0.0.1`.
 
-This application is a viewer. Editing, Git history, design conventions, tokens, and asset approval remain with the owning project and workflow. It has no ARC runtime dependency, account system, collaborative state, or asset import database.
+Projects retain their assets, Git history, design conventions, tokens, and asset approval workflow. It has no ARC runtime dependency, account system, collaborative state, or asset import database.
+
+`src/toolkit/` implements the [design toolkit contract](design-toolkit.md): project/config discovery and version requirements, token parsing and SVG shadow filters, generated-region sync, two-theme checks, rendering, text measurement, and fixture comparison. Chromium is loaded dynamically only for browser commands. Compare uses the project adapter to start and stop its app, resolve fixture environment, wait for readiness, block requests, and collect additional text; it captures declared page clips or named elements and writes images plus a text-difference report. The overlay is composed in browser canvas without an image-processing dependency. Viewer serving, camera input, and rendering remain independent of toolkit execution.
