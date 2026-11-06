@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { launch, loadSvg } from './browser.mjs';
 import { designFrame, implementationTexts } from './document.mjs';
 import { matchTexts, textDelta } from './text.mjs';
@@ -43,6 +44,19 @@ async function overlay(page, target) {
   writeFileSync(path.join(target, 'overlay.png'), Buffer.from(data, 'base64'));
 }
 const safeName = value => encodeURIComponent(value).replace(/\./g, '%2E');
+async function settle(read) {
+  const started = performance.now();
+  let previous, changed = started;
+  for (;;) {
+    const implementation = await read();
+    const state = JSON.stringify({ box: implementation.box, texts: implementation.texts.map(({ text, x, y, width, height }) => ({ text, x, y, width, height })) });
+    const now = performance.now();
+    if (state !== previous) { previous = state; changed = now; }
+    if (now - changed >= 300) return { implementation, settled: true };
+    if (now - started >= 5000) return { implementation, settled: false };
+    await delay(Math.min(50, 5000 - (now - started)));
+  }
+}
 export async function compare(config, args, options) {
   const file = selectAssets(config, args)[0], adapter = config.compare;
   if (!adapter.fixture) throw new Error('Compare needs compare.fixture(name); add it to sdg.config.mjs');
@@ -59,6 +73,12 @@ export async function compare(config, args, options) {
     if (!fixtureName) throw new Error('Frame has no data-fixture; supply --fixture or declare data-fixture');
     const fixture = await adapter.fixture(fixtureName);
     if (!fixture || typeof fixture.url !== 'string' || !['light', 'dark'].includes(fixture.theme) || typeof fixture.locale !== 'string' || !fixture.locale || !Number.isFinite(Date.parse(fixture.clock))) throw new Error('compare.fixture must return url, theme (light/dark), locale and a valid clock; fix sdg.config.mjs');
+    if (fixture.timezone !== undefined) {
+      try {
+        if (typeof fixture.timezone !== 'string' || !fixture.timezone || /^[+-]/.test(fixture.timezone)) throw new Error();
+        new Intl.DateTimeFormat('en-US', { timeZone: fixture.timezone });
+      } catch { throw new Error('compare.fixture timezone must be a valid IANA time zone such as Asia/Shanghai; fix sdg.config.mjs'); }
+    }
     const size = viewport(design.viewport ?? options.viewport ?? adapter.viewport);
     const origin = design.origin?.trim().split(/\s+/).map(Number);
     if (design.viewport && (origin?.length !== 2 || !origin.every(Number.isFinite) || origin.some(n => n < 0) || origin[0] + design.box.width > size.width || origin[1] + design.box.height > size.height)) throw new Error('Frame does not fit its declared viewport; fix data-origin and the shell size');
@@ -77,7 +97,7 @@ export async function compare(config, args, options) {
     const target = path.join(config.output, 'compare', `${path.basename(file, '.svg')}-${safeName(frame.replace(/^frame-/, ''))}-${safeName(fixtureName)}`);
     mkdirSync(target, { recursive: true });
     await sheet.screenshot({ path: path.join(target, 'design.png'), clip: design.box });
-    const app = await browser.newPage({ viewport: size, colorScheme: fixture.theme, reducedMotion: 'reduce', locale: fixture.locale });
+    const app = await browser.newPage({ viewport: size, colorScheme: fixture.theme, reducedMotion: 'reduce', locale: fixture.locale, timezoneId: fixture.timezone });
     for (const pattern of adapter.block ?? []) await app.route(pattern, route => route.abort());
     await app.addInitScript(({ clock, theme }) => {
       const original = Date, fixed = original.parse(clock);
@@ -96,26 +116,24 @@ export async function compare(config, args, options) {
     if (adapter.ready) await adapter.ready(app, fixtureName);
     for (const name of options.click ?? []) await app.getByRole('button', { name, exact: true }).first().click();
     await app.evaluate(() => document.fonts.ready);
-    let implementation, capture;
-    if (design.viewport) {
-      capture = { x: origin[0], y: origin[1], width: design.box.width, height: design.box.height };
-      implementation = await app.locator('html').evaluate(implementationTexts, capture);
-      await app.screenshot({ path: path.join(target, 'implementation.png'), clip: capture });
-    } else {
-      const panel = options.selector ? app.locator(options.selector).first() : app.getByRole('region', { name: options.region, exact: true }).or(app.getByRole('dialog', { name: options.region, exact: true })).first();
-      await panel.scrollIntoViewIfNeeded();
-      implementation = await panel.evaluate(implementationTexts);
-      capture = implementation.box;
-      await panel.screenshot({ path: path.join(target, 'implementation.png') });
-    }
-    if (adapter.texts) {
-      const additional = await adapter.texts(app);
-      if (!Array.isArray(additional) || additional.some(t => typeof t.text !== 'string' || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(t[key])))) throw new Error('compare.texts must return text boxes in page coordinates; fix sdg.config.mjs');
-      implementation.texts.push(...additional.filter(t => t.x >= capture.x && t.y >= capture.y && t.x + t.width <= capture.x + capture.width && t.y + t.height <= capture.y + capture.height).map(t => ({ ...t, x: t.x - capture.x, y: t.y - capture.y })));
-    }
+    const capture = design.viewport ? { x: origin[0], y: origin[1], width: design.box.width, height: design.box.height } : undefined;
+    const panel = capture ? app.locator('html') : options.selector ? app.locator(options.selector).first() : app.getByRole('region', { name: options.region, exact: true }).or(app.getByRole('dialog', { name: options.region, exact: true })).first();
+    if (!capture) await panel.scrollIntoViewIfNeeded();
+    const { implementation, settled } = await settle(async () => {
+      const result = await panel.evaluate(implementationTexts, capture);
+      if (adapter.texts) {
+        const additional = await adapter.texts(app), box = result.box;
+        if (!Array.isArray(additional) || additional.some(t => typeof t.text !== 'string' || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(t[key])))) throw new Error('compare.texts must return text boxes in page coordinates; fix sdg.config.mjs');
+        result.texts.push(...additional.filter(t => t.x >= box.x && t.y >= box.y && t.x + t.width <= box.x + box.width && t.y + t.height <= box.y + box.height).map(t => ({ ...t, x: t.x - box.x, y: t.y - box.y })));
+      }
+      return result;
+    });
+    const screenshot = { path: path.join(target, 'implementation.png') };
+    if (capture) await app.screenshot({ ...screenshot, clip: capture });
+    else await panel.screenshot(screenshot);
     const canvasPage = await browser.newPage();
     await overlay(canvasPage, target);
-    const report = compareReport(relative(config, file), frame, fixtureName, design, implementation);
+    const report = { ...compareReport(relative(config, file), frame, fixtureName, design, implementation), settled };
     writeFileSync(path.join(target, 'report.json'), JSON.stringify(report, null, 2) + '\n');
     writeFileSync(path.join(target, 'index.html'), reportHtml(report));
     console.log(`${relative(config, path.join(target, 'index.html'))}: matched ${report.matched}, ${report.offBy2px.length} off by >2px, ${report.missing.length} missing, ${report.extra.length} extra.`);

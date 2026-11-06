@@ -244,3 +244,88 @@ export default { compare: {
     assert.equal(readFileSync(path.join(target, 'overlay.png')).subarray(1, 4).toString(), 'PNG');
   }
 });
+
+async function compareFixture(t, html) {
+  const root = temporary(t); init({ root }, () => {});
+  const { createServer } = await import('node:http');
+  const server = createServer((req, res) => { res.setHeader('Content-Type', 'text/html'); res.end(html); });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const fixture = { url: `http://127.0.0.1:${server.address().port}`, theme: 'light', locale: 'en-US', clock: '2026-01-01T00:00:00Z' };
+  const config = await loadConfig(root);
+  config.compare.fixture = () => fixture;
+  const asset = path.join(config.design, 'surfaces/demo.svg');
+  const report = () => JSON.parse(readFileSync(path.join(config.output, 'compare/demo-demo-sample/report.json')));
+  return { root, config, fixture, asset, report };
+}
+
+test('compare applies fixture time zones and defaults to the system zone', async t => {
+  const sample = await compareFixture(t, `<div id="panel" style="width:200px;height:50px"></div><script>
+    document.querySelector('#panel').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone + ' ' + new Date().getHours();
+  </script>`);
+  for (const timezone of ['Asia/Shanghai', undefined]) {
+    sample.fixture.timezone = timezone;
+    const label = timezone ? 'Asia/Shanghai 8' : `${Intl.DateTimeFormat().resolvedOptions().timeZone} ${new Date(sample.fixture.clock).getHours()}`;
+    writeFileSync(sample.asset, svg(`<g data-part="frame-demo" data-fixture="sample">${component(text(label))}</g>`));
+    await compare(sample.config, ['surfaces/demo.svg'], { frame: 'demo', selector: '#panel' });
+    assert.equal(sample.report().matched, 1);
+    assert.deepEqual(sample.report().missing, []);
+    assert.deepEqual(sample.report().extra, []);
+    assert.equal(sample.report().settled, true);
+  }
+});
+
+test('compare rejects invalid fixture time zones with exit 2 and one stderr line', async t => {
+  const root = temporary(t); init({ root }, () => {});
+  writeFileSync(path.join(root, 'design/surfaces/demo.svg'), svg(`<g data-part="frame-demo" data-fixture="sample" data-viewport="300x200" data-origin="0 0">${component()}</g>`));
+  const run = promisify(execFile), cli = path.resolve('src/cli.mjs');
+  for (const timezone of ['Invalid/Zone', '+08:00', '', 8]) {
+    writeFileSync(path.join(root, 'sdg.config.mjs'), `export default { compare: { fixture() { return { url: 'http://127.0.0.1:1', theme: 'light', locale: 'en-US', clock: '2026-01-01', timezone: ${JSON.stringify(timezone)} }; } } };`);
+    await assert.rejects(run(process.execPath, [cli, 'compare', 'surfaces/demo.svg', '--frame=demo'], { cwd: root }), error => {
+      assert.equal(error.code, 2);
+      assert.equal(error.stdout, '');
+      assert.equal(error.stderr.trim().split('\n').length, 1);
+      assert.match(error.stderr, /timezone must be a valid IANA time zone.*fix sdg.config.mjs/);
+      return true;
+    });
+  }
+});
+
+test('compare settles delayed post-click text and reflow in clips, regions and selectors', async t => {
+  const sample = await compareFixture(t, `<style>
+    body{margin:0;font:11px system-ui}.panel{position:absolute;left:20px;top:20px;width:200px;height:50px}
+    #label{position:absolute;left:10px;top:10px}button{position:absolute;top:100px}#outside{position:absolute;top:150px}
+  </style><div class="panel" role="region" aria-label="Panel"><span id="label">Before</span></div>
+  <button onclick="window.clicked=performance.now();setTimeout(()=>label.textContent='After',200);setTimeout(()=>label.style.left='40px',400)">Open board</button>
+  <span id="outside"></span><script>setInterval(()=>outside.textContent=String(performance.now()),50)</script>`);
+  let elapsed;
+  sample.config.compare.texts = async page => { elapsed = await page.evaluate(() => performance.now() - window.clicked); return []; };
+  for (const options of [{}, { region: 'Panel' }, { selector: '.panel' }]) {
+    const clip = !options.region && !options.selector ? 'data-viewport="300x200" data-origin="20 20"' : '';
+    writeFileSync(sample.asset, svg(`<g data-part="frame-demo" data-fixture="sample" ${clip}>${component(text('After'))}</g>`));
+    await compare(sample.config, ['surfaces/demo.svg'], { frame: 'demo', click: ['Open board'], ...options });
+    const report = sample.report();
+    assert.equal(report.settled, true);
+    assert.equal(report.matched, 1);
+    assert.deepEqual(report.missing, []);
+    assert.deepEqual(report.extra, []);
+    assert.ok(report.offBy2px.some(row => row.text === 'After' && row.dx === 30), 'capture must use the final text box');
+    assert.ok(elapsed >= 690 && elapsed < 3000, `settled after ${elapsed}ms`);
+  }
+});
+
+test('compare captures after the settling timeout and reports settled false', { timeout: 15000 }, async t => {
+  const sample = await compareFixture(t, `<div id="panel" style="width:200px;height:50px"><span id="label">Before</span></div>
+    <button onclick="window.clicked=performance.now();setInterval(()=>label.textContent='Tick '+(++window.tick),75)">Open board</button><script>window.tick=0</script>`);
+  writeFileSync(sample.asset, svg(`<g data-part="frame-demo" data-fixture="sample">${component(text('Before'))}</g>`));
+  let elapsed;
+  sample.config.compare.texts = async page => { elapsed = await page.evaluate(() => performance.now() - window.clicked); return []; };
+  assert.equal(await compare(sample.config, ['surfaces/demo.svg'], { frame: 'demo', selector: '#panel', click: ['Open board'] }), 1);
+  const report = sample.report();
+  assert.equal(report.settled, false);
+  assert.ok(report.extra.some(label => /^Tick \d+$/.test(label)));
+  assert.ok(elapsed >= 4900 && elapsed < 7000, `captured after ${elapsed}ms`);
+  const destination = path.join(sample.config.output, 'compare/demo-demo-sample');
+  assert.deepEqual(readdirSync(destination).sort(), ['design.png', 'implementation.png', 'index.html', 'overlay.png', 'report.json']);
+  assert.equal(readFileSync(path.join(destination, 'implementation.png')).subarray(1, 4).toString(), 'PNG');
+});

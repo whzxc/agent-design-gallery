@@ -132,7 +132,9 @@ Asset arguments are paths under the design directory, with or without `design/`.
 
 ## Compare
 
-`compare` renders one frame of an asset, the `data-part` group named by `--frame` (`failed` or `frame-failed`), and the implementation in the fixture's theme, locale and clock. `--fixture` defaults to the frame's `data-fixture`. A frame with `data-viewport` sets that viewport and captures the page clip at `data-origin` with the frame's size. Otherwise `--region` captures the element with role `region` or `dialog` and that accessible name, and `--selector` captures the first element matching a CSS selector. Each `--click` activates a button by accessible name, in order, before capture.
+`compare` renders one frame of an asset, the `data-part` group named by `--frame` (`failed` or `frame-failed`), and the implementation in the fixture's theme, locale, clock and optional time zone. Without `timezone`, the system time zone applies. An invalid IANA time zone exits with code 2 and one line on stderr. `--fixture` defaults to the frame's `data-fixture`. A frame with `data-viewport` sets that viewport and captures the page clip at `data-origin` with the frame's size. Otherwise `--region` captures the element with role `region` or `dialog` and that accessible name, and `--selector` captures the first element matching a CSS selector. Each `--click` activates a button by accessible name, in order, before capture.
+
+After the clicks, `compare` waits until the capture target has the same texts and text boxes for 300ms, up to 5s. This includes entries returned by `texts`. It then captures and records `settled: true` in `report.json`. On timeout it captures anyway and records `settled: false`; settling alone does not change the exit code. The same wait applies when no clicks are supplied. Fixtures do not need fixed sleeps for delayed labels or text reflow.
 
 It reads one text per rendered line, including the placeholders of empty fields, skips text clipped outside the captured element, and pairs texts by content. Positions are relative to the frame's shell, the first component container in the frame, and to the captured element. It reports anchored-edge, vertical-center and width differences above 2px, plus texts missing from either side. It does not compare shapes, so review the overlay as well.
 
@@ -142,7 +144,7 @@ The project describes how to run its implementation in `sdg.config.mjs`:
 
 ```js
 export default {
-  requires: '>=0.3.0',
+  requires: '>=0.3.1',
   design: 'design',
   output: 'output/design',
   compare: {
@@ -157,7 +159,7 @@ export default {
     },
     // Resolves a fixture name to the page to open and its environment.
     fixture(name) {
-      return { url: `/?scenario=${encodeURIComponent(name)}`, theme: 'light', locale: 'en-US', clock: '2026-01-01T00:00:00Z' };
+      return { url: `/?scenario=${encodeURIComponent(name)}`, theme: 'light', locale: 'en-US', clock: '2026-01-01T00:00:00Z', timezone: 'Asia/Shanghai' };
     },
     // Resolves once the page shows the fixture; throws to fail.
     async ready(page, name) {
@@ -172,7 +174,7 @@ export default {
 ```
 
 - `start` is optional when `url` values are absolute and the app already runs.
-- `fixture` returns `url`, relative to `http://127.0.0.1:<port>` or absolute, plus `theme` (`light` or `dark`), `locale` and `clock`. A `clock` fixes `Date` and `Date.now()` while timers keep running. Motion is reduced.
+- `fixture` returns `url`, relative to `http://127.0.0.1:<port>` or absolute, plus `theme` (`light` or `dark`), `locale` and `clock`. Optional `timezone` is an IANA name such as `Asia/Shanghai`, applied to the implementation browser context; omitting it uses the system time zone. A `clock` fixes `Date` and `Date.now()` while timers keep running. Motion is reduced.
 - `ready` defaults to the page's `load` event.
 - `texts` returns `{ text, x, y, width, height, fill, size, weight, family }` entries in page coordinates. They join the DOM texts inside the captured element.
 
