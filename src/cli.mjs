@@ -9,7 +9,7 @@ const usage = {
   open: '[directory] [--port=<n>] [--no-open] [--state-dir=<path>]',
   init: '', sync: '', check: '[asset...]', render: '[asset...] [--scale=2]',
   measure: '<text> [--size=<px|token>] [--weight=400] [--mono]',
-  compare: '<asset> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css>] [--click=<name>...] [--viewport=<w>x<h>]',
+  compare: '<asset> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css>] [--click=<accessible-name>...] [--viewport=<w>x<h>]',
 };
 const details = {
   open: 'Browse SVG designs. Omit directory to open recent directories. --port defaults to automatic; --no-open prints the URL; --state-dir isolates preferences.',
@@ -18,7 +18,7 @@ const details = {
   check: 'Check selected assets, or all assets, in both themes. Exit 1 means asset problems; run sdg sync for stale tokens.',
   render: 'Write <asset>-light.png and <asset>-dark.png under the configured output directory. --scale defaults to 2.',
   measure: 'Print text width in pixels. --size accepts pixels (14 or 14px) or a --text-* suffix (body). --mono uses --font-mono.',
-  compare: 'Compare one frame using the sdg.config.mjs adapter. --fixture defaults to data-fixture. Declared viewports capture a page clip; otherwise use --region or --selector. Clicks run in order. Exit 1 means differences above 2px or unmatched texts.',
+  compare: 'Compare one frame using the sdg.config.mjs adapter. --fixture defaults to data-fixture. Declared viewports capture a page clip; otherwise use --region or --selector. Each --click activates the first visible control with that exact accessible name, preferring roles in this order: button, radio, tab, checkbox, switch, menuitem, menuitemradio, option, link. Clicks run in order. Exit 1 means a click had no matching visible control, differences above 2px or unmatched texts.',
 };
 export function help(command) {
   if (command) return `Usage: sdg ${command} ${usage[command]}\n\n${details[command]}\n\n-h, --help  Show help\nExit codes: 0 success, 1 check/compare problems, 2 usage/configuration/environment error.`;

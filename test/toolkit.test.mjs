@@ -259,6 +259,48 @@ async function compareFixture(t, html) {
   return { root, config, fixture, asset, report };
 }
 
+test('compare clicks named controls in role priority and selects radio groups', { timeout: 15000 }, async t => {
+  const priority = ['button', 'radio', 'tab', 'checkbox', 'switch', 'menuitem', 'menuitemradio', 'option', 'link'];
+  const controls = [...priority].reverse().map(role => `<div role="${role}" aria-label="Shared" tabindex="0" onclick="window.order.push('${role}');this.remove()">${role}</div>`).join('');
+  const sample = await compareFixture(t, `<div id="panel" style="width:200px;height:50px"><span id="result">Pending</span></div>
+    <button aria-label="Shared" style="width:0;height:0;padding:0;border:0" onclick="window.order.push('hidden')"></button>
+    <button aria-label="Shared extra" onclick="window.order.push('partial')">Partial</button>
+    ${controls}<button aria-label="Shared" onclick="window.order.push('second button');this.remove()">Second button</button>
+    <button hidden>Activity</button>
+    <div role="radiogroup" aria-label="View">
+      <label><input type="radio" name="view" value="Summary" checked onchange="update()">Summary</label>
+      <label><input type="radio" name="view" value="Activity" onchange="update()">Activity</label>
+    </div>
+    <div role="radiogroup" aria-label="Provider">
+      <label><input type="radio" name="provider" value="Other" checked onchange="update()">Other</label>
+      <label><input type="radio" name="provider" value="Google" onchange="update()">Google</label>
+    </div>
+    <script>window.order=[];function update(){document.querySelector('#result').textContent=document.querySelector('input[name=view]:checked').value+' '+document.querySelector('input[name=provider]:checked').value}</script>`);
+  writeFileSync(sample.asset, svg(`<g data-part="frame-demo" data-fixture="sample">${component(text('Activity Google'))}</g>`));
+  sample.config.compare.texts = async page => {
+    assert.deepEqual(await page.evaluate(() => window.order), ['button', 'second button', ...priority.slice(1)]);
+    assert.equal(await page.getByRole('radio', { name: 'Activity', exact: true }).isChecked(), true);
+    assert.equal(await page.getByRole('radio', { name: 'Google', exact: true }).isChecked(), true);
+    return [];
+  };
+  await compare(sample.config, ['surfaces/demo.svg'], { frame: 'demo', selector: '#panel', click: [...Array(10).fill('Shared'), 'Activity', 'Google'] });
+  assert.equal(sample.report().matched, 1);
+  assert.deepEqual(sample.report().missing, []);
+  assert.deepEqual(sample.report().extra, []);
+});
+
+test('compare exits 1 with one line naming a click without a visible exact control', async t => {
+  const sample = await compareFixture(t, '<div id="panel"></div><button hidden>Activity</button><button>Activity extra</button><h1>Activity</h1>');
+  writeFileSync(sample.asset, svg(`<g data-part="frame-demo" data-fixture="sample">${component()}</g>`));
+  writeFileSync(path.join(sample.root, 'sdg.config.mjs'), `export default { compare: { fixture() { return ${JSON.stringify(sample.fixture)}; } } };`);
+  await assert.rejects(promisify(execFile)(process.execPath, [path.resolve('src/cli.mjs'), 'compare', 'surfaces/demo.svg', '--frame=demo', '--selector=#panel', '--click=Activity'], { cwd: sample.root }), error => {
+    assert.equal(error.code, 1);
+    assert.equal(error.stdout, '');
+    assert.equal(error.stderr, 'sdg: No visible control matches --click="Activity"\n');
+    return true;
+  });
+});
+
 test('compare applies fixture time zones and defaults to the system zone', async t => {
   const sample = await compareFixture(t, `<div id="panel" style="width:200px;height:50px"></div><script>
     document.querySelector('#panel').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone + ' ' + new Date().getHours();

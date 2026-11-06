@@ -116,7 +116,7 @@ sdg sync
 sdg check [asset...]
 sdg render [asset...] [--scale=2]
 sdg measure <text> [--size=<px|token>] [--weight=400] [--mono]
-sdg compare <asset> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css>] [--click=<name>...] [--viewport=<w>x<h>]
+sdg compare <asset> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css>] [--click=<accessible-name>...] [--viewport=<w>x<h>]
 ```
 
 A first argument that names a command runs it; any other argument is a directory to open. `sdg open check` opens a directory named `check`.
@@ -132,7 +132,9 @@ Asset arguments are paths under the design directory, with or without `design/`.
 
 ## Compare
 
-`compare` renders one frame of an asset, the `data-part` group named by `--frame` (`failed` or `frame-failed`), and the implementation in the fixture's theme, locale, clock and optional time zone. Without `timezone`, the system time zone applies. An invalid IANA time zone exits with code 2 and one line on stderr. `--fixture` defaults to the frame's `data-fixture`. A frame with `data-viewport` sets that viewport and captures the page clip at `data-origin` with the frame's size. Otherwise `--region` captures the element with role `region` or `dialog` and that accessible name, and `--selector` captures the first element matching a CSS selector. Each `--click` activates a button by accessible name, in order, before capture.
+`compare` renders one frame of an asset, the `data-part` group named by `--frame` (`failed` or `frame-failed`), and the implementation in the fixture's theme, locale, clock and optional time zone. Without `timezone`, the system time zone applies. An invalid IANA time zone exits with code 2 and one line on stderr. `--fixture` defaults to the frame's `data-fixture`. A frame with `data-viewport` sets that viewport and captures the page clip at `data-origin` with the frame's size. Otherwise `--region` captures the element with role `region` or `dialog` and that accessible name, and `--selector` captures the first element matching a CSS selector.
+
+Each `--click` activates the first visible element with that exact accessible name, choosing roles in this priority: `button`, `radio`, `tab`, `checkbox`, `switch`, `menuitem`, `menuitemradio`, `option`, `link`. Within a role, the first visible match in document order wins. Clicks run in the supplied order before capture; for example, `--click=Activity --click=Google` prepares two radio selections. If a click has no matching visible control, `compare` exits with code 1 and one line on stderr naming that click.
 
 After the clicks, `compare` waits until the capture target has the same texts and text boxes for 300ms, up to 5s. This includes entries returned by `texts`. It then captures and records `settled: true` in `report.json`. On timeout it captures anyway and records `settled: false`; settling alone does not change the exit code. The same wait applies when no clicks are supplied. Fixtures do not need fixed sleeps for delayed labels or text reflow.
 
@@ -144,7 +146,7 @@ The project describes how to run its implementation in `sdg.config.mjs`:
 
 ```js
 export default {
-  requires: '>=0.3.1',
+  requires: '>=0.3.2',
   design: 'design',
   output: 'output/design',
   compare: {

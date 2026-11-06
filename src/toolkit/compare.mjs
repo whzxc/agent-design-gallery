@@ -114,7 +114,18 @@ export async function compare(config, args, options) {
     }, { clock: fixture.clock, theme: fixture.theme });
     await app.goto(url, { waitUntil: 'load' });
     if (adapter.ready) await adapter.ready(app, fixtureName);
-    for (const name of options.click ?? []) await app.getByRole('button', { name, exact: true }).first().click();
+    for (const name of options.click ?? []) {
+      let control;
+      for (const role of ['button', 'radio', 'tab', 'checkbox', 'switch', 'menuitem', 'menuitemradio', 'option', 'link']) {
+        const candidate = app.getByRole(role, { name, exact: true }).filter({ visible: true }).first();
+        if (await candidate.count()) { control = candidate; break; }
+      }
+      if (!control) {
+        console.error(`sdg: No visible control matches --click=${JSON.stringify(name)}`);
+        return 1;
+      }
+      await control.click();
+    }
     await app.evaluate(() => document.fonts.ready);
     const capture = design.viewport ? { x: origin[0], y: origin[1], width: design.box.width, height: design.box.height } : undefined;
     const panel = capture ? app.locator('html') : options.selector ? app.locator(options.selector).first() : app.getByRole('region', { name: options.region, exact: true }).or(app.getByRole('dialog', { name: options.region, exact: true })).first();
