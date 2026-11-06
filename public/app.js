@@ -1,3 +1,4 @@
+import { Labels } from "./labels.js";
 import { fitArea, fitView } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
@@ -26,6 +27,7 @@ let raf = 0,
   loading = 0,
   queued = [],
   palette = {};
+const labelLayer = new Labels($("#labels"));
 const cache = new Map(),
   pointers = new Map();
 let gesture = {};
@@ -460,183 +462,95 @@ function thumbnail(e, upgrade = false) {
   e.bitmapScale = limit;
   return c;
 }
-function placements(a) {
-  const rows = a.rows;
-  let y =
-    a.y +
-    44 +
-    (a.height -
-      44 -
-      rows.reduce((n, r) => n + Math.max(...r.map((p) => p.height)) + 28, 0)) /
-      2;
-  return rows.flatMap((row) => {
-    const h = Math.max(...row.map((p) => p.height));
-    let x =
-      a.x +
-      (a.width - row.reduce((n, p) => n + p.width, 0) - (row.length - 1) * 20) /
-        2;
-    const out = row.map((p) => {
-      const pos = { part: p, x, y: y + (h - p.height) / 2 };
-      x += p.width + 20;
-      return pos;
-    });
-    y += h + 28;
-    return out;
-  });
-}
+function placements(a) { return a.shown.map(part => ({ part, x: a.x, y: a.y })); }
 function draw() {
   raf = 0;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle =
-    $("#background").value === "theme"
-      ? palette.canvas
-      : $("#background").value;
+  ctx.fillStyle = backgroundColor();
   ctx.fillRect(0, 0, width, height);
-  const displayed =
-    manifest?.renderTheme === effectiveTheme
-      ? inspection
-        ? [inspection]
-        : assets
-      : [];
-  ctx.save();
-  ctx.translate(view.x, view.y);
-  ctx.scale(view.scale, view.scale);
-  if (!inspection)
-    for (const g of groups) {
-      if (!visible(g)) continue;
-      ctx.strokeStyle = palette.border;
-      ctx.lineWidth = 1 / view.scale;
-      ctx.beginPath();
-      ctx.moveTo(g.x, g.y + 58);
-      ctx.lineTo(g.x + g.width, g.y + 58);
-      ctx.stroke();
-    }
-  let ready = 0,
-    count = 0;
+  ctx.fillStyle = palette.dot;
+  ctx.beginPath();
+  for (let x = 1; x < width; x += 20) for (let y = 1; y < height; y += 20) { ctx.moveTo(x + 1, y); ctx.arc(x, y, 1, 0, Math.PI * 2); }
+  ctx.fill();
+  const displayed = manifest?.renderTheme === effectiveTheme ? inspection ? [inspection] : assets : [];
+  ctx.save(); ctx.translate(view.x, view.y); ctx.scale(view.scale, view.scale);
+  if (!inspection) for (const g of groups) {
+    if (!visible(g)) continue;
+    rounded(g.x, g.y, g.width, g.height, 16 / view.scale, palette['surface-section']);
+    ctx.strokeStyle = palette.border; ctx.lineWidth = 1 / view.scale; ctx.stroke();
+  }
+  let ready = 0, count = 0;
   for (const a of displayed) {
     if (!visible(a)) continue;
-    if (a.chrome) {
-      rounded(a.x, a.y, a.width, a.height, 10, palette.surface);
-      rounded(
-        a.x + 1,
-        a.y + 40,
-        a.width - 2,
-        a.height - 41,
-        8,
-        a.background || palette.canvas,
-      );
-      ctx.strokeStyle = selectedId === a.id ? palette.accent : palette.border;
-      ctx.lineWidth = 1 / view.scale;
-      ctx.beginPath();
-      ctx.roundRect(a.x, a.y, a.width, a.height, 10);
-      ctx.stroke();
-    }
+    rounded(a.x, a.y, a.width, a.height, Math.min(6 / view.scale, a.width / 2, a.height / 2), a.background || palette.canvas);
+    ctx.save(); ctx.clip();
     for (const pos of placements(a)) {
       count++;
       const e = ensureImage(a, pos.part);
-      if (e.state !== "ready") continue;
+      if (e.state !== 'ready') continue;
       ready++;
-      const source = moving
-        ? thumbnail(e)
-        : view.scale < 0.8
-          ? thumbnail(e, true)
-          : e.image;
+      const source = moving ? thumbnail(e) : view.scale < .8 ? thumbnail(e, true) : e.image;
       ctx.drawImage(source, pos.x, pos.y, pos.part.width, pos.part.height);
-      if (
-        a.chrome &&
-        a.shown.length > 1 &&
-        pos.part.height >= 140 &&
-        view.scale >= 0.6
-      ) {
-        ctx.save();
-        ctx.font = `${11 / view.scale}px system-ui`;
-        ctx.fillStyle = palette.muted;
-        ctx.fillText(
-          pos.part.name,
-          pos.x + 12,
-          pos.y + pos.part.height + 12 / view.scale,
-        );
-        ctx.restore();
-      }
     }
-    if (!a.chrome && selectedId === a.id) {
-      ctx.strokeStyle = palette.accent;
-      ctx.lineWidth = 1 / view.scale;
-      ctx.strokeRect(a.x, a.y, a.width, a.height);
-    }
+    ctx.restore();
+    ctx.beginPath(); ctx.roundRect(a.x, a.y, a.width, a.height, Math.min(6 / view.scale, a.width / 2, a.height / 2));
+    const chosen = inspection ? true : selectedId === a.id;
+    ctx.strokeStyle = chosen ? palette.accent : palette.border;
+    ctx.lineWidth = (chosen ? 2 : 1) / view.scale; ctx.stroke();
   }
   ctx.restore();
-  // Labels stay in CSS pixels and disappear when their regions cannot accommodate them.
-  if (!inspection)
-    for (const g of groups) {
-      if (!visible(g)) continue;
-      const x = view.x + g.x * view.scale,
-        y = view.y + g.y * view.scale;
-      ctx.fillStyle = palette.text;
-      ctx.font = "600 18px system-ui";
-      ctx.fillText(
-        g.title,
-        x + 8,
-        y + 16,
-        Math.max(1, g.width * view.scale - (view.scale < 0.3 ? 16 : 80)),
-      );
-      if (view.scale < 0.3) continue;
-      ctx.fillStyle = palette.muted;
-      ctx.font = "12px system-ui";
-      ctx.textAlign = "right";
-      ctx.fillText(
-        `${g.assets.length} assets`,
-        x + g.width * view.scale - 8,
-        y + 16,
-      );
-      ctx.textAlign = "left";
-    }
-  for (const a of displayed) {
-    if (!visible(a) || a.width * view.scale < 150 || view.scale < 0.45)
-      continue;
-    const x = view.x + a.x * view.scale,
-      y = view.y + a.y * view.scale,
-      w = a.width * view.scale;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x + 8, y, w - 16, 40 * view.scale);
-    ctx.clip();
-    ctx.fillStyle = palette.text;
-    ctx.font = "500 12px system-ui";
-    ctx.fillText(
-      a.name + (!a.chrome ? " / " + a.shown[0].name : ""),
-      x + 14,
-      y + Math.max(14, 25 * view.scale),
-      w - (a.compact ? 160 : 46),
-    );
-    ctx.fillStyle = palette.muted;
-    ctx.textAlign = "right";
-    ctx.fillText(
-      a.compact
-        ? `${a.shown[0].name} · ${a.parts.indexOf(a.shown[0]) + 1} / ${a.parts.length}`
-        : "",
-      x + w - 14,
-      y + Math.max(14, 25 * view.scale),
-    );
-    ctx.restore();
-  }
-  $("#zoom-value").value =
-    document.activeElement === $("#zoom-value")
-      ? $("#zoom-value").value
-      : `${Math.round(view.scale * 100)}%`;
+  drawLabels(displayed);
+  if (document.activeElement !== $("#zoom-value")) $("#zoom-value").value = `${Math.round(view.scale * 100)}%`;
   $("output").value = `${Math.round(view.scale * 100)}%`;
-  window.__sdg.ready =
-    !!manifest && manifest.renderTheme === effectiveTheme && ready === count;
+  window.__sdg.ready = !!manifest && manifest.renderTheme === effectiveTheme && ready === count && !moving;
   window.__sdg.revision = manifest?.revision;
-  window.__sdg.visibleReady = ready;
-  window.__sdg.visibleCount = count;
+  window.__sdg.visibleReady = ready; window.__sdg.visibleCount = count;
   drawMap();
-  if (cache.size > 100)
-    for (const e of [...cache.values()].sort((a, b) => a.used - b.used)) {
-      if (cache.size <= 80) break;
-      if (!displayed.some((a) => a.path === e.asset.path && visible(a)))
-        cache.delete(e.key);
+  if (cache.size > 100) for (const e of [...cache.values()].sort((a,b) => a.used - b.used)) {
+    if (cache.size <= 80) break;
+    if (!displayed.some(a => a.path === e.asset.path && visible(a))) cache.delete(e.key);
+  }
+}
+function backgroundColor() {
+  const value = $("#background")?.value ?? 'theme';
+  return value === 'theme' ? palette.canvas : value;
+}
+function drawLabels(displayed) {
+  const candidates = [], screen = box => ({ x: view.x + box.x * view.scale, y: view.y + box.y * view.scale });
+  const caption = Number.parseFloat(palette['text-caption']), meta = Number.parseFloat(palette['text-meta']), section = Number.parseFloat(palette['text-section']);
+  const part = (text, size, weight, color, gap = 0) => ({ text, size, weight, color, gap });
+  if (!inspection) for (const g of groups) {
+    if (!visible(g)) continue;
+    const p = screen(g);
+    candidates.push({ id: `section:${g.title}`, x: p.x, y: p.y - 16, slot: g.width * view.scale, parts: [part(g.title, section, 650, palette.text), part(`${g.assets.length} assets`, meta, 400, palette['text-tertiary'], 8)] });
+  }
+  if (view.scale >= .2) {
+    const flows = new Set();
+    for (const a of displayed) {
+      if (!visible(a)) continue;
+      const p = screen(a), chosen = selectedId === a.id;
+      if (a.kind === 'set' || inspection) {
+        candidates.push({ id: `set:${a.id}`, x:p.x,y:p.y-12,slot:(a.width+64)*view.scale,
+          parts:[part(inspection ? a.shown[0].name : a.name,meta,550,chosen ? palette.text : palette['text-secondary']), ...(!inspection ? [part(`${a.parts.length} ${a.parts.length === 1 ? 'form' : 'forms'}`,meta,400,palette['text-tertiary'],6)] : [])] });
+        if (!inspection && view.scale >= .75 && a.parts.length > 1) {
+          const crop = a.shown[0];
+          candidates.push(a.parts.map(form => ({ id:`form:${a.id}:${form.id}`,x:p.x+(form.x-crop.x)*view.scale,y:p.y+(form.y-crop.y)*view.scale-16,slot:form.width*view.scale,
+            parts:[part(form.name,caption,400,palette['text-tertiary'])] })));
+        }
+      } else {
+        if (!flows.has(a.path)) {
+          flows.add(a.path);
+          const family = displayed.filter(item => item.path === a.path), first = family[0];
+          const origin = screen(first), right = Math.max(...family.map(item => item.x+item.width));
+          candidates.push({ id:`flow:${a.path}`,x:origin.x,y:origin.y-34,slot:(right-first.x)*view.scale,parts:[part(a.name,meta,600,palette['text-secondary']),part(`${a.parts.length} ${a.parts.length === 1 ? 'frame' : 'frames'}`,meta,400,palette['text-tertiary'],6)] });
+        }
+        candidates.push({ id:`frame:${a.id}`,x:p.x,y:p.y-12,slot:(a.width+64)*view.scale,parts:[part(a.shown[0].name,caption,chosen?550:400,chosen?palette.text:palette['text-tertiary'])] });
+      }
     }
+  }
+  const vr = viewport.getBoundingClientRect();
+  const obstacles = [...document.querySelectorAll('.floating, :popover-open, dialog[open], #tooltip:not([hidden])')].filter(el => !el.hidden && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none').map(el => { const r=el.getBoundingClientRect();return {x:r.x-vr.x,y:r.y-vr.y,width:r.width,height:r.height}; });
+  labelLayer.update(candidates,obstacles,width,height,palette['font-ui']);
 }
 function drawMap() {
   const map = $("#minimap");
@@ -666,7 +580,7 @@ function applyTheme() {
   document.documentElement.dataset.theme = effectiveTheme;
   const css = getComputedStyle(document.documentElement);
   palette = Object.fromEntries(
-    ["canvas", "surface", "raised", "text", "muted", "accent", "border"].map(
+    ["canvas", "surface", "surface-section", "surface-sunken", "text", "text-secondary", "text-tertiary", "accent", "border", "dot", "font-ui", "text-caption", "text-meta", "text-section"].map(
       (k) => [k, css.getPropertyValue("--" + k).trim()],
     ),
   );
@@ -1044,6 +958,7 @@ async function applyManifest(data, force = false) {
   manifest = { ...data, assets: results, renderTheme: versionTheme };
   if (changedRoot) {
     cache.clear();
+    labelLayer.clear();
     queued = [];
     selected = null;
     selectedId = null;

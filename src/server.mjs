@@ -394,6 +394,7 @@ export async function startServer({
           "/assets.js": "assets.js",
           "/icons.js": "icons.js",
           "/layout.js": "layout.js",
+          "/labels.js": "labels.js",
           "/style.css": "style.css",
         }[url.pathname];
         if (!file) {
@@ -408,6 +409,7 @@ export async function startServer({
           "assets.js": "text/javascript",
           "icons.js": "text/javascript",
           "layout.js": "text/javascript",
+          "labels.js": "text/javascript",
           "style.css": "text/css",
         }[file];
       }
