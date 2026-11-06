@@ -6,6 +6,7 @@ export async function prepare(asset, theme) {
   );
   if (!response.ok) throw new Error(`Cannot load ${asset.path}`);
   const source = await response.text();
+  if (asset.path.endsWith(".tsx")) return prepareSource(asset, JSON.parse(source), theme);
 
   const frame = document.createElement("iframe");
   frame.setAttribute("sandbox", "allow-same-origin");
@@ -150,4 +151,32 @@ export function arrange(data) {
     }
   }
   return { groups, items, world: { x: 0, y: 0, width: Math.max(1, ...groups.map(g => g.x + g.width)), height: Math.max(1, ...groups.map(g => g.y + g.height)) } };
+}
+
+async function prepareSource(asset, built, theme) {
+  const parts = []; let x=0,y=0,rowHeight=0;
+  const frame = document.createElement('iframe');
+  frame.setAttribute('sandbox','allow-same-origin');
+  frame.style.cssText='position:fixed;left:-100000px;top:0;visibility:hidden';
+  document.body.append(frame);
+  try {
+    for (const [index, form] of built.frames.entries()) {
+      frame.style.width=(form.width ?? 1600)+'px'; frame.style.height=(form.height ?? 1200)+'px';
+      await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=form.document;});
+      await frame.contentDocument.fonts.ready;
+      const shell=frame.contentDocument.querySelector('[data-sdg-frame]');
+      const box=shell.getBoundingClientRect();
+      if (built.component && x && x+box.width>1600) { x=0;y+=rowHeight+48;rowHeight=0; }
+      const content=frame.contentDocument.createElement('div');
+      content.setAttribute('xmlns','http://www.w3.org/1999/xhtml');
+      content.setAttribute('style','font:16px/1.5 var(--font-ui);color:var(--text);');
+      content.append(frame.contentDocument.querySelector('style').cloneNode(true),shell.cloneNode(true));
+      parts.push({id:String(index),name:form.name,note:form.note,x,y,width:box.width,height:box.height,markup:new XMLSerializer().serializeToString(content)});
+      x+=box.width+32;rowHeight=Math.max(rowHeight,box.height);
+    }
+    const width=Math.max(1,...parts.map(p=>p.x+p.width)),height=Math.max(1,...parts.map(p=>p.y+p.height));
+    const xml = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+    const source=`<svg xmlns="http://www.w3.org/2000/svg" data-theme="${theme}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.map(p=>`<g ${built.component ? 'data-component="source" data-form="'+xml(p.name)+'"' : 'data-part="frame-'+xml(p.name)+'"'}><foreignObject overflow="visible" x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}">${p.markup}</foreignObject></g>`).join('')}</svg>`;
+    return {...asset,format:'tsx',source,full:{x:0,y:0,width,height},parts:parts.map(({markup,...p})=>p),component:built.component,background:frame.contentWindow.getComputedStyle(frame.contentDocument.documentElement).getPropertyValue('--canvas').trim()};
+  } finally { frame.remove(); }
 }

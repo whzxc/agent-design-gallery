@@ -80,7 +80,6 @@ h3 { font-size:var(--text-meta); color:var(--text-tertiary); font-weight:550; li
 #source h3 { margin:13px 16px 6px; }
 #forms { padding:0 8px; }
 #forms+.rule { margin-top:8px; margin-bottom:8px; }
-#full-sheet { margin:0 8px; width:calc(100% - 16px); color:var(--text-secondary); }
 #forms .tree-row { gap:6px; }
 #source .count { font-size:var(--text-meta); }
 .menu { position:fixed; margin:0; border:0; border-radius:var(--radius-menu); padding:6px; background:var(--surface); color:var(--text); box-shadow:var(--shadow-menu); }

@@ -14,6 +14,8 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 
+import { buildSource } from './toolkit/build.mjs';
+import { refreshTypes } from './toolkit/project.mjs';
 const publicRoot = fileURLToPath(new URL("../public/", import.meta.url));
 const defaultState = path.join(
   process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
@@ -63,10 +65,10 @@ export async function startServer({
     for (const entry of await readdir(path.join(base, relative), {
       withFileTypes: true,
     })) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+      if (entry.name.startsWith(".") || entry.name === "node_modules" || (relative === "" && entry.name === "art")) continue;
       const name = path.posix.join(relative, entry.name);
       if (entry.isDirectory()) await collect(base, name, out);
-      else if (entry.isFile() && /\.svg$/i.test(name)) {
+      else if (entry.isFile() && /\.(svg|tsx)$/i.test(name)) {
         const info = await stat(path.join(base, name));
         const version = `${info.mtimeMs}-${info.size}`;
         const old = base === root ? files.get(name) : undefined;
@@ -76,7 +78,7 @@ export async function startServer({
             ? old
             : {
                 path: name,
-                name: path.basename(name, ".svg"),
+                name: path.basename(name, path.extname(name)),
                 version,
                 stamp: version,
                 size: info.size,
@@ -118,11 +120,13 @@ export async function startServer({
     }
     if (!(await stat(next)).isDirectory())
       throw new Error("Choose a directory containing SVG files.");
+    if ((await readdir(next)).includes("tokens.css")) refreshTypes({design:next});
     const nextFiles = await collect(next),
       nextGroups = await readGroups(next);
     if (!nextFiles.size) throw new Error("No SVG files in this directory.");
     // Complete reads before switching, so an invalid directory leaves the current canvas intact.
     const nextWatcher = watch(next, { recursive: true }, (_event, filename) => {
+      if (filename && String(filename).split(path.sep).some(part => part.startsWith("."))) return;
       if (filename) touched.add(String(filename).split(path.sep).join("/"));
       clearTimeout(refreshTimer);
       refreshTimer = setTimeout(
@@ -233,6 +237,11 @@ export async function startServer({
     const key = `${name}\0${theme}`,
       cached = svgCache.get(key);
     if (cached?.version === asset.version) return cached;
+    if (name.endsWith('.tsx')) {
+      const built = await buildSource({root:path.dirname(root),design:root,output:path.join(root,'.sdg/build')},path.join(root,name),{write:false});
+      const result = {version:asset.version,dependencies:built.dependencies.map(p=>path.relative(root,p).split(path.sep).join('/')),body:JSON.stringify({format:'tsx',component:name.startsWith('components/'),frames:built.frames.map(f=>({...f,document:f.document(theme)}))})};
+      svgCache.set(key,result); return result;
+    }
     let content = await readFile(path.join(root, name), "utf8");
     content = content.replace(
       /<svg\b([^>]*)>/,
@@ -380,7 +389,8 @@ export async function startServer({
       }
       let content, type, etag;
       if (url.pathname === "/tokens.css") {
-        content = await readFile(new URL("../design/tokens.css", import.meta.url));
+        try { content = await readFile(new URL("../design/tokens.css", import.meta.url)); }
+        catch { content = await readFile(new URL("../public/tokens.css", import.meta.url)); }
         type = "text/css";
       } else if (url.pathname === "/manifest") {
         content = JSON.stringify(fixtureManifest(url.searchParams.get("fixture")));
@@ -401,7 +411,7 @@ export async function startServer({
           return;
         }
         content = (await svg(name, theme)).body;
-        type = "image/svg+xml";
+        type = name.endsWith(".tsx") ? "application/json" : "image/svg+xml";
       } else {
         const file = {
           "/": "index.html",

@@ -295,14 +295,14 @@ function selection() {
   const a=currentItem();
   if(a) {
     $("#source-name").textContent=a.name;$("#source-path").textContent=a.path;
-    $("#dimensions").textContent=`${Math.round(a.full.width)} × ${Math.round(a.full.height)}`;
     $("#forms-heading").textContent=a.component?'Forms':'Frames';
     $("#forms").replaceChildren(...a.parts.map(p=>{
       const button=makeRow(a.component?'component':'app-window',p.name,`${Math.round(p.width)} × ${Math.round(p.height)}`);
       button.setAttribute('aria-current',String(!inspection && (a.component ? (selectedForm??a.parts[0]?.id)===p.id : a.shown[0].id===p.id)));
-      button.onclick=()=>inspectForm(a,p);return button;
+      button.onclick=()=>inspectForm(a,p);
+      if (p.note) { const row=document.createElement('div');row.append(button);const note=document.createElement('p');note.textContent=p.note;note.style.cssText='margin:4px 8px 8px;color:var(--text-secondary)';row.append(note);return row; }
+      return button;
     }));
-    $("#full-sheet").setAttribute('aria-current',String(!!inspection));
   }
   requestDraw();
 }
@@ -778,10 +778,6 @@ $("#close-inspector").onclick = () => {
   inspector = false;
   selection();
   save();
-};
-$("#full-sheet").onclick = () => {
-  const a = currentItem();
-  inspectForm(a, { ...a.full, id: "full", name: "Full sheet" });
 };
 $("#copy-path").onclick = () =>
   navigator.clipboard

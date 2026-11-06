@@ -55,7 +55,7 @@ Labels draw at constant screen size. Each label is drawn only when it fits its s
 
 ## Frames and fixtures
 
-Every surface frame is 1440 × 900 and declares its fixture and a page capture at a 1440 × 900 viewport. Fixtures open `fixtures/arc-sample/` with isolated preferences.
+Every surface frame declares its fixture and a page capture at a 1440 × 900 viewport. Canvas and inspector frames, plus the empty/open dialog frames, cover the viewport. Menu, tooltip, shortcuts and error frames retain their local crop sizes and origins in `Frame.capture`. Fixtures open `fixtures/arc-sample/` with isolated preferences.
 
 | Asset | Frame | Theme | State |
 | --- | --- | --- | --- |
@@ -79,3 +79,9 @@ Every surface frame is 1440 × 900 and declares its fixture and a page capture a
 - Icons use Lucide geometry at a 1.75px stroke. Do not use Unicode glyphs as icons.
 - Canvas labels are positioned DOM text or reported through the compare `texts` hook, so `compare` reads them.
 - Form bounds for layout are the frames' sizes without shadow padding; the set padding covers shadows.
+
+## TSX conversion
+
+Ordinary controls use flex/grid layout and shared component functions. Only the free-form drawing canvas and floating chrome positions use coordinates. The retained ARC preview pictures in `design/art/arc-previews.ts` are fixture artwork, shared across surfaces; their original palettes are independent of SDG chrome. They are not package contents.
+
+Full sheet is removed from both the inspector and design frames. The shorter component inspector exposes the adjacent icon-button set label. Token names and light/dark theme selection are unchanged. Browser text metrics can differ from SVG central-baseline metrics by about one pixel.
