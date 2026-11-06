@@ -8,20 +8,15 @@ This document is the format and command contract. A project's own design documen
 
 ## Install
 
-The toolkit installs from this repository. Pin a tag:
+`sdg` is installed once per machine and shared by every project. Projects do not list it in their dependencies.
 
 ```sh
-npm install --save-dev github:whzxc/svg-design-gallery#v0.3.0
-npm install --save-dev playwright
+npm install -g github:whzxc/svg-design-gallery
 ```
 
-Add a script so contributors run the pinned version:
+Run the same install again to update. `check`, `render`, `measure` and `compare` launch Chromium through the Playwright that ships with `sdg`; the viewer and `sync` start without it. When Chromium is missing, those commands stop with the command that installs it for that Playwright version.
 
-```json
-{ "scripts": { "design": "sdg" } }
-```
-
-`npm run design -- check` then runs the project's copy. `check`, `render`, `measure` and `compare` load Playwright from the project and launch its Chromium; the viewer and `sync` need neither.
+A project may set `requires` in `sdg.config.mjs`, such as `'>=0.3.0'`. Older versions stop with exit code 2 and the update command, so every contributor checks with the same rules.
 
 ## Project layout
 
@@ -147,6 +142,7 @@ The project describes how to run its implementation in `sdg.config.mjs`:
 
 ```js
 export default {
+  requires: '>=0.3.0',
   design: 'design',
   output: 'output/design',
   compare: {
