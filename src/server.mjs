@@ -115,6 +115,7 @@ export async function startServer({
       throw new Error("Choose a directory containing SVG files.");
     const nextFiles = await collect(next),
       nextGroups = await readGroups(next);
+    if (!nextFiles.size) throw new Error("No SVG files in this directory.");
     // Complete reads before switching, so an invalid directory leaves the current canvas intact.
     const nextWatcher = watch(next, { recursive: true }, (_event, filename) => {
       if (filename) touched.add(String(filename).split(path.sep).join("/"));
@@ -199,7 +200,7 @@ export async function startServer({
   const manifest = () => ({
     directory: root ?? null,
     label: root
-      ? `${path.basename(path.dirname(root))} / ${path.basename(root)}`
+      ? path.basename(root) === "design" ? path.basename(path.dirname(root)) : path.basename(root)
       : "SVG Design Gallery",
     assets: [...files.values()].sort((a, b) => a.path.localeCompare(b.path)),
     groups,

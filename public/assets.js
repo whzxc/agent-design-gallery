@@ -145,7 +145,7 @@ export function arrange(data) {
       for (const frame of frames) {
         const crop = { ...frame.crop, width: frame.crop.w, height: frame.crop.h, id: frame.id, name: frame.name };
         items.push({ ...asset, id: block.kind === 'set' ? asset.path : `${asset.path}#${frame.id}`, kind: block.kind,
-          group, x: frame.x, y: frame.y, width: crop.width, height: crop.height, shown: [crop], rows: [[crop]], chrome: false, compact: false });
+          group, x: frame.x, y: frame.y, width: crop.width, height: crop.height, shown: [crop] });
       }
     }
   }

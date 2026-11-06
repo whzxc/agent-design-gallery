@@ -34,7 +34,9 @@ let gesture = {};
 let sidebar = true,
   inspector = false,
   selectedId = null,
+  selectedForm = null,
   inspection = null;
+let backgroundChoice = "theme", backgroundColors = {};
 let history = [],
   searchReturn = null;
 const expanded = new Set(),
@@ -46,6 +48,7 @@ function remember() {
     active,
     selected,
     selectedId,
+    selectedForm,
     inspection,
     inspector,
   });
@@ -54,17 +57,37 @@ function remember() {
 function back() {
   const old = history.pop();
   if (old) {
-    ({ active, selected, selectedId, inspection, inspector } = old);
+    ({ active, selected, selectedId, selectedForm, inspection, inspector } = old);
     selection();
     commit(old.view);
   }
 }
 function toggleSidebar(value = !sidebar) {
   sidebar = value;
-  $(".gallery").classList.toggle("sidebar-hidden", !sidebar);
-  $("#sidebar-toggle").setAttribute("aria-expanded", String(sidebar));
-  resizeViewport();
+  updateChrome();
+  requestDraw();
   save();
+}
+function updateChrome() {
+  const opened = !!manifest?.directory;
+  $("#sidebar").hidden = !opened || !sidebar;
+  $("#app-bar").hidden = opened && sidebar;
+  $("#app-directory").hidden = !opened;
+  $("#app-bar .separator").hidden = !opened;
+  $("#tools").hidden = !opened;
+  $(".zoom").hidden = !opened;
+  $("#source").hidden = !opened || !inspector || !selected;
+  if (!opened) $("#minimap").hidden = true;
+  $("#sidebar-toggle").setAttribute('aria-expanded', String(sidebar));
+  $("#expand-sidebar").setAttribute('aria-expanded', String(sidebar));
+  $("#close").hidden = !opened;
+  const right = width - (inspector && selected ? 312 : 0);
+  $(".zoom").style.left = `${((sidebar && opened ? 272 : 0) + right) / 2}px`;
+  positionZoomMenu();
+}
+function positionZoomMenu() {
+  const r = $("#zoom-options").getBoundingClientRect();
+  $("#zoom-menu").style.left = `${r.x + r.width / 2}px`;
 }
 
 const media = matchMedia("(prefers-color-scheme: dark)");
@@ -141,7 +164,7 @@ function layout(data, preserve = false) {
     }
     const occupied = previous.filter((p) => assets.some((a) => a.id === p.id));
     const shape = (a) =>
-      JSON.stringify(a.rows.map((row) => row.map((p) => [p.width, p.height])));
+      JSON.stringify(a.shown.map(p => [p.width, p.height]));
     for (const a of assets) {
       const old = previous.find((p) => p.id === a.id);
       if (old) {
@@ -158,14 +181,14 @@ function layout(data, preserve = false) {
         continue;
       }
       const group = groups[a.group];
-      a.x = old?.x ?? group.x + 20;
+      a.x = old?.x ?? group.x + 64;
       a.y =
         Math.max(
-          group.y + 88,
+          group.y + 104,
           ...occupied
             .filter((p) => previousGroups[p.group]?.title === group.title)
             .map((p) => p.y + p.height),
-        ) + 20;
+        ) + 112;
       let collision;
       while (
         (collision = occupied.find(
@@ -177,17 +200,17 @@ function layout(data, preserve = false) {
             a.y + a.height + 20 > p.y,
         ))
       )
-        a.y = collision.y + collision.height + 20;
+        a.y = collision.y + collision.height + 112;
       const index = occupied.findIndex((p) => p.id === a.id);
       if (index >= 0) occupied[index] = a;
       else occupied.push(a);
     }
     for (const g of groups) {
       const list = assets.filter((a) => groups[a.group] === g);
-      g.width = Math.max(g.width, ...list.map((a) => a.x + a.width - g.x + 20));
+      g.width = Math.max(g.width, ...list.map((a) => a.x + a.width - g.x + 64));
       g.height = Math.max(
         g.height,
-        ...list.map((a) => a.y + a.height - g.y + 20),
+        ...list.map((a) => a.y + a.height - g.y + 64),
       );
     }
     world.width = Math.max(1, ...groups.map((g) => g.x + g.width));
@@ -197,128 +220,82 @@ function layout(data, preserve = false) {
   $("#asset-access").replaceChildren(
     ...assets.map((a) => {
       const b = document.createElement("button");
-      b.textContent = `View ${a.name}${!a.chrome ? " / " + a.shown[0].name : ""}`;
+      b.textContent = `View ${a.name}${a.kind === "flow" ? " / " + a.shown[0].name : ""}`;
       b.onclick = () => focusAsset(a);
       return b;
     }),
   );
   $("#empty").hidden = !!assets.length;
 }
+function makeRow(name, label, count, className = 'tree-row') {
+  const button = document.createElement('button'); button.className = className;
+  button.innerHTML = icon(name, 14);
+  const text = document.createElement('span'); text.textContent = label; button.append(text);
+  if (count !== undefined) { const detail = document.createElement('span'); detail.className='count'; detail.textContent=count; button.append(detail); }
+  return button;
+}
+function searchResults(query) {
+  const files = manifest.assets.filter(a => a.name.toLowerCase().includes(query)).map(a => ({ a }));
+  const forms = manifest.assets.flatMap(a => a.name.toLowerCase().includes(query) ? [] : a.parts.filter(p => p.name.toLowerCase().includes(query)).map(p => ({ a, p })));
+  return [...files, ...forms];
+}
 function renderNav() {
+  if (!manifest) return;
   const focusKey = document.activeElement?.dataset.navkey;
-  const query = $("#search").value.trim().toLowerCase();
-  $("#modules").replaceChildren(
-    ...groups.flatMap((g, i) => {
-      const list = g.assets.filter(
-        (a) =>
-          !query ||
-          [a.name, ...a.parts.map((p) => p.name)].some((n) =>
-            n.toLowerCase().includes(query),
-          ),
-      );
-      if (!list.length) return [];
-      const section = document.createElement("section"),
-        row = document.createElement("div"),
-        chevron = document.createElement("button"),
-        b = document.createElement("button");
-      row.className = "group-row";
-      chevron.innerHTML = icon(expanded.has(i) || query ? "chevron-down" : "chevron-right", 12);
-      chevron.dataset.navkey = `toggle:${g.title}`;
-      chevron.setAttribute("aria-label", `Toggle ${g.title}`);
-      chevron.setAttribute("aria-expanded", String(expanded.has(i) || !!query));
-      chevron.onclick = () => {
-        expanded.has(i) ? expanded.delete(i) : expanded.add(i);
-        renderNav();
-      };
-      b.textContent = g.title;
-      b.dataset.navkey = `group:${g.title}`;
-      b.className = "group-name";
-      b.dataset.group = i;
-      if (active === i) b.setAttribute("aria-current", "location");
-      b.onclick = () => {
-        remember();
-        inspection = null;
-        active = i;
-        selected = null;
-        selectedId = null;
-        expanded.add(i);
-        selection();
-        frame(g);
-      };
-      row.append(chevron, b);
-      section.append(row);
-      if (expanded.has(i) || query)
-        for (const a of list) {
-          const file = document.createElement("button");
-          file.className = "file";
-          file.dataset.navkey = `file:${a.path}`;
-          file.textContent = a.name;
-          file.title = a.path;
-          file.setAttribute("aria-current", String(selected === a.path));
-          file.onclick = () => {
-            const item = assets.find((x) => x.path === a.path);
-            focusAsset(item);
-          };
-          section.append(file);
-          if (query)
-            for (const p of a.parts.filter((p) =>
-              p.name.toLowerCase().includes(query),
-            )) {
-              const f = document.createElement("button");
-              f.className = "file form-result";
-              f.dataset.navkey = `form:${a.path}:${p.id}`;
-              f.textContent = p.name;
-              f.onclick = () =>
-                inspectForm(
-                  assets.find((x) => x.path === a.path),
-                  p,
-                );
-              section.append(f);
-            }
-        }
-      return [section];
-    }),
-  );
-  if (focusKey)
-    $("#modules")
-      .querySelector(`[data-navkey="${CSS.escape(focusKey)}"]`)
-      ?.focus({ preventScroll: true });
+  const query = $("#search").value.trim().toLowerCase(), nodes = [];
+  $(".gallery").classList.toggle('searching', !!query);
+  $("#search-clear").hidden = !query; $("#search-key").hidden = !!query;
+  if (query) {
+    const results = searchResults(query), heading = document.createElement('h3');
+    heading.className='search-count'; heading.textContent=`${results.length} ${results.length === 1 ? 'result' : 'results'}`; nodes.push(heading);
+    for (const { a, p } of results) {
+      const button=makeRow(a.component?'component':'app-window',p ? `${a.name} · ${p.name}` : a.name,p ? 'form' : `${a.parts.length} ${a.component?'forms':'frames'}`,'tree-row search-result');
+      button.dataset.navkey=`search:${a.path}:${p?.id ?? ''}`;
+      button.setAttribute('aria-current',String(selected===a.path && (!p || selectedForm===p.id)));
+      button.onclick=()=>p ? inspectForm(a,p) : focusAsset(assets.find(item=>item.path===a.path)); nodes.push(button);
+    }
+  } else {
+    const all=makeRow('layout-grid','All designs',manifest.assets.length); all.id='all'; all.onclick=fit; nodes.push(all);
+    const rule=document.createElement('div');rule.className='rule';nodes.push(rule);
+    groups.forEach((g,i)=>{
+      const section=document.createElement('section'), row=document.createElement('div'), toggle=document.createElement('button'), button=document.createElement('button');
+      row.className='group-row'; toggle.innerHTML=icon(expanded.has(i)?'chevron-down':'chevron-right',12);
+      toggle.setAttribute('aria-label',`Toggle ${g.title}`);toggle.setAttribute('aria-expanded',String(expanded.has(i)));toggle.dataset.navkey=`toggle:${g.title}`;
+      toggle.onclick=()=>{expanded.has(i)?expanded.delete(i):expanded.add(i);renderNav()};
+      button.className='group-name';button.dataset.navkey=`group:${g.title}`;
+      const title=document.createElement('span'), count=document.createElement('span'); title.textContent=g.title;count.textContent=g.assets.length;count.className='count';button.append(title,count);
+      button.onclick=()=>{remember();inspection=null;active=i;selected=null;selectedId=null;selectedForm=null;expanded.add(i);selection();frame(g)};
+      row.append(toggle,button);section.append(row);
+      if(expanded.has(i)) { const files=document.createElement('div');files.className='group-files';
+        for(const a of g.assets) {const item=makeRow(a.component?'component':'app-window',a.name,undefined,'tree-row file');item.dataset.navkey=`file:${a.path}`;item.setAttribute('aria-current',String(selected===a.path));item.onclick=()=>focusAsset(assets.find(x=>x.path===a.path));files.append(item)}
+        section.append(files);
+      }
+      nodes.push(section);
+    });
+  }
+  $("#modules").replaceChildren(...nodes);
+  if(focusKey) $("#modules").querySelector(`[data-navkey="${CSS.escape(focusKey)}"]`)?.focus({preventScroll:true});
+  requestDraw();
 }
 function selection() {
-  renderNav();
-  $("#back").disabled = !history.length;
-  $("#breadcrumb").textContent = [
-    "All designs",
-    active !== null ? groups[active]?.title : null,
-    inspection ? inspection.name + " / " + inspection.shown[0].name : null,
-  ]
-    .filter(Boolean)
-    .join(" / ");
-  const wasHidden = $("#source").hidden;
-  $("#source").hidden = !inspector || !selected;
-  if (wasHidden !== $("#source").hidden)
-    view = { ...view, x: view.x + ($("#source").hidden ? 152 : -152) };
-  $("#inspect").setAttribute("aria-pressed", String(inspector));
-  const a = currentItem();
-  if (a) {
-    $("#source-name").textContent = a.name;
-    $("#source-path").textContent = a.path;
-    const p = inspection?.shown[0] || a.full;
-    $("#dimensions").textContent =
-      `${Math.round(p.width)} × ${Math.round(p.height)}`;
-    $("#forms").replaceChildren(
-      ...[{ id: "full", name: "Full sheet" }, ...a.parts].map((p) => {
-        const o = document.createElement("option");
-        o.value = p.id;
-        o.textContent = p.name;
-        return o;
-      }),
-    );
-    $("#forms").value =
-      inspection?.shown[0].id || (a.compact ? a.shown[0].id : "full");
+  renderNav(); updateChrome();
+  $("#back").disabled=!history.length;
+  $("#inspect").setAttribute('aria-pressed',String(inspector));
+  const a=currentItem();
+  if(a) {
+    $("#source-name").textContent=a.name;$("#source-path").textContent=a.path;
+    $("#dimensions").textContent=`${Math.round(a.full.width)} × ${Math.round(a.full.height)}`;
+    $("#forms-heading").textContent=a.component?'Forms':'Frames';
+    $("#forms").replaceChildren(...a.parts.map(p=>{
+      const button=makeRow(a.component?'component':'app-window',p.name,`${Math.round(p.width)} × ${Math.round(p.height)}`);
+      button.setAttribute('aria-current',String(!inspection && (a.component ? (selectedForm??a.parts[0]?.id)===p.id : a.shown[0].id===p.id)));
+      button.onclick=()=>inspectForm(a,p);return button;
+    }));
+    $("#full-sheet").setAttribute('aria-current',String(!!inspection));
   }
   requestDraw();
 }
+
 function cameraArea() { return fitArea(width, height, sidebar, inspector && !!selected); }
 function frame(box, padding = 0) { commit(fitView(box, cameraArea(), padding)); }
 function fit() {
@@ -341,34 +318,27 @@ function focusAsset(a) {
   selected = a.path;
   selectedId = a.id;
   active = a.group;
+  selectedForm = a.parts[0]?.id ?? null;
   expanded.add(active);
   selection();
   frame(a, 24);
 }
 function inspectForm(a, p) {
   if (!a || !p) return;
-  a = assets.find((item) => item.path === a.path) || a;
   remember();
-  inspection = {
-    ...a,
-    id: a.id + "@" + p.id,
-    x: 0,
-    y: 0,
-    width: p.width + 40,
-    height: p.height + 52,
-    chrome: false,
-    compact: false,
-    shown: [p],
-    rows: [[p]],
-  };
-  selected = a.path;
-  selectedId = a.id;
-  active = a.group;
-  inspector = true;
-  selection();
-  frame(inspection);
+  const item=assets.find(item=>item.path===a.path && (a.component || item.shown[0].id===p.id)) ?? assets.find(item=>item.path===a.path);
+  selected=a.path;selectedId=item.id;selectedForm=p.id;active=item.group;expanded.add(active);inspector=true;
+  if(p.id==='full') {
+    inspection={...item,id:item.id+'@full',x:0,y:0,width:p.width,height:p.height,shown:[p],kind:'sheet'};
+    selection();frame(inspection,24);
+  } else {
+    inspection=null;selection();
+    if(a.component) {const crop=item.shown[0];frame({x:item.x+p.x-crop.x,y:item.y+p.y-crop.y,width:p.width,height:p.height},24)}
+    else frame(item,24);
+  }
   save();
 }
+
 function zoom(scale, x = cameraArea().x + cameraArea().width / 2, y = cameraArea().y + cameraArea().height / 2) {
   const next = clamp(scale);
   commit({
@@ -500,7 +470,7 @@ function draw() {
   }
   ctx.restore();
   drawLabels(displayed);
-  if (document.activeElement !== $("#zoom-value")) $("#zoom-value").value = `${Math.round(view.scale * 100)}%`;
+  if (document.activeElement !== $("#zoom-value")) $("#zoom-value").textContent = `${Math.round(view.scale * 100)}%`;
   $("output").value = `${Math.round(view.scale * 100)}%`;
   window.__sdg.ready = !!manifest && manifest.renderTheme === effectiveTheme && ready === count && !moving;
   window.__sdg.revision = manifest?.revision;
@@ -511,10 +481,8 @@ function draw() {
     if (!displayed.some(a => a.path === e.asset.path && visible(a))) cache.delete(e.key);
   }
 }
-function backgroundColor() {
-  const value = $("#background")?.value ?? 'theme';
-  return value === 'theme' ? palette.canvas : value;
-}
+function backgroundColor() { return backgroundChoice === 'theme' ? palette.canvas : backgroundColors[backgroundChoice]; }
+
 function drawLabels(displayed) {
   const candidates = [], screen = box => ({ x: view.x + box.x * view.scale, y: view.y + box.y * view.scale });
   const caption = Number.parseFloat(palette['text-caption']), meta = Number.parseFloat(palette['text-meta']), section = Number.parseFloat(palette['text-section']);
@@ -552,27 +520,20 @@ function drawLabels(displayed) {
   const obstacles = [...document.querySelectorAll('.floating, :popover-open, dialog[open], #tooltip:not([hidden])')].filter(el => !el.hidden && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none').map(el => { const r=el.getBoundingClientRect();return {x:r.x-vr.x,y:r.y-vr.y,width:r.width,height:r.height}; });
   labelLayer.update(candidates,obstacles,width,height,palette['font-ui']);
 }
-function drawMap() {
-  const map = $("#minimap");
-  if (map.hidden) return;
-  map.width = 220 * dpr;
-  map.height = 140 * dpr;
-  const c = map.getContext("2d"),
-    s = Math.min(200 / world.width, 120 / world.height);
-  c.scale(dpr, dpr);
-  c.fillStyle = palette.surface;
-  c.fillRect(0, 0, 220, 140);
-  c.fillStyle = palette.raised;
-  for (const g of groups)
-    c.fillRect(10 + g.x * s, 10 + g.y * s, g.width * s, g.height * s);
-  c.strokeStyle = palette.accent;
-  c.strokeRect(
-    10 - (view.x / view.scale) * s,
-    10 - (view.y / view.scale) * s,
-    (width / view.scale) * s,
-    (height / view.scale) * s,
-  );
+function mapGeometry() {
+  const scale=Math.min(168/world.width,100/world.height);
+  return {scale,x:(200-world.width*scale)/2,y:(132-world.height*scale)/2};
 }
+function drawMap() {
+  const map=$("#minimap");if(map.hidden)return;
+  if(map.width!==200*dpr||map.height!==132*dpr){map.width=200*dpr;map.height=132*dpr}
+  const c=map.getContext('2d'),{scale:s,x,y}=mapGeometry();c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,200,132);
+  for(const g of groups){c.fillStyle=palette['surface-section'];c.strokeStyle=palette.border;c.beginPath();c.roundRect(x+g.x*s,y+g.y*s,g.width*s,g.height*s,4);c.fill();c.stroke()}
+  c.strokeStyle=palette.accent;c.lineWidth=1;
+  const area=cameraArea();
+  c.strokeRect(x+(area.x-view.x)/view.scale*s,y+(area.y-view.y)/view.scale*s,area.width/view.scale*s,area.height/view.scale*s);
+}
+
 function applyTheme() {
   window.__sdg.ready = false;
   effectiveTheme =
@@ -586,8 +547,12 @@ function applyTheme() {
   );
   palette.raised = css.getPropertyValue("--surface-sunken").trim();
   palette.muted = css.getPropertyValue("--text-secondary").trim();
-  for (const b of $("#themes").children)
-    b.setAttribute("aria-pressed", String(b.dataset.theme === theme));
+  for (const sheet of document.styleSheets) for(const rule of sheet.cssRules ?? []) {
+    if(rule.selectorText === ':root' && rule.style.getPropertyValue('--canvas')) backgroundColors.light=rule.style.getPropertyValue('--canvas').trim();
+    if(rule.selectorText === ':root[data-theme="dark"]' && rule.style.getPropertyValue('--canvas')) backgroundColors.dark=rule.style.getPropertyValue('--canvas').trim();
+  }
+  backgroundColors.neutral=`color-mix(in srgb, ${backgroundColors.light} 50%, ${backgroundColors.dark})`;
+  updateChoices();
   requestDraw();
 }
 for (const b of $("#themes").children)
@@ -678,11 +643,7 @@ function up(e) {
       selectedId = a.id;
       active = a.group;
       selection();
-      if (y < a.y + 40 && x > a.x + a.width - 180 && a.compact) {
-        inspector = true;
-        selection();
-        $("#forms").focus();
-      } else if (y < a.y + 40 && x > a.x + a.width - 44) focusAsset(a);
+
     }
   }
   if (viewport.hasPointerCapture(e.pointerId))
@@ -712,21 +673,21 @@ viewport.addEventListener("dblclick", () => {
   const a = currentItem();
   if (a) focusAsset(a);
 });
-$("#fit").onclick = fit;
 for (const [id, action] of Object.entries({
   "zoom-fit-all": fit,
   "zoom-fit-group": () => frame(active === null ? world : groups[active]),
   "zoom-fit-selection": () =>
-    frame(currentItem() || (active === null ? world : groups[active])),
+    frame(currentItem() || (active === null ? world : groups[active]), currentItem() ? 24 : 0),
   "zoom-actual": () => zoom(1),
 }))
   $("#" + id).onclick = () => {
     $("#zoom-menu").hidePopover();
     action();
   };
-$("#all").onclick = fit;
 $("#back").onclick = back;
-$("#sidebar-toggle").onclick = () => toggleSidebar();
+$("#sidebar-toggle").onclick = () => toggleSidebar(false);
+$("#expand-sidebar").onclick = () => toggleSidebar(true);
+$("#app-directory").onclick = () => showOpen();
 $("#directory").onclick = () => showOpen();
 $("#inspect").onclick = () => {
   inspector = !inspector;
@@ -737,16 +698,6 @@ $("#close-inspector").onclick = () => {
   inspector = false;
   selection();
   save();
-};
-$("#forms").onchange = () => {
-  const a = currentItem(),
-    id = $("#forms").value;
-  inspectForm(
-    a,
-    id === "full"
-      ? { ...a.full, id: "full", name: "Full sheet" }
-      : a.parts.find((p) => p.id === id),
-  );
 };
 $("#full-sheet").onclick = () => {
   const a = currentItem();
@@ -763,37 +714,16 @@ $("#fullscreen").onclick = () => {
   p.catch((e) => error(e.message));
 };
 $("#fit-current").onclick = () =>
-  frame(currentItem() || (active !== null ? groups[active] : world));
-$("#zoom-value").onchange = () => {
-  const n = parseFloat($("#zoom-value").value);
-  if (Number.isFinite(n) && n > 0) zoom(n / 100);
-  else $("#zoom-value").value = `${Math.round(view.scale * 100)}%`;
-};
-$("#zoom-value").onkeydown = (e) => {
-  if (e.key === "Enter") {
-    e.target.blur();
-    viewport.focus();
-  }
-};
-$("#background").onchange = requestDraw;
+  frame(currentItem() || (active !== null ? groups[active] : world), currentItem() ? 24 : 0);
 $("#map-toggle").onclick = () => {
   $("#minimap").hidden = !$("#minimap").hidden;
+  $("#map-toggle").setAttribute("aria-pressed", String(!$("#minimap").hidden));
   requestDraw();
 };
-$("#minimap").onclick = (e) => {
-  const s = Math.min(200 / world.width, 120 / world.height),
-    r = e.target.getBoundingClientRect();
-  remember();
-  inspection = null;
-  selected = null;
-  selectedId = null;
-  active = null;
-  selection();
-  commit({
-    ...view,
-    x: width / 2 - ((e.clientX - r.left - 10) / s) * view.scale,
-    y: height / 2 - ((e.clientY - r.top - 10) / s) * view.scale,
-  });
+$("#minimap").onclick = e => {
+  const {scale:s,x,y}=mapGeometry(),r=e.target.getBoundingClientRect(),area=cameraArea();
+  remember();inspection=null;selection();
+  commit({...view,x:area.x+area.width/2-(e.clientX-r.left-x)/s*view.scale,y:area.y+area.height/2-(e.clientY-r.top-y)/s*view.scale});
 };
 $("#shortcuts").onclick = () => {
   $("#more-menu").hidePopover();
@@ -844,14 +774,14 @@ $("#search").onfocus = () => {
       inspector,
     };
 };
-$("#search").oninput = renderNav;
+$("#search").oninput = () => { if(!$("#search").value) searchReturn=null; renderNav(); };
+$("#search-clear").onclick=()=>{$("#search").value="";searchReturn=null;renderNav();$("#search").focus()};
 $("#search").onkeydown = (e) => {
   if (e.key === "Enter")
-    ($("#modules .form-result") || $("#modules .file"))?.click();
+    $("#modules .search-result")?.click();
 };
 $("#minus").onclick = () => zoom(view.scale / 1.25);
 $("#plus").onclick = () => zoom(view.scale * 1.25);
-$("#actual").onclick = () => zoom(1);
 $("#reveal").onclick = () =>
   api("/reveal", { path: selected }).catch((e) => error(e.message));
 function resizeViewport() {
@@ -869,30 +799,31 @@ function resizeViewport() {
       x: view.x + (width - oldW) / 2,
       y: view.y + (height - oldH) / 2,
     };
+  updateChrome();
   requestDraw();
 }
 new ResizeObserver(resizeViewport).observe(viewport);
 function recent() {
-  $("#recent").replaceChildren(
-    ...(manifest?.recent ?? []).map((p) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.textContent = p;
-      b.title = p;
-      b.onclick = () => open(p);
-      return b;
-    }),
-  );
+  const paths=manifest?.recent??[];
+  $("#recent-heading").hidden=!paths.length;
+  $("#recent").replaceChildren(...paths.map((path,index)=>{
+    const button=document.createElement('button');button.type='button';button.innerHTML=icon('folder',16);
+    const text=document.createElement('span');text.className='recent-text';
+    const name=document.createElement('strong'),detail=document.createElement('small');
+    const pieces=path.split('/').filter(Boolean);name.textContent=pieces.at(-1)==='design'?pieces.at(-2):pieces.at(-1);
+    detail.textContent=path.replace(/^\/Users\/[^/]+/,'~').replace(/^\/home\/[^/]+/,'~');text.append(name,detail);button.append(text);
+    button.setAttribute('aria-current',String(index===0&&!$("#path").value));
+    button.onclick=()=>{$("#path").value=path;for(const row of $("#recent").children)row.setAttribute('aria-current',String(row===button));$("#path").focus()};
+    button.ondblclick=()=>open(path);return button;
+  }));
 }
 function showOpen() {
-  recent();
-  $("#path").value = manifest?.directory ?? "";
-  $("#open-error").hidden = true;
-  $("#directories").showModal();
-  $("#path").focus();
+  $("#path").value='';$("#path").removeAttribute('aria-invalid');$("#open-error").hidden=true;
+  recent();updateChrome();hideTooltip();$("#directories").showModal();$("#path").blur();requestDraw();
 }
-$("#open").onclick = showOpen;
+
 $("#close").onclick = () => $("#directories").close();
+$("#path").oninput=()=>{$("#path").removeAttribute("aria-invalid");$("#open-error").hidden=true};
 $("#directory-form").onsubmit = (e) => {
   e.preventDefault();
   void open($("#path").value);
@@ -907,7 +838,8 @@ async function open(directory) {
     $("#directories").close();
     viewport.focus();
   } catch (e) {
-    $("#open-error").textContent = e.message;
+    $("#open-error span:last-child").textContent = e.message;
+    $("#path").setAttribute("aria-invalid","true");
     $("#open-error").hidden = false;
   } finally {
     button.disabled = false;
@@ -973,8 +905,8 @@ async function applyManifest(data, force = false) {
       !changedRoot &&
       JSON.stringify(previous.groups) === JSON.stringify(data.groups),
   );
-  $("#directory").textContent = data.label;
-  $("#directory").title = data.directory || "";
+  for(const element of document.querySelectorAll('.directory-name')) element.textContent=data.label;
+  $("#directory").title=data.directory||'';$("#app-directory").title=data.directory||'';
   document.title = `${data.label} — SVG Design Gallery`;
   if (changedRoot || first) {
     if (data.view) view = data.view;
@@ -985,29 +917,48 @@ async function applyManifest(data, force = false) {
     selectedId = null;
     inspection = null;
   } else if (inspection) {
-    const a = assets.find((a) => a.path === selected),
-      p =
-        inspection.shown[0].id === "full"
-          ? { ...a.full, id: "full", name: "Full sheet" }
-          : a.parts.find((p) => p.id === inspection.shown[0].id);
-    if (p)
-      inspection = {
-        ...inspection,
-        ...a,
-        x: 0,
-        y: 0,
-        width: p.width + 40,
-        height: p.height + 52,
-        chrome: false,
-        compact: false,
-        shown: [p],
-        rows: [[p]],
-      };
-    else inspection = null;
+    const a=assets.find(a=>a.path===selected),p={...a.full,id:'full',name:'Full sheet'};
+    inspection={...a,id:a.id+'@full',x:0,y:0,width:p.width,height:p.height,shown:[p],kind:'sheet'};
   }
   selection();
   requestDraw();
 }
+function updateChoices() {
+  for(const button of document.querySelectorAll('#themes button, #backgrounds button')) {
+    const selected=button.dataset.theme ? button.dataset.theme===theme : button.dataset.background===backgroundChoice;
+    button.setAttribute('aria-pressed',String(selected));button.querySelector('svg')?.remove();
+    if(selected) button.insertAdjacentHTML('afterbegin',icon('check',14));
+  }
+}
+for(const button of $("#backgrounds").children) button.onclick=()=>{backgroundChoice=button.dataset.background;updateChoices();requestDraw()};
+for(const [id,trigger] of [['display-menu','display'],['zoom-menu','zoom-options'],['more-menu','more']]) {
+  $("#"+id).addEventListener('toggle',event=>{
+    $("#"+trigger).setAttribute('aria-pressed',String(event.newState==='open'));
+    if(event.newState==='open') {
+      for(const other of document.querySelectorAll(':popover-open')) if(other.id!==id) other.hidePopover();
+      hideTooltip();positionZoomMenu();
+    }
+    requestDraw();
+  });
+}
+let tooltipTimer;
+function hideTooltip() { clearTimeout(tooltipTimer);$("#tooltip").hidden=true; }
+for(const button of document.querySelectorAll('[data-tooltip]')) {
+  const show=()=>{clearTimeout(tooltipTimer);tooltipTimer=setTimeout(()=>{
+    if(document.querySelector(':popover-open, dialog[open]'))return;
+    const tip=$("#tooltip"),r=button.getBoundingClientRect();tip.textContent=button.dataset.tooltip;tip.hidden=false;
+    tip.style.left=`${Math.max(4,Math.min(width-tip.offsetWidth-4,r.x+r.width/2-tip.offsetWidth/2))}px`;
+    tip.style.top=`${r.y>height/2?r.top-tip.offsetHeight-12:r.bottom+12}px`;requestDraw();
+  },400)};
+  button.addEventListener('pointerenter',show);button.addEventListener('focus',show);
+  button.addEventListener('pointerleave',()=>{hideTooltip();requestDraw()});button.addEventListener('blur',hideTooltip);button.addEventListener('click',hideTooltip);
+}
+$("#keys-close").onclick=()=>$("#keys").close();
+$("#directories").addEventListener('cancel',event=>{if(!manifest?.directory)event.preventDefault()});
+for(const dialog of document.querySelectorAll('dialog')) dialog.addEventListener('close',()=>{viewport.focus({preventScroll:true});requestDraw()});
+document.addEventListener('keydown',event=>{
+  if(event.key==='?'&&!event.target.matches('input,textarea')&&!document.querySelector('dialog[open]')) {event.preventDefault();hideTooltip();$("#keys").showModal()}
+});
 let fetching = false,
   pending = false;
 async function refresh(force = false) {
@@ -1063,7 +1014,7 @@ document.addEventListener("keydown", (e) => {
     searchReturn = null;
     $("#search").value = "";
     toggleSidebar(old.sidebar);
-    ({ active, selected, selectedId, inspection, inspector } = old);
+    ({ active, selected, selectedId, selectedForm, inspection, inspector } = old);
     selection();
     commit(old.view);
   } else if (inspector && selected) {
