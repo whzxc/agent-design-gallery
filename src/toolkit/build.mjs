@@ -26,14 +26,18 @@ export async function buildSource(config, file, { write = true } = {}) {
     api.onResolve({ filter: /.*/ }, args => {
       if (['sdg','sdg/jsx-runtime','sdg/jsx-dev-runtime'].includes(args.path)) return { path: pathToFileURL(runtime).href, external: true };
       if (args.kind !== 'entry-point' && !args.path.startsWith('.')) return { errors: [{ text: `Bare import ${args.path} is unavailable; import sdg or a relative file inside design/` }] };
-      let resolved = args.kind === 'entry-point' ? path.resolve(args.path) : path.resolve(args.resolveDir, args.path);
+      const url = args.path.endsWith('?url');
+      const requested = url ? args.path.slice(0,-4) : args.path;
+      let resolved = args.kind === 'entry-point' ? path.resolve(requested) : path.resolve(args.resolveDir, requested);
       resolved = [resolved, ...['.tsx','.ts','.js','/index.tsx','/index.ts'].map(ext => resolved + ext)].find(existsSync);
       if (!resolved) return { errors: [{ text: `Cannot resolve ${args.path}` }] };
       resolved = realpathSync(resolved);
       if (!resolved.startsWith(base + path.sep)) return { errors: [{ text: `Import ${args.path} leaves design/; move it inside design/` }] };
       dependencies.add(resolved);
-      return { path: resolved };
+      if (url && !resolved.startsWith(path.join(base,'art')+path.sep)) return {errors:[{text:'?url imports must be under design/art/'}]};
+      return { path: resolved, ...(url ? {namespace:'art-url'} : {}) };
     });
+    api.onLoad({filter:/.*/,namespace:'art-url'}, args => ({contents:readFileSync(args.path),loader:'dataurl'}));
     api.onLoad({ filter: /\.(png|jpe?g|webp)$/i }, args => ({ contents: readFileSync(args.path), loader: 'dataurl' }));
     api.onLoad({ filter: /\.svg$/i }, args => {
       const source = readFileSync(args.path,'utf8');

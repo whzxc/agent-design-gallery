@@ -63,7 +63,7 @@ export default () => [
 ];
 ```
 
-The specifier `sdg` resolves to the installed toolkit's runtime. Relative imports resolve within `design/`. Importing an `.svg` file under `design/` yields a component that inlines the drawing and passes its props to the drawing's root; importing a PNG, JPEG or WebP file yields a data URL. Packages from npm are not available to sources.
+The specifier `sdg` resolves to the installed toolkit's runtime. Relative imports resolve within `design/`. Importing an `.svg` file under `design/` yields a component that inlines the drawing and passes its props to the drawing's root; importing a PNG, JPEG or WebP file yields a data URL. `import url from './x.svg?url'` yields a data URL for any file under `design/art/`, preserving self-contained artwork as an image. Packages from npm are not available to sources.
 
 Reuse components and pass parameters instead of copying markup between sources. Generate repeated geometry with ordinary functions and loops in the source.
 
@@ -72,7 +72,7 @@ Reuse components and pass parameters instead of copying markup between sources. 
 A `Frame` is one declared form of a component or surface.
 
 - `name` is the form name, unique within the source.
-- `width` and `height` are CSS pixels. Without `height`, the frame takes its content's height.
+- `width` and `height` are CSS pixels. Without width or height, the frame takes its content's size.
 - `fixture` names the compare fixture for this form.
 - `capture` tells `compare` what to capture in the implementation: `{ region }`, `{ selector }` or `{ page: true }`, each with optional `viewport` (`'<w>x<h>'`) and `clicks` (accessible names, in order). A page capture clips the page at `origin` (`'<x> <y>'`, default `'0 0'`) with the frame's size.
 - `note` is a caption that the viewer shows in the inspector. It is not part of the drawing.
@@ -102,6 +102,16 @@ Paint resolves through tokens. A literal color is allowed only inside an element
 
 A frame may animate with CSS to show timing and easing. `check`, `render` and `compare` run with motion reduced.
 
+## Authoring
+
+A source describes structure, not coordinates. Write it the way the UI is built.
+
+- Lay out with flex and grid, gap and padding. Sizes follow content; fix a width or height only where the design fixes it, such as a panel, a dialog, a list row or the frame.
+- Use whole CSS pixels. Spacing uses the 4px scale where it fits, otherwise an arbitrary whole-pixel value.
+- Keep fixture text and repeated items as data at the top of the source and render them with `map`.
+- Mark free-form geometry with `data-free`: canvas content, topology, charts, and chrome placed at fixed screen positions. Inside it, `style` may position elements with values computed from data.
+- Outside `data-free`, `style` sets only width, height and custom properties.
+
 ## Presentation forms
 
 - The user declares the forms each source contains, such as three densities of one card.
@@ -118,7 +128,9 @@ A frame may animate with CSS to show timing and easing. `check`, `render` and `c
 - a computed text, background, border, outline, fill, stroke or shadow color that matches no token value in the active theme, outside `data-brand`;
 - text that overflows its box without an ellipsis, leaves the frame, or overlaps other text;
 - content that overflows the frame's declared width or height;
-- a `<style>` element, script or event attribute in the output.
+- a `<style>` element, script or event attribute in the output;
+- a fractional pixel length in a class or style outside `data-free`;
+- a `style` outside `data-free` that sets anything but width, height or custom properties.
 
 Each problem is one line, `<path>: <frame>: <problem>`. A nonzero exit means the source is not ready.
 

@@ -20,6 +20,11 @@ export function inspectFrame(tokenNames) {
     const s = getComputedStyle(el), r = el.getBoundingClientRect();
     if (['STYLE','SCRIPT'].includes(el.tagName.toUpperCase())) problems.add(`Forbidden <${el.tagName.toLowerCase()}> in output`);
     for (const attr of el.attributes) if (/^on/i.test(attr.name) || attr.name === 'classname') problems.add(`Forbidden attribute ${attr.name} in output`);
+    if (!el.closest('[data-free]')) {
+      const authored = (el.getAttribute('class') ?? '') + ' ' + (el.getAttribute('style') ?? '');
+      if ([...authored.matchAll(/(-?(?:\d*\.)?\d+)px\b/g)].some(m => !Number.isInteger(Number(m[1])))) problems.add('Fractional pixel length outside data-free');
+      for (const [,property] of (el.getAttribute('style') ?? '').matchAll(/(?:^|;)\s*([-\w]+)\s*:/g)) if (!['width','height'].includes(property) && !property.startsWith('--')) problems.add(`Style ${property} outside data-free; use layout classes`);
+    }
     if (s.display === 'none' || s.visibility === 'hidden' || r.width === 0 || r.height === 0) continue;
     const clipped = rect => {
       let left=rect.left,right=rect.right,top=rect.top,bottom=rect.bottom;

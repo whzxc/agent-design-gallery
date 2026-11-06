@@ -27,7 +27,7 @@ Design sources are TSX modules. Import `Frame` and `Icon` from `sdg`, export reu
 
 A component source is one set: frames run in source order with 32px gaps, wrap before 1600px, and have 48px between rows. Sets pad forms by 24px at the sides and bottom and 36px at the top. A surface source is one flow: each frame receives 16px padding and follows the flow layout. Frame notes appear in the inspector, outside the drawing. Full sheet has been removed; choose a declared form or frame.
 
-Legacy SVGs remain browsable with their existing geometric crops and relative embedded artwork. Files without declarations keep a whole-file preview. New toolkit commands accept TSX only; an SVG directly in `design/components/` or `design/surfaces/` must be converted. Imported SVG artwork belongs in `design/art/`; PNG, JPEG and WebP imports become data URLs.
+Legacy SVGs remain browsable with their existing geometric crops and relative embedded artwork. Files without declarations keep a whole-file preview. New toolkit commands accept TSX only; an SVG directly in `design/components/` or `design/surfaces/` must be converted. Imported SVG artwork belongs in `design/art/`; PNG, JPEG and WebP imports become data URLs. Add `?url` to an import under `design/art/` to embed any file as a data URL, including self-contained SVG previews.
 
 Sets and flows pack into sections, and sections into a stable world. Saving a source, imported component, artwork or tokens refreshes affected previews without moving the camera. Unchanged regions retain their positions; new or enlarged regions move below existing content. Use Arrange current group to compact after structural changes. Labels retain constant screen sizes and hide when they collide with chrome or other labels.
 

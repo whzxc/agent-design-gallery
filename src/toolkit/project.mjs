@@ -16,7 +16,7 @@ export function refreshTypes(config) {
   mkdirSync(path.join(config.design, '.sdg'), { recursive: true });
   const runtime = readFileSync(new URL('./runtime.d.ts', import.meta.url), 'utf8');
   writeFileSync(path.join(config.design, '.sdg/runtime.d.ts'), runtime);
-  writeFileSync(path.join(config.design, '.sdg/assets.d.ts'), `declare module '*.svg' { const Art: (props: Record<string, unknown>) => any; export default Art; }\n${['png','jpg','jpeg','webp'].map(ext => `declare module '*.${ext}' { const url: string; export default url; }`).join('\n')}\n`);
+  writeFileSync(path.join(config.design, '.sdg/assets.d.ts'), `declare module '*?url' { const url: string; export default url; }\ndeclare module '*.svg' { const Art: (props: Record<string, unknown>) => any; export default Art; }\n${['png','jpg','jpeg','webp'].map(ext => `declare module '*.${ext}' { const url: string; export default url; }`).join('\n')}\n`);
 }
 export const tsconfig = { compilerOptions: { target: 'ESNext', module: 'ESNext', moduleResolution: 'Bundler', jsx: 'react-jsx', jsxImportSource: 'sdg', noEmit: true, strict: true, paths: { sdg: ['./.sdg/runtime.d.ts'], 'sdg/jsx-runtime': ['./.sdg/runtime.d.ts'] } }, include: ['**/*.tsx', '**/*.ts', '.sdg/*.d.ts'] };
 export function init(config, log = console.log) {

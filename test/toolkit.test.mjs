@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,readdirSync,symlinkSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,readdirSync,symlinkSync,realpathSync} from 'node:fs';
 import path from 'node:path';
 import {tmpdir} from 'node:os';
 import {execFile} from 'node:child_process';
@@ -45,6 +45,37 @@ test('imports reject npm, escaping relative paths and symlink escapes with sourc
   }
   put(c,'art/bad.svg','<svg>\n<script>alert(1)</script></svg>');
   await assert.rejects(buildSource(c,put(c,'surfaces/a.tsx',`import Art from '../art/bad.svg';${source('<Art/>')}`)),/bad.svg:2/);
+});
+test('?url embeds any art file, tracks its dependency and rejects files outside art',async t=>{
+  const c=await project(t);
+  const art=put(c,'art/preview.svg','<svg xmlns="http://www.w3.org/2000/svg"><style>rect{fill:red}</style><rect width="2" height="2"/></svg>');
+  put(c,'art/data.txt','fixture artwork');
+  const f=put(c,'surfaces/url.tsx',`import preview from '../art/preview.svg?url';import data from '../art/data.txt?url';${source('<div><img src={preview}/><a href={data}>Data</a></div>')}`);
+  const built=await buildSource(c,f);
+  assert.match(built.frames[0].html,/src="data:image\/svg\+xml[,;]/);
+  assert.match(built.frames[0].html,/href="data:text\/plain[,;]/);
+  assert.ok(built.dependencies.includes(realpathSync(art)));
+  assert.match(readFileSync(path.join(c.design,'.sdg/assets.d.ts'),'utf8'),/declare module '\*\?url'/);
+  put(c,'components/preview.svg','<svg/>');
+  put(c,'surfaces/url.tsx',`import preview from '../components/preview.svg?url';${source('<img src={preview}/>')}`);
+  await assert.rejects(buildSource(c,f),/url.tsx:1.*\?url imports must be under design\/art/s);
+});
+test('check rejects fractional pixel lengths in classes and styles outside data-free',async t=>{
+  const c=await project(t);
+  for(const [name,body] of [['class','<div class="w-[10.5px] h-4"/>'],['style','<div style={{width:10.5,height:16}}/>']])put(c,`surfaces/${name}.tsx`,source(body));
+  put(c,'surfaces/frame.tsx',source('<div/>').replace('width={200}','width={200.5}'));
+  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),1);
+  assert.equal(problems.length,6);
+  assert.ok(problems.every(p=>p.endsWith('Fractional pixel length outside data-free')));
+});
+test('check rejects layout style properties outside data-free',async t=>{
+  const c=await project(t);put(c,'surfaces/style.tsx',source('<div style={{padding:4}}>Label</div>'));
+  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),1);
+  assert.equal(problems.length,2);assert.ok(problems.every(p=>p.endsWith('Style padding outside data-free; use layout classes')));
+});
+test('check permits whole-pixel dimensions, custom properties and inherited free-form geometry',async t=>{
+  const c=await project(t);put(c,'surfaces/free.tsx',source('<div style={{width:100,height:60,"--gap":"4px"}}><div data-free class="relative"><div class="absolute left-[1.5px]" style={{top:2.5}}>Free</div></div></div>'));
+  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),0,problems.join('\n'));
 });
 test('Tailwind uses rendered classes, inline token aliases and no color, size, font, radius or shadow defaults',async t=>{
   const c=await project(t);writeFileSync(path.join(c.design,'tokens.css'),starterTokens.replace('--canvas: #ffffff;','--canvas: #ffffff;\n  --surface: #eeeeee;\n  --text-body: 13px;\n  --radius-panel: 7px;\n  --shadow-card: 0 1px 3px #171717;').replace('--canvas: #171717;','--canvas: #171717;\n  --surface: #222222;'));
