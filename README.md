@@ -3,7 +3,7 @@
 Browse a repository's SVG designs with a local browser canvas.
 
 ```sh
-npm install -g github:whzxc/svg-design-gallery
+npm install -g @whzxc/svg-design-gallery
 sdg /path/to/design
 ```
 

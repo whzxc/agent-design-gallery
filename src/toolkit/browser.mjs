@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { UPDATE } from './config.mjs';
 import { svgSize } from './project.mjs';
 
 export async function launch() {
   let chromium;
   try { ({ chromium } = await import('playwright')); }
-  catch { throw new Error('Playwright is missing; run npm install -g github:whzxc/svg-design-gallery'); }
+  catch { throw new Error(`Playwright is missing; run ${UPDATE}`); }
   try { return await chromium.launch(); }
   catch (error) {
     if (/Executable doesn't exist|playwright install/i.test(error.message)) throw new Error('Chromium is missing; run npx playwright@1.64.1 install chromium');

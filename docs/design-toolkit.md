@@ -8,10 +8,10 @@ This document is the format and command contract. A project's own design documen
 
 ## Install
 
-`sdg` is installed once per machine and shared by every project. Projects do not list it in their dependencies.
+`sdg` is installed once per machine and shared by every project. Projects do not list it in their dependencies. The package comes from the private registry configured for the `@whzxc` scope.
 
 ```sh
-npm install -g github:whzxc/svg-design-gallery
+npm install -g @whzxc/svg-design-gallery
 ```
 
 Run the same install again to update. `check`, `render`, `measure` and `compare` launch Chromium through the Playwright that ships with `sdg`; the viewer and `sync` start without it. When Chromium is missing, those commands stop with the command that installs it for that Playwright version.

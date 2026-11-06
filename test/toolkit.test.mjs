@@ -103,7 +103,7 @@ test('asset arguments, viewport and measurement token sizes', t => {
 test('CLI usage and requires failures return 2 with actionable single-line stderr', async t => {
   const root = temporary(t); writeFileSync(path.join(root, 'sdg.config.mjs'), "export default { requires: '>=99.0.0' };");
   const run = promisify(execFile), cli = path.resolve('src/cli.mjs');
-  await assert.rejects(run(process.execPath, [cli, 'sync'], { cwd: root }), error => error.code === 2 && error.stderr.trim().split('\n').length === 1 && error.stderr.includes('npm install -g github:whzxc/svg-design-gallery'));
+  await assert.rejects(run(process.execPath, [cli, 'sync'], { cwd: root }), error => error.code === 2 && error.stderr.trim().split('\n').length === 1 && error.stderr.includes('npm install -g @whzxc/svg-design-gallery'));
   await assert.rejects(run(process.execPath, [cli, 'measure'], { cwd: root }), error => error.code === 2 && error.stderr.includes('--help'));
 });
 test('installed symlink runs version, init and failing requires', async t => {
@@ -119,7 +119,7 @@ test('installed symlink runs version, init and failing requires', async t => {
     assert.equal(error.code, 2);
     assert.equal(error.stdout, '');
     assert.equal(error.stderr.trim().split('\n').length, 1);
-    assert.match(error.stderr, /does not satisfy requires >=99.0.0; run npm install -g github:whzxc\/svg-design-gallery/);
+    assert.match(error.stderr, /does not satisfy requires >=99.0.0; run npm install -g @whzxc\/svg-design-gallery/);
     return true;
   });
 });

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url))).version;
-export const UPDATE = 'npm install -g github:whzxc/svg-design-gallery';
+export const UPDATE = 'npm install -g @whzxc/svg-design-gallery';
 
 export function discoverRoot(cwd = process.cwd()) {
   let directory = path.resolve(cwd), packageRoot;
