@@ -1,0 +1,56 @@
+/* Design token source. Assets embed these through `sdg sync`. */
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", "Microsoft YaHei", Inter, "WenQuanYi Zen Hei", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, "JetBrains Mono", monospace;
+  --text-title: 15px;
+  --text-section: 14px;
+  --text-body: 13px;
+  --text-meta: 12px;
+  --text-caption: 11px;
+  --radius-dialog: 16px;
+  --radius-panel: 14px;
+  --radius-menu: 12px;
+  --radius-field: 9px;
+  --radius-row: 8px;
+  --radius-artboard: 6px;
+  --toolbar-height: 44px;
+  --field-height: 32px;
+  --row-height: 28px;
+  --control-size: 32px;
+
+  --canvas: #ecece9;
+  --dot: #d2d2ce;
+  --surface: #ffffff;
+  --surface-section: #f5f5f3;
+  --surface-sunken: #f1f1ee;
+  --border: #e2e2de;
+  --text: #1c1c1a;
+  --text-secondary: #5b5b57;
+  --text-tertiary: #7c7c77;
+  --accent: #1c1c1a;
+  --on-accent: #ffffff;
+  --danger: #c2453b;
+  --tooltip: #1c1c1a;
+  --on-tooltip: #ffffff;
+  --shadow-float: 0 1px 2px rgb(0 0 0 / 6%), 0 8px 24px rgb(0 0 0 / 8%);
+  --shadow-menu: 0 2px 4px rgb(0 0 0 / 6%), 0 12px 32px rgb(0 0 0 / 14%);
+}
+
+:root[data-theme="dark"] {
+  --canvas: #121212;
+  --dot: #262626;
+  --surface: #1f1f1f;
+  --surface-section: #191919;
+  --surface-sunken: #2a2a2a;
+  --border: #2d2d2d;
+  --text: #efefed;
+  --text-secondary: #a8a8a4;
+  --text-tertiary: #85857f;
+  --accent: #efefed;
+  --on-accent: #1c1c1a;
+  --danger: #f08b80;
+  --tooltip: #efefed;
+  --on-tooltip: #1c1c1a;
+  --shadow-float: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px rgb(0 0 0 / 45%);
+  --shadow-menu: 0 2px 4px rgb(0 0 0 / 40%), 0 12px 32px rgb(0 0 0 / 55%);
+}
