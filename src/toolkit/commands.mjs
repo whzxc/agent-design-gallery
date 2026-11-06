@@ -7,11 +7,24 @@ export function inspectFrame(tokenNames) {
   const frame = document.querySelector('[data-sdg-frame]'), box = frame.getBoundingClientRect(), problems = new Set();
   if (frame.children.length !== 1 || [...frame.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) problems.add('Frame needs exactly one root element');
   const sample = document.createElement('i'); document.body.append(sample);
-  const colors = new Set(['rgba(0, 0, 0, 0)']);
+  const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+  const context = canvas.getContext('2d', { colorSpace: 'srgb', colorType: 'float16', willReadFrequently: true });
+  context.globalCompositeOperation = 'copy';
+  const normalized = new Map();
+  const normalize = value => {
+    if (!normalized.has(value)) {
+      context.fillStyle = value; context.fillRect(0, 0, 1, 1);
+      // Float pixels retain un-premultiplied RGB even at low opacity.
+      const [r, g, b, a] = context.getImageData(0, 0, 1, 1, { colorSpace: 'srgb', pixelFormat: 'rgba-float16' }).data;
+      normalized.set(value, [r, g, b].map(channel => Math.round(channel * 255)).concat(a));
+    }
+    return normalized.get(value);
+  };
+  const colors = [];
   for (const name of tokenNames) {
     const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    if (CSS.supports('color', value)) { sample.style.color = value; colors.add(getComputedStyle(sample).color); }
-    for (const color of value.match(/(?:rgba?|hsla?|oklch|oklab|color)\([^)]*\)|#[\da-f]{3,8}\b/gi) ?? []) { sample.style.color = color; colors.add(getComputedStyle(sample).color); }
+    if (CSS.supports('color', value)) { sample.style.color = value; colors.push(normalize(getComputedStyle(sample).color)); }
+    for (const color of value.match(/(?:rgba?|hsla?|oklch|oklab|color)\([^)]*\)|#[\da-f]{3,8}\b/gi) ?? []) { sample.style.color = color; colors.push(normalize(getComputedStyle(sample).color)); }
   }
   sample.remove();
   const outside = r => r.left < box.left - 1 || r.right > box.right + 1 || r.top < box.top - 1 || r.bottom > box.bottom + 1;
@@ -38,7 +51,15 @@ export function inspectFrame(tokenNames) {
       if (s.outlineStyle !== 'none') paints.push(s.outlineColor);
       if (el instanceof SVGElement && /^(path|rect|circle|ellipse|polygon|polyline|line|text)$/.test(el.localName)) paints.push(s.fill, s.stroke);
       paints.push(...((s.boxShadow+' '+s.textShadow+' '+s.backgroundImage).match(/(?:rgba?|hsla?|oklch|oklab|color)\([^)]*\)/g) ?? []));
-      for (const value of paints) if (value && !['none','transparent'].includes(value) && !value.startsWith('url(') && !colors.has(value)) problems.add(`Color ${value} matches no token`);
+      for (const value of paints) {
+        if (!value || value === 'none' || value.startsWith('url(')) continue;
+        const paint = normalize(value), alpha = paint[3];
+        if (alpha === 0) continue;
+        const matches = colors.some(color => alpha < 1
+          ? paint.slice(0, 3).every((channel, i) => Math.abs(channel - color[i]) <= 2)
+          : paint.every((channel, i) => channel === color[i]));
+        if (!matches) problems.add(`Color ${value} matches no token`);
+      }
     }
     for (const node of el.childNodes) {
       if (node.nodeType !== 3 || !node.textContent.trim()) continue;

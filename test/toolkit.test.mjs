@@ -111,6 +111,26 @@ test('check permits token paint, brand art, clipped content and intentional elli
   const c=await project(t);put(c,'surfaces/a.tsx',source('<div class="w-[200px] h-[100px] overflow-hidden"><span data-brand class="text-[#ff0101]">Brand</span><div class="w-4 truncate">Clipped text</div></div>'));
   const p=[];assert.equal(await check(c,[],{},()=>{},s=>p.push(s)),0,p.join('\n'));
 });
+test('check permits token opacity modifiers in both themes across paint channels',async t=>{
+  const c=await project(t);
+  writeFileSync(path.join(c.design,'tokens.css'),starterTokens.replace('--canvas: #ffffff;','--canvas: #ffffff;\n  --warning: #eab308;').replace('--canvas: #171717;','--canvas: #171717;\n  --warning: #d8b45c;'));
+  put(c,'surfaces/opacity.tsx',source('<div class="bg-warning/10 text-warning/10 border border-warning/10 outline outline-warning/10 shadow-[0_1px_3px_var(--warning)]/10"><span class="text-warning/1">Warning</span><svg width="20" height="20"><rect width="20" height="20" class="fill-warning/10 stroke-warning/10"/></svg><div class="h-4 bg-linear-to-r from-warning/10 to-warning/1"/><span data-brand class="text-[#ff0101]/10">Brand</span></div>'));
+  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),0,problems.join('\n'));
+});
+test('check rejects literal translucent colors outside data-brand in both themes',async t=>{
+  const c=await project(t);put(c,'surfaces/translucent.tsx',source('<div class="bg-[#ff0101]/10">Literal</div>'));
+  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),1);
+  assert.equal(problems.length,2);
+  for(const theme of ['light','dark'])assert.ok(problems.some(p=>p.includes(`: ${theme}: Color `)&&p.endsWith('matches no token')));
+});
+test('check applies RGB tolerance only to translucent paints',async t=>{
+  const c=await project(t);
+  writeFileSync(path.join(c.design,'tokens.css'),starterTokens.replace('--canvas: #ffffff;','--canvas: #ffffff;\n  --warning: #646464;'));
+  for(const [name,color] of [['within','rgb(102 98 100 / 10%)'],['outside','rgb(103 100 100 / 10%)'],['opaque','rgb(101 100 100)']])put(c,`surfaces/${name}.tsx`,source(`<div class="bg-[${color.replaceAll(' ','_')}]">Color</div>`));
+  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),1);
+  assert.equal(problems.length,4);
+  for(const name of ['outside','opaque'])for(const theme of ['light','dark'])assert.ok(problems.some(p=>p.startsWith(`design/surfaces/${name}.tsx: sample: ${theme}: Color `)));
+});
 test('legacy SVG sources block all-source commands and init with exit 2 and the conversion message', async t => {
   const c = await project(t);
   put(c, 'components/converted.tsx', source('<div/>'));
