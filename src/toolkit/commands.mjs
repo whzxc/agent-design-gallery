@@ -66,8 +66,12 @@ export async function check(config, args = [], options = {}, log = console.log, 
     const page = await browser.newPage();
     for (const file of files) {
       let built;
-      try { built = await buildSource(config,file); }
-      catch(e) { problems.add(`${relative(config,file)}: -: ${e.message.replace(/\s+/g,' ')}`); continue; }
+      try { built = await buildSource(config,file,{allowLegacy:false}); }
+      catch(e) {
+        const legacy = e.errors?.find(error => error.detail?.code === 'LEGACY_SVG');
+        if (legacy) throw legacy.detail;
+        problems.add(`${relative(config,file)}: -: ${e.message.replace(/\s+/g,' ')}`); continue;
+      }
       for (const frame of built.frames) for (const theme of ['light','dark']) {
         try {
           await loadFrame(page,frame,theme);
@@ -88,7 +92,7 @@ export async function render(config, args = [], options = {}) {
   try {
     const page = await browser.newPage({deviceScaleFactor:scale});
     for (const file of files) {
-      const built = await buildSource(config,file);
+      const built = await buildSource(config,file,{allowLegacy:false});
       for (const frame of built.frames.filter(f => !options.frame || f.name === options.frame)) {
         found = true;
         for (const theme of ['light','dark']) {

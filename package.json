@@ -1,6 +1,6 @@
 {
   "name": "@whzxc/svg-design-gallery",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Local TSX design toolkit and SVG viewer",
   "type": "module",
   "license": "MIT",

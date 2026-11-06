@@ -64,7 +64,7 @@ export async function compare(config, args, options) {
   if (!adapter.fixture) throw new Error('Compare needs compare.fixture(name); add it to sdg.config.mjs');
   if ([options.region,options.selector,options.page].filter(Boolean).length > 1) throw Error('Choose --region, --selector or --page');
   const frame = options.frame;
-  const built = await buildSource(config,file), definition = built.frames.find(f=>f.name===frame);
+  const built = await buildSource(config,file,{allowLegacy:false}), definition = built.frames.find(f=>f.name===frame);
   if (!definition) throw Error(`Unknown frame ${frame}; choose a declared frame`);
   const settings = {...definition.capture};
   if (options.region || options.selector || options.page) { delete settings.region; delete settings.selector; delete settings.page; }
@@ -165,7 +165,7 @@ export async function compare(config, args, options) {
 async function compareAll(config) {
   const files = selectSources(config), summary = []; let code = 0;
   for (const file of files) {
-    const built = await buildSource(config,file);
+    const built = await buildSource(config,file,{allowLegacy:false});
     for (const frame of built.frames.filter(f=>f.fixture)) code = Math.max(code,await compare(config,[file],{frame:frame.name,collect:summary}));
   }
   const target=path.join(config.output,'compare'); mkdirSync(target,{recursive:true});

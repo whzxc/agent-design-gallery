@@ -48,18 +48,24 @@ export function listSources(directory) {
     return entry.isDirectory() ? listSources(file) : entry.isFile() && entry.name.endsWith('.tsx') ? [file] : [];
   }).sort();
 }
-export function rejectLegacy(config) {
-  for (const dir of ['components', 'surfaces']) {
-    const base = path.join(config.design, dir);
-    for (const name of existsSync(base) ? readdirSync(base) : []) if (/\.svg$/i.test(name)) throw Error(`${relative(config, path.join(base, name))}: convert this SVG source to TSX; move artwork to design/art/`);
+export function rejectLegacy(config, files) {
+  const directories = ['components', 'surfaces'].map(dir => path.join(config.design, dir));
+  files ??= directories.flatMap(base => existsSync(base) ? readdirSync(base).map(name => path.join(base, name)) : []);
+  for (const file of files) {
+    if (/\.svg$/i.test(file) && directories.includes(path.dirname(file))) {
+      const error = Error(`${relative(config, file)}: convert this SVG source to TSX; move artwork to design/art/`);
+      error.code = 'LEGACY_SVG';
+      throw error;
+    }
   }
 }
 export function selectSources(config, args = []) {
-  refreshTypes(config); rejectLegacy(config);
-  if (!args.length) return listSources(config.design);
+  refreshTypes(config);
+  if (!args.length) { rejectLegacy(config); return listSources(config.design); }
   return args.map(arg => {
     const fromRoot = path.resolve(config.root, arg);
     let file = path.isAbsolute(arg) || fromRoot.startsWith(config.design + path.sep) ? fromRoot : path.resolve(config.design, arg);
+    if (existsSync(file)) rejectLegacy(config, [file]);
     if (!file.endsWith('.tsx')) file += '.tsx';
     if (!file.startsWith(config.design + path.sep) || !existsSync(file)) throw Error(`Invalid source ${arg}; name a TSX file under ${config.design}`);
     return file;

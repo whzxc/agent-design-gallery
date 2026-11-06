@@ -241,4 +241,4 @@ The viewer reads the same sources and rebuilds a source, and the sources that im
 
 - Sources name the system font stack. Linux renders use fallback fonts, so final visual review runs on macOS.
 - Frames are static. They do not show hover response, focus movement, dragging, springs or interruption; a state the user declares is its own form.
-- `sdg` 0.4 reads TSX sources only. An `.svg` file directly in `design/components/` or `design/surfaces/` stops every command except the viewer with exit code 2 and names the file to convert; illustrations belong in `design/art/`.
+- An `.svg` file directly in `design/components/` or `design/surfaces/` stops a command that runs over all sources, including `compare --all`, with exit code 2 and names the file to convert. Commands that name sources check only those, so a project can convert in stages. Illustrations belong in `design/art/`.

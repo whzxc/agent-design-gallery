@@ -4,7 +4,7 @@ import { existsSync, readFileSync, realpathSync, mkdirSync, writeFileSync } from
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadTokens, refreshTypes, relative } from './project.mjs';
+import { loadTokens, refreshTypes, rejectLegacy, relative } from './project.mjs';
 import { themeCss } from './tokens.mjs';
 import { escape } from './runtime.mjs';
 const require = createRequire(import.meta.url);
@@ -18,7 +18,7 @@ export function validateFrame(frame) {
     if (!c || typeof c !== 'object' || ['region','selector','page'].filter(k => c[k] !== undefined).length !== 1 || (c.page !== undefined && c.page !== true) || ['region','selector'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim())) || (c.viewport !== undefined && !/^[1-9]\d*x[1-9]\d*$/.test(c.viewport)) || (c.origin !== undefined && (!c.page || !/^\d+(?:\.\d+)? \d+(?:\.\d+)?$/.test(c.origin))) || (c.clicks !== undefined && (!Array.isArray(c.clicks) || c.clicks.some(v => typeof v !== 'string' || !v)))) throw Error('Invalid capture; use region, selector or page with viewport, origin and clicks');
   }
 }
-export async function buildSource(config, file, { write = true } = {}) {
+export async function buildSource(config, file, { write = true, allowLegacy = true } = {}) {
   refreshTypes(config);
   file = realpathSync(file);
   const base = realpathSync(config.design), dependencies = new Set([path.join(base, 'tokens.css')]);
@@ -33,6 +33,7 @@ export async function buildSource(config, file, { write = true } = {}) {
       if (!resolved) return { errors: [{ text: `Cannot resolve ${args.path}` }] };
       resolved = realpathSync(resolved);
       if (!resolved.startsWith(base + path.sep)) return { errors: [{ text: `Import ${args.path} leaves design/; move it inside design/` }] };
+      if (!allowLegacy) rejectLegacy(config, [path.join(config.design, path.relative(base, resolved))]);
       dependencies.add(resolved);
       if (url && !resolved.startsWith(path.join(base,'art')+path.sep)) return {errors:[{text:'?url imports must be under design/art/'}]};
       return { path: resolved, ...(url ? {namespace:'art-url'} : {}) };

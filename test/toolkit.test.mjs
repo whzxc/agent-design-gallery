@@ -111,9 +111,63 @@ test('check permits token paint, brand art, clipped content and intentional elli
   const c=await project(t);put(c,'surfaces/a.tsx',source('<div class="w-[200px] h-[100px] overflow-hidden"><span data-brand class="text-[#ff0101]">Brand</span><div class="w-4 truncate">Clipped text</div></div>'));
   const p=[];assert.equal(await check(c,[],{},()=>{},s=>p.push(s)),0,p.join('\n'));
 });
-test('legacy SVG source blocks check, render, compare and init with exit 2 and conversion path',async t=>{
-  const c=await project(t);put(c,'components/old.svg','<svg/>');
-  for(const args of [['check'],['render'],['compare','--all'],['init']])await assert.rejects(promisify(execFile)(process.execPath,[path.resolve('src/cli.mjs'),...args],{cwd:c.root}),e=>e.code===2&&e.stderr.includes('design/components/old.svg')&&e.stderr.includes('convert')&&e.stderr.trim().split('\n').length===1);
+test('legacy SVG sources block all-source commands and init with exit 2 and the conversion message', async t => {
+  const c = await project(t);
+  put(c, 'components/converted.tsx', source('<div/>'));
+  for (const directory of ['components', 'surfaces']) {
+    const name = `${directory}/old.svg`, file = put(c, name, '<svg/>');
+    for (const args of [['check'], ['render'], ['compare', '--all'], ['init']]) {
+      await assert.rejects(promisify(execFile)(process.execPath, [path.resolve('src/cli.mjs'), ...args], { cwd: c.root }), error => {
+        assert.equal(error.code, 2);
+        assert.equal(error.stderr, `sdg: design/${name}: convert this SVG source to TSX; move artwork to design/art/\n`);
+        return true;
+      });
+    }
+    rmSync(file);
+  }
+});
+test('named check, render and compare succeed during staged conversion and permit art imports', async t => {
+  const c = await project(t), { createServer } = await import('node:http');
+  const server = createServer((req, res) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.end('<!doctype html><style>body{margin:0}</style><div style="width:200px;height:100px"></div>');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  writeFileSync(path.join(c.root, 'sdg.config.mjs'), `export default { compare: { fixture() { return { url: 'http://127.0.0.1:${server.address().port}', theme: 'light', locale: 'en-US', clock: '2026-01-01' }; } } };`);
+  put(c, 'components/old.svg', '<svg/>');
+  put(c, 'surfaces/old.svg', '<svg/>');
+  put(c, 'surfaces/unconverted.tsx', 'invalid TSX');
+  put(c, 'art/mark.svg', '<svg width="12" height="12"></svg>');
+  put(c, 'components/converted.tsx', `import Art from '../art/mark.svg';${source('<div class="w-[200px] h-[100px]"><Art/></div>', 'fixture="sample" capture={{page:true}}')}`);
+  for (const args of [['check', 'components/converted'], ['render', 'design/components/converted.tsx'], ['compare', realpathSync(path.join(c.design, 'components/converted.tsx')), '--frame=sample']]) {
+    await promisify(execFile)(process.execPath, [path.resolve('src/cli.mjs'), ...args], { cwd: c.root });
+  }
+  for (const theme of ['light', 'dark']) assert.ok(readFileSync(path.join(c.output, `components/converted/sample-${theme}.png`)).length);
+  const report = JSON.parse(readFileSync(path.join(c.output, 'compare/components-converted-sample-sample/report.json')));
+  assert.equal(report.missing.length, 0);
+  assert.equal(report.extra.length, 0);
+});
+test('named commands reject a legacy SVG source and direct or transitive legacy imports', async t => {
+  const c = await project(t);
+  writeFileSync(path.join(c.root, 'sdg.config.mjs'), 'export default { compare: { fixture() {} } };');
+  for (const directory of ['components', 'surfaces']) {
+    const name = `${directory}/old.svg`;
+    put(c, name, '<svg><style>rect{fill:red}</style></svg>');
+    put(c, 'components/dependency.ts', `export { default } from '../${name}';`);
+    for (const specifier of [`../${name}`, './dependency']) {
+      put(c, 'components/converted.tsx', `import Legacy from '${specifier}';${source('<div><Legacy/></div>')}`);
+      for (const selected of [name, 'components/converted']) {
+        for (const args of [['check', selected], ['render', selected], ['compare', selected, '--frame=sample']]) {
+          await assert.rejects(promisify(execFile)(process.execPath, [path.resolve('src/cli.mjs'), ...args], { cwd: c.root }), error => {
+            assert.equal(error.code, 2);
+            assert.ok(error.stderr.includes(`design/${name}: convert this SVG source to TSX; move artwork to design/art/`));
+            return true;
+          });
+        }
+      }
+    }
+  }
 });
 test('reader merges adjacent line segments and pairs duplicate content nearest-first',async()=>{
   const b=await launch();try{const p=await b.newPage();await p.setContent('<div id="capture" style="font:16px/20px monospace;width:300px"><span>A</span><span>B</span><span style="margin-left:2px">C</span><div>Next</div><span aria-hidden="true">Hidden</span></div>');const r=await p.locator('#capture').evaluate(implementationTexts);assert.deepEqual(r.texts.map(t=>t.text),['AB C','Next']);}finally{await b.close();}
