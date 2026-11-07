@@ -80,6 +80,7 @@ export class Labels {
             const glyph = document.createElement('span'); glyph.className = 'label-copy-icon';
             glyph.hidden = part.copyIcon === false;
             const feedback = copied => {
+              span.toggleAttribute('data-copied', copied);
               glyph.innerHTML = icon(copied ? 'check' : 'copy', 12);
               span.setAttribute('aria-label', copied ? `Copied ${part.copyText}` : `Copy ${part.copyText} name`);
               span.title = copied ? 'Copied' : 'Copy name';
