@@ -20,7 +20,7 @@ A project may set `requires` in `sdg.config.mjs`, such as `'>=0.4.0'`. Older ver
 
 ## Project layout
 
-- `sdg.config.mjs` at the project root configures paths and `compare`. Every field is optional.
+- `sdg.config.mjs` at the project root configures paths, `sources` and `compare`. Every field is optional.
 - `design/tokens.css` holds color, type, radius, size and shadow tokens for the light and dark themes.
 - `design/components/<name>.tsx` holds one shared component. It exports the functions other sources use, and its default export returns the component's declared forms as frames.
 - `design/surfaces/<name>.tsx` holds a panel, dialog, page or screen composed from components. Its default export returns its declared forms as frames.
@@ -29,7 +29,7 @@ A project may set `requires` in `sdg.config.mjs`, such as `'>=0.4.0'`. Older ver
 - `design/tsconfig.json` lets editors resolve the toolkit's types. `sdg init` writes it; every command refreshes the ignored `design/.sdg/` declarations it points to.
 - `output/design/` receives builds, renders and compare reports. Keep it and `design/.sdg/` out of Git.
 
-Other modules under `design/`, such as shared scene data, are imports, not sources.
+`sources` is an optional array of plain top-level directory names, defaulting to `['components', 'surfaces']`. For example, `sources: ['components', 'modules', 'surfaces']` includes module assets in the canvas, checks and renders. Names use letters, digits, underscores or hyphens; nested paths are rejected. Only direct TSX files in those directories are source entries. Other files under `design/`, such as shared scene data, remain imports.
 
 Commands run from any directory inside the project. They find the nearest `sdg.config.mjs` or, without one, the nearest `package.json`, and resolve paths from there.
 

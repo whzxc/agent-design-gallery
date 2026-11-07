@@ -15,7 +15,8 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 
 import { buildSource } from './toolkit/build.mjs';
-import { refreshTypes, isSourcePath, readGroups } from './toolkit/project.mjs';
+import { refreshTypes, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
+import { loadConfig } from './toolkit/config.mjs';
 const publicRoot = fileURLToPath(new URL("../public/", import.meta.url));
 const defaultState = path.join(
   process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
@@ -36,6 +37,7 @@ export async function startServer({
       throw new Error(`Cannot read preferences: ${e.message}`);
   }
   let root,
+    sources = sourceDirectories(),
     files = new Map(),
     groups = [],
     watcher,
@@ -61,14 +63,14 @@ export async function startServer({
     for (const client of clients)
       client.write(`data: ${JSON.stringify(data)}\n\n`);
   };
-  async function collect(base, relative = "", out = new Map()) {
+  async function collect(base, relative = "", out = new Map(), sourceNames = sources) {
     for (const entry of await readdir(path.join(base, relative), {
       withFileTypes: true,
     })) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules" || (relative === "" && entry.name === "art")) continue;
+      if (entry.name.startsWith(".") || entry.name === "node_modules" || (relative === "" && entry.name === "art" && !sourceNames.includes("art"))) continue;
       const name = path.posix.join(relative, entry.name);
-      if (entry.isDirectory()) await collect(base, name, out);
-      else if (entry.isFile() && (/\.svg$/i.test(name) || isSourcePath(name))) {
+      if (entry.isDirectory()) await collect(base, name, out, sourceNames);
+      else if (entry.isFile() && (/\.svg$/i.test(name) || isSourcePath(name, sourceNames))) {
         const info = await stat(path.join(base, name));
         const version = `${info.mtimeMs}-${info.size}`;
         const old = base === root ? files.get(name) : undefined;
@@ -99,8 +101,10 @@ export async function startServer({
     if (!(await stat(next)).isDirectory())
       throw new Error("Choose a directory containing SVG files.");
     if ((await readdir(next)).includes("tokens.css")) refreshTypes({design:next});
-    const nextFiles = await collect(next),
-      nextGroups = await readGroups(next);
+    const project = await loadConfig(next);
+    const nextSources = project.design === next ? project.sources : sourceDirectories();
+    const nextFiles = await collect(next, "", new Map(), nextSources),
+      nextGroups = await readGroups(next, nextSources);
     if (!nextFiles.size) throw new Error("No SVG files in this directory.");
     // Complete reads before switching, so an invalid directory leaves the current canvas intact.
     const nextWatcher = watch(next, { recursive: true }, (_event, filename) => {
@@ -118,6 +122,7 @@ export async function startServer({
     watcher?.close();
     watcher = nextWatcher;
     root = next;
+    sources = nextSources;
     touched.clear();
     files = nextFiles;
     groups = nextGroups;
@@ -143,7 +148,7 @@ export async function startServer({
       touched.clear();
       const base = root,
         next = await collect(base),
-        nextGroups = await readGroups(base);
+        nextGroups = await readGroups(base, sources);
       if (root !== base) return;
       const changed = [...new Set([...files.keys(), ...next.keys()])].filter(
         (k) => files.get(k)?.version !== next.get(k)?.version,
@@ -218,8 +223,8 @@ export async function startServer({
       cached = svgCache.get(key);
     if (cached?.version === asset.version) return cached;
     if (name.endsWith('.tsx')) {
-      const built = await buildSource({root:path.dirname(root),design:root,output:path.join(root,'.sdg/build')},path.join(root,name),{write:false});
-      const result = {version:asset.version,dependencies:built.dependencies.map(p=>path.relative(root,p).split(path.sep).join('/')),body:JSON.stringify({format:'tsx',component:name.startsWith('components/'),frames:built.frames.map(f=>({...f,document:f.document(theme)}))})};
+      const built = await buildSource({root:path.dirname(root),design:root,output:path.join(root,'.sdg/build'),sources},path.join(root,name),{write:false});
+      const result = {version:asset.version,dependencies:built.dependencies.map(p=>path.relative(root,p).split(path.sep).join('/')),body:JSON.stringify({format:'tsx',component:!name.startsWith('surfaces/'),frames:built.frames.map(f=>({...f,document:f.document(theme)}))})};
       svgCache.set(key,result); return result;
     }
     let content = await readFile(path.join(root, name), "utf8");

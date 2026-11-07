@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { sourceDirectories } from './project.mjs';
 
 export const VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url))).version;
 export const UPDATE = 'npm install -g @whzxc/svg-design-gallery';
@@ -82,5 +83,5 @@ export async function loadConfig(cwd = process.cwd()) {
   if (!Number.isInteger(compare.port) || compare.port < 1 || compare.port > 65535) throw new Error('Set compare.port to an integer from 1 to 65535 in sdg.config.mjs');
   for (const key of ['start', 'fixture', 'ready', 'texts']) if (compare[key] !== undefined && typeof compare[key] !== 'function') throw new Error(`Set compare.${key} to a function in sdg.config.mjs`);
   if (compare.block !== undefined && (!Array.isArray(compare.block) || compare.block.some(value => typeof value !== 'string'))) throw new Error('Set compare.block to an array of request patterns in sdg.config.mjs');
-  return { root, design: path.resolve(root, config.design ?? 'design'), output: path.resolve(root, config.output ?? 'output/design'), compare };
+  return { root, sources: sourceDirectories(config), design: path.resolve(root, config.design ?? 'design'), output: path.resolve(root, config.output ?? 'output/design'), compare };
 }

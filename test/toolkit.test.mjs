@@ -7,7 +7,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {jsx,jsxs,Fragment,Frame,Icon} from '../src/toolkit/runtime.mjs';
 import {parseTokens,themeCss} from '../src/toolkit/tokens.mjs';
-import {init,starterTokens,selectSources,refreshTypes} from '../src/toolkit/project.mjs';
+import {init,starterTokens,selectSources,refreshTypes,sourceDirectories,isSourcePath} from '../src/toolkit/project.mjs';
 import {buildSource} from '../src/toolkit/build.mjs';
 import {loadConfig,discoverRoot,satisfies,viewport} from '../src/toolkit/config.mjs';
 import {check,inspectFrame,render} from '../src/toolkit/commands.mjs';
@@ -111,23 +111,52 @@ test('check permits token paint, brand art, clipped content and intentional elli
   const c=await project(t);put(c,'surfaces/a.tsx',source('<div class="w-[200px] h-[100px] overflow-hidden"><span data-brand class="text-[#ff0101]">Brand</span><div class="w-4 truncate">Clipped text</div></div>'));
   const p=[];assert.equal(await check(c,[],{},()=>{},s=>p.push(s)),0,p.join('\n'));
 });
-test('check and render discover only direct component and surface TSX sources',async t=>{
-  const c=await project(t);
-  put(c,'scenes/topology-screen.tsx','export const width=200;');
-  const component=put(c,'components/a.tsx',`import {width} from '../scenes/topology-screen';${source('<div style={{width,height:100}}/>')}`);
-  const surface=put(c,'surfaces/a.tsx',source('<div/>'));
-  for(const name of ['helper.tsx','art/helper.tsx','helpers/helper.tsx','components/nested/helper.tsx','surfaces/nested/helper.tsx','components/helper.ts'])put(c,name,'imports only');
-  writeFileSync(path.join(c.design,'gallery.json'),JSON.stringify({groups:[{title:'Sources',assets:['surfaces/a.tsx','components/a.tsx']}]}));
-  assert.deepEqual(selectSources(c),[component,surface]);
-  for(const name of ['scenes/topology-screen','design/helper.tsx','art/helper.tsx','components/nested/helper.tsx','surfaces/nested/helper.tsx','components/helper.ts']) {
-    assert.throws(()=>selectSources(c,[name]),/Invalid source.*directly/);
+test('check, render and the canvas discover configured top-level TSX source directories',async t=>{
+  assert.deepEqual(sourceDirectories(),['components','surfaces']);
+  for(const sources of [[],null,'modules',['nested/modules'],['../modules'],['.sdg'],['modules\\nested'],[42]]) {
+    assert.throws(()=>sourceDirectories({sources}),/plain top-level directory names/);
   }
-  const logs=[],problems=[];
-  assert.equal(await check(c,[],{},s=>logs.push(s),s=>problems.push(s)),0,problems.join('\n'));
-  assert.deepEqual(logs,['Design check passed for 2 sources.']);
-  assert.equal(await render(c),0);
-  assert.deepEqual(readdirSync(c.output).sort(),['components','surfaces']);
-  for(const directory of ['components','surfaces']) for(const theme of ['light','dark']) assert.ok(readFileSync(path.join(c.output,directory,`a/sample-${theme}.png`)).length);
+  assert.equal(isSourcePath('modules/a.tsx'),false);
+  assert.equal(isSourcePath('modules/a.tsx',['modules']),true);
+  const {startServer}=await import('../src/server.mjs');
+  for(const directories of [['components','surfaces'],['components','modules','surfaces']]) {
+    const root=temporary(t);init({root},()=>{});
+    writeFileSync(path.join(root,'sdg.config.mjs'),`export default { sources: ${JSON.stringify(directories)} };`);
+    const c=await loadConfig(root);
+    assert.deepEqual(c.sources,directories);
+    put(c,'scenes/topology-screen.tsx','export const width=200;');
+    const component=put(c,'components/a.tsx',`import {width} from '../scenes/topology-screen';${source('<div style={{width,height:100}}/>')}`);
+    const surface=put(c,'surfaces/a.tsx',source('<div/>'));
+    const module=put(c,'modules/a.tsx',source('<div/>'));
+    const expected=(directories.includes('modules')?[component,module,surface]:[component,surface]).sort();
+    for(const name of ['helper.tsx','art/helper.tsx','helpers/helper.tsx','components/nested/helper.tsx',
+      'surfaces/nested/helper.tsx','modules/nested/helper.tsx','components/helper.ts'])put(c,name,'imports only');
+    writeFileSync(path.join(c.design,'gallery.json'),JSON.stringify({groups:[{title:'Sources',assets:directories.map(d=>`${d}/a.tsx`)}]}));
+    assert.deepEqual(selectSources(c),expected);
+    for(const name of ['scenes/topology-screen','design/helper.tsx','art/helper.tsx','components/nested/helper.tsx',
+      'surfaces/nested/helper.tsx','modules/nested/helper.tsx','components/helper.ts']) {
+      assert.throws(()=>selectSources(c,[name]),/Invalid source.*directly/);
+    }
+    if(directories.includes('modules'))assert.deepEqual(selectSources(c,['modules/a']),[module]);
+    else assert.throws(()=>selectSources(c,['modules/a']),/Invalid source.*directly/);
+    const logs=[],problems=[];
+    assert.equal(await check(c,[],{},s=>logs.push(s),s=>problems.push(s)),0,problems.join('\n'));
+    assert.deepEqual(logs,[`Design check passed for ${expected.length} sources.`]);
+    assert.equal(await render(c),0);
+    assert.deepEqual(readdirSync(c.output).sort(),[...directories].sort());
+    for(const directory of directories)for(const theme of ['light','dark']) {
+      assert.ok(readFileSync(path.join(c.output,directory,`a/sample-${theme}.png`)).length);
+    }
+    const server=await startServer({directory:c.design,stateDirectory:path.join(c.root,'.viewer')});
+    try {
+      const manifest=await (await fetch(new URL('/manifest',server.url))).json();
+      assert.deepEqual(manifest.assets.map(asset=>asset.path),directories.map(d=>`${d}/a.tsx`).sort());
+      if(directories.includes('modules')) {
+        const asset=await (await fetch(new URL('/asset/modules/a.tsx',server.url))).json();
+        assert.equal(asset.format,'tsx');assert.equal(asset.component,true);
+      }
+    } finally {await server.close();}
+  }
 });
 test('gallery entries cannot promote helper modules to sources',async t=>{
   const c=await project(t);
