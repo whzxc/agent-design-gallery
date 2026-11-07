@@ -68,6 +68,6 @@ npm start -- /path/to/design --no-open
 npm test
 ```
 
-The server serves the checked-in frontend and `design/tokens.css` directly. Reload after frontend edits; restart after server edits. `npm pack` copies the shared viewer tokens into the packaged browser files. No frontend framework is required. Maintainers publish only to the configured private registry, `https://npm.leow.top`.
+The server serves the checked-in frontend and `design/tokens.css` directly. Reload after frontend edits; restart after server edits. `npm pack` copies the shared viewer tokens into the packaged browser files. No frontend framework is required. Maintainers publish to the public npm registry; a scope registry in the local npm config takes precedence over `publishConfig`, so override it with `npm publish --@whzxc:registry=https://registry.npmjs.org/`.
 
 See [SDG design](docs/design.md), [architecture](docs/architecture.md), and [performance](docs/performance.md). ARC's MIT-licensed gallery is the starting point; the MIT license and Lucide/Feather icon notices are retained in `LICENSE`.

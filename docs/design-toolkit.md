@@ -14,7 +14,7 @@ This document is the format and command contract. A project's own design documen
 npm install -g @whzxc/svg-design-gallery
 ```
 
-The package comes from the private registry configured for the `@whzxc` scope. Run the same install again to update. `check`, `render` and `compare` launch Chromium through the Playwright that ships with `sdg`; the viewer and the build start without it. When Chromium is missing, those commands stop with the command that installs it for that Playwright version.
+The package comes from the public npm registry. Run the same install again to update. `check`, `render` and `compare` launch Chromium through the Playwright that ships with `sdg`; the viewer and the build start without it. When Chromium is missing, those commands stop with the command that installs it for that Playwright version.
 
 A project may set `requires` in `sdg.config.mjs`, such as `'>=0.4.0'`. Older versions stop with exit code 2 and the update command, so every contributor checks with the same rules.
 
