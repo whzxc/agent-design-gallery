@@ -83,3 +83,7 @@ All six runs reported no page errors and preserved the camera on file save. The 
 ## Selection and label refresh, 2026-11-07
 
 The state-persistence and label changes were compared with `15f80c9` using the same 34-source snapshot, environment and three sequential runs per implementation. Raw data is retained under `output/state-labels-20261107/performance/`. Median reload time was 598 ms before and 580 ms after; catalog time was 27 ms and 26 ms. Pan frame P95 stayed at 16.8 ms and zoom frame P95 at 16.7 ms. Refreshing visible labels during pans increased main-thread task time from 259 ms to 282 ms across 120 moves. Zoom task time was 603 ms and 601 ms. File-save refresh was 341 ms and 339 ms; all runs preserved the camera and reported no page errors.
+
+## Click-to-copy labels, 2026-11-07
+
+One paired run against `6b07f5e` used the same 34-source snapshot and benchmark environment. Raw output remains under `output/copy-labels-20261107/performance/`. Reload measured 577 ms before and 543 ms after; catalog time was 24 ms and 23 ms. Pan frame P95 stayed at 16.7 ms; zoom frame P95 was 16.8 ms and 16.7 ms. Both runs preserved the camera on file save and reported no page errors.

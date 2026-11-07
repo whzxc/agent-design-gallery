@@ -1,3 +1,4 @@
+import { icon } from './icons.js';
 // Retain screen-sized text; pure pans translate one layer until the camera settles.
 export function overlaps(a, b) {
   return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
@@ -6,7 +7,7 @@ export function overlaps(a, b) {
 export function placeLabels(candidates, obstacles, width, height, measure) {
   const occupied = [...obstacles], result = [];
   const sized = candidate => {
-    const parts = candidate.parts.map(part => ({ ...part, width: measure(part) }));
+    const parts = candidate.parts.map(part => ({ ...part, width: measure(part) + (part.copyText === undefined || part.copyIcon === false ? 0 : 16) }));
     const w = parts.reduce((sum, p) => sum + p.width + (p.gap ?? 0), 0) + (candidate.paddingRight ?? 0);
     const h = candidate.height ?? Math.max(...parts.map(p => p.size)) * 1.2;
     return { ...candidate, parts, width: w, height: h, y: candidate.y - h / 2 };
@@ -25,6 +26,9 @@ export function placeLabels(candidates, obstacles, width, height, measure) {
         parts = parts.filter((_, i) => i !== last);
         label = sized({...candidate, parts});
       }
+      if (!fits(label) && parts.some(p => p.copyText !== undefined)) {
+        label = sized({...candidate,parts:parts.map(p => p.copyText === undefined ? p : {...p,copyIcon:false})});
+      }
       return label;
     });
     if (labels.some((label, i) => !fits(label) || labels.slice(0, i).some(other => overlaps(label, other)))) continue;
@@ -33,8 +37,9 @@ export function placeLabels(candidates, obstacles, width, height, measure) {
   return result;
 }
 export class Labels {
-  constructor(root) {
+  constructor(root, onCopyError) {
     this.root = root;
+    this.onCopyError = onCopyError;
     this.layer = document.createElement('div');
     this.layer.className = 'label-layer';
     root.append(this.layer);
@@ -68,7 +73,30 @@ export class Labels {
       const signature = JSON.stringify(label.parts);
       if (node.dataset.signature !== signature) {
         node.replaceChildren(...label.parts.map(part => {
-          const span = document.createElement(part.timestamp ? 'time' : 'span'); span.textContent = part.text;
+          const span = document.createElement(part.copyText !== undefined ? 'button' : part.timestamp ? 'time' : 'span'); span.textContent = part.text;
+          if (part.copyText !== undefined) {
+            span.type = 'button';
+            span.className = 'label-copy';
+            const glyph = document.createElement('span'); glyph.className = 'label-copy-icon';
+            glyph.hidden = part.copyIcon === false;
+            const feedback = copied => {
+              glyph.innerHTML = icon(copied ? 'check' : 'copy', 12);
+              span.setAttribute('aria-label', copied ? `Copied ${part.copyText}` : `Copy ${part.copyText} name`);
+              span.title = copied ? 'Copied' : 'Copy name';
+            };
+            feedback(false); span.append(glyph);
+            for (const event of ['pointerdown','pointerup','dblclick']) span.addEventListener(event, e => e.stopPropagation());
+            span.onkeydown = e => {if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()};
+            let timer;
+            span.onclick = async e => {
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(part.copyText);
+                this.onCopyError?.(null);
+                feedback(true);clearTimeout(timer);timer=setTimeout(()=>feedback(false),1200);
+              } catch (error) {this.onCopyError?.(error)}
+            };
+          }
           if (part.timestamp) {span.dateTime = part.timestamp;span.title = part.title;span.style.pointerEvents = 'auto'}
           Object.assign(span.style, { fontSize: `${part.size}px`, fontWeight: part.weight ?? 400, color: part.color, marginLeft: `${part.gap ?? 0}px` });
           return span;

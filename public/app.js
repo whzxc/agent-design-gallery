@@ -31,7 +31,10 @@ let raf = 0,
   loading = 0,
   queued = [],
   palette = {};
-const labelLayer = new Labels($("#labels"));
+const labelLayer = new Labels($("#labels"), copyError => {
+  if (copyError) error(`Cannot copy name: ${copyError.message}`);
+  else if ($('#error').textContent.startsWith('Cannot copy name:')) error('');
+});
 document.fonts.ready.then(() => {labelLayer.metrics.clear();requestDraw()});
 let labelsDirty = true, labelObstacles = null;
 let drawingDirty = true, drawingView = null, drawingMargin = 0, drawingReady = 0, drawingCount = 0;
@@ -589,6 +592,7 @@ function drawLabels(displayed) {
   const candidates = [], screen = box => ({ x: view.x + box.x * view.scale, y: view.y + box.y * view.scale });
   const caption = Number.parseFloat(palette['text-caption']), meta = Number.parseFloat(palette['text-meta']), section = Number.parseFloat(palette['text-section']);
   const part = (text, size, weight, color, gap = 0) => ({ text, size, weight, color, gap });
+  const title = (...args) => ({...part(...args),copyText:args[0]});
   const modified = a => a.modified ? [{...part(a.modified.text,meta,400,palette['text-tertiary'],10),...a.modified,optional:true}] : [];
   const heading = (x, y, right) => {
     const half = meta * .6;
@@ -605,7 +609,7 @@ function drawLabels(displayed) {
   if (!inspection) for (const g of groups) {
     if (!visible(g)) continue;
     const p = screen(g);
-    candidates.push({ id: `section:${g.title}`, x: p.x, y: p.y - 16, slot: g.width * view.scale, parts: [part(g.title, section, 650, palette.text), {...part(`${g.assets.length} assets`, meta, 400, palette['text-tertiary'], 8),optional:true}] });
+    candidates.push({ id: `section:${g.title}`, x: p.x, y: p.y - 16, slot: g.width * view.scale, parts: [title(g.title, section, 650, palette.text), {...part(`${g.assets.length} assets`, meta, 400, palette['text-tertiary'], 8),optional:true}] });
   }
   if (view.scale >= .2) {
     const flows = new Set();
@@ -615,20 +619,20 @@ function drawLabels(displayed) {
       const p = screen(a), chosen = selectedId === a.id;
       if (a.kind === 'set' || inspection) {
         candidates.push({ id: `set:${a.id}`, ...heading(p.x,p.y-12,p.x+(a.width+64)*view.scale-10),
-          parts:[part(inspection ? a.shown[0].name : a.name,meta,550,chosen ? palette.text : palette['text-secondary']), ...(!inspection ? [{ ...part(`${a.parts.length} ${a.parts.length === 1 ? 'form' : 'forms'}`,meta,400,palette['text-tertiary'],6), optional: true },...modified(a)] : [])] });
+          parts:[title(inspection ? a.shown[0].name : a.name,meta,550,chosen ? palette.text : palette['text-secondary']), ...(!inspection ? [{ ...part(`${a.parts.length} ${a.parts.length === 1 ? 'form' : 'forms'}`,meta,400,palette['text-tertiary'],6), optional: true },...modified(a)] : [])] });
         if (!inspection && view.scale >= .75 && a.parts.length > 1) {
           const crop = a.shown[0];
           candidates.push(...a.parts.map(form => ({ id:`form:${a.id}:${form.id}`,x:p.x+(form.x-crop.x)*view.scale,y:p.y+(form.y-crop.y)*view.scale-9.5,slot:Infinity,height:13,paddingRight:6,within:{x:p.x,y:p.y,width:a.width*view.scale,height:a.height*view.scale},
-            parts:[part(form.name,caption,400,palette['text-tertiary'])] })));
+            parts:[title(form.name,caption,400,palette['text-tertiary'])] })));
         }
       } else {
         if (!flows.has(a.path)) {
           flows.add(a.path);
           const family = displayed.filter(item => item.path === a.path), first = family[0];
           const origin = screen(first), right = Math.max(...family.map(item => item.x+item.width));
-          candidates.push({ id:`flow:${a.path}`,...heading(origin.x,origin.y-34,origin.x+(right-first.x)*view.scale),parts:[part(a.name,meta,600,palette['text-secondary']),{...part(`${a.parts.length} ${a.parts.length === 1 ? 'frame' : 'frames'}`,meta,400,palette['text-tertiary'],6),optional:true},...modified(a)] });
+          candidates.push({ id:`flow:${a.path}`,...heading(origin.x,origin.y-34,origin.x+(right-first.x)*view.scale),parts:[title(a.name,meta,600,palette['text-secondary']),{...part(`${a.parts.length} ${a.parts.length === 1 ? 'frame' : 'frames'}`,meta,400,palette['text-tertiary'],6),optional:true},...modified(a)] });
         }
-        candidates.push({ id:`frame:${a.id}`,x:p.x,y:p.y-12,slot:(a.width+64)*view.scale,parts:[part(a.shown[0].name,caption,chosen?550:400,chosen?palette.text:palette['text-tertiary'])] });
+        candidates.push({ id:`frame:${a.id}`,x:p.x,y:p.y-12,slot:(a.width+64)*view.scale,parts:[title(a.shown[0].name,caption,chosen?550:400,chosen?palette.text:palette['text-tertiary'])] });
       }
     }
   }

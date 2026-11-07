@@ -18,6 +18,12 @@ test('optional modification time yields to the form count and asset name', () =>
   assert.deepEqual(place([{...label,slot:60}])[0].parts.map(p=>p.text),['button']);
   assert.equal(place([{...label,slot:200}])[0].parts.length,3);
 });
+test('copy icons reserve space and yield before a narrow name is hidden', () => {
+  const label={id:'name',x:20,y:40,slot:60,parts:[part('button',40,{copyText:'button'})]};
+  assert.equal(place([label])[0].width,56);
+  const narrow=place([{...label,slot:45}])[0];
+  assert.equal(narrow.width,40);assert.equal(narrow.parts[0].copyIcon,false);
+});
 test('form labels use padded text bounds inside the artboard and appear as a group', () => {
   const within={x:100,y:100,width:144,height:94};
   const first={ id:'regular',x:124,y:126.5,height:13,paddingRight:6,slot:Infinity,within,parts:[part('regular',36)] };

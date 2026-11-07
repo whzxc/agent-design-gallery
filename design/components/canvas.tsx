@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame, Icon } from 'sdg';
 import { Sidebar, Inspector, Menu, OpenDialog, Shortcuts } from './panel';
 import { Tools, AppBar, ZoomBar } from './toolbar';
 import { Tooltip } from './tooltip';
@@ -18,7 +18,7 @@ export function Drawing({ nodes }: { nodes: any[] }): unknown {
         <image width={preview.size[0]} height={preview.size[1]} href={preview.dark} class="hidden dark:inline"/>
       </svg>}
       {kind!=='section' && outline && <rect width={width} height={height} rx={Math.min(6,width/2,height/2)} class={selected?'fill-none stroke-accent stroke-[2]':'fill-none stroke-border'}/>}
-      {labels.map(([x,y,role,text]:any)=><text x={x} y={y} dominant-baseline="central" class={labelClasses[role]}>{text}</text>)}
+      {labels.map(([x,y,role,text]:any)=>role==='copy' ? <g transform={`translate(${x} ${y-6})`}><Icon name="copy" size={12} class="text-text-tertiary"/></g> : <text x={x} y={y} dominant-baseline="central" class={labelClasses[role]}>{text}</text>)}
       <Drawing nodes={children}/>
     </g>);
 }

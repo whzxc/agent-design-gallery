@@ -22,6 +22,8 @@ h3 { font-size:var(--text-meta); color:var(--text-tertiary); font-weight:550; li
 #labels { position:absolute; inset:0; overflow:hidden; pointer-events:none; contain:layout style; }
 .label-layer { position:absolute; inset:0; will-change:transform; }
 .canvas-label { position:absolute; top:0; left:0; display:flex; align-items:center; white-space:nowrap; line-height:1.2; }
+.label-copy { display:inline-flex; align-items:center; gap:4px; pointer-events:auto; text-align:left; }
+.label-copy-icon { display:flex; flex:none; color:var(--text-tertiary); }
 .floating { position:fixed; background:var(--surface); border-radius:var(--radius-panel); box-shadow:var(--shadow-float); }
 #sidebar { top:12px; left:12px; bottom:12px; width:260px; display:flex; flex-direction:column; padding-top:136px; overflow:hidden; }
 .sidebar-heading { position:absolute; top:6px; left:6px; right:6px; height:32px; display:flex; align-items:center; gap:10px; }

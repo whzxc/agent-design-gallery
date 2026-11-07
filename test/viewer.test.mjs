@@ -263,6 +263,53 @@ test('camera pans retain labels, while scale, settle and viewport changes refres
   } finally {await browser.close();await server.close()}
 });
 
+test('canvas names copy by pointer and keyboard without changing the camera or selection', {timeout:30000}, async t => {
+  const stateDirectory=await temporary(t);
+  const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory,fixtures:{states,recent}});
+  const browser=await launch();
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:900}});
+    await page.addInitScript(()=>{
+      window.copiedNames=[];
+      window.nativeClipboardWrite=navigator.clipboard.writeText.bind(navigator.clipboard);
+      Object.defineProperty(navigator.clipboard,'writeText',{configurable:true,value:async text=>{
+        if(window.copyFailure) throw Error('Clipboard access denied');
+        window.copiedNames.push(text);
+      }});
+    });
+    await page.goto(new URL('/?fixture=sample-inspect-component',server.url).href);
+    await config.compare.ready(page,'sample-inspect-component');
+    const view=await page.evaluate(()=>window.__sdg.view);
+    const name=page.getByRole('button',{name:'Copy button name',exact:true});
+    await name.locator('.label-copy-icon').click();
+    await page.getByRole('button',{name:'Copied button',exact:true}).waitFor();
+    assert.deepEqual(await page.evaluate(()=>window.copiedNames),['button']);
+    assert.deepEqual(await page.evaluate(()=>window.__sdg.view),view);
+    assert.equal(await page.locator('#source-name').textContent(),'button');
+    await name.waitFor({timeout:2500});
+    await name.focus();await page.keyboard.press('Enter');
+    await page.waitForFunction(()=>window.copiedNames.length===2);
+    assert.deepEqual(await page.evaluate(()=>window.__sdg.view),view);
+    await page.evaluate(()=>{window.copyFailure=true});
+    await page.getByRole('button',{name:'Copy primary name',exact:true}).click();
+    await page.locator('#error').waitFor();
+    assert.match(await page.locator('#error').textContent(),/Clipboard access denied/);
+    assert.deepEqual(await page.evaluate(()=>window.copiedNames),['button','button']);
+    await page.evaluate(()=>{window.copyFailure=false});
+    await page.getByRole('button',{name:'Copy primary name',exact:true}).focus();
+    await page.keyboard.press('Space');
+    await page.waitForFunction(()=>window.copiedNames.length===3);
+    assert.equal((await page.evaluate(()=>window.copiedNames)).at(-1),'primary');
+    assert.equal(await page.locator('#error').isVisible(),false);
+    assert.deepEqual(await page.evaluate(()=>window.__sdg.view),view);
+    await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:new URL(server.url).origin});
+    await page.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{value:window.nativeClipboardWrite}));
+    await name.waitFor();await name.click();
+    await page.getByRole('button',{name:'Copied button',exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'button');
+  } finally {await browser.close();await server.close()}
+});
+
 test('TSX sets and flows use built frame sizes, inline previews, notes and import-dependent refresh', {timeout:30000}, async t=>{
   const {writeFile}=await import('node:fs/promises');
   const {init}=await import('../src/toolkit/project.mjs');

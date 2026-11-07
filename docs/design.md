@@ -76,7 +76,7 @@ Every surface frame declares its fixture and a page capture at a 1440 × 900 vie
 
 ## Implementation notes
 
-The asset metadata heading in `design/components/asset-label.tsx` was approved on 2026-11-07. Modification times describe the source file on disk. Fixture timestamps use November 7, 2026 at 13:24:08 UTC so comparisons remain deterministic.
+The asset metadata heading and its copy interaction in `design/components/asset-label.tsx` were approved on 2026-11-07. Clicking a component, flow, frame, form or section name, or its adjacent 12px copy icon, copies the displayed name. A successful copy replaces the icon with a check for 1.2 seconds. The icon occupies 16px including its gap and yields when needed to keep a narrow name visible. Title buttons support Enter and Space without triggering canvas gestures. Clipboard failures use the existing error alert. Modification times describe the source file on disk. Fixture timestamps use November 7, 2026 at 13:24:08 UTC so comparisons remain deterministic.
 
 - The runtime theme uses `design/tokens.css` as its only token source.
 - Icons use Lucide geometry at a 1.75px stroke. Do not use Unicode glyphs as icons.

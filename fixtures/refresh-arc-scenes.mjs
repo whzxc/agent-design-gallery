@@ -47,10 +47,13 @@ try {
       const snapshot = await page.evaluate(() => {
         if (document.documentElement.dataset.fixtureError) throw Error(document.documentElement.dataset.fixtureError);
         const zoom = document.querySelector('.zoom').getBoundingClientRect();
-        return { view: window.__sdg.view, zoom: [zoom.x, zoom.y], labels: [...document.querySelectorAll('.canvas-label:not([hidden])')].flatMap(el => [...el.children].map(span => {
+        return { view: window.__sdg.view, zoom: [zoom.x, zoom.y], labels: [...document.querySelectorAll('.canvas-label:not([hidden])')].flatMap(el => [...el.children].flatMap(span => {
           const b = span.getBoundingClientRect(), s = getComputedStyle(span);
           const role = s.fontSize === '14px' ? 'section' : s.fontSize === '11px' ? (s.fontWeight === '550' ? 'selected-frame' : 'form') : s.fontWeight === '400' ? 'count' : s.fontWeight === '600' ? 'flow' : s.color === getComputedStyle(document.body).color ? 'selected-set' : 'set';
-          return [b.x, b.y + b.height / 2, role, span.textContent];
+          const labels = [[b.x, b.y + b.height / 2, role, span.textContent]];
+          const glyph = span.querySelector('.label-copy-icon:not([hidden])');
+          if (glyph) {const box=glyph.getBoundingClientRect();labels.push([box.x,box.y+box.height/2,'copy',''])}
+          return labels;
         })) };
       });
       if (state.dialog && !state.empty && !frame.chrome.some(c => c.kind === 'scrim')) frame.chrome.unshift({kind: 'scrim'});
