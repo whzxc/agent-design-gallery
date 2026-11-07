@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { startServer } from './src/server.mjs';
-import { states, recent } from './fixtures/viewer.mjs';
+import { states, recent, assetModifiedAt } from './fixtures/viewer.mjs';
 
 export default {
   requires: '>=0.4.0',
@@ -14,14 +14,14 @@ export default {
       try {
         const empty = path.join(temporary, 'empty'); await mkdir(empty);
         const server = await startServer({ directory: path.join(root, 'fixtures/arc-sample/design'), port, stateDirectory: temporary,
-          fixtures: { states, recent, paths: { '~/projects/empty': empty } } });
+          fixtures: { states, recent, assetModifiedAt, paths: { '~/projects/empty': empty } } });
         return async () => { try { await server.close(); } finally { await rm(temporary, { recursive: true, force: true }); } };
       } catch (error) { await rm(temporary, { recursive: true, force: true }); throw error; }
     },
     fixture(name) {
       const state = states[name];
       if (!state) throw new Error(`Unknown SDG fixture ${name}; choose ${Object.keys(states).join(', ')}`);
-      return { url: `/?fixture=${encodeURIComponent(name)}`, theme: state.theme, locale: 'en-US', clock: '2026-01-01T00:00:00Z' };
+      return { url: `/?fixture=${encodeURIComponent(name)}`, theme: state.theme, locale: 'en-US', timezone: 'UTC', clock: '2026-01-01T00:00:00Z' };
     },
     async ready(page, name) {
       await page.waitForFunction(name => document.documentElement.dataset.fixtureError || document.documentElement.dataset.fixtureReady === name, name, { timeout: 15000 });

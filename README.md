@@ -42,7 +42,7 @@ Files group by directory unless `gallery.json` supplies project groups. Entries 
 }
 ```
 
-Unlisted assets remain in directory groups. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Recent directories, theme, sidebar, inspector, and camera preferences stay in `$XDG_STATE_HOME/svg-design-gallery/state.json`, defaulting to `~/.local/state/svg-design-gallery/state.json`. `--state-dir` isolates preferences.
+Unlisted assets remain in directory groups. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Recent directories, theme, sidebar, inspector, and per-directory camera and selection preferences stay in `$XDG_STATE_HOME/svg-design-gallery/state.json`, defaulting to `~/.local/state/svg-design-gallery/state.json`. Refreshing or reopening a directory restores its zoom, position, selected component and form. Canvas asset headings show the source's last modification time in local time; hover for the complete timestamp. `--state-dir` isolates preferences.
 
 ## Design toolkit
 

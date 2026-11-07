@@ -82,7 +82,9 @@ const frames = [
       "origin": "440 218"
     },
     "chrome": [
-      { "kind": "scrim" },
+      {
+        "kind": "scrim"
+      },
       {
         "left": 60,
         "top": 40,

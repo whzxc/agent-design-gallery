@@ -1,4 +1,5 @@
 // Repository-only deterministic Float states; the installed viewer has no fixtures.
+export const assetModifiedAt = Date.UTC(2026, 10, 7, 13, 24, 8);
 const components = { theme: 'light', sidebar: true, group: 'Essentials', asset: 'components/field.tsx', camera: 'group' };
 const overview = { theme: 'dark', sidebar: false, camera: 'all' };
 export const states = {

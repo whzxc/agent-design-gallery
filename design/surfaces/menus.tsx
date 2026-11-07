@@ -1,5 +1,6 @@
 import { Frame } from 'sdg';
 import { Screen } from '../components/canvas';
+import { scenes } from '../scenes/menus';
 
 const frames = [
   {
@@ -221,6 +222,9 @@ const frames = [
     },
     "chrome": [
       {
+        "kind": "scrim"
+      },
+      {
         "left": 50,
         "top": 30,
         "kind": "shortcuts"
@@ -230,5 +234,5 @@ const frames = [
 ] as const;
 
 export default () => frames.map(({ chrome, ...frame }) =>
-  <Frame {...frame}><Screen width={frame.width} height={frame.height} chrome={chrome} /></Frame>
+  <Frame {...frame}><Screen width={frame.width} height={frame.height} scene={scenes[frame.name]} chrome={chrome} /></Frame>
 );

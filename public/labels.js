@@ -19,8 +19,13 @@ export function placeLabels(candidates, obstacles, width, height, measure) {
   };
   for (const batch of candidates) {
     const labels = (Array.isArray(batch) ? batch : [batch]).map(candidate => {
-      const full = sized(candidate);
-      return !fits(full) && candidate.parts.some(p => p.optional) ? sized({ ...candidate, parts: candidate.parts.filter(p => !p.optional) }) : full;
+      let parts = candidate.parts, label = sized(candidate);
+      while (!fits(label) && parts.some(p => p.optional)) {
+        const last = parts.findLastIndex(p => p.optional);
+        parts = parts.filter((_, i) => i !== last);
+        label = sized({...candidate, parts});
+      }
+      return label;
     });
     if (labels.some((label, i) => !fits(label) || labels.slice(0, i).some(other => overlaps(label, other)))) continue;
     occupied.push(...labels); result.push(...labels);
@@ -39,7 +44,9 @@ export class Labels {
     this.context = document.createElement('canvas').getContext('2d');
   }
   pan(view) {
-    if (!this.anchor || view.scale !== this.anchor.scale) return false;
+    if (!this.anchor || view.scale !== this.anchor.scale ||
+        (this.pinned && (view.x !== this.anchor.x || view.y !== this.anchor.y)) ||
+        Math.abs(view.x - this.anchor.x) > 32 || Math.abs(view.y - this.anchor.y) > 32) return false;
     this.layer.style.transform = `translate(${view.x - this.anchor.x}px,${view.y - this.anchor.y}px)`;
     return true;
   }
@@ -52,14 +59,17 @@ export class Labels {
       if (!this.metrics.has(key)) { this.context.font = spec; this.metrics.set(key, this.context.measureText(part.text).width); }
       return this.metrics.get(key);
     };
-    for (const label of placeLabels(candidates, obstacles, width, height, measure)) {
+    const placed = placeLabels(candidates, obstacles, width, height, measure);
+    this.pinned = placed.some(label => label.pinned);
+    for (const label of placed) {
       shown.add(label.id);
       let node = this.nodes.get(label.id);
       if (!node) { node = document.createElement('div'); node.className = 'canvas-label'; this.nodes.set(label.id, node); this.layer.append(node); }
       const signature = JSON.stringify(label.parts);
       if (node.dataset.signature !== signature) {
         node.replaceChildren(...label.parts.map(part => {
-          const span = document.createElement('span'); span.textContent = part.text;
+          const span = document.createElement(part.timestamp ? 'time' : 'span'); span.textContent = part.text;
+          if (part.timestamp) {span.dateTime = part.timestamp;span.title = part.title;span.style.pointerEvents = 'auto'}
           Object.assign(span.style, { fontSize: `${part.size}px`, fontWeight: part.weight ?? 400, color: part.color, marginLeft: `${part.gap ?? 0}px` });
           return span;
         }));

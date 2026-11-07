@@ -5,13 +5,13 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { startServer } from '../src/server.mjs';
 import { launch } from '../src/toolkit/browser.mjs';
-import { states, recent } from './viewer.mjs';
+import { states, recent, assetModifiedAt } from './viewer.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const temporary = await mkdtemp(path.join(tmpdir(), 'sdg-refresh-'));
 await mkdir(path.join(temporary, 'empty'));
 const server = await startServer({ directory: path.join(root, 'fixtures/arc-sample/design'), stateDirectory: temporary,
-  fixtures: { states, recent, paths: { '~/projects/empty': path.join(temporary, 'empty') } } });
+  fixtures: { states, recent, assetModifiedAt, paths: { '~/projects/empty': path.join(temporary, 'empty') } } });
 const browser = await launch();
 const art = path.join(root, 'design/art/arc-previews');
 try {
@@ -32,7 +32,7 @@ try {
       items: items.map(({ id, path, x, y, width, height, group }) => ({ id, path, x, y, width, height, group })), world };
   });
   await writeFile(path.join(root, 'fixtures/arc-sample.layout.json'), JSON.stringify({ sections: reference.sections, sources: reference.sources }, null, 2) + '\n');
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, timezoneId:'UTC' });
   const previews = new Map(), scenesBySource = new Map();
   for (const source of ['canvas', 'inspector', 'open-directory', 'menus']) {
     const file = path.join(root, `design/surfaces/${source}.tsx`);
@@ -53,7 +53,7 @@ try {
           return [b.x, b.y + b.height / 2, role, span.textContent];
         })) };
       });
-      if (state.dialog === 'directories' && !state.empty && !frame.chrome.some(c => c.kind === 'scrim')) frame.chrome.unshift({kind: 'scrim'});
+      if (state.dialog && !state.empty && !frame.chrome.some(c => c.kind === 'scrim')) frame.chrome.unshift({kind: 'scrim'});
       const selected = reference.sources.find(a => a.path === state.asset);
       for (const chrome of frame.chrome) {
         if (chrome.kind === 'sidebar' && !chrome.search) {
@@ -79,8 +79,6 @@ try {
           chrome.viewport = [x + (292 - v.x) / v.scale * s, y + (100 - v.y) / v.scale * s, 1124 / v.scale * s, 716 / v.scale * s];
         }
       }
-      // Local menu specimens retain their authored background; their controls do not depend on the world.
-      if (source === 'menus') continue;
       const [ox, oy] = frame.capture.origin.split(' ').map(Number), v = snapshot.view;
       const at = (x, y) => [v.x + x * v.scale - ox, v.y + y * v.scale - oy];
       const visible = (x, y, w, h) => x < frame.width && x + w > 0 && y < frame.height && y + h > 0;
@@ -107,7 +105,7 @@ try {
     }
     text = text.replace(match[0], `const frames = ${JSON.stringify(frames, null, 2)} as const;`);
     await writeFile(file, text);
-    if (source !== 'menus') scenesBySource.set(source, scenes);
+    scenesBySource.set(source, scenes);
   }
   await rm(art, { recursive: true, force: true }); await mkdir(art, { recursive: true });
   for (const [name, { item, scale }] of previews) for (const theme of ['light', 'dark']) {

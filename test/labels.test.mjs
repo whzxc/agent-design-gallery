@@ -12,6 +12,12 @@ test('set labels keep the name when only the count exceeds the slot or hits chro
   assert.equal(place([label],[{x:20,y:30,width:30,height:20}]).length,0);
   assert.equal(place([{...label,slot:60}]).length,0);
 });
+test('optional modification time yields to the form count and asset name', () => {
+  const label={id:'set',x:20,y:40,slot:170,parts:[part('button',40),part('5 forms',43,{gap:6,optional:true}),part('Nov 7, 13:24',80,{gap:10,optional:true})]};
+  assert.deepEqual(place([label])[0].parts.map(p=>p.text),['button','5 forms']);
+  assert.deepEqual(place([{...label,slot:60}])[0].parts.map(p=>p.text),['button']);
+  assert.equal(place([{...label,slot:200}])[0].parts.length,3);
+});
 test('form labels use padded text bounds inside the artboard and appear as a group', () => {
   const within={x:100,y:100,width:144,height:94};
   const first={ id:'regular',x:124,y:126.5,height:13,paddingRight:6,slot:Infinity,within,parts:[part('regular',36)] };

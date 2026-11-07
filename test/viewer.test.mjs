@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, readFile, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, access, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -83,6 +83,45 @@ test('catalog is usable before asset preparation and retains a queued selection'
     assert.equal(await page.locator('[data-navkey="file:components/button.tsx"]').getAttribute('aria-current'),'true');
     assert.equal(await page.locator('#error').isVisible(),false);
   } finally {release();await browser.close();await server.close()}
+});
+test('camera and selected form survive immediate reload and a server restart', {timeout:30000}, async t => {
+  const stateDirectory=await temporary(t), directory=path.join(root,'fixtures/arc-sample/design');
+  let server=await startServer({directory,stateDirectory});
+  const browser=await launch();
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:900}});
+    await page.goto(server.url);await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.getByRole('button',{name:'Toggle Essentials',exact:true}).click();
+    await page.locator('[data-navkey="file:components/button.tsx"]').click();
+    await page.locator('#inspect').click();
+    await page.locator('#forms button').filter({hasText:/^secondary/}).click();
+    await page.locator('#plus').click();
+    const camera=await page.evaluate(()=>window.__sdg.view);
+    // Reload inside the save debounce, without waiting for camera settling.
+    await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
+    assert.deepEqual(await page.evaluate(()=>window.__sdg.view),camera);
+    assert.equal(await page.locator('[data-navkey="file:components/button.tsx"]').getAttribute('aria-current'),'true');
+    assert.match(await page.locator('#forms [aria-current=true]').textContent(),/^secondary/);
+    const data=await(await fetch(new URL('/manifest',server.url))).json();
+    assert.deepEqual(data.selection,{path:'components/button.tsx',form:'secondary',group:'Essentials'});
+    assert.equal(data.assets.find(a=>a.path==='components/button.tsx').modifiedAt,(await stat(path.join(directory,'components/button.tsx'))).mtimeMs);
+    const time=page.locator('.canvas-label:not([hidden]) time').first();
+    await time.waitFor({timeout:3000});assert.ok(await time.getAttribute('datetime'));assert.ok(await time.getAttribute('title'));
+    await page.close();await server.close();
+    server=await startServer({directory,stateDirectory});
+    const restored=await browser.newPage({viewport:{width:1440,height:900}});
+    await restored.goto(server.url);await restored.waitForFunction(()=>window.__sdg?.ready);
+    assert.deepEqual(await restored.evaluate(()=>window.__sdg.view),camera);
+    assert.equal(await restored.locator('#source-name').textContent(),'button');
+    assert.match(await restored.locator('#forms [aria-current=true]').textContent(),/^secondary/);
+    const heading = restored.locator('.canvas-label:not([hidden])').filter({hasText:/^button/});
+    const before = await heading.boundingBox();
+    await restored.locator('.gallery-viewport').evaluate(async el => {
+      el.dispatchEvent(new WheelEvent('wheel',{deltaX:8,deltaY:0,bubbles:true,cancelable:true}));
+      await new Promise(requestAnimationFrame);
+    });
+    assert.equal((await heading.boundingBox()).x,before.x,'clipped headings remain pinned during small pans');
+  } finally {await browser.close();await server.close()}
 });
 test('all fixture states reach drawn readiness without screenshots or persisted preferences', {timeout:90000}, async t => {
   const temporaryRoot=await temporary(t),empty=path.join(temporaryRoot,'empty');await mkdir(empty);
@@ -210,6 +249,13 @@ test('camera pans retain labels, while scale, settle and viewport changes refres
     });
     assert.equal(zoom.updates,3);assert.equal(zoom.chromeReads,0);
     await page.waitForFunction(()=>window.__sdg.ready);
+    const immediate=await page.evaluate(async()=>{
+      const viewport=document.querySelector('.gallery-viewport'),before=window.labelWork.updates;
+      viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:40,deltaY:0,bubbles:true,cancelable:true}));
+      await new Promise(requestAnimationFrame);
+      return window.labelWork.updates-before;
+    });
+    assert.equal(immediate,1,'large pans refresh visible labels without waiting for the idle timer');
     const updates=await page.evaluate(()=>window.labelWork.updates);
     await page.setViewportSize({width:1200,height:800});
     await page.waitForFunction(previous=>window.labelWork.updates>previous&&window.__sdg.ready,updates);

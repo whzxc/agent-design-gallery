@@ -48,9 +48,10 @@ The world is laid out in SVG units and never changes while panning, zooming or c
 Labels draw at constant screen size. Each label is drawn only when it fits its slot and does not collide with floating chrome or another label; otherwise it is omitted.
 
 - Section title: `--text-section` 650 at 16 above the section's top-left, followed 8 later by the asset count in `--text-meta` tertiary.
-- Set name: `--text-meta` 550 secondary, or `--text` when selected, 12 above the artboard, followed 6 later by its form count. Shown from 20% zoom when the name alone fits the set width plus its gap, minus 10 screen pixels. The count follows only when the name, 6px gap and count also fit.
-- Form names: `--text-caption` tertiary, with its center 9.5 above each form's top, inside the artboard. Shown from 75% zoom for sets with two or more forms, for all forms or none.
-- Flow name: `--text-meta` 600 secondary, 34 above the flow, followed by its frame count. Frame name: `--text-caption` tertiary, or 550 `--text` when selected, 12 above the frame. Both shown from 20% zoom.
+- Set name: `--text-meta` 550 secondary, or `--text` when selected, 12 above the artboard, followed 6 later by its form count and 10 later by the source's last modification time. Time uses local `MMM d, HH:mm`; hovering it shows the full local timestamp. Shown from 20% zoom. When space narrows, omit the time first, then the count, retaining the name whenever it fits.
+- Headings whose original anchor moves above or left of the viewport follow the visible canvas edge with an 8px inset, avoiding floating chrome by 12px. The selected asset's heading gets priority when labels collide.
+- Form names: `--text-caption` tertiary, with its center 9.5 above each form's top, inside the artboard. Shown from 75% zoom for sets with two or more forms. Visible captions are tested individually; offscreen or occluded siblings do not hide them.
+- Flow name: `--text-meta` 600 secondary, 34 above the flow, followed by its frame count and source modification time, with the same priority and clipping rules as set headings. Frame name: `--text-caption` tertiary, or 550 `--text` when selected, 12 above the frame. Both shown from 20% zoom.
 - Artboards have a 1px `--border` stroke, radius 6, and the asset's own canvas color. Selection replaces the stroke with a 2px `--accent` ring. Previews never stretch.
 
 ## Frames and fixtures
@@ -74,6 +75,8 @@ Every surface frame declares its fixture and a page capture at a 1440 × 900 vie
 | open-directory | error | light | `~/projects/empty` submitted |
 
 ## Implementation notes
+
+The asset metadata heading in `design/components/asset-label.tsx` was approved on 2026-11-07. Modification times describe the source file on disk. Fixture timestamps use November 7, 2026 at 13:24:08 UTC so comparisons remain deterministic.
 
 - The runtime theme uses `design/tokens.css` as its only token source.
 - Icons use Lucide geometry at a 1.75px stroke. Do not use Unicode glyphs as icons.

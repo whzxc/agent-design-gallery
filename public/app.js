@@ -32,6 +32,7 @@ let raf = 0,
   queued = [],
   palette = {};
 const labelLayer = new Labels($("#labels"));
+document.fonts.ready.then(() => {labelLayer.metrics.clear();requestDraw()});
 let labelsDirty = true, labelObstacles = null;
 let drawingDirty = true, drawingView = null, drawingMargin = 0, drawingReady = 0, drawingCount = 0;
 const zoomValue = $("#zoom-value"), zoomOutput = $("output");
@@ -101,6 +102,7 @@ function positionZoomMenu() {
 }
 
 const media = matchMedia("(prefers-color-scheme: dark)");
+const modifiedDate = new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 window.__sdg = {
   ready: false,
   get view() {
@@ -127,7 +129,7 @@ function error(message) {
   $("#error").textContent = message;
   $("#error").hidden = !message;
 }
-async function api(url, data) {
+async function api(url, data, keepalive = false) {
   if(fixtureName && ["/manifest","/open"].includes(url)) url += `?fixture=${encodeURIComponent(fixtureName)}`;
   const response = await fetch(
     url,
@@ -136,6 +138,7 @@ async function api(url, data) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
+          keepalive,
         }
       : {},
   );
@@ -143,25 +146,30 @@ async function api(url, data) {
   if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
   return result;
 }
-function save() {
-  if(fixtureState || catalog) return;
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(
-    () => {
-      if (catalog) return;
-      api("/preferences", {
-        directory: manifest?.directory,
-        view: inspection
-          ? (history.findLast((h) => !h.inspection)?.view ?? view)
-          : view,
-        theme,
-        sidebar,
-        inspector,
-      }).catch((e) => error(e.message));
+function preferences() {
+  return {
+    directory: manifest?.directory,
+    view,
+    selection: {
+      path: selected,
+      form: currentItem()?.parts.find(p => p.id === selectedForm)?.name ?? null,
+      group: groups[active]?.title ?? null,
     },
-    220,
-  );
+    theme, sidebar, inspector,
+  };
 }
+function persistPreferences(keepalive = false) {
+  clearTimeout(saveTimer);
+  if (fixtureState || catalog || !manifest?.directory) return;
+  return api('/preferences', preferences(), keepalive).catch(e => error(e.message));
+}
+function save() {
+  if(fixtureState || catalog || !manifest?.directory) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persistPreferences, 220);
+}
+window.addEventListener('pagehide', () => void persistPreferences(true));
+document.addEventListener('visibilitychange', () => {if (document.hidden) void persistPreferences(true)});
 function layout(data, preserve = false) {
   const previous = assets,
     previousGroups = groups,
@@ -316,6 +324,7 @@ function selection() {
     }));
   }
   requestDraw();
+  save();
 }
 
 function cameraArea() { return fitArea(width, height, sidebar, inspector && !!selected); }
@@ -375,14 +384,15 @@ function zoom(scale, x = cameraArea().x + cameraArea().width / 2, y = cameraArea
 }
 function commit(next) {
   window.__sdg.ready = false;
+  labelsDirty ||= view.scale !== next.scale;
   view = next;
   moving = true;
   requestDraw(false, false);
+  save();
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     moving = false;
     requestDraw();
-    save();
   }, 150);
 }
 function requestDraw(labelsChanged = true, drawingChanged = true) {
@@ -579,22 +589,36 @@ function drawLabels(displayed) {
   const candidates = [], screen = box => ({ x: view.x + box.x * view.scale, y: view.y + box.y * view.scale });
   const caption = Number.parseFloat(palette['text-caption']), meta = Number.parseFloat(palette['text-meta']), section = Number.parseFloat(palette['text-section']);
   const part = (text, size, weight, color, gap = 0) => ({ text, size, weight, color, gap });
+  const modified = a => a.modified ? [{...part(a.modified.text,meta,400,palette['text-tertiary'],10),...a.modified,optional:true}] : [];
+  const heading = (x, y, right) => {
+    const half = meta * .6;
+    let left = Math.max(8, x), edge = Math.min(width - 8, right);
+    const center = Math.max(8 + half, y);
+    for (const obstacle of labelObstacles) {
+      if (center + half <= obstacle.y || center - half >= obstacle.y + obstacle.height) continue;
+      if (obstacle.x + obstacle.width <= left || obstacle.x >= edge) continue;
+      if (obstacle.x - 12 - left >= edge - obstacle.x - obstacle.width - 12) edge = obstacle.x - 12;
+      else left = obstacle.x + obstacle.width + 12;
+    }
+    return {x:left,y:center,slot:Math.max(0,edge-left),pinned:left !== x || center !== y};
+  };
   if (!inspection) for (const g of groups) {
     if (!visible(g)) continue;
     const p = screen(g);
-    candidates.push({ id: `section:${g.title}`, x: p.x, y: p.y - 16, slot: g.width * view.scale, parts: [part(g.title, section, 650, palette.text), part(`${g.assets.length} assets`, meta, 400, palette['text-tertiary'], 8)] });
+    candidates.push({ id: `section:${g.title}`, x: p.x, y: p.y - 16, slot: g.width * view.scale, parts: [part(g.title, section, 650, palette.text), {...part(`${g.assets.length} assets`, meta, 400, palette['text-tertiary'], 8),optional:true}] });
   }
   if (view.scale >= .2) {
     const flows = new Set();
-    for (const a of displayed) {
+    const labeled = selectedId ? [...displayed].sort((a,b) => Number(b.id === selectedId) - Number(a.id === selectedId)) : displayed;
+    for (const a of labeled) {
       if (!visible(a)) continue;
       const p = screen(a), chosen = selectedId === a.id;
       if (a.kind === 'set' || inspection) {
-        candidates.push({ id: `set:${a.id}`, x:p.x,y:p.y-12,slot:(a.width+64)*view.scale-10,
-          parts:[part(inspection ? a.shown[0].name : a.name,meta,550,chosen ? palette.text : palette['text-secondary']), ...(!inspection ? [{ ...part(`${a.parts.length} ${a.parts.length === 1 ? 'form' : 'forms'}`,meta,400,palette['text-tertiary'],6), optional: true }] : [])] });
+        candidates.push({ id: `set:${a.id}`, ...heading(p.x,p.y-12,p.x+(a.width+64)*view.scale-10),
+          parts:[part(inspection ? a.shown[0].name : a.name,meta,550,chosen ? palette.text : palette['text-secondary']), ...(!inspection ? [{ ...part(`${a.parts.length} ${a.parts.length === 1 ? 'form' : 'forms'}`,meta,400,palette['text-tertiary'],6), optional: true },...modified(a)] : [])] });
         if (!inspection && view.scale >= .75 && a.parts.length > 1) {
           const crop = a.shown[0];
-          candidates.push(a.parts.map(form => ({ id:`form:${a.id}:${form.id}`,x:p.x+(form.x-crop.x)*view.scale,y:p.y+(form.y-crop.y)*view.scale-9.5,slot:Infinity,height:13,paddingRight:6,within:{x:p.x,y:p.y,width:a.width*view.scale,height:a.height*view.scale},
+          candidates.push(...a.parts.map(form => ({ id:`form:${a.id}:${form.id}`,x:p.x+(form.x-crop.x)*view.scale,y:p.y+(form.y-crop.y)*view.scale-9.5,slot:Infinity,height:13,paddingRight:6,within:{x:p.x,y:p.y,width:a.width*view.scale,height:a.height*view.scale},
             parts:[part(form.name,caption,400,palette['text-tertiary'])] })));
         }
       } else {
@@ -602,7 +626,7 @@ function drawLabels(displayed) {
           flows.add(a.path);
           const family = displayed.filter(item => item.path === a.path), first = family[0];
           const origin = screen(first), right = Math.max(...family.map(item => item.x+item.width));
-          candidates.push({ id:`flow:${a.path}`,x:origin.x,y:origin.y-34,slot:(right-first.x)*view.scale,parts:[part(a.name,meta,600,palette['text-secondary']),part(`${a.parts.length} ${a.parts.length === 1 ? 'frame' : 'frames'}`,meta,400,palette['text-tertiary'],6)] });
+          candidates.push({ id:`flow:${a.path}`,...heading(origin.x,origin.y-34,origin.x+(right-first.x)*view.scale),parts:[part(a.name,meta,600,palette['text-secondary']),{...part(`${a.parts.length} ${a.parts.length === 1 ? 'frame' : 'frames'}`,meta,400,palette['text-tertiary'],6),optional:true},...modified(a)] });
         }
         candidates.push({ id:`frame:${a.id}`,x:p.x,y:p.y-12,slot:(a.width+64)*view.scale,parts:[part(a.shown[0].name,caption,chosen?550:400,chosen?palette.text:palette['text-tertiary'])] });
       }
@@ -733,12 +757,14 @@ function up(e) {
       selected = a.path;
       selectedId = a.id;
       active = a.group;
+      selectedForm = a.component ? a.parts[0]?.id ?? null : a.shown[0].id;
       selection();
 
     }
   }
   if (viewport.hasPointerCapture(e.pointerId))
     viewport.releasePointerCapture(e.pointerId);
+  if (!pointers.size && gesture.moved) requestDraw();
 }
 for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
   viewport.addEventListener(event, up);
@@ -922,7 +948,7 @@ async function open(directory) {
   const button = $("#directory-form button[type=submit]");
   button.disabled = true;
   try {
-    if(!fixtureState) await api("/preferences", { directory: manifest?.directory, view, theme });
+    await persistPreferences();
     const data = await api("/open", { directory });
     await applyManifest(data);
     $("#directories").close();
@@ -969,6 +995,10 @@ async function applyManifest(data, force = false) {
         let entry = prepared.get(key);
         if (!entry) {
           entry = await prepare(a, versionTheme);
+          if (Number.isFinite(a.modifiedAt)) {
+            const date = new Date(a.modifiedAt);
+            entry.modified = {text:modifiedDate.format(date),timestamp:date.toISOString(),title:date.toLocaleString(undefined,{dateStyle:'full',timeStyle:'long'})};
+          }
           prepared.set(key, entry);
         }
         results[i] = entry;
@@ -1011,6 +1041,23 @@ async function applyManifest(data, force = false) {
   if (changedRoot || first) {
     if (data.view) view = data.view;
     else frame(world);
+    const restored = data.selection;
+    if (!fixtureState && restored) {
+      const source = manifest.assets.find(a => a.path === restored.path);
+      const form = source?.parts.find(p => p.name === restored.form);
+      const item = assets.find(a => a.path === restored.path && (a.component || !form || a.shown[0].id === form.id));
+      if (item) {
+        selected = item.path;
+        selectedId = item.id;
+        selectedForm = form?.id ?? item.parts[0]?.id ?? null;
+        active = item.group;
+        expanded.add(active);
+      } else {
+        active = groups.findIndex(g => g.title === restored.group);
+        if (active < 0) active = null;
+        else expanded.add(active);
+      }
+    }
   }
   if (selected && !assets.some((a) => a.path === selected)) {
     selected = null;

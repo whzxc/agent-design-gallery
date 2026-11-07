@@ -27,7 +27,7 @@ export async function startServer({
   stateDirectory = defaultState,
   fixtures = null,
 } = {}) {
-  let state = { recent: [], views: {}, theme: "system" };
+  let state = { recent: [], views: {}, selections: {}, theme: "system" };
   const statePath = path.join(stateDirectory, "state.json");
   try {
     state = { ...state, ...JSON.parse(await readFile(statePath, "utf8")) };
@@ -82,6 +82,7 @@ export async function startServer({
                 version,
                 stamp: version,
                 size: info.size,
+                modifiedAt: info.mtimeMs,
               },
         );
       }
@@ -193,6 +194,7 @@ export async function startServer({
     revision,
     recent: state.recent,
     view: state.views[root] ?? null,
+    selection: state.selections[root] ?? null,
     theme: state.theme,
     sidebar: state.sidebar ?? true,
     inspector: state.inspector ?? false,
@@ -200,6 +202,7 @@ export async function startServer({
   function fixtureManifest(name) {
     const data = manifest();
     if (!fixtures || !name) return data;
+    if (Number.isFinite(fixtures.assetModifiedAt)) data.assets = data.assets.map(a => ({...a,modifiedAt:fixtures.assetModifiedAt}));
     const preset = fixtures.states[name];
     if (!preset) throw new Error(`Unknown fixture ${name}; choose a declared SDG fixture.`);
     return { ...data, ...(preset.empty ? { directory: null, assets: [], groups: [] } : {}),
@@ -315,6 +318,14 @@ export async function startServer({
             data.view.scale > 0
           )
             state.views[root] = data.view;
+          if (root && data.directory === root && data.selection &&
+              (data.selection.path === null || files.has(data.selection.path))) {
+            state.selections[root] = {
+              path: data.selection.path,
+              form: typeof data.selection.form === 'string' ? data.selection.form : null,
+              group: typeof data.selection.group === 'string' ? data.selection.group : null,
+            };
+          }
           await persist();
         } else if (url.pathname === "/reveal") {
           if (!files.has(data.path)) throw new Error("Select an existing SVG.");
