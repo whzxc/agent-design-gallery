@@ -10,6 +10,8 @@ Previews are SVG images with cropped viewBoxes, preserving document-local styles
 
 TSX builds return a dependency list, including imported source modules, artwork and tokens. The browser measures standalone frame documents in script-disabled iframes and wraps their static HTML in SVG foreignObjects for the existing image/LOD pipeline. Local legacy SVG references are embedded recursively. Their dependencies participate in cache invalidation. File versions are per asset. An update invalidates the changed file and known dependents, then sends an SSE notification. The camera belongs to the directory and survives refresh; unchanged regions retain positions while enlarged or new regions move below existing content until Arrange current group is invoked.
 
+The directory tree renders from the manifest before asset preparation. Group expansion and filename search are available immediately; a navigation choice made during preparation runs after layout. Forms from one TSX source share a single sandbox document and its compiled stylesheet. Each form replaces the specimen and restores its declared viewport before fonts, images and bounds are measured, avoiding a document navigation for every form.
+
 The service writes preferences and refreshes ignored editor declarations and binds to `127.0.0.1`. Asset paths come from the scanned directory; symlinks are not scanned. Open-directory, preferences, and reveal operations reject requests from another web origin. Opening an invalid or empty directory preserves the current directory. Projects retain their assets, history, conventions, and approval workflow. SDG has no ARC runtime dependency, account system, collaborative state, or asset import database.
 
 `src/toolkit/` implements the [v2 contract](design-toolkit.md):

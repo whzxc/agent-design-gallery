@@ -61,6 +61,29 @@ test('missing directory CLI errors name the path on one plain line', async t => 
     assert.doesNotMatch(error.stderr,/ENOENT|review sdg/);return true;
   });
 });
+test('catalog is usable before asset preparation and retains a queued selection', {timeout:30000}, async t => {
+  const stateDirectory = await temporary(t);
+  const server = await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory});
+  const browser = await launch();
+  let release;
+  const gate = new Promise(resolve => {release=resolve});
+  try {
+    const page = await browser.newPage();
+    await page.route('**/asset/**', async route => {await gate;await route.continue()});
+    await page.goto(server.url, {waitUntil:'domcontentloaded'});
+    await page.locator('#all').waitFor();
+    assert.equal(await page.locator('#sidebar').isVisible(),true);
+    assert.equal(await page.evaluate(()=>window.__sdg.assets),0);
+    assert.equal(await page.evaluate(()=>window.__sdg.ready),false);
+    await page.getByRole('button',{name:'Toggle Essentials',exact:true}).click();
+    await page.locator('[data-navkey="file:components/button.tsx"]').click();
+    release();
+    await page.waitForFunction(()=>window.__sdg.ready);
+    assert.equal(await page.locator('#source-name').textContent(),'button');
+    assert.equal(await page.locator('[data-navkey="file:components/button.tsx"]').getAttribute('aria-current'),'true');
+    assert.equal(await page.locator('#error').isVisible(),false);
+  } finally {release();await browser.close();await server.close()}
+});
 test('all fixture states reach drawn readiness without screenshots or persisted preferences', {timeout:90000}, async t => {
   const temporaryRoot=await temporary(t),empty=path.join(temporaryRoot,'empty');await mkdir(empty);
   const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot,fixtures:{states,recent,paths:{'~/projects/empty':empty}}});

@@ -16,6 +16,14 @@ node tooling/compare.mjs output/performance-v2 output/comparison-new 3 --reuse-s
 
 Use a new output directory for each comparison. The runner exports the exact ARC HEAD into an isolated source snapshot, reuses its installed build dependencies, extracts its product grouping into the snapshot's `design/gallery.json`, and serves the same 46 SVG assets to both implementations. It never saves into the original ARC checkout. Each candidate run uses an isolated preferences directory. ARC and SDG runs are sequential, with fresh browser contexts and server processes. The output retains the source snapshot, JSON samples, screenshots, environment, server logs, and source commit.
 
+To compare an SDG change against an earlier SDG checkout using a project's current TSX assets:
+
+```sh
+node tooling/compare.mjs /path/to/project/design output/loading-comparison 3 --sdg-baseline=/path/to/baseline-sdg
+```
+
+This mode copies the design directory once, excluding generated `.sdg` files, then runs both viewers sequentially against that snapshot with separate preferences. The original project is never written. The baseline needs access to its installed dependencies. Results include first browse and a subsequent reload, plus the first animation frames showing the catalog, completed layout and loaded visible previews. Reload measures browser measurement and preview work with an already-running, warm server.
+
 The benchmark opens Fit all through the Float zoom menu and Light through the Display menu. Legacy buttons and radios remain supported for the baseline viewers; gesture counts, timing, and measurements are unchanged.
 
 `tooling/benchmark.mjs <url> <output.json> [snapshot-design-directory]` can measure an already-running instance. Supply only a disposable copied fixture directory as the final argument: the file-save phase appends a comment to `components/button.svg` and restores it in `finally`.
@@ -23,6 +31,7 @@ The benchmark opens Fit all through the Float zoom menu and Light through the Di
 ## Workload and measurements
 
 - First browse: navigation until visible assets load. Server process startup is recorded separately; their sum excludes browser launch time. Disk and OS caches are not flushed.
+- Reload: refresh the same browser page after first browse, with the server's compiled assets cached. Catalog and layout milestones are sampled on animation frames independently of loaded previews.
 - Pan: 120 pointer moves on a fixed sinusoidal path, paced by an 8 ms delay after each dispatched event.
 - Zoom: overview to the first asset's detail and back. Wheel deltas account for the two implementations' different zoom sensitivities. A reach check requires detail zoom; the baseline reaches the same 877% peak in both viewers.
 - Trackpad-style scrolling: 90 two-axis wheel events. ARC maps these to zoom; SDG maps them to pan. This row measures each implementation's response to the same input, not equivalent camera trajectories. Physical trackpad hardware is not part of the automated workload.
@@ -55,3 +64,18 @@ ARC source: `963560b2eb805910f8b6f0507a43baed1fc06359`. Asset set: 46 SVGs. Envi
 The second refresh request is an embedded dependent asset. All three runs preserve the camera during the file-save phase and report no page errors. Canvas drawing spends more main-thread time during continuous zoom, while avoiding the original frame spikes; retain both measurements when evaluating future changes.
 
 Use the initial numbers as a regression reference on this environment. Compare the same source snapshot, browser, viewport, pixel ratio, and input workload. Investigate sustained frame intervals above the display's frame budget, changed camera behavior, missing detail, or renewed full-set refreshes before accepting a rendering change. Visual review also covers SVG sharpness, both themes, directory switching, keyboard focus, and recent-directory camera restoration.
+
+## TSX loading, 2026-11-07
+
+Compared the SDG baseline at `38e2253` with sandbox-document reuse and early catalog rendering using a copied SCNet design snapshot containing 34 TSX sources. Three sequential runs per implementation used fresh servers, preferences and browser contexts on Apple M4 Pro, macOS ARM64, Node 24.22.0 and Chromium 156.0.8078.4 at 1440 × 900, DPR 2. Values are medians. Raw samples, copied sources and screenshots remain local under `output/loading-20261107/client-comparison/`.
+
+| Metric | Baseline | Updated |
+| --- | ---: | ---: |
+| First browse | 1,045 ms | 635 ms |
+| Reload to visible previews | 885 ms | 600 ms |
+| Reload to catalog | 526 ms | 27 ms |
+| Reload to completed layout | 526 ms | 211 ms |
+| Pan frame P95 | 16.7 ms | 16.7 ms |
+| File-save refresh | 428 ms | 334 ms |
+
+All six runs reported no page errors and preserved the camera on file save. The viewer regression suite also checks the reference layout, both-theme fixture readiness and selection queued before asset preparation finishes.

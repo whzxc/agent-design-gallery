@@ -2,7 +2,7 @@ import { Labels } from "./labels.js";
 import { fitArea, fitView } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
-import { prepare, imageURL, arrange } from "./assets.js";
+import { prepare, imageURL, arrange, groupAssets } from "./assets.js";
 // ARC's gallery layout and camera model, decoupled from its React runtime.
 const $ = (selector) => document.querySelector(selector);
 const viewport = $(".gallery-viewport"),
@@ -11,6 +11,8 @@ const viewport = $(".gallery-viewport"),
   background = $("#canvas-background"),
   backgroundContext = background.getContext("2d", { alpha: false });
 let manifest,
+  catalog = null,
+  pendingNavigation = null,
   groups = [],
   assets = [],
   world = { x: 0, y: 0, width: 1, height: 1 },
@@ -76,7 +78,7 @@ function toggleSidebar(value = !sidebar) {
   save();
 }
 function updateChrome() {
-  const opened = !!manifest?.directory;
+  const opened = !!(catalog ?? manifest)?.directory;
   $("#sidebar").hidden = !opened || !sidebar;
   $("#app-bar").hidden = opened && sidebar;
   $("#app-directory").hidden = !opened;
@@ -142,10 +144,11 @@ async function api(url, data) {
   return result;
 }
 function save() {
-  if(fixtureState) return;
+  if(fixtureState || catalog) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(
-    () =>
+    () => {
+      if (catalog) return;
       api("/preferences", {
         directory: manifest?.directory,
         view: inspection
@@ -154,7 +157,8 @@ function save() {
         theme,
         sidebar,
         inspector,
-      }).catch((e) => error(e.message)),
+      }).catch((e) => error(e.message));
+    },
     220,
   );
 }
@@ -246,12 +250,18 @@ function makeRow(name, label, count, className = 'tree-row') {
   return button;
 }
 function searchResults(query) {
-  const files = manifest.assets.filter(a => a.name.toLowerCase().includes(query)).map(a => ({ a }));
-  const forms = manifest.assets.flatMap(a => a.name.toLowerCase().includes(query) ? [] : a.parts.filter(p => p.name.toLowerCase().includes(query)).map(p => ({ a, p })));
+  const entries = (catalog ?? manifest).assets;
+  const files = entries.filter(a => a.name.toLowerCase().includes(query)).map(a => ({ a }));
+  const forms = entries.flatMap(a => a.name.toLowerCase().includes(query) ? [] : (a.parts ?? []).filter(p => p.name.toLowerCase().includes(query)).map(p => ({ a, p })));
   return [...files, ...forms];
 }
+function navigate(action) {
+  if (catalog) pendingNavigation = action;
+  else action();
+}
 function renderNav() {
-  if (!manifest) return;
+  const data = catalog ?? manifest;
+  if (!data) return;
   const focusKey = document.activeElement?.dataset.navkey;
   const query = $("#search").value.trim().toLowerCase(), nodes = [];
   $(".gallery").classList.toggle('searching', !!query);
@@ -260,25 +270,26 @@ function renderNav() {
     const results = searchResults(query), heading = document.createElement('h3');
     heading.className='search-count'; heading.textContent=`${results.length} ${results.length === 1 ? 'result' : 'results'}`; nodes.push(heading);
     for (const { a, p } of results) {
-      const button=makeRow(a.component?'component':'app-window',p ? `${a.name} · ${p.name}` : a.name,p ? 'form' : `${a.parts.length} ${a.component?'forms':'frames'}`,'tree-row search-result');
+      const component = a.component ?? a.path.startsWith('components/');
+      const button=makeRow(component?'component':'app-window',p ? `${a.name} · ${p.name}` : a.name,p ? 'form' : a.parts ? `${a.parts.length} ${component?'forms':'frames'}` : undefined,'tree-row search-result');
       button.dataset.navkey=`search:${a.path}:${p?.id ?? ''}`;
       button.setAttribute('aria-current',String(selected===a.path && (!p || selectedForm===p.id)));
-      button.onclick=()=>p ? inspectForm(a,p) : focusAsset(assets.find(item=>item.path===a.path)); nodes.push(button);
+      button.onclick=()=>navigate(()=>p ? inspectForm(a,p) : focusAsset(assets.find(item=>item.path===a.path))); nodes.push(button);
     }
   } else {
-    const all=makeRow('layout-grid','All designs',manifest.assets.length); all.id='all'; all.onclick=fit; nodes.push(all);
+    const all=makeRow('layout-grid','All designs',data.assets.length); all.id='all'; all.onclick=()=>navigate(fit); nodes.push(all);
     const rule=document.createElement('div');rule.className='rule';nodes.push(rule);
-    groups.forEach((g,i)=>{
+    (catalog ? groupAssets(catalog) : groups).forEach((g,i)=>{
       const section=document.createElement('section'), row=document.createElement('div'), toggle=document.createElement('button'), button=document.createElement('button');
       row.className='group-row'; toggle.innerHTML=icon(expanded.has(i)?'chevron-down':'chevron-right',12);
       toggle.setAttribute('aria-label',`Toggle ${g.title}`);toggle.setAttribute('aria-expanded',String(expanded.has(i)));toggle.dataset.navkey=`toggle:${g.title}`;
       toggle.onclick=()=>{expanded.has(i)?expanded.delete(i):expanded.add(i);renderNav()};
       button.className='group-name';button.dataset.navkey=`group:${g.title}`;
       const title=document.createElement('span'), count=document.createElement('span'); title.textContent=g.title;count.textContent=g.assets.length;count.className='count';button.append(title,count);
-      button.onclick=()=>{remember();inspection=null;active=i;selected=null;selectedId=null;selectedForm=null;expanded.add(i);selection();frame(g)};
+      button.onclick=()=>navigate(()=>{remember();inspection=null;active=i;selected=null;selectedId=null;selectedForm=null;expanded.add(i);selection();frame(groups[i])});
       row.append(toggle,button);section.append(row);
       if(expanded.has(i)) { const files=document.createElement('div');files.className='group-files';
-        for(const a of g.assets) {const item=makeRow(a.component?'component':'app-window',a.name,undefined,'tree-row file');item.dataset.navkey=`file:${a.path}`;item.setAttribute('aria-current',String(selected===a.path));item.onclick=()=>focusAsset(assets.find(x=>x.path===a.path));files.append(item)}
+        for(const a of g.assets) {const item=makeRow((a.component ?? a.path.startsWith('components/'))?'component':'app-window',a.name,undefined,'tree-row file');item.dataset.navkey=`file:${a.path}`;item.setAttribute('aria-current',String(selected===a.path));item.onclick=()=>navigate(()=>focusAsset(assets.find(x=>x.path===a.path)));files.append(item)}
         section.append(files);
       }
       nodes.push(section);
@@ -879,7 +890,7 @@ function resizeViewport() {
 }
 new ResizeObserver(resizeViewport).observe(viewport);
 function recent() {
-  const paths=manifest?.recent??[];
+  const paths=(catalog ?? manifest)?.recent??[];
   $("#recent-heading").hidden=!paths.length;
   $("#recent").replaceChildren(...paths.map((path,index)=>{
     const button=document.createElement('button');button.type='button';button.innerHTML=icon('folder',16);
@@ -904,6 +915,10 @@ $("#directory-form").onsubmit = (e) => {
   void open($("#path").value);
 };
 async function open(directory) {
+  if (catalog) {
+    pendingNavigation = () => void open(directory);
+    return;
+  }
   const button = $("#directory-form button[type=submit]");
   button.disabled = true;
   try {
@@ -922,15 +937,24 @@ async function open(directory) {
 }
 async function applyManifest(data, force = false) {
   const changedRoot = manifest?.directory !== data.directory,
-    first = !manifest;
+    first = !manifest && !catalog;
   if (!force && !changedRoot && !first && manifest.revision === data.revision)
     return;
+  if (changedRoot && catalog?.directory !== data.directory) expanded.clear();
+  if (first || changedRoot) catalog = data;
   if (first) {
     fixtureState=data.fixture ?? null;
     theme = data.theme;
     applyTheme();
     toggleSidebar(data.sidebar);
     inspector = data.inspector;
+  }
+  if (first || changedRoot) {
+    for(const element of document.querySelectorAll('.directory-name')) element.textContent=data.label;
+    $("#directory").title=data.directory||'';$("#app-directory").title=data.directory||'';
+    document.title = `${data.label} — SVG Design Gallery`;
+    updateChrome();
+    renderNav();
   }
   window.__sdg.ready = false;
   const versionTheme = effectiveTheme;
@@ -964,6 +988,7 @@ async function applyManifest(data, force = false) {
       prepared.delete(key);
   const previous = manifest;
   manifest = { ...data, assets: results, renderTheme: versionTheme };
+  catalog = null;
   if (changedRoot) {
     cache.clear();
     labelLayer.clear();
@@ -973,7 +998,6 @@ async function applyManifest(data, force = false) {
     inspection = null;
     active = null;
     history = [];
-    expanded.clear();
   }
   layout(
     manifest,
@@ -997,6 +1021,11 @@ async function applyManifest(data, force = false) {
     inspection={...a,id:a.id+'@full',x:0,y:0,width:p.width,height:p.height,shown:[p],kind:'sheet'};
   }
   selection();
+  if (pendingNavigation) {
+    const action = pendingNavigation;
+    pendingNavigation = null;
+    action();
+  }
   requestDraw();
 }
 function updateChoices() {
@@ -1030,7 +1059,7 @@ for(const button of document.querySelectorAll('[data-tooltip]')) {
   button.addEventListener('pointerleave',()=>{hideTooltip();requestDraw()});button.addEventListener('blur',hideTooltip);button.addEventListener('click',hideTooltip);
 }
 $("#keys-close").onclick=()=>$("#keys").close();
-$("#directories").addEventListener('cancel',event=>{if(!manifest?.directory)event.preventDefault()});
+$("#directories").addEventListener('cancel',event=>{if(!(catalog ?? manifest)?.directory)event.preventDefault()});
 for(const dialog of document.querySelectorAll('dialog')) {
   dialog.addEventListener('toggle', () => requestDraw());
   dialog.addEventListener('close',()=>{viewport.focus({preventScroll:true});requestDraw()});

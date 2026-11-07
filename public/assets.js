@@ -116,7 +116,7 @@ export function imageURL(asset, crop) {
   );
 }
 
-export function arrange(data) {
+export function groupAssets(data) {
   const used = new Set(),
     grouped = [];
   for (const g of data.groups) {
@@ -136,6 +136,11 @@ export function arrange(data) {
     rest.get(parent).push(a);
   }
   for (const [title, assets] of rest) grouped.push({ title, assets });
+  return grouped;
+}
+
+export function arrange(data) {
+  const grouped = groupAssets(data);
   const sections = layoutWorld(grouped.map(g => ({ ...g, blocks: g.assets.map(blockForAsset) })));
   const groups = sections.map(s => ({ ...s, width: s.w, height: s.h }));
   const items = [];
@@ -162,7 +167,15 @@ async function prepareSource(asset, built, theme) {
   try {
     for (const [index, form] of built.frames.entries()) {
       frame.style.width=(form.width ?? 1600)+'px'; frame.style.height=(form.height ?? 1200)+'px';
-      await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=form.document;});
+      if (index === 0) {
+        await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=form.document;});
+      } else {
+        // Frames from one source share CSS. Keep its sandbox document and viewport,
+        // replacing only the specimen instead of navigating for every form.
+        const parsed = new DOMParser().parseFromString(form.document, 'text/html');
+        frame.contentDocument.body.replaceChildren(frame.contentDocument.importNode(parsed.querySelector('[data-sdg-frame]'), true));
+        await Promise.all([...frame.contentDocument.images].map(image => image.decode().catch(() => {})));
+      }
       await frame.contentDocument.fonts.ready;
       const shell=frame.contentDocument.querySelector('[data-sdg-frame]');
       const box=shell.getBoundingClientRect();

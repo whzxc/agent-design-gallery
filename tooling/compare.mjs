@@ -4,16 +4,23 @@ import path from "node:path";
 import { createServer } from "node:net";
 const [arc, destination = `output/comparison-${Date.now()}`, count = "3"] =
   process.argv.slice(2);
+const baseline = process.argv.find(arg => arg.startsWith('--sdg-baseline='))?.slice('--sdg-baseline='.length);
 if (!arc)
   throw new Error(
-    "Usage: node tooling/compare.mjs <ARC checkout> [output-directory] [runs] [--reuse-snapshot]",
+    "Usage: node tooling/compare.mjs <ARC checkout or design directory> [output-directory] [runs] [--reuse-snapshot | --sdg-baseline=<checkout>]",
   );
 const root = process.cwd(),
   out = path.resolve(destination),
-  snapshot = path.join(out, "arc");
+  snapshot = path.join(out, baseline ? "project" : "arc");
 await mkdir(snapshot, { recursive: true });
 let sha, assetCount;
-if (process.argv.includes("--reuse-snapshot")) {
+if (baseline) {
+  sha = execFileSync('git', ['-C', arc, 'rev-parse', 'HEAD'], {encoding:'utf8'}).trim();
+  await cp(path.resolve(arc), path.join(snapshot, 'design'), {
+    recursive: true,
+    filter: source => path.basename(source) !== '.sdg',
+  });
+} else if (process.argv.includes("--reuse-snapshot")) {
   const previous = JSON.parse(
     await readFile(path.join(arc, "comparison.json"), "utf8"),
   );
@@ -115,25 +122,26 @@ async function start(command, args, env) {
 }
 const records = [];
 for (let run = 1; run <= Number(count); run++)
-  for (const implementation of ["arc", "sdg"]) {
+  for (const implementation of baseline ? ["baseline", "sdg"] : ["arc", "sdg"]) {
     const port = await freePort();
     const server = await start(
       process.execPath,
       implementation === "arc"
         ? [path.join(snapshot, "tooling/design-server.mjs")]
         : [
-            "src/cli.mjs",
+            implementation === 'baseline' ? path.resolve(baseline, 'src/cli.mjs') : "src/cli.mjs",
             path.join(snapshot, "design"),
             "--no-open",
             "--port",
             String(port),
             "--state-dir",
-            path.join(out, `state-${run}`),
+            path.join(out, `state-${implementation}-${run}`),
           ],
       { ARC_DESIGN_PORT: String(port) },
     );
     const file = path.join(out, `${implementation}-${run}.json`);
     try {
+      if (baseline && assetCount === undefined) assetCount = (await (await fetch(new URL('/manifest', server.url))).json()).assets.length;
       await new Promise((resolve, reject) => {
         const p = spawn(
           process.execPath,
@@ -167,10 +175,11 @@ for (let run = 1; run <= Number(count); run++)
       );
     }
   }
+const summary = { ...(baseline ? {sourceCommit:sha,baseline:path.resolve(baseline)} : {arcCommit:sha}), assetCount, records };
 await writeFile(
   path.join(out, "comparison.json"),
-  JSON.stringify({ arcCommit: sha, assetCount, records }, null, 2),
+  JSON.stringify(summary, null, 2),
 );
 console.log(
-  JSON.stringify({ out, arcCommit: sha, assetCount, records }, null, 2),
+  JSON.stringify({ out, ...summary }, null, 2),
 );

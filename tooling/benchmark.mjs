@@ -14,9 +14,13 @@ const context = await browser.newContext({
   colorScheme: "dark",
 });
 await context.addInitScript(() => {
-  window.__perf = { frames: [], longTasks: [], events: [] };
+  window.__perf = { frames: [], longTasks: [], events: [], loading: {} };
   let last;
   function frame(now) {
+    const loading = window.__perf.loading;
+    if (!loading.catalogMs && document.querySelector('#modules')?.children.length && !document.querySelector('#sidebar').hidden) loading.catalogMs = now;
+    if (!loading.layoutMs && window.__sdg?.assets) loading.layoutMs = now;
+    if (!loading.drawnMs && window.__sdg?.ready) loading.drawnMs = now;
     if (last) window.__perf.frames.push(now - last);
     last = now;
     requestAnimationFrame(frame);
@@ -63,6 +67,16 @@ await page.waitForFunction(
       )),
 );
 const firstBrowseMs = performance.now() - begin;
+const loading = await page.evaluate(() => ({
+  ...window.__perf.loading,
+  requests: performance.getEntriesByType('resource').filter(e => e.name.includes('/asset/')).map(e => ({path: new URL(e.name).pathname, startMs: e.startTime, durationMs: e.duration})),
+}));
+const reloadBegin = performance.now();
+await page.reload();
+await page.waitForFunction(() => window.__sdg?.ready ||
+  (document.querySelectorAll('.gallery-drawing img').length && [...document.querySelectorAll('.gallery-drawing img')].every(x => x.complete && x.naturalWidth)));
+const reloadBrowseMs = performance.now() - reloadBegin;
+const reloadLoading = await page.evaluate(() => window.__perf.loading);
 await fit();
 const viewport = await page.locator(".gallery-viewport").boundingBox();
 const px = viewport.x + viewport.width * 0.55,
@@ -265,6 +279,9 @@ const result = {
   },
   url,
   firstBrowseMs,
+  loading,
+  reloadBrowseMs,
+  reloadLoading,
   peakZoom,
   phases,
   update,
@@ -277,6 +294,9 @@ await writeFile(destination, JSON.stringify(result, null, 2));
 console.log(
   JSON.stringify({
     firstBrowseMs,
+    reloadBrowseMs,
+    loading: {...loading, requests: loading.requests.length},
+    reloadLoading,
     phases: phases.map(({ name, frameP95, frameMax, taskMs, heapBytes }) => ({
       name,
       frameP95,
