@@ -14,6 +14,7 @@ const context = await browser.newContext({
   colorScheme: "dark",
 });
 await context.addInitScript(() => {
+  performance.setResourceTimingBufferSize(10000);
   window.__perf = { frames: [], longTasks: [], events: [], loading: {} };
   let last;
   function frame(now) {
@@ -35,6 +36,12 @@ await context.addInitScript(() => {
   ).observe({ type: "longtask", buffered: true });
 });
 const page = await context.newPage();
+const cacheWrites = [], requestRecords = [];
+page.on('request', request => {
+  requestRecords.push(request);
+  if (request.method() === 'POST' && /\/(?:metadata|preview)\//.test(request.url()))
+    cacheWrites.push({path:new URL(request.url()).pathname,bytes:request.postDataBuffer()?.length ?? 0});
+});
 const cdp = await context.newCDPSession(page);
 await cdp.send("Performance.enable");
 const errors = [];
@@ -67,16 +74,41 @@ await page.waitForFunction(
       )),
 );
 const firstBrowseMs = performance.now() - begin;
-const loading = await page.evaluate(() => ({
-  ...window.__perf.loading,
-  requests: performance.getEntriesByType('resource').filter(e => e.name.includes('/asset/')).map(e => ({path: new URL(e.name).pathname, startMs: e.startTime, durationMs: e.duration, transferBytes: e.transferSize, bodyBytes: e.decodedBodySize})),
-}));
+async function readLoading() {
+  const data=await page.evaluate(()=>({
+    ...window.__perf.loading,timeOrigin:performance.timeOrigin,
+    resources:performance.getEntriesByType('resource').map(e=>({url:e.name,path:new URL(e.name).pathname,startMs:e.startTime,durationMs:e.duration,initiatorType:e.initiatorType,transferBytes:e.transferSize,bodyBytes:e.decodedBodySize})),
+  }));
+  const resources=data.resources.map(entry=>{
+    const absolute=data.timeOrigin+entry.startMs;
+    const matches=requestRecords.filter(request=>request.url()===entry.url&&request.timing().startTime>0);
+    matches.sort((a,b)=>Math.abs(a.timing().startTime-absolute)-Math.abs(b.timing().startTime-absolute));
+    const {url,...resource}=entry;
+    return {...resource,method:matches[0]?.method()??'GET'};
+  });
+  const {resources:unused,timeOrigin,...loading}=data;
+  return {...loading,
+    requests:resources.filter(e=>e.method==='GET'&&/\/(?:asset|preview)\//.test(e.path)).map(e=>({...e,kind:e.path.includes('/asset/')?'source':'preview'})),
+    dataRequests:resources.filter(e=>e.method==='GET'&&/\/(?:asset|preview|metadata)\/|\/(?:manifest|relationships)$/.test(e.path)),
+  };
+}
+const loading = await readLoading();
+const firstViewCacheWrites = [...cacheWrites];
+// Cache writes are outside visible-ready latency, but complete before the warm reload.
+await page.waitForFunction(() => !window.__sdg?.cachePending && window.__sdg?.metadataComplete !== false, {}, {timeout:120000});
+const metadataCompleteMs = performance.now() - begin, coldCacheWrites = [...cacheWrites], coldLoading = await readLoading();
+if (process.argv.includes('--browse-only')) {
+  await mkdir(destination.substring(0, destination.lastIndexOf('/')), {recursive:true});
+  await writeFile(destination, JSON.stringify({time:new Date().toISOString(),url,firstBrowseMs,metadataCompleteMs,loading,coldLoading,firstViewCacheWrites,coldCacheWrites,cacheWrites,errors}, null, 2));
+  await browser.close();
+  process.exit(0);
+}
 const reloadBegin = performance.now();
 await page.reload();
 await page.waitForFunction(() => window.__sdg?.ready ||
   (document.querySelectorAll('.gallery-drawing img').length && [...document.querySelectorAll('.gallery-drawing img')].every(x => x.complete && x.naturalWidth)));
 const reloadBrowseMs = performance.now() - reloadBegin;
-const reloadLoading = await page.evaluate(() => window.__perf.loading);
+const reloadLoading = await readLoading();
 await fit();
 const viewport = await page.locator(".gallery-viewport").boundingBox();
 const px = viewport.x + viewport.width * 0.55,
@@ -210,6 +242,8 @@ if (fixtureRoot) {
   let file = fixtureRoot + "/components/button.tsx";
   try { await access(file); } catch { file = fixtureRoot + "/components/button.svg"; }
   const original = await readFile(file, "utf8"), sourcePath = file.slice(fixtureRoot.length + 1);
+  const incrementalHashes = await page.evaluate(async () =>
+    (await (await fetch(new URL('manifest', location.href))).json()).features?.incrementalHashes);
   const camera = () =>
     page.evaluate(
       () =>
@@ -219,13 +253,15 @@ if (fixtureRoot) {
   const before = await camera();
   let requests = [];
   const record = (r) => {
-    if (r.url().includes("/asset/")) requests.push(r.url());
+    if (r.method() === 'GET' && /\/(?:asset|preview)\//.test(r.url())) requests.push(r.url());
   };
   page.on("request", record);
-  const updatedManifest = page.waitForResponse((r) =>
-    r.url().endsWith("/manifest"),
+  const previousRevision = await page.evaluate(() => window.__sdg?.revision);
+  const updatedManifest = page.waitForResponse(async r =>
+    new URL(r.url()).pathname.endsWith("/manifest") && r.request().method() === "GET" &&
+      (previousRevision === undefined || (await r.json()).revision > previousRevision),
   );
-  const image = page.waitForResponse(
+  const image = incrementalHashes ? null : page.waitForResponse(
     (r) =>
       r.url().includes("/asset/") &&
       decodeURIComponent(r.url()).includes(sourcePath),
@@ -253,12 +289,19 @@ if (fixtureRoot) {
     update = {
       latencyMs: performance.now() - start,
       assetRequests: requests.length,
+      incrementalHashes: !!incrementalHashes,
       cameraBefore: before,
       cameraAfter: await camera(),
     };
   } finally {
     page.off("request", record);
+    const revision = await page.evaluate(() => window.__sdg?.revision);
     await writeFile(file, original);
+    if (incrementalHashes) {
+      await page.waitForFunction(revision => window.__sdg.ready && window.__sdg.revision > revision,
+        revision, {timeout:120000});
+      await page.waitForFunction(() => !window.__sdg.cachePending && window.__sdg.metadataComplete !== false, {}, {timeout:120000});
+    }
   }
   await page.waitForTimeout(250);
 }
@@ -281,7 +324,12 @@ const result = {
   },
   url,
   firstBrowseMs,
+  metadataCompleteMs,
   loading,
+  coldLoading,
+  firstViewCacheWrites,
+  coldCacheWrites,
+  cacheWrites,
   reloadBrowseMs,
   reloadLoading,
   peakZoom,

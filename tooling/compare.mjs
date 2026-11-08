@@ -8,7 +8,7 @@ const [arc, destination = `output/comparison-${Date.now()}`, count = "3"] =
 const baseline = process.argv.find(arg => arg.startsWith('--sdg-baseline='))?.slice('--sdg-baseline='.length);
 if (!arc)
   throw new Error(
-    "Usage: node tooling/compare.mjs <ARC checkout or design directory> [output-directory] [runs] [--reuse-snapshot | --sdg-baseline=<checkout>]",
+    "Usage: node tooling/compare.mjs <ARC checkout or design directory> [output-directory] [runs] [--reuse-snapshot | --sdg-baseline=<checkout>] [--warm-restart]",
   );
 const root = process.cwd(),
   out = path.resolve(destination),
@@ -127,7 +127,7 @@ const records = [];
 for (let run = 1; run <= Number(count); run++)
   for (const implementation of baseline ? ["baseline", "sdg"] : ["arc", "sdg"]) {
     const port = await freePort();
-    const server = await start(
+    const launch = () => start(
       process.execPath,
       implementation === "arc"
         ? [path.join(snapshot, "tooling/design-server.mjs")]
@@ -142,6 +142,7 @@ for (let run = 1; run <= Number(count); run++)
           ],
       { ARC_DESIGN_PORT: String(port) },
     );
+    const server = await launch();
     const file = path.join(out, `${implementation}-${run}.json`);
     try {
       if (baseline && assetCount === undefined) assetCount = (await (await fetch(new URL('/manifest', server.url))).json()).assets.length;
@@ -176,6 +177,21 @@ for (let run = 1; run <= Number(count); run++)
         path.join(out, `${implementation}-${run}-server.log`),
         server.log,
       );
+    }
+    if (process.argv.includes('--warm-restart') && implementation !== 'arc') {
+      const restarted = await launch(), restartFile = path.join(out, `${implementation}-${run}-restart.json`);
+      try {
+        await new Promise((resolve,reject) => {
+          const child=spawn(process.execPath,['tooling/benchmark.mjs',restarted.url,restartFile,'--browse-only'],{stdio:'inherit'});
+          child.on('error',reject);child.on('exit',code=>code?reject(new Error(`Restart benchmark exited ${code}`)):resolve());
+        });
+        const result=JSON.parse(await readFile(restartFile,'utf8'));
+        Object.assign(records.at(-1), {warmRestartStartupMs:restarted.startupMs,warmRestartBrowseMs:result.firstBrowseMs,warmRestartResult:path.basename(restartFile)});
+      } finally {
+        restarted.child.kill('SIGTERM');
+        await new Promise(resolve=>restarted.child.on('exit',resolve));
+        await writeFile(path.join(out,`${implementation}-${run}-restart-server.log`),restarted.log);
+      }
     }
   }
 const summary = { ...(baseline ? {sourceCommit:sha,baseline:path.resolve(baseline)} : {arcCommit:sha}), assetCount, records };
