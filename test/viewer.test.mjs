@@ -164,7 +164,7 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
           assert.deepEqual(actual.sections,reference.sections);
         }
         if(name==='sample-zoomed') {
-          for(const caption of ['regular','compact']) assert.equal(await page.locator('#labels .canvas-label:not([hidden])').filter({hasText:new RegExp(`^${caption}$`)}).count(),1);
+          for(const caption of ['default','error']) assert.equal(await page.locator('#labels .canvas-label:not([hidden])').filter({hasText:new RegExp(`^${caption}$`)}).count(),1);
         }
         if(name==='sample-inspect-frame') {
           assert.equal(Math.round(await page.evaluate(()=>window.__sdg.view.scale)*100),71);
@@ -212,8 +212,10 @@ test('camera pans retain labels, while scale, settle and viewport changes refres
   const browser=await launch();
   try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});
-    await page.goto(new URL('/?fixture=sample-zoomed',server.url).href);
-    await config.compare.ready(page,'sample-zoomed');
+    // Overview headings are unpinned; the detail fixture deliberately clips
+    // neighboring sets and must rebuild their pinned headings on every pan.
+    await page.goto(new URL('/?fixture=sample-overview',server.url).href);
+    await config.compare.ready(page,'sample-overview');
     const pan=await page.evaluate(async()=>{
       const {Labels}=await import('/labels.js'), update=Labels.prototype.update;
       const rect=Element.prototype.getBoundingClientRect;
@@ -453,6 +455,24 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
       throw Error('Imported source did not invalidate its dependent');
     },result.version);
     const rebuilt=await(await fetch(new URL('/asset/components%2Fforms.tsx?theme=light',server.url))).json();assert.equal(rebuilt.frames[0].width,901);
+    await page.waitForFunction(()=>window.__sdg.ready && window.__sdg.metadataComplete);
+    const beforeGrowth=await page.evaluate(()=>({items:window.__sdg.items,revision:window.__sdg.revision,view:window.__sdg.view}));
+    await writeFile(path.join(directory,'scenes/sizes.tsx'),'export const widths=Array(87).fill(600);');
+    await page.waitForFunction(revision=>window.__sdg.ready && window.__sdg.metadataComplete && window.__sdg.revision>revision,beforeGrowth.revision);
+    const grown=await page.evaluate(()=>({items:window.__sdg.items,view:window.__sdg.view}));
+    assert.deepEqual(grown.view,beforeGrowth.view,'geometry refresh must retain the camera');
+    assert.deepEqual(grown.items.filter(a=>a.path==='surfaces/flow.tsx'),beforeGrowth.items.filter(a=>a.path==='surfaces/flow.tsx'),
+      'unchanged regions keep their positions even when section height ordering changes');
+    const grownSet=grown.items.find(a=>a.path==='components/forms.tsx');
+    assert.ok(grownSet.width>1600,'many measured forms must use an adaptive wrap width');
+    assert.ok(grownSet.y>beforeGrowth.items.find(a=>a.path===grownSet.path).y,'enlarged set moves below occupied content');
+    await page.locator('.group-name').filter({hasText:/^components/}).click();
+    await page.locator('#more').click();await page.locator('#arrange').click();
+    const arranged=await page.evaluate(()=>window.__sdg.items);
+    assert.deepEqual(arranged.filter(a=>a.path==='surfaces/flow.tsx'),grown.items.filter(a=>a.path==='surfaces/flow.tsx'),
+      'Arrange current group leaves other groups in place');
+    assert.equal(arranged.find(a=>a.path===grownSet.path).y,beforeGrowth.items.find(a=>a.path===grownSet.path).y,
+      'Arrange returns the enlarged set to its section content origin');
     assert.equal(await page.locator('#full-sheet').count(),0);
   }finally{await browser.close();await server.close();}
   await writeFile(path.join(directory,'gallery.json'),JSON.stringify({groups:[{title:'Helpers',assets:['scenes/sizes.tsx']}]}));

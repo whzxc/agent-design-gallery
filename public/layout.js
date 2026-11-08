@@ -13,15 +13,20 @@ export function rows(blocks, limit, gapX, gapY, nextWidth) {
     return placed;
   });
 }
-export function skyline(blocks, limit, nextWidth) {
-  const placed = [];
-  for (const block of blocks) {
-    const candidates = [0, ...placed.map(p => p.x + p.w + 64)].filter(x => { if (x + block.w <= limit) return true; nextWidth?.(x + block.w); return false; });
-    const positions = candidates.map(x => ({ x, y: Math.max(0, ...placed.filter(p => x < p.x + p.w + 64 && x + block.w + 64 > p.x).map(p => p.y + p.h + 112)) }));
+export function skyline(blocks, limit, nextWidth, gapX = 64, gapY = 112) {
+  const placed = [], result = [];
+  // Pack tall blocks first, but keep returned identities in source order for
+  // navigation, selection and incremental placement across geometry changes.
+  const ordered = blocks.map((block, index) => ({ block, index }))
+    .sort((a, b) => b.block.h - a.block.h || b.block.w - a.block.w || a.index - b.index);
+  for (const { block, index } of ordered) {
+    const candidates = [0, ...placed.map(p => p.x + p.w + gapX)].filter(x => { if (x + block.w <= limit) return true; nextWidth?.(x + block.w); return false; });
+    const positions = candidates.map(x => ({ x, y: Math.max(0, ...placed.filter(p => x < p.x + p.w + gapX && x + block.w + gapX > p.x).map(p => p.y + p.h + gapY)) }));
     positions.sort((a, b) => a.y - b.y || a.x - b.x);
-    placed.push({ ...block, ...positions[0] });
+    result[index] = { ...block, ...positions[0] };
+    placed.push(result[index]);
   }
-  return placed;
+  return result;
 }
 // Cache only the winning width, never source objects or placed coordinates.
 // Repacking at that width gives fresh metadata after saves with unchanged geometry.
@@ -32,12 +37,14 @@ export function restorePacking(entries=[]) {
     if(typeof key==='string'&&key.length<=32768&&Number.isFinite(width)&&width>0)widthChoices.set(key,width);
   while(widthChoices.size>32)widthChoices.delete(widthChoices.keys().next().value);
 }
-function chooseWidth(blocks, step, ratio, pack) {
+const aspectPenalty = 0.6;
+function chooseWidth(blocks, step, ratio, gapX, gapY) {
   if (!blocks.length) return [];
-  const key = JSON.stringify([step, ratio, blocks.map(b => [b.kind, b.w, b.h])]);
+  const pack = (limit, nextWidth) => skyline(blocks, limit, nextWidth, gapX, gapY);
+  const key = JSON.stringify(['area-skyline-v1', step, ratio, aspectPenalty, gapX, gapY, blocks.map(b => [b.kind, b.w, b.h])]);
   if (widthChoices.has(key)) return pack(widthChoices.get(key));
   const minimum = Math.max(...blocks.map(b => b.w));
-  const maximum = blocks.reduce((n, b) => n + b.w, 0) + blocks.length * 480;
+  const maximum = blocks.reduce((n, b) => n + b.w, 0) + blocks.length * gapX;
   // Browser layout widths are exact multiples of 1/64px. Skip only on that
   // safe grid; arbitrary SVG float geometry keeps the exhaustive search.
   const skip = Number.isSafeInteger((maximum + step) * 64) &&
@@ -45,7 +52,8 @@ function chooseWidth(blocks, step, ratio, pack) {
   let best, bestLimit, score = Infinity;
   for (let limit = minimum; limit <= maximum + step; limit += step) {
     let threshold = Infinity;
-    const placed = pack(limit, width => { threshold = Math.min(threshold, width); }), box = bounds(placed), distance = Math.abs(box.w / box.h - ratio);
+    const placed = pack(limit, width => { threshold = Math.min(threshold, width); }), box = bounds(placed);
+    const distance = box.w * box.h * (1 + aspectPenalty * Math.abs(Math.log((box.w / box.h) / ratio)));
     if (distance < score) { best = placed; bestLimit = limit; score = distance; }
     if (skip) {
       if (threshold === Infinity) break;
@@ -60,20 +68,19 @@ function chooseWidth(blocks, step, ratio, pack) {
 }
 export function layoutWorld(input) {
   const sections = input.map(section => {
-    const blocks = chooseWidth(section.blocks, 50, 1.6, (limit, nextWidth) => {
-      const sets = skyline(section.blocks.filter(b => b.kind === 'set'), limit, nextWidth);
-      const offset = sets.length ? bounds(sets).h + 200 : 0;
-      const flows = rows(section.blocks.filter(b => b.kind === 'flow'), limit, 64, 200, nextWidth).map(b => ({ ...b, y: b.y + offset }));
-      return [...sets, ...flows];
-    });
+    const blocks = chooseWidth(section.blocks, 50, 1.6, 64, 112);
     const box = bounds(blocks);
     return { ...section, blocks, w: box.w + 128, h: box.h + 168 };
   });
-  const placed = chooseWidth(sections, 100, 1.5, (limit, nextWidth) => rows(sections, limit, 480, 480, nextWidth));
+  const placed = chooseWidth(sections, 100, 1.5, 240, 240);
   return placed.map(section => ({ ...section, blocks: section.blocks.map(block => {
     const x = section.x + 64 + block.x, y = section.y + 104 + block.y;
     return { ...block, x, y, ...(block.frames ? { frames: block.frames.map(frame => ({ ...frame, x: x + frame.x, y: y + frame.y })) } : {}) };
   }) }));
+}
+export function componentWrapWidth(parts) {
+  const area = parts.reduce((sum, part) => sum + (part.width + 32) * (part.height + 48), 0);
+  return Math.min(6400, Math.max(1600, Math.ceil(Math.sqrt(area * 1.6))));
 }
 export function blockForAsset(asset) {
   const parts = asset.parts.length ? asset.parts : [{ ...asset.full, id: 'full', name: 'Full sheet' }];

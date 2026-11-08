@@ -48,10 +48,10 @@ export const frames = [
         "active": null
       },
       {
-        "left": 587,
+        "left": 583,
         "top": 840,
         "kind": "zoom",
-        "label": "7%",
+        "label": "10%",
         "active": false,
         "backDisabled": true,
         "minimapPressed": false

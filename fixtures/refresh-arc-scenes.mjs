@@ -32,7 +32,8 @@ try {
     }
     const { groups, items, world } = window.snapshot.light;
     return { sections: groups.map(({ title, x, y, w, h, blocks }) => ({ title, x, y, w, h, blocks })),
-      sources: groups.flatMap(g => g.assets.map(({ path, name, component, parts }) => ({ path, name, component, parts }))),
+      sources: groups.flatMap(g => g.assets.map(({ path, name, component, parts }) => ({ path, name, component,
+        parts: parts.map(({id,name,note,x,y,width,height}) => ({id,name,note,x,y,width,height})) }))),
       items: items.map(({ id, path, x, y, width, height, group }) => ({ id, path, x, y, width, height, group })), world };
   });
   await writeFile(path.join(root, 'fixtures/arc-sample.layout.json'), JSON.stringify({ sections: reference.sections, sources: reference.sources }, null, 2) + '\n');

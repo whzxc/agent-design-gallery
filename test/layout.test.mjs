@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { layoutWorld, blockForAsset, rows, skyline, bounds, fitArea, fitView } from '../public/layout.js';
+import { layoutWorld, blockForAsset, rows, skyline, bounds, fitArea, fitView, componentWrapWidth, packingSnapshot, restorePacking } from '../public/layout.js';
 
 test('Float packing reproduces every reference section and block position from sizes', () => {
   const reference = JSON.parse(readFileSync(new URL('../fixtures/arc-sample.layout.json', import.meta.url))).sections;
@@ -41,9 +41,10 @@ test('ARC TSX reference packs component forms in source order and flows from fra
   const {sections,sources}=JSON.parse(readFileSync(new URL('../fixtures/arc-sample.layout.json',import.meta.url)));
   assert.equal(sources.length,51);
   for(const source of sources) {
+    const wrapWidth=componentWrapWidth(source.parts);
     let x=0,y=0,rowHeight=0;
     for(const part of source.parts) {
-      if(source.component && x && x+part.width>1600) {x=0;y+=rowHeight+48;rowHeight=0;}
+      if(source.component && x && x+part.width>wrapWidth) {x=0;y+=rowHeight+48;rowHeight=0;}
       assert.deepEqual([part.x,part.y],[x,y],source.path+' '+part.name);
       x+=part.width+32;rowHeight=Math.max(rowHeight,part.height);
     }
@@ -71,25 +72,26 @@ test('equal geometry reuses packing without retaining old source metadata or out
 
 // Deliberately exhaustive oracle: compare event skipping against every original
 // width step, including fractional SVG widths that take the fallback path.
-function exhaustiveWorld(input) {
-  const choose = (blocks, step, ratio, pack) => {
+function exhaustiveWorld(input, legacy = false) {
+  const choose = (blocks, step, ratio, gap, pack) => {
     if (!blocks.length) return [];
     let best, score = Infinity;
-    for (let width = Math.max(...blocks.map(b => b.w)); width <= blocks.reduce((n,b) => n+b.w,0)+blocks.length*480+step; width += step) {
-      const placed=pack(width), box=bounds(placed), distance=Math.abs(box.w/box.h-ratio);
+    for (let width = Math.max(...blocks.map(b => b.w)); width <= blocks.reduce((n,b) => n+b.w,0)+blocks.length*gap+step; width += step) {
+      const placed=pack(width), box=bounds(placed), distance=legacy ? Math.abs(box.w/box.h-ratio) : box.w*box.h*(1+0.6*Math.abs(Math.log((box.w/box.h)/ratio)));
       if (distance<score) {best=placed;score=distance;}
     }
     return best;
   };
   const sections=input.map(section=>{
-    const blocks=choose(section.blocks,50,1.6,limit=>{
-      const sets=skyline(section.blocks.filter(b=>b.kind==='set'),limit);
+    const blocks=choose(section.blocks,50,1.6,legacy?480:64,limit=>{
+      if (!legacy) return skyline(section.blocks,limit);
+      const sets=sourceOrderSkyline(section.blocks.filter(b=>b.kind==='set'),limit);
       const offset=sets.length?bounds(sets).h+200:0;
       return [...sets,...rows(section.blocks.filter(b=>b.kind==='flow'),limit,64,200).map(b=>({...b,y:b.y+offset}))];
     });
     const box=bounds(blocks);return {...section,blocks,w:box.w+128,h:box.h+168};
   });
-  return choose(sections,100,1.5,limit=>rows(sections,limit,480,480)).map(section=>({...section,blocks:section.blocks.map(block=>{
+  return choose(sections,100,1.5,legacy?480:240,limit=>legacy?rows(sections,limit,480,480):skyline(sections,limit,undefined,240,240)).map(section=>({...section,blocks:section.blocks.map(block=>{
     const x=section.x+64+block.x,y=section.y+104+block.y;
     return {...block,x,y,...(block.frames?{frames:block.frames.map(frame=>({...frame,x:x+frame.x,y:y+frame.y}))}:{})};
   })}));
@@ -104,4 +106,92 @@ test('packing event skips equal exhaustive width search on mixed and fractional 
     }))}));
     assert.deepEqual(layoutWorld(input),exhaustiveWorld(input));
   }
+});
+
+// Frozen source-order skyline used only by the previous-algorithm density oracle.
+function sourceOrderSkyline(blocks, limit) {
+  const placed=[];
+  for (const block of blocks) {
+    const candidates=[0,...placed.map(p=>p.x+p.w+64)].filter(x=>x+block.w<=limit);
+    const positions=candidates.map(x=>({x,y:Math.max(0,...placed.filter(p=>x<p.x+p.w+64 && x+block.w+64>p.x).map(p=>p.y+p.h+112))}));
+    positions.sort((a,b)=>a.y-b.y || a.x-b.x);
+    placed.push({...block,...positions[0]});
+  }
+  return placed;
+}
+const fill = blocks => {
+  const box=bounds(blocks);
+  return blocks.reduce((area,b)=>area+b.w*b.h,0)/(box.w*box.h);
+};
+const worldFill = sections => {
+  const box=bounds(sections);
+  return sections.flatMap(s=>s.blocks).reduce((area,b)=>area+b.w*b.h,0)/(box.w*box.h);
+};
+function assertSeparated(blocks, gapX, gapY) {
+  for (let i=0;i<blocks.length;i++) for (let j=i+1;j<blocks.length;j++) {
+    const a=blocks[i],b=blocks[j],epsilon=1e-8;
+    assert.ok(a.x+a.w+gapX<=b.x+epsilon || b.x+b.w+gapX<=a.x+epsilon ||
+      a.y+a.h+gapY<=b.y+epsilon || b.y+b.h+gapY<=a.y+epsilon,`Overlapping blocks: ${JSON.stringify([a,b])}`);
+  }
+}
+test('placed blocks never overlap, including section and world gaps', () => {
+  let seed=20261108;
+  const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed;};
+  for (let sample=0;sample<100;sample++) {
+    const input=Array.from({length:1+random()%8},(_,g)=>({title:String(g),blocks:Array.from({length:1+random()%16},(_,i)=>({
+      asset:String(i),kind:i%2?'set':'flow',w:32+(random()%16000)/64,h:32+(random()%32000)/64,
+    }))}));
+    const sections=layoutWorld(input);
+    assertSeparated(sections,240,240);
+    assert.deepEqual(sections.map(s=>s.title),input.map(s=>s.title));
+    for (const section of sections) {
+      assertSeparated(section.blocks,64,112);
+      for (const block of section.blocks) {
+        assert.ok(block.x>=section.x+64 && block.y>=section.y+104);
+        assert.ok(block.x+block.w<=section.x+section.w-64+1e-8);
+        assert.ok(block.y+block.h<=section.y+section.h-64+1e-8);
+      }
+    }
+  }
+});
+test('reference density never regresses against the previous algorithm, per section and world', () => {
+  const {sources,sections}=JSON.parse(readFileSync(new URL('../fixtures/arc-sample.layout.json',import.meta.url)));
+  const input=sections.map(s=>({title:s.title,blocks:s.blocks.map(b=>blockForAsset(sources.find(a=>a.path===b.asset)))}));
+  const previous=exhaustiveWorld(input,true),current=layoutWorld(input);
+  for (let i=0;i<current.length;i++) assert.ok(fill(current[i].blocks)>=fill(previous[i].blocks),current[i].title);
+  assert.ok(worldFill(current)>=worldFill(previous));
+});
+test('tall outliers leave room for short blocks, regardless of set or flow kind', () => {
+  const input=[{title:'modules',blocks:Array.from({length:87},(_,i)=>({
+    asset:String(i),kind:i%2?'set':'flow',w:600+(i%3)*80,h:i===86?12000:240+(i%5)*40,
+  }))}];
+  const current=layoutWorld(input)[0];
+  assert.ok(fill(current.blocks)>fill(exhaustiveWorld(input,true)[0].blocks));
+  assert.ok(current.blocks.some(b=>b.y>current.y+104),'short blocks must occupy lower slots');
+  assertSeparated(current.blocks,64,112);
+});
+test('skyline places tallest then widest, with stable ties and source identities', () => {
+  const blocks=[{id:'short',w:100,h:40},{id:'narrow',w:100,h:200},{id:'wide',w:200,h:200},{id:'tie',w:200,h:200}];
+  const result=skyline(blocks,1000);
+  assert.deepEqual(result.map(b=>b.id),blocks.map(b=>b.id));
+  assert.deepEqual([...result].sort((a,b)=>a.x-b.x).map(b=>b.id),['wide','tie','narrow','short']);
+  assert.equal(blocks[0].x,undefined);
+});
+test('adaptive form wrap grows with area, stays bounded and leaves small sets unchanged', () => {
+  assert.equal(componentWrapWidth([{width:100,height:30}]),1600);
+  const forms=Array.from({length:87},()=>({width:600,height:200}));
+  const width=componentWrapWidth(forms);
+  assert.ok(width>1600 && width<=6400);
+  const packed=rows(forms.map(p=>({w:p.width,h:p.height})),width,32,48);
+  assert.ok(bounds(packed).h<bounds(rows(forms.map(p=>({w:p.width,h:p.height})),1600,32,48)).h);
+  assertSeparated(packed,32,48);
+  assert.equal(componentWrapWidth([{width:100000,height:100000}]),6400);
+});
+test('restored width choices reproduce fresh geometry and ignore obsolete algorithm keys', () => {
+  const input=[{title:'cache',blocks:[{kind:'set',w:333,h:777},{kind:'flow',w:456,h:123}]}];
+  restorePacking([[JSON.stringify([50,1.6,input[0].blocks.map(b=>[b.kind,b.w,b.h])]),99999]]);
+  const expected=exhaustiveWorld(input);
+  assert.deepEqual(layoutWorld(input),expected);
+  restorePacking(packingSnapshot());
+  assert.deepEqual(layoutWorld(input),expected);
 });

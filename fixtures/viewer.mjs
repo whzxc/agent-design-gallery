@@ -4,7 +4,7 @@ const components = { theme: 'light', sidebar: true, group: 'Essentials', asset: 
 const overview = { theme: 'dark', sidebar: false, camera: 'all' };
 export const states = {
   'sample-components': { ...components },
-  'sample-zoomed': { ...components, theme: 'dark', camera: 'origin', scale: 1, origin: [292,112], minimap: true },
+  'sample-zoomed': { ...components, theme: 'dark', camera: 'selection', scale: 1, minimap: true },
   'sample-surfaces': { theme: 'light', sidebar: true, group: 'Connections & MCP', asset: 'surfaces/mcp-hub.tsx', form: 'failed', camera: 'origin', scale: .3, origin: [292,112] },
   'sample-overview': { ...overview },
   'sample-inspect-frame': { theme: 'light', sidebar: true, group: 'Connections & MCP', asset: 'surfaces/mcp-hub.tsx', form: 'failed', inspector: true, camera: 'selection' },

@@ -1,7 +1,7 @@
 import { dataFetch } from './auth.js';
-import { blockForAsset, layoutWorld } from "./layout.js";
+import { blockForAsset, componentWrapWidth, layoutWorld } from "./layout.js";
 // Measure declared SVG content in an isolated, script-disabled document.
-export const metadataContext = () => `${navigator.userAgent}|${devicePixelRatio}`;
+export const metadataContext = () => `adaptive-wrap-v1|${navigator.userAgent}|${devicePixelRatio}`;
 export function measuredMetadata(asset) {
   const {format,full,component,parts,background,imports,frameRanges}=asset;
   return {format,full,component,parts,background,imports,frameRanges};
@@ -226,7 +226,7 @@ function formDocument(form,css,theme) {
   return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-sdg-frame="${escape(form.name)}" style="${form.width ? `width:${form.width}px;` : 'width:max-content;'}${form.height ? `height:${form.height}px;` : ''}">${form.html}</div></body></html>`;
 }
 async function prepareSource(asset, built, theme, signal) {
-  const parts = []; let x=0,y=0,rowHeight=0;
+  const parts = [];
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox','allow-same-origin');
   frame.style.cssText='position:fixed;left:-100000px;top:0;visibility:hidden';
@@ -269,13 +269,18 @@ async function prepareSource(asset, built, theme, signal) {
         if (right<=left || bottom<=top || styleFor(node).visibility==='hidden') return [];
         return [{id:String(index),owners:JSON.parse(node.dataset.sdgOwners),x:left-box.x,y:top-box.y,width:right-left,height:bottom-top}];
       });
-      if (built.component && x && x+box.width>1600) { x=0;y+=rowHeight+48;rowHeight=0; }
       const content=frame.contentDocument.createElement('div');
       content.setAttribute('xmlns','http://www.w3.org/1999/xhtml');
       content.setAttribute('style','font:16px/1.5 var(--font-ui);color:var(--text);');
       content.append(frame.contentDocument.querySelector('style').cloneNode(true),shell.cloneNode(true));
-      parts.push({id:String(index),name:form.name,note:form.note,x,y,width:box.width,height:box.height,elements,markup:new XMLSerializer().serializeToString(content)});
-      x+=box.width+32;rowHeight=Math.max(rowHeight,box.height);
+      parts.push({id:String(index),name:form.name,note:form.note,width:box.width,height:box.height,elements,markup:new XMLSerializer().serializeToString(content)});
+    }
+    const wrapWidth = built.component ? componentWrapWidth(parts) : Infinity;
+    let x=0,y=0,rowHeight=0;
+    for (const part of parts) {
+      if (x && x+part.width>wrapWidth) { x=0;y+=rowHeight+48;rowHeight=0; }
+      Object.assign(part,{x,y});
+      x+=part.width+32;rowHeight=Math.max(rowHeight,part.height);
     }
     const width=Math.max(1,...parts.map(p=>p.x+p.width)),height=Math.max(1,...parts.map(p=>p.y+p.height));
     const xml = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
