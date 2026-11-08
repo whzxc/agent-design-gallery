@@ -76,6 +76,30 @@ test('central sampling cannot hide exposed edge strips or rounded transparent co
   } finally {await browser.close()}
 });
 
+test('static opaque menus cover rounded breadcrumb buttons absent from edge hit tests',async()=>{
+  const browser=await launch();
+  try {
+    const page=await browser.newPage({viewport:{width:300,height:250}});
+    const body=(background,z)=>`<button style="position:absolute;left:16px;top:24px;border:0;border-radius:8px;padding:2px 0;font:16px/20px monospace;background:transparent">Breadcrumb</button>
+      <div style="position:absolute;inset:0;z-index:${z}"><div class="menu" style="height:100px;border-radius:12px;background:${background}"><span class="text">Menu label</span></div></div>`;
+    await page.setContent(stage(body('white',10)));
+    const hits=await page.evaluate(()=>{
+      const button=document.querySelector('button'),menu=document.querySelector('.menu');
+      const range=document.createRange();range.selectNodeContents(button);const r=range.getBoundingClientRect();
+      return [[r.left+.01,r.top+.01],[r.right-.01,r.top+.01],[r.left+.01,r.bottom-.01],
+        [r.right-.01,r.bottom-.01],[(r.left+r.right)/2,(r.top+r.bottom)/2]].map(([x,y])=>{
+          const stack=document.elementsFromPoint(x,y);return{subject:stack.indexOf(button),cover:stack.indexOf(menu)};
+        });
+    });
+    assert.ok(hits.some(p=>p.subject===-1),'rounded button edge omits its text owner');
+    assert.ok(hits.some(p=>p.subject>p.cover&&p.cover>=0),'shared sample proves foreground paint order');
+    assert.deepEqual(await page.evaluate(inspectFrame,[]),[]);
+    assert.ok(overlaps(await inspect(page,body('rgba(255,255,255,.5)',10))).length,'translucent menu still reports');
+    assert.ok(overlaps(await inspect(page,body('transparent',10))).length,'transparent menu still reports');
+    assert.ok(overlaps(await inspect(page,body('white',-1))).length,'opaque menu behind the button still reports');
+  } finally {await browser.close()}
+});
+
 test('visible line rectangles intersect nested scroll, horizontal and self clipping',async()=>{
   const browser=await launch();
   try {

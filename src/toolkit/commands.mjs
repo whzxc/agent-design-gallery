@@ -142,13 +142,18 @@ export function inspectFrame(tokenNames) {
     const dx=Math.min(.01,(rect.right-rect.left)/100),dy=Math.min(.01,(rect.bottom-rect.top)/100);
     const points=[[rect.left+dx,rect.top+dy],[rect.right-dx,rect.top+dy],
       [rect.left+dx,rect.bottom-dy],[rect.right-dx,rect.bottom-dy],[(rect.left+rect.right)/2,(rect.top+rect.bottom)/2]];
-    return covers.some(cover => !cover.el.contains(el) && cover.rect.left<=rect.left && cover.rect.right>=rect.right &&
-      cover.rect.top<=rect.top && cover.rect.bottom>=rect.bottom && points.every(([x,y])=>{
-        const stack=paintStack(x,y),subject=stack.indexOf(el),foreground=stack.indexOf(cover.el);
-        // The SAME convex background must contain every corner and sit above
-        // this text. Central samples alone miss uncovered strips and corners.
-        return subject>=0 && foreground>=0 && foreground<subject;
-      }));
+    return covers.some(cover => {
+      if (cover.el.contains(el) || cover.rect.left>rect.left || cover.rect.right<rect.right ||
+          cover.rect.top>rect.top || cover.rect.bottom<rect.bottom) return false;
+      const samples=points.map(([x,y])=>{
+        const stack=paintStack(x,y);return [stack.indexOf(el),stack.indexOf(cover.el)];
+      });
+      // The SAME convex background must hit every corner. Rounded controls can
+      // omit their text owner at an edge, so establish paint order where both
+      // elements hit; absence alone is never evidence that the text is behind.
+      return samples.every(([subject,foreground])=>foreground>=0 && (subject<0 || foreground<subject)) &&
+        samples.some(([subject,foreground])=>subject>=0 && foreground<subject);
+    });
   };
   try {
     for (let i=0;i<lines.length;i++) for(let j=i+1;j<lines.length;j++) {
