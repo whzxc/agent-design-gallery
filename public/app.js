@@ -91,7 +91,7 @@ function keepSource(key,entry) {
   prepared.delete(key);prepared.set(key,entry);
   let bytes=[...prepared.values()].reduce((n,a)=>n+(a.source?.length??0)*2,0);
   for(const [old,value] of prepared) {
-    if(bytes<=32*1024*1024)break;
+    if(bytes<=64*1024*1024)break;
     bytes-=(value.source?.length??0)*2;prepared.delete(old);
   }
 }

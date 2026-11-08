@@ -239,6 +239,7 @@ await fit();
 await page.waitForTimeout(250);
 let update;
 if (fixtureRoot) {
+  await page.evaluate(async()=>{const flush=window.__sdg?.cacheFlush;if(flush)await flush;});
   let file = fixtureRoot + "/components/button.tsx";
   try { await access(file); } catch { file = fixtureRoot + "/components/button.svg"; }
   const original = await readFile(file, "utf8"), sourcePath = file.slice(fixtureRoot.length + 1);
@@ -289,6 +290,8 @@ if (fixtureRoot) {
     update = {
       latencyMs: performance.now() - start,
       assetRequests: requests.length,
+      sourceRequests: requests.filter(url=>new URL(url).pathname.includes('/asset/')).length,
+      previewRequests: requests.filter(url=>new URL(url).pathname.includes('/preview/')).length,
       incrementalHashes: !!incrementalHashes,
       cameraBefore: before,
       cameraAfter: await camera(),
