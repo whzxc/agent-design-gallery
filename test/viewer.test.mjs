@@ -328,6 +328,7 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
   const {writeFile}=await import('node:fs/promises');
   const {init}=await import('../src/toolkit/project.mjs');
   const temporaryRoot=await temporary(t);init({root:temporaryRoot},()=>{});
+  for(const layer of ['components','modules','surfaces']) await rm(path.join(temporaryRoot,'design',layer,'example.tsx'));
   const directory=path.join(temporaryRoot,'design');
   await mkdir(path.join(directory,'scenes'));
   await writeFile(path.join(directory,'scenes/sizes.tsx'),'export const widths=[900,700,500];');
@@ -396,8 +397,9 @@ test('frame and element selection expose transitive relationships, matching expo
   const {writeFile}=await import('node:fs/promises');
   const {init}=await import('../src/toolkit/project.mjs');
   const temporaryRoot=await temporary(t);init({root:temporaryRoot},()=>{});
+  for(const layer of ['components','modules','surfaces']) await rm(path.join(temporaryRoot,'design',layer,'example.tsx'));
   const directory=path.join(temporaryRoot,'design');
-  await mkdir(path.join(directory,'modules'));
+  await mkdir(path.join(directory,'modules'),{recursive:true});
   await writeFile(path.join(temporaryRoot,'sdg.config.mjs'),"export default {sources:['components','modules','surfaces']};");
   await writeFile(path.join(directory,'components/alert.tsx'),`import {Frame} from 'sdg';export const Alert=()=> <span>Alert</span>;export default()=> <Frame name="alert"><Alert/></Frame>;`);
   await writeFile(path.join(directory,'modules/composer.tsx'),`import {Frame} from 'sdg';import {Alert} from '../components/alert';export const Composer=()=> <section class="w-[200px] h-[80px] bg-text text-canvas"><Alert/></section>;export default()=> ['composer-home-enhancement-ready','compact'].map(name=><Frame name={name}><Composer/></Frame>);`);

@@ -12,9 +12,11 @@ export const starterTokens = `:root {
   --text: #ffffff;
 }
 `;
-const defaultSources = ['components', 'surfaces'];
+const defaultSources = ['components', 'modules', 'surfaces'];
 export function sourceDirectories(config = {}) {
-  const sources = config.sources === undefined ? defaultSources : config.sources;
+  const studies = config.sources === undefined && config.design && existsSync(path.join(config.design, 'studies')) &&
+    readdirSync(path.join(config.design, 'studies'), {withFileTypes:true}).some(entry => entry.isFile() && isSourcePath(`studies/${entry.name}`, ['studies']));
+  const sources = config.sources === undefined ? [...defaultSources, ...(studies ? ['studies'] : [])] : config.sources;
   if (!Array.isArray(sources) || !sources.length || sources.some(name => typeof name !== 'string' || !/^[A-Za-z0-9_-]+$/.test(name))) {
     throw Error('Set sources to a non-empty array of plain top-level directory names in sdg.config.mjs; nesting is not allowed');
   }
@@ -28,13 +30,44 @@ export function refreshTypes(config) {
   writeFileSync(path.join(config.design, '.sdg/assets.d.ts'), `declare module '*?url' { const url: string; export default url; }\ndeclare module '*.svg' { const Art: (props: Record<string, unknown>) => any; export default Art; }\n${['png','jpg','jpeg','webp'].map(ext => `declare module '*.${ext}' { const url: string; export default url; }`).join('\n')}\n`);
 }
 export const tsconfig = { compilerOptions: { target: 'ESNext', module: 'ESNext', moduleResolution: 'Bundler', jsx: 'react-jsx', jsxImportSource: 'sdg', noEmit: true, strict: true, paths: { sdg: ['./.sdg/runtime.d.ts'], 'sdg/jsx-runtime': ['./.sdg/runtime.d.ts'] } }, include: ['**/*.tsx', '**/*.ts', '.sdg/*.d.ts'] };
+function starterSources(sources) {
+  const layers=sources.filter(name=>name!=='studies');
+  return layers.map((directory,index) => {
+    const imports=`import { Frame } from 'sdg';\n`;
+    let body;
+    if (!index) body=`import { example } from '../fixtures/example';
+
+export function Example({ label = example.action }: { label?: string }) {
+  return <button class="rounded-lg bg-text px-4 py-2 text-canvas">{label}</button>;
+}
+export default () => <Frame name="default"><Example /></Frame>;
+`;
+    else {
+      const last=index===layers.length-1;
+      body=`import { Example as Part } from '../${layers[index-1]}/example';
+${last ? '' : "import { example } from '../fixtures/example';\n"}
+export function Example() {
+  return ${last ? '<main class="flex h-[360px] w-[640px] items-center justify-center bg-canvas p-6"><Part /></main>' : '<section class="flex flex-col items-start gap-3 p-4"><h2>{example.title}</h2><Part /></section>'};
+}
+export default () => <Frame name="default"${last ? ' width={640} height={360}' : ''}><Example /></Frame>;
+`;
+    }
+    return [path.join(directory,'example.tsx'),imports+body];
+  });
+}
 export function init(config, log = console.log) {
   config.design ??= path.join(config.root, 'design');
   refreshTypes(config); rejectLegacy(config);
+  const sources=sourceDirectories(config), fresh=sources.some(name=>name!=='studies') &&
+    !listSources(config.design,sources).length && !existsSync(path.join(config.design,'fixtures/example.ts'));
   for (const [file, content] of [
-    [path.join(config.root, 'sdg.config.mjs'), "export default { requires: '>=0.4.0', design: 'design', output: 'output/design' };\n"],
+    [path.join(config.root, 'sdg.config.mjs'), "export default { requires: '>=0.5.0', design: 'design', output: 'output/design' };\n"],
     [path.join(config.design, 'tokens.css'), starterTokens],
-    ...[...sourceDirectories(config), 'art'].map(name => [path.join(config.design, name), null]),
+    ...[...sources.filter(name=>name!=='studies'), 'fixtures', 'art'].map(name => [path.join(config.design, name), null]),
+    ...(fresh ? [
+      [path.join(config.design,'fixtures/example.ts'), "export const example = { title: 'Example', action: 'Continue' };\n"],
+      ...starterSources(sources).map(([name,content])=>[path.join(config.design,name),content]),
+    ] : []),
     [path.join(config.design, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2) + '\n'],
   ]) {
     if (existsSync(file)) { log(`skipped ${relative(config, file)}`); continue; }
@@ -49,7 +82,7 @@ export function init(config, log = console.log) {
   refreshTypes(config);
   return 0;
 }
-export function listSources(directory, sources = defaultSources) {
+export function listSources(directory, sources = sourceDirectories({design:directory})) {
   return sources.flatMap(name => {
     const base = path.join(directory, name);
     if (!existsSync(base)) return [];
@@ -62,7 +95,7 @@ export function isSourcePath(name, sources = defaultSources) {
   const slash = name.indexOf('/');
   return slash > 0 && sources.includes(name.slice(0, slash)) && /^[^/.][^/]*\.tsx$/.test(name.slice(slash + 1));
 }
-export function readGroups(directory, sources = defaultSources) {
+export function readGroups(directory, sources = sourceDirectories({design:directory})) {
   try {
     const data = JSON.parse(readFileSync(path.join(directory, 'gallery.json'), 'utf8'));
     if (!Array.isArray(data.groups) || data.groups.some(group => typeof group.title !== 'string' || !Array.isArray(group.assets))) {
@@ -91,8 +124,8 @@ export function rejectLegacy(config, files) {
     }
   }
 }
-export function selectSources(config, args = []) {
-  refreshTypes(config);
+export function selectSources(config, args = [], { write = true } = {}) {
+  if (write) refreshTypes(config);
   if (!args.length) rejectLegacy(config);
   const directories = sourceDirectories(config);
   readGroups(config.design, directories);

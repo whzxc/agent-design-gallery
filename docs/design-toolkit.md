@@ -1,10 +1,10 @@
 # Design toolkit
 
-[SDG design](design.md) · [Architecture](architecture.md) · [Performance](performance.md)
+[Asset rules and adoption](asset-rules.md) · [SDG design](design.md) · [Architecture](architecture.md) · [Performance](performance.md)
 
 A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `sdg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, and browses them in the viewer (`sdg <directory>`).
 
-This document is the format and command contract. A project's own design document keeps only its decisions: the direction, the forms it declares and its implementation notes.
+This document is the format and command contract. The [design asset rules](asset-rules.md) define layers, ownership, states, frame naming, fidelity and lifecycle, with an adoption guide for existing projects. A project's own mapping and governance documents keep its direction, declared forms, implementation locations, approval process and concrete gaps.
 
 ## Install
 
@@ -20,16 +20,20 @@ A project may set `requires` in `sdg.config.mjs`, such as `'>=0.4.0'`. Older ver
 
 ## Project layout
 
-- `sdg.config.mjs` at the project root configures paths, `sources` and `compare`. Every field is optional.
+- `sdg.config.mjs` at the project root configures paths, `sources`, `check` and `compare`. Every field is optional.
 - `design/tokens.css` holds color, type, radius, size and shadow tokens for the light and dark themes.
 - `design/components/<name>.tsx` holds one shared component. It exports the functions other sources use, and its default export returns the component's declared forms as frames.
+- `design/modules/<feature>.tsx` owns feature parts and their states, composed from components and other modules' exported parts.
 - `design/surfaces/<name>.tsx` holds a panel, dialog, page or screen composed from components. Its default export returns its declared forms as frames.
 - `design/art/` holds SVG illustrations and brand artwork that sources import.
+- `design/fixtures/` holds representative content and state data. `design/studies/` holds temporary direction explorations only while they are active.
 - `design/gallery.json` optionally arranges sources into groups for the viewer.
 - `design/tsconfig.json` lets editors resolve the toolkit's types. `sdg init` writes it; every command refreshes the ignored `design/.sdg/` declarations it points to.
 - `output/design/` receives builds, renders and compare reports. Keep it and `design/.sdg/` out of Git.
 
-`sources` is an optional array of plain top-level directory names, defaulting to `['components', 'surfaces']`. For example, `sources: ['components', 'modules', 'surfaces']` includes module assets in the canvas, checks and renders. Names use letters, digits, underscores or hyphens; nested paths are rejected. Only direct TSX files in those directories are source entries. Other files under `design/`, such as shared scene data, remain imports.
+`sources` is an optional array of plain top-level directory names. Since 0.5.0 it defaults to `['components', 'modules', 'surfaces']`, adding `studies` only when a direct `design/studies/*.tsx` file exists. Empty study directories and nested helpers do not enable studies. Saving the first study or removing the last one updates default viewer discovery. Explicit lists retain their exact directories and order, including whether to include studies. Names use letters, digits, underscores or hyphens; nested paths are rejected. Only direct TSX files in those directories are source entries. Other files under `design/`, such as shared scene data, remain imports.
+
+Production directories in `sources` are ordered from lower to higher layers. `check` rejects imports into a higher layer and permits imports within the same layer. With the default order, components cannot import modules or surfaces, and modules cannot import surfaces. Custom names use the configured order; studies are exempt. A consumer can set `check: { importDirection: false }` in `sdg.config.mjs` to disable only this lint and document its alternative policy locally. The check uses resolved direct source imports from the relationship graph, including extension/index resolution and re-exports.
 
 Commands run from any directory inside the project. They find the nearest `sdg.config.mjs` or, without one, the nearest `package.json`, and resolve paths from there.
 
@@ -136,6 +140,8 @@ A source describes structure, not coordinates. Write it the way the UI is built.
 
 Each problem is one line, `<path>: <frame>: <problem>`. A nonzero exit means the source is not ready.
 
+An import-direction problem is one line, `<path>: import <source> violates import direction (<lower> -> <higher>); ...`. It names the resolved source rather than a manual dependency annotation. Named-source checks lint those sources' outgoing imports, including targets outside the selected subset. Other imported helpers and erased type-only imports are outside the graph; review their ownership in the [read-only audit](asset-rules.md#2-run-a-read-only-audit).
+
 ## Workflow
 
 1. Start from the user's request and the fixture data the frame will be compared against.
@@ -173,7 +179,7 @@ Review the composition of every frame before showing it. A frame that copies the
 ```sh
 sdg [open] [directory] [--port=<n>] [--no-open] [--state-dir=<path>]
 sdg init
-sdg check [source...]
+sdg check [source...] [--read-only]
 sdg render [source...] [--frame=<name>] [--scale=2]
 sdg compare <source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin=<x> <y>] [--click=<name>...] [--viewport=<w>x<h>]
 sdg compare --all
@@ -181,8 +187,8 @@ sdg compare --all
 
 A first argument that names a command runs it; any other argument is a directory to open. `sdg open check` opens a directory named `check`.
 
-- `init` creates `sdg.config.mjs`, `design/tokens.css` with the required tokens, `design/components/`, `design/surfaces/`, `design/art/` and `design/tsconfig.json`. It never overwrites a file and lists what it created and skipped.
-- `check` checks the named sources, or all of them.
+- `init` creates `sdg.config.mjs` requiring `>=0.5.0`, required tokens, production source directories, fixtures/art, editor configuration and ignore entries. A fresh library gets `components/example.tsx`, `modules/example.tsx`, `surfaces/example.tsx` and `fixtures/example.ts`: one runnable downward composition with frame name `default` in each source. Explicit source names are used in place of the defaults. Existing source libraries or an existing example fixture receive no demo assets. Authored files are preserved, generated declarations are refreshed, missing ignore entries are appended, and created/skipped files are listed. It creates no study or empty studies directory.
+- `check` checks import direction and the named sources' frames, or all sources. `--read-only` skips generated type declarations and HTML build files; it runs the same import and both-theme frame checks without changing consumer files.
 - `render` writes `output/design/<path>/<frame>-light.png` and `-dark.png` at the given scale, for every frame or the one named.
 - `compare` compares one frame; its flags override the frame's `fixture` and `capture`.
 - `compare --all` compares every frame that has a fixture and writes `output/design/compare/summary.json` and `index.html`, one row per frame with its counts and report link.

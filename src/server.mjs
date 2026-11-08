@@ -103,7 +103,7 @@ export async function startServer({
       throw new Error("Choose a directory containing SVG files.");
     if ((await readdir(next)).includes("tokens.css")) refreshTypes({design:next});
     const project = await loadConfig(next);
-    const nextSources = project.design === next ? project.sources : sourceDirectories();
+    const nextSources = project.design === next ? project.sources : sourceDirectories({design:next});
     const nextFiles = await collect(next, "", new Map(), nextSources),
       nextGroups = await readGroups(next, nextSources);
     if (!nextFiles.size) throw new Error("No SVG files in this directory.");
@@ -148,8 +148,10 @@ export async function startServer({
       const observed = [...touched];
       touched.clear();
       const base = root,
-        next = await collect(base),
-        nextGroups = await readGroups(base, sources);
+        project = await loadConfig(base),
+        nextSources = project.design===base ? project.sources : sourceDirectories({design:base}),
+        next = await collect(base,'',new Map(),nextSources),
+        nextGroups = await readGroups(base, nextSources);
       if (root !== base) return;
       const changed = [...new Set([...files.keys(), ...next.keys()])].filter(
         (k) => files.get(k)?.version !== next.get(k)?.version,
@@ -179,6 +181,7 @@ export async function startServer({
           }
         }
       files = next;
+      sources = nextSources;
       groups = nextGroups;
       revision++;
       emit({ revision, changed });

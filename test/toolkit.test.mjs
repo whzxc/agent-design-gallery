@@ -7,7 +7,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {jsx,jsxs,Fragment,Frame,Icon} from '../src/toolkit/runtime.mjs';
 import {parseTokens,themeCss} from '../src/toolkit/tokens.mjs';
-import {init,starterTokens,selectSources,refreshTypes,sourceDirectories,isSourcePath} from '../src/toolkit/project.mjs';
+import {init,starterTokens,selectSources,refreshTypes,sourceDirectories,isSourcePath,listSources} from '../src/toolkit/project.mjs';
 import {buildSource} from '../src/toolkit/build.mjs';
 import {loadConfig,discoverRoot,satisfies,viewport} from '../src/toolkit/config.mjs';
 import {check,inspectFrame,render} from '../src/toolkit/commands.mjs';
@@ -17,7 +17,7 @@ import {launch,loadFrame} from '../src/toolkit/browser.mjs';
 import {matchTexts,textDelta} from '../src/toolkit/text.mjs';
 import {parseCli,help} from '../src/cli.mjs';
 const temporary=t=>{const root=mkdtempSync(path.join(tmpdir(),'sdg-v2-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
-async function project(t){const root=temporary(t);init({root},()=>{});return loadConfig(root);}
+async function project(t){const root=temporary(t);init({root},()=>{});for(const file of listSources(path.join(root,'design')))rmSync(file);return loadConfig(root);}
 const source=(body,props='')=>`import {Frame, Icon} from 'sdg'; export default()=> <Frame name="sample" width={200} height={100} ${props}>${body}</Frame>;`;
 const put=(c,name,body)=>{const f=path.join(c.design,name);mkdirSync(path.dirname(f),{recursive:true});writeFileSync(f,body);return f;};
 
@@ -112,15 +112,15 @@ test('check permits token paint, brand art, clipped content and intentional elli
   const p=[];assert.equal(await check(c,[],{},()=>{},s=>p.push(s)),0,p.join('\n'));
 });
 test('check, render and the canvas discover configured top-level TSX source directories',async t=>{
-  assert.deepEqual(sourceDirectories(),['components','surfaces']);
+  assert.deepEqual(sourceDirectories(),['components','modules','surfaces']);
   for(const sources of [[],null,'modules',['nested/modules'],['../modules'],['.sdg'],['modules\\nested'],[42]]) {
     assert.throws(()=>sourceDirectories({sources}),/plain top-level directory names/);
   }
-  assert.equal(isSourcePath('modules/a.tsx'),false);
+  assert.equal(isSourcePath('modules/a.tsx'),true);
   assert.equal(isSourcePath('modules/a.tsx',['modules']),true);
   const {startServer}=await import('../src/server.mjs');
   for(const directories of [['components','surfaces'],['components','modules','surfaces']]) {
-    const root=temporary(t);init({root},()=>{});
+    const root=temporary(t);init({root},()=>{});for(const file of listSources(path.join(root,'design')))rmSync(file);
     writeFileSync(path.join(root,'sdg.config.mjs'),`export default { sources: ${JSON.stringify(directories)} };`);
     const c=await loadConfig(root);
     assert.deepEqual(c.sources,directories);

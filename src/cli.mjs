@@ -7,12 +7,12 @@ import { VERSION, loadConfig } from './toolkit/config.mjs';
 export const commands = ['open', 'init', 'check', 'render', 'compare'];
 const usage = {
   open: '[directory] [--port=<n>] [--no-open] [--state-dir=<path>]',
-  init: '', check: '[source...]', render: '[source...] [--frame=<name>] [--scale=2]',
+  init: '', check: '[source...] [--read-only]', render: '[source...] [--frame=<name>] [--scale=2]',
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
 };
 const details = {
   open: 'Browse TSX sources and legacy SVG designs.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
-  check: 'Build and check every selected frame in both themes.', render: 'Render each selected frame in both themes. Scale defaults to 2.',
+  check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render each selected frame in both themes. Scale defaults to 2.',
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
 };
 export function help(command) {
@@ -25,6 +25,7 @@ export function parseCli(args) {
   const strings = { open: ['port', 'state-dir'], render: ['scale', 'frame'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
+  if (command === 'check') options['read-only'] = { type: 'boolean' };
   if (command === 'compare') { options.all = { type: 'boolean' }; options.page = { type: 'boolean' }; }
   if (command === 'compare') options.click = { type: 'string', multiple: true };
   let parsed;

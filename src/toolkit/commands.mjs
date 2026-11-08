@@ -1,7 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { buildSource } from './build.mjs';
-import { selectSources, relative, loadTokens } from './project.mjs';
+import { selectSources, relative, loadTokens, sourceDirectories } from './project.mjs';
+import { importDirectionViolations } from './asset-rules.mjs';
 import { launch, loadFrame } from './browser.mjs';
 export function inspectFrame(tokenNames) {
   const frame = document.querySelector('[data-sdg-frame]'), box = frame.getBoundingClientRect(), problems = new Set();
@@ -81,18 +82,20 @@ export function inspectFrame(tokenNames) {
   return [...problems];
 }
 export async function check(config, args = [], options = {}, log = console.log, error = console.error) {
-  const files = selectSources(config,args), tokens = loadTokens(config), problems = new Set();
+  const write=!options['read-only'];
+  const files = selectSources(config,args,{write}), tokens = loadTokens(config), problems = new Set(), graph={};
   const browser = await launch();
   try {
     const page = await browser.newPage();
     for (const file of files) {
       let built;
-      try { built = await buildSource(config,file,{allowLegacy:false}); }
+      try { built = await buildSource(config,file,{allowLegacy:false,write}); }
       catch(e) {
         const legacy = e.errors?.find(error => error.detail?.code === 'LEGACY_SVG');
         if (legacy) throw legacy.detail;
         problems.add(`${relative(config,file)}: -: ${e.message.replace(/\s+/g,' ')}`); continue;
       }
+      graph[path.relative(config.design,file).split(path.sep).join('/')]={uses:built.imports};
       for (const frame of built.frames) for (const theme of ['light','dark']) {
         try {
           await loadFrame(page,frame,theme);
@@ -101,6 +104,9 @@ export async function check(config, args = [], options = {}, log = console.log, 
       }
     }
   } finally { await browser.close(); }
+  if (config.check?.importDirection!==false) for (const {source,target,from,to} of importDirectionViolations(graph,sourceDirectories(config))) {
+    problems.add(`${relative(config,path.join(config.design,source))}: import ${target} violates import direction (${from} -> ${to}); import from the same or a lower layer in sources`);
+  }
   for (const problem of problems) error(problem);
   log(`Design check ${problems.size ? 'failed' : 'passed'} for ${files.length} sources${problems.size ? `: ${problems.size} problems` : ''}.`);
   return problems.size ? 1 : 0;

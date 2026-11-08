@@ -27,7 +27,9 @@ The directory picker opens **Open a design directory**. Enter a path or select a
 
 ## Sources and layout
 
-Design sources are TSX modules directly in `design/components/` and `design/surfaces/`. Other modules under `design/` are imports. Import `Frame` and `Icon` from `sdg`, export reusable component functions, and default-export a function returning the declared frames. JSX builds static HTML and inline SVG without React or browser scripts. Tailwind v4 utilities resolve through the project's `design/tokens.css`; light and dark are selected by the document's `data-theme`.
+Design sources are TSX files directly in `design/components/`, `design/modules/` and `design/surfaces/`. Default discovery also includes `design/studies/` once it contains a direct TSX study; explicit `sources` lists remain unchanged. Fixtures and artwork stay in their supporting directories. Import `Frame` and `Icon` from `sdg`, export reusable component functions, and default-export a function returning the declared frames. JSX builds static HTML and inline SVG without React or browser scripts. Tailwind v4 utilities resolve through the project's `design/tokens.css`; light and dark are selected by the document's `data-theme`.
+
+Follow the [design asset rules](docs/asset-rules.md) for placement, ownership, states, frame names, fidelity, lifecycle and studies. The [adoption guide](docs/asset-rules.md#adopting-an-existing-project) covers inventory, a read-only audit with `file / problem / suggested fix` findings, review batches, and the mappings/governance each consumer keeps locally. `sources` orders production layers from lower to higher; `check` reports upward imports. Set `check: { importDirection: false }` to opt out of that lint while keeping frame checks.
 
 A component source is one set: frames run in source order with 32px gaps, wrap before 1600px, and have 48px between rows. Sets pad forms by 24px at the sides and bottom and 36px at the top. A surface source is one flow: each frame receives 16px padding and follows the flow layout. Frame notes appear in the inspector, outside the drawing. Full sheet has been removed; choose a declared form or frame.
 
@@ -35,7 +37,7 @@ Legacy SVGs remain browsable with their existing geometric crops and relative em
 
 Sets and flows pack into sections, and sections into a stable world. Saving a source, imported component, artwork or tokens refreshes affected previews without moving the camera. Unchanged regions retain their positions; new or enlarged regions move below existing content. Use Arrange current group to compact after structural changes. Labels retain constant screen sizes and hide when they collide with chrome or other labels.
 
-Files group by directory unless `gallery.json` supplies project groups. Entries must point directly into `components/` or `surfaces/`:
+Files group by directory unless `gallery.json` supplies project groups. Entries must point directly into configured source directories:
 
 ```json
 {
@@ -55,14 +57,15 @@ Run commands from inside the project:
 ```sh
 sdg init
 sdg check
-sdg render surfaces/settings --frame=ready --scale=2
-sdg compare surfaces/settings --frame=ready
-sdg compare --all
+sdg render surfaces/example --frame=default --scale=2
+sdg check --read-only
 ```
 
-`init` creates tokens, source/art directories, editor configuration and ignore entries without overwriting existing files. Each command refreshes declarations in `design/.sdg/`; projects do not install SDG as a dependency. Builds produce standalone HTML and renders produce `<frame>-light.png` and `<frame>-dark.png` under `output/design/<source>/`. Compare uses Frame fixture/capture props, with CLI flags taking precedence. `--all` writes a linked HTML index and `summary.json` under `output/design/compare/`. `sync` and `measure` have been removed.
+`init` creates tokens, components/modules/surfaces, fixtures/art, editor configuration and ignore entries. A fresh library gets one `example.tsx` per production layer, composed downward with shared fixture data; existing libraries receive no demo sources. Existing authored files are preserved, declarations are refreshed, and missing ignore entries are appended. Starter configuration requires SDG 0.5.0 or newer. `check --read-only` skips declarations and build files for an audit. Projects do not install SDG as a dependency.
 
-See the [v2 toolkit contract](docs/design-toolkit.md) for source rules and compare adapters. Node.js executes design modules at build time; open sources you trust.
+Builds produce standalone HTML and renders produce `<frame>-light.png` and `<frame>-dark.png` under `output/design/<source>/`. After configuring an implementation adapter and frame fixture/capture, use `sdg compare <source> --frame=<name>` or `sdg compare --all`. Flags override Frame capture props; `--all` writes a linked HTML index and `summary.json` under `output/design/compare/`. `sync` and `measure` have been removed.
+
+See the [toolkit contract](docs/design-toolkit.md) for source format and compare adapters, and the [changelog](CHANGELOG.md) for version changes. Node.js executes design modules at build time; open sources you trust.
 
 ## Development
 

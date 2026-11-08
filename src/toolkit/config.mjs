@@ -78,10 +78,13 @@ export async function loadConfig(cwd = process.cwd()) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('Export a default object from sdg.config.mjs');
   if (config.requires !== undefined && !satisfies(VERSION, config.requires)) throw new Error(`SDG ${VERSION} does not satisfy requires ${config.requires}; run ${UPDATE}`);
   for (const key of ['design', 'output']) if (config[key] !== undefined && (typeof config[key] !== 'string' || !config[key].trim())) throw new Error(`Set ${key} to a directory path in sdg.config.mjs`);
+  if (config.check !== undefined && (!config.check || typeof config.check!=='object' || Array.isArray(config.check))) throw new Error('Set check to an object in sdg.config.mjs');
+  if (config.check?.importDirection !== undefined && typeof config.check.importDirection!=='boolean') throw new Error('Set check.importDirection to true or false in sdg.config.mjs');
   const compare = { port: 5188, viewport: '1280x800', ...config.compare };
   viewport(compare.viewport);
   if (!Number.isInteger(compare.port) || compare.port < 1 || compare.port > 65535) throw new Error('Set compare.port to an integer from 1 to 65535 in sdg.config.mjs');
   for (const key of ['start', 'fixture', 'ready', 'texts']) if (compare[key] !== undefined && typeof compare[key] !== 'function') throw new Error(`Set compare.${key} to a function in sdg.config.mjs`);
   if (compare.block !== undefined && (!Array.isArray(compare.block) || compare.block.some(value => typeof value !== 'string'))) throw new Error('Set compare.block to an array of request patterns in sdg.config.mjs');
-  return { root, sources: sourceDirectories(config), design: path.resolve(root, config.design ?? 'design'), output: path.resolve(root, config.output ?? 'output/design'), compare };
+  const design=path.resolve(root,config.design??'design');
+  return { root, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{importDirection:true,...config.check}, compare };
 }
