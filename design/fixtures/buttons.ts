@@ -8,3 +8,5 @@ export const buttonForms = [
 ];
 
 export const iconButtonForms = ['default', 'active'];
+
+export const disabledIconButton = { icon: 'arrow-left', disabled: true };

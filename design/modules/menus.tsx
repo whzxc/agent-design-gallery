@@ -61,7 +61,9 @@ const frames = [
         "top": 250,
         "kind": "zoom",
         "label": "48%",
-        "active": true
+        "active": true,
+        "backDisabled": false,
+        "minimapPressed": false
       },
       {
         "left": 92,

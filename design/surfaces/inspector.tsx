@@ -32,7 +32,9 @@ const frames = [
         "top": 840,
         "kind": "zoom",
         "label": "71%",
-        "active": false
+        "active": false,
+        "backDisabled": false,
+        "minimapPressed": false
       },
       {
         "left": 1128,
@@ -95,7 +97,9 @@ const frames = [
         "top": 840,
         "kind": "zoom",
         "label": "125%",
-        "active": false
+        "active": false,
+        "backDisabled": false,
+        "minimapPressed": false
       },
       {
         "left": 1128,

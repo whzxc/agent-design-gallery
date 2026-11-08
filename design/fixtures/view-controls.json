@@ -2,5 +2,22 @@
   "appBar": {
     "specimen": true,
     "directory": "arc"
-  }
+  },
+  "zoomBarStates": [
+    {
+      "name": "zoom-bar"
+    },
+    {
+      "name": "zoom-bar-menu-open",
+      "active": true
+    },
+    {
+      "name": "zoom-bar-back-disabled",
+      "backDisabled": true
+    },
+    {
+      "name": "zoom-bar-minimap-pressed",
+      "minimapPressed": true
+    }
+  ]
 }

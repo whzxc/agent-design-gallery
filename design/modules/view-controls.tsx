@@ -39,10 +39,20 @@ export function AppBar({
     </Toolbar>
   );
 }
-export function ZoomBar({ label = '48%', active = false }: { label?: string; active?: boolean }) {
+export function ZoomBar({
+  label = '48%',
+  active = false,
+  backDisabled = false,
+  minimapPressed = false,
+}: {
+  label?: string;
+  active?: boolean;
+  backDisabled?: boolean;
+  minimapPressed?: boolean;
+}) {
   return (
     <Toolbar>
-      <IconButton icon="arrow-left" />
+      <IconButton icon="arrow-left" disabled={backDisabled} />
       <div class="ml-1">
         <Separator />
       </div>
@@ -50,8 +60,8 @@ export function ZoomBar({ label = '48%', active = false }: { label?: string; act
       <Button form={active ? 'zoom-open' : 'zoom'} label={label} />
       <IconButton icon="plus" />
       <Separator />
-      <IconButton icon="maximize" />
-      <IconButton icon="map" />
+      <IconButton icon="scan" />
+      <IconButton icon="map" form={minimapPressed ? 'active' : 'default'} />
     </Toolbar>
   );
 }
@@ -90,6 +100,11 @@ export default () => [
   <Frame name="app-bar">
     <AppBar {...viewControlFixtures.appBar} />
   </Frame>,
+  ...viewControlFixtures.zoomBarStates.map(({ name, ...props }) => (
+    <Frame name={name}>
+      <ZoomBar {...props} />
+    </Frame>
+  )),
   ...frames.map(({ chrome, ...frame }) => (
     <Frame {...frame}>
       <Screen width={frame.width} height={frame.height} scene={scenes[frame.name]}>

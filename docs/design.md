@@ -29,13 +29,13 @@ implementation mappings and review process. The asset rules take precedence over
 
 | Owner | Current assets | Current scope / remaining work |
 | --- | --- | --- |
-| Shared values and controls | `tokens.css`, button, icon-button, field, tree-row and menu-item components; their fixtures | Reviewed; defaults belong to parts and frame presentation data belongs to fixtures. |
+| Shared values and controls | `tokens.css`, button, icon-button, field, tree-row and menu-item components; their fixtures | Reviewed; IconButton disabled is approved; defaults belong to parts and frame presentation data belongs to fixtures. |
 | Generic containers | `components/panel.tsx`, `components/toolbar.tsx`, `components/canvas.tsx`, `fixtures/containers.ts` | Independent source entries and minimal specimens; Reviewed. |
 | Surface layout | `surfaces/canvas.tsx` / `ViewerChrome`; three surface renderers | Select and position feature chrome around the generic Screen. Boundary Reviewed. Review one full-region source at a time after feature dependencies. |
-| Navigation | `modules/navigation.tsx` / `Sidebar` | Boundary Reviewed; navigation/search fixtures are separate; current extraction awaits controller review. |
+| Navigation | `modules/navigation.tsx` / `Sidebar` | Reviewed; navigation/search fixtures are separate. |
 | Inspector | `modules/inspector.tsx` / `Inspector`, `DetailInspector` | Boundary Reviewed; consolidate the runtime-facing composition and local states in the inspector scope. |
-| Menus | `modules/menus.tsx` / `Menu` | Boundary Reviewed; menu captures and their fixtures await controller review. |
-| View controls | `modules/view-controls.tsx` / `Tools`, `AppBar`, `ZoomBar` | Boundary Reviewed; structure and tool-tooltip capture await controller review; Fit geometry and disabled/pressed states remain visual proposals. |
+| Menus | `modules/menus.tsx` / `Menu` | Reviewed; menu captures and their fixtures belong to the menus module. |
+| View controls | `modules/view-controls.tsx` / `Tools`, `AppBar`, `ZoomBar` | Reviewed; tools, AppBar, ZoomBar and tooltip capture are approved, including Fit scan, Back disabled and Minimap pressed. |
 | Directory opening | `modules/open-directory.tsx` / `OpenDialog` | Boundary Reviewed; recent data, errors and dialog copy remain in the directory scope. |
 | Shortcuts | `modules/shortcuts.tsx` / `Shortcuts`; `components/kbd.tsx` | Boundary Reviewed; keycap radius and content governance remain in the shortcuts scope. |
 | Canvas presentation | `Drawing`, `Artboard`, `Flow`, `Section`, `AssetLabel`, `Minimap`, `Tooltip`, `scenes/`, `art/arc-previews/` | Resolve duplicate ownership, unknown consumers and artwork governance in the canvas scope. |
@@ -55,7 +55,7 @@ owning scope resolves them.
 | --- | --- | --- | --- |
 | `tokens.css` | `public/index.html` `/tokens.css`; `public/style.css`; `public/app.js` `applyTheme` | All sources | Reviewed; in use. Shared theme, typography and geometry values. |
 | `components/button.tsx` / `Button` | `public/index.html` `#directory-form .primary`, `#zoom-options`; `public/style.css` `.primary`, `#zoom-options` | `modules/open-directory`, `modules/view-controls` → surface chrome | Reviewed; in use. Frames: `primary`, `secondary`, `zoom`, `zoom-open`. Secondary runtime usage is unknown; submit-disabled coverage belongs to the view-controls scope. |
-| `components/icon-button.tsx` / `IconButton` | `public/index.html` `.icon-button`; `public/style.css` `.icon-button`, pressed/current states | Inspector, navigation, directory, shortcuts and view-controls modules; Toolbar specimens | Reviewed; in use. Frames: `default`, `active`. Disabled Back and Minimap pressed coverage remain in the view-controls scope. |
+| `components/icon-button.tsx` / `IconButton` | `public/index.html` `.icon-button`; `public/style.css` `.icon-button`, pressed/current states | Inspector, navigation, directory, shortcuts and view-controls modules; Toolbar specimens | Reviewed; in use. Approved frames: `default`, `active`, `disabled`. Disabled uses the runtime 45% opacity and is adopted by ZoomBar. |
 | `components/field.tsx` / `Field` | `public/index.html` `.picker`, `.search-field`, `#path`; `public/style.css` corresponding selectors | Navigation, directory and view-controls modules | Reviewed; in use. Frames: `search`, `search-active`, `picker`, `input`, `input-error`, `input-empty`. Default height uses `--field-height`; numeric overrides are supported. |
 | `components/tree-row.tsx` / `TreeRow` | `public/app.js` `makeRow`, `renderNav`, `selection`, `recent`; `public/style.css` `.tree-row`, `.frame-row`, `#recent button` | Navigation, inspector and directory modules | Reviewed; in use. Frames: `root`, `root-selected`, `group`, `group-selected`, `item`, `item-selected`, `two-line`, `two-line-selected`. Heights use row tokens; numeric overrides are supported; multiline follows content. |
 | `components/menu-item.tsx` / `MenuItem` | `public/index.html` menu buttons/headings; `public/style.css` `.menu button`, `.menu h3` | Menus module | Reviewed; in use. Frames: `item`, `item-active`, `check`, `option`, `label`. Heights use `--menu-item-height` and `--menu-label-height`. |
@@ -67,15 +67,15 @@ owning scope resolves them.
 | `components/canvas.tsx` / `Drawing` | `public/app.js` `draw`, `drawLabels`; `public/labels.js` `Labels` | Screen → surfaces and feature-module captures | In use; generic scene-node renderer. Drawing and label ownership gaps remain in the canvas scope. |
 | `components/canvas.tsx` / `Screen` | `public/index.html` gallery layers; `public/app.js` `draw` | Three surfaces and captured feature modules | In use; generic scene layer with child content, independent of feature dispatch. Specimen `screen` Reviewed. |
 | `components/canvas.tsx` / `Scrim` | `public/style.css` `dialog::backdrop` | ViewerChrome and shortcuts module | In use; existing 60% canvas overlay. Specimen `scrim` Reviewed. |
-| `modules/navigation.tsx` / `Sidebar` | `public/index.html` `#sidebar`; `public/app.js` `renderNav` | ViewerChrome → surfaces | In use; boundary Reviewed; `search` and captured `search-results` await controller review. Fixtures own rows, directory, query and count. |
+| `modules/navigation.tsx` / `Sidebar` | `public/index.html` `#sidebar`; `public/app.js` `renderNav` | ViewerChrome → surfaces | Reviewed; in use; frames: `search`, captured `search-results`. Fixtures own rows, directory, query and count. |
 | `modules/inspector.tsx` / `Inspector` | `public/index.html` `#source`; `public/app.js` `selection` | ViewerChrome and DetailInspector | In use; `inspector` Reviewed. Runtime-facing inspector consolidation remains. |
 | `modules/inspector.tsx` / `DetailInspector` | `public/app.js` `selection`, `renderRelationships`; `public/index.html` `#source`, `#relationships` | Mapped runtime usage; module specimens | In use; `detail-inspector-frame`, `detail-inspector-element` Reviewed; the surface uses Inspector. |
-| `modules/menus.tsx` / `Menu` | `public/index.html` `#display-menu`, `#zoom-menu`, `#more-menu` | Menus module captures; mapped runtime menus | In use; boundary Reviewed; `default`, `display`, `zoom`, `more` and separate menu fixtures await controller review. |
+| `modules/menus.tsx` / `Menu` | `public/index.html` `#display-menu`, `#zoom-menu`, `#more-menu` | Menus module captures; mapped runtime menus | Reviewed; in use; frames: `default`, `display`, `zoom`, `more`, with separate menu fixtures. |
 | `modules/open-directory.tsx` / `OpenDialog` | `public/index.html` `#directories`; `public/app.js` `showOpen`, `open`, `recent` | ViewerChrome → open-directory surface | In use; `error` Reviewed. Recent data and SVG-specific copy need reconciliation. |
 | `modules/shortcuts.tsx` / `Shortcuts` | `public/index.html` `#keys`; `public/style.css` `#keys` | ViewerChrome and module capture | In use; captured `default` Reviewed. Shortcut data and keycap fidelity remain. |
-| `modules/view-controls.tsx` / `Tools` | `public/index.html` `#tools`; display/inspector/fullscreen handlers | ViewerChrome → surfaces; menus and view-controls module captures | In use; boundary Reviewed; `tools` and `tools-tooltip` await controller review; visual state coverage remains. |
-| `modules/view-controls.tsx` / `AppBar` | `public/index.html` `#app-bar`; `public/app.js` `updateChrome` | ViewerChrome → canvas/open-directory surfaces | In use; boundary Reviewed; `app-bar` presentation fixture awaits controller review. |
-| `modules/view-controls.tsx` / `ZoomBar` | `public/index.html` `.zoom`; zoom/fit handlers | ViewerChrome → surfaces; menus module | In use; boundary Reviewed; Fit icon and disabled/pressed gaps remain. |
+| `modules/view-controls.tsx` / `Tools` | `public/index.html` `#tools`; display/inspector/fullscreen handlers | ViewerChrome → surfaces; menus and view-controls module captures | Reviewed; in use; frames: `tools`, `tools-tooltip`. |
+| `modules/view-controls.tsx` / `AppBar` | `public/index.html` `#app-bar`; `public/app.js` `updateChrome` | ViewerChrome → canvas/open-directory surfaces | Reviewed; in use; `app-bar` uses a separate presentation fixture. |
+| `modules/view-controls.tsx` / `ZoomBar` | `public/index.html` `.zoom`; zoom/fit handlers | ViewerChrome → surfaces; menus module | Reviewed; in use; Fit uses `scan`, Back exposes `backDisabled`, and Minimap exposes `minimapPressed` through the existing active form. All four state specimens are approved. Frames: `zoom-bar`, `zoom-bar-menu-open`, `zoom-bar-back-disabled`, `zoom-bar-minimap-pressed`. |
 | `surfaces/canvas.tsx` / `ViewerChrome` | `public/index.html` floating chrome; `public/app.js` `updateChrome` | All three surface renderers | In use; boundary Reviewed. Only chooses and positions imported feature parts. |
 | `components/minimap.tsx` / `Minimap` | `public/index.html` `#minimap`; `public/app.js` `drawMap` | ViewerChrome → canvas surface | Approval unrecorded; in use; specimen geometry differs from runtime geometry. |
 | `components/tooltip.tsx` / `Tooltip` | `public/index.html` `#tooltip`; tooltip handlers; `public/style.css` `#tooltip` | View-controls module capture | Approval unrecorded; in use. |
@@ -92,7 +92,7 @@ Field, TreeRow and MenuItem. `fixtures/containers.ts` owns only neutral generic-
 `fixtures/navigation.json` owns Sidebar presentation records for module and surface consumers. The compact `search`
 specimen shows one of two results; the captured `search-results` frame shows both, matching the runtime fixture.
 Part defaults belong to their defining components. The fixtures have no independent implementation mapping.
-`fixtures/menus.json` owns menu rows and widths; `fixtures/view-controls.json` owns AppBar presentation data.
+`fixtures/menus.json` owns menu rows and widths; `fixtures/view-controls.json` owns AppBar presentation data and ZoomBar state specimens.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
 

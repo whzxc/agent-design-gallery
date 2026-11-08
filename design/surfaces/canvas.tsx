@@ -60,7 +60,9 @@ const frames = [
         "top": 840,
         "kind": "zoom",
         "label": "49%",
-        "active": false
+        "active": false,
+        "backDisabled": false,
+        "minimapPressed": false
       }
     ]
   },
@@ -92,7 +94,9 @@ const frames = [
         "top": 840,
         "kind": "zoom",
         "label": "100%",
-        "active": false
+        "active": false,
+        "backDisabled": false,
+        "minimapPressed": true
       },
       {
         "left": 1228,
@@ -173,7 +177,9 @@ const frames = [
         "top": 840,
         "kind": "zoom",
         "label": "30%",
-        "active": false
+        "active": false,
+        "backDisabled": false,
+        "minimapPressed": false
       }
     ]
   },
@@ -205,7 +211,9 @@ const frames = [
         "top": 840,
         "kind": "zoom",
         "label": "7%",
-        "active": false
+        "active": false,
+        "backDisabled": true,
+        "minimapPressed": false
       }
     ]
   }

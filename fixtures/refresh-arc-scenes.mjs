@@ -53,7 +53,9 @@ try {
       const snapshot = await page.evaluate(() => {
         if (document.documentElement.dataset.fixtureError) throw Error(document.documentElement.dataset.fixtureError);
         const zoom = document.querySelector('.zoom').getBoundingClientRect();
-        return { view: window.__sdg.view, zoom: [zoom.x, zoom.y], labels: [...document.querySelectorAll('.canvas-label:not([hidden])')].flatMap(el => [...el.children].flatMap(span => {
+        return { backDisabled: document.querySelector('#back').disabled,
+          minimapPressed: document.querySelector('#map-toggle').getAttribute('aria-pressed') === 'true',
+          view: window.__sdg.view, zoom: [zoom.x, zoom.y], labels: [...document.querySelectorAll('.canvas-label:not([hidden])')].flatMap(el => [...el.children].flatMap(span => {
           const b = span.getBoundingClientRect(), s = getComputedStyle(span);
           const role = s.fontSize === '14px' ? 'section' : s.fontSize === '11px' ? (s.fontWeight === '550' ? 'selected-frame' : 'form') : s.fontWeight === '400' ? 'count' : s.fontWeight === '600' ? 'flow' : s.color === getComputedStyle(document.body).color ? 'selected-set' : 'set';
           const labels = [[b.x, b.y + b.height / 2, role, span.textContent]];
@@ -81,6 +83,7 @@ try {
           const [ox, oy] = frame.capture.origin.split(' ').map(Number);
           chrome.left = Math.round(snapshot.zoom[0] - ox); chrome.top = Math.round(snapshot.zoom[1] - oy);
           chrome.label = `${Math.round(snapshot.view.scale * 100)}%`;
+          chrome.backDisabled = snapshot.backDisabled; chrome.minimapPressed = snapshot.minimapPressed;
         }
         if (chrome.kind === 'minimap') {
           const { width, height } = reference.world, s = Math.min(168 / width, 100 / height), x = (200 - width * s) / 2, y = (132 - height * s) / 2;

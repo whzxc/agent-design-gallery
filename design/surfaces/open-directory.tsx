@@ -58,7 +58,9 @@ const frames = [
         "top": 840,
         "kind": "zoom",
         "label": "7%",
-        "active": false
+        "active": false,
+        "backDisabled": true,
+        "minimapPressed": false
       },
       {
         "kind": "scrim"
