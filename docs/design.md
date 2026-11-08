@@ -39,7 +39,7 @@ implementation mappings and review process. The asset rules take precedence over
 | Menus | `modules/menus.tsx` / `Menu` | Reviewed; menu captures and their fixtures belong to the menus module. |
 | View controls | `modules/view-controls.tsx` / `Tools`, `AppBar`, `ZoomBar` | Reviewed; tools, AppBar, ZoomBar and tooltip capture are approved, including Fit scan, Back disabled and Minimap pressed. |
 | Directory opening | `modules/open-directory.tsx` / `OpenDialog` | Reviewed; directory states and recent entries have one fixture owner; current visual gaps are listed below. |
-| Shortcuts | `modules/shortcuts.tsx` / `Shortcuts`; `components/kbd.tsx` | Boundary Reviewed; keycap radius and content governance remain in the shortcuts scope. |
+| Shortcuts | `modules/shortcuts.tsx` / `Shortcuts`; `components/kbd.tsx` | Reviewed; keyboard content belongs to shortcuts fixtures; keycap geometry uses dedicated tokens at its current values. |
 | Canvas presentation | `Drawing`, `Artboard`, `Flow`, `Section`, `AssetLabel`, `Minimap`, `Tooltip`, `scenes/`, `art/arc-previews/` | Resolve duplicate ownership, unknown consumers and artwork governance in the canvas scope. |
 
 The six feature modules own their existing parts and specimens. Their remaining content, coverage and fidelity gaps
@@ -61,7 +61,7 @@ owning scope resolves them.
 | `components/field.tsx` / `Field` | `public/index.html` `.picker`, `.search-field`, `#path`; `public/style.css` corresponding selectors | Navigation, directory and view-controls modules | Reviewed; in use. Frames: `search`, `search-active`, `picker`, `input`, `input-error`, `input-empty`. Default height uses `--field-height`; numeric overrides are supported. |
 | `components/tree-row.tsx` / `TreeRow` | `public/app.js` `makeRow`, `renderNav`, `selection`, `recent`; `public/style.css` `.tree-row`, `.frame-row`, `#recent button` | Navigation, inspector and directory modules | Reviewed; in use. Frames: `root`, `root-selected`, `group`, `group-selected`, `item`, `item-selected`, `two-line`, `two-line-selected`. Heights use row tokens; numeric overrides are supported; multiline follows content. |
 | `components/menu-item.tsx` / `MenuItem` | `public/index.html` menu buttons/headings; `public/style.css` `.menu button`, `.menu h3` | Menus module | Reviewed; in use. Frames: `item`, `item-active`, `check`, `option`, `label`. Heights use `--menu-item-height` and `--menu-label-height`. |
-| `components/kbd.tsx` / `Kbd` | `public/index.html` `#keys kbd`; `public/style.css` `kbd` | Shortcuts module | Approval unrecorded; in use; 6px design versus 7px implementation radius. |
+| `components/kbd.tsx` / `Kbd` | `public/index.html` `#keys kbd`; `public/style.css` `kbd` | Shortcuts module | Reviewed; in use; current 6px radius and 22px minimum size use dedicated keycap tokens; runtime radius gap is retained. |
 | `components/panel.tsx` / `Panel` | `public/style.css` `.floating`, `.menu`, `dialog` | Navigation, inspector, menus, directory and shortcuts modules | In use; generic specimens `floating`, `menu`, `dialog` Reviewed. Default form remains `sidebar`. |
 | `components/toolbar.tsx` / `Toolbar` | `public/style.css` `#tools`, `#app-bar`, `.zoom` | View-controls module | In use; generic specimens `toolbar`, `toolbar-wide` Reviewed. |
 | `components/toolbar.tsx` / `Separator` | `public/index.html` `.separator`; `public/style.css` `.separator` | AppBar and ZoomBar in view-controls | In use; generic specimen `separator` Reviewed. |
@@ -73,7 +73,7 @@ owning scope resolves them.
 | `modules/inspector.tsx` / `Inspector` | `public/index.html` `#source`, `#relationships`; `public/app.js` `selection`, `renderRelationships`; `public/selection.js` `exportFrames` | ViewerChrome → inspector surface; mapped source and export selection | Reviewed; in use. Approved states: `frames`, `frame`, `element`, `source`, `export-element`, `export-element-nested`, `export-element-empty`. Export rows show owning-frame sizes while the header shows the selected element size; export rows have no selected frame highlight. |
 | `modules/menus.tsx` / `Menu` | `public/index.html` `#display-menu`, `#zoom-menu`, `#more-menu` | Menus module captures; mapped runtime menus | Reviewed; in use; frames: `default`, `display`, `zoom`, `more`, with separate menu fixtures. |
 | `modules/open-directory.tsx` / `OpenDialog` | `public/index.html` `#directories`; `public/app.js` `showOpen`, `open`, `recent` | ViewerChrome → open-directory surface | Reviewed; in use; `error` specimen and captured states preserve existing visuals. Recent labels/paths are shared with runtime fixtures. Two-line rows use their existing height token. |
-| `modules/shortcuts.tsx` / `Shortcuts` | `public/index.html` `#keys`; `public/style.css` `#keys` | ViewerChrome and module capture | In use; captured `default` Reviewed. Shortcut data and keycap fidelity remain. |
+| `modules/shortcuts.tsx` / `Shortcuts` | `public/index.html` `#keys`; `public/style.css` `#keys` | ViewerChrome and module capture | Reviewed; in use; captured `default` consumes shared keyboard fixtures; its module owns the local dialog capture. |
 | `modules/view-controls.tsx` / `Tools` | `public/index.html` `#tools`; display/inspector/fullscreen handlers | ViewerChrome → surfaces; menus and view-controls module captures | Reviewed; in use; frames: `tools`, `tools-tooltip`. |
 | `modules/view-controls.tsx` / `AppBar` | `public/index.html` `#app-bar`; `public/app.js` `updateChrome` | ViewerChrome → canvas/open-directory surfaces | Reviewed; in use; `app-bar` uses a separate presentation fixture. |
 | `modules/view-controls.tsx` / `ZoomBar` | `public/index.html` `.zoom`; zoom/fit handlers | ViewerChrome → surfaces; menus module | Reviewed; in use; Fit uses `scan`, Back exposes `backDisabled`, and Minimap exposes `minimapPressed` through the existing active form. All four state specimens are approved. Frames: `zoom-bar`, `zoom-bar-menu-open`, `zoom-bar-back-disabled`, `zoom-bar-minimap-pressed`. |
@@ -101,6 +101,7 @@ Their part mappings are `StatePill` in `components/state-pill.tsx` and nested `I
 These local design specimens have no independent implementation capture. Existing frame/component captures remain unchanged.
 `fixtures/open-directory.json` owns recent labels/paths and dialog presentation states; `fixtures/viewer.mjs`
 derives runtime recent paths from that same record.
+`fixtures/shortcuts.json` owns shortcut labels/key sequences and the keycap specimen.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
 
@@ -140,6 +141,8 @@ from the npm package. Per-image downsizing and owner consolidation belong to the
 ### Known gaps
 
 - Directory opening retains the redundant SVG-only description and empty-directory error copy; submit disabled/pending states lack design coverage.
+
+- Keycaps retain a 6px design radius while runtime `kbd` uses 7px.
 
 ## Direction
 

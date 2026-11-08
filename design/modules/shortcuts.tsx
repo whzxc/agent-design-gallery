@@ -4,16 +4,8 @@ import { IconButton } from '../components/icon-button';
 import { Kbd } from '../components/kbd';
 import { Screen, Scrim } from '../components/canvas';
 import { scenes } from '../scenes/shortcuts';
-const shortcuts = [
-  ['Search', ['⌘F']],
-  ['Fit all', ['0']],
-  ['Zoom to 100%', ['1']],
-  ['Zoom in or out', ['+', '−']],
-  ['Pan', ['←', '↑', '→', '↓']],
-  ['Focus selection', ['Enter']],
-  ['Back or close', ['Esc']],
-] as const;
-export function Shortcuts() {
+import shortcutFixtures from '../fixtures/shortcuts.json';
+export function Shortcuts({ shortcuts = [] }: { shortcuts?: string[][][] | any[] }) {
   return (
     <Panel form="dialog" width={380}>
       <div class="px-5 pt-5 pb-3">
@@ -73,7 +65,7 @@ export default () =>
             <Scrim />
           ) : (
             <div class="absolute" style={{ left, top }}>
-              <Shortcuts />
+              <Shortcuts shortcuts={shortcutFixtures.items} />
             </div>
           ),
         )}

@@ -13,6 +13,7 @@
   --radius-field: 9px;
   --radius-row: 8px;
   --radius-artboard: 6px;
+  --radius-keycap: 6px;
   --toolbar-height: 44px;
   --field-height: 32px;
   --row-height: 28px;
@@ -20,6 +21,7 @@
   --menu-item-height: 30px;
   --menu-label-height: 24px;
   --control-size: 32px;
+  --keycap-size: 22px;
 
   --canvas: #ecece9;
   --dot: #d2d2ce;

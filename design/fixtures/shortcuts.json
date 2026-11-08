@@ -1,0 +1,53 @@
+{
+  "items": [
+    [
+      "Search",
+      [
+        "⌘F"
+      ]
+    ],
+    [
+      "Fit all",
+      [
+        "0"
+      ]
+    ],
+    [
+      "Zoom to 100%",
+      [
+        "1"
+      ]
+    ],
+    [
+      "Zoom in or out",
+      [
+        "+",
+        "−"
+      ]
+    ],
+    [
+      "Pan",
+      [
+        "←",
+        "↑",
+        "→",
+        "↓"
+      ]
+    ],
+    [
+      "Focus selection",
+      [
+        "Enter"
+      ]
+    ],
+    [
+      "Back or close",
+      [
+        "Esc"
+      ]
+    ]
+  ],
+  "keycap": {
+    "label": "⌘F"
+  }
+}
