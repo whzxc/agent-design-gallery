@@ -5,7 +5,7 @@ import { startServer } from './src/server.mjs';
 import { states, recent, assetModifiedAt } from './fixtures/viewer.mjs';
 
 export default {
-  requires: '>=0.4.0',
+  requires: '>=0.5.0',
   compare: {
     port: 5188,
     viewport: '1440x900',
