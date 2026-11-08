@@ -1,7 +1,7 @@
 import { Frame, Icon } from 'sdg';
-import { buttonForms, buttonLabels } from '../fixtures/buttons';
+import { buttonForms } from '../fixtures/buttons';
 
-export function Button({ form = 'primary', label = buttonLabels.open, icon }: {
+export function Button({ form = 'primary', label = 'Open', icon }: {
   form?: string;
   label?: string;
   icon?: string;

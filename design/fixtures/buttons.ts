@@ -1,4 +1,4 @@
-export const buttonLabels = { open: 'Open', copyPath: 'Copy path', zoom: '48%' };
+const buttonLabels = { open: 'Open', copyPath: 'Copy path', zoom: '48%' };
 
 export const buttonForms = [
   { form: 'primary', label: buttonLabels.open },
@@ -8,4 +8,3 @@ export const buttonForms = [
 ];
 
 export const iconButtonForms = ['default', 'active'];
-export const iconButtonIcon = 'panel-right';

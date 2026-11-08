@@ -26,10 +26,10 @@ implementation mappings and review process. The asset rules take precedence over
 
 ### Ownership and current scope
 
-| Owner | Current assets | Remaining scope |
+| Owner | Current assets | Current scope / remaining work |
 | --- | --- | --- |
-| Shared values and button controls | `tokens.css`, `components/button.tsx`, `components/icon-button.tsx`, `fixtures/buttons.ts` | Batch 1: current governance, mappings, minimum version, existing size-token use, fixture separation and formatting. Controller review pending. |
-| Fields | `components/field.tsx` | Batch 2: field specimens, fixture separation, size tokens and formatting. Not started. |
+| Shared values and button controls | `tokens.css`, `components/button.tsx`, `components/icon-button.tsx`, `fixtures/buttons.ts` | Reviewed; part defaults belong to components and frame specimens belong to fixtures. |
+| Fields | `components/field.tsx`, `fixtures/fields.ts` | Field specimens, existing field-height token, fixture data and states. Controller review pending. |
 | Rows | `components/tree-row.tsx`, `components/menu-item.tsx` | Row family governance. |
 | Viewer shell | `Panel`, `Toolbar`, `Separator`, `Canvas`, `Screen` | Separate generic containers from feature composition before moving their consumers. |
 | Navigation | `Sidebar` | Own the sidebar/search feature and its fixture data. |
@@ -53,10 +53,10 @@ owning scope resolves them.
 
 | Source / part | Implementation location | Design consumers | Approval / adoption / remaining gap |
 | --- | --- | --- | --- |
-| `tokens.css` | `public/index.html` `/tokens.css`; `public/style.css`; `public/app.js` `applyTheme` | All sources | Controller review pending; in use. Shared theme, typography and geometry values. |
-| `components/button.tsx` / `Button` | `public/index.html` `#directory-form .primary`, `#zoom-options`; `public/style.css` `.primary`, `#zoom-options` | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Controller review pending; in use. Frames: `primary`, `secondary`, `zoom`, `zoom-open`. `secondary` is a specimen variant with unknown current runtime usage, assigned to the view-controls scope. Submit-disabled state remains a later gap. |
-| `components/icon-button.tsx` / `IconButton` | `public/index.html` `.icon-button`; `public/style.css` `.icon-button`, pressed/current states | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Controller review pending; in use. Frames: `default`, `active`. Disabled Back and Minimap pressed coverage belong to the view-controls scope. |
-| `components/field.tsx` / `Field` | `public/index.html` `.picker`, `.search-field`, `#path`; `public/style.css` corresponding selectors | `panel`, `toolbar` → all surfaces | Approval unrecorded; in use; embedded specimen data. |
+| `tokens.css` | `public/index.html` `/tokens.css`; `public/style.css`; `public/app.js` `applyTheme` | All sources | Reviewed; in use. Shared theme, typography and geometry values. |
+| `components/button.tsx` / `Button` | `public/index.html` `#directory-form .primary`, `#zoom-options`; `public/style.css` `.primary`, `#zoom-options` | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Reviewed; in use. Frames: `primary`, `secondary`, `zoom`, `zoom-open`. `secondary` is a specimen variant with unknown current runtime usage, assigned to the view-controls scope. Submit-disabled state remains a later gap. |
+| `components/icon-button.tsx` / `IconButton` | `public/index.html` `.icon-button`; `public/style.css` `.icon-button`, pressed/current states | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Reviewed; in use. Frames: `default`, `active`. Disabled Back and Minimap pressed coverage belong to the view-controls scope. |
+| `components/field.tsx` / `Field` | `public/index.html` `.picker`, `.search-field`, `#path`; `public/style.css` `.picker`, `.search-field`, `.searching .search-field`, `#path`, `#path[aria-invalid="true"]` | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Controller review pending; in use. Frames: `search`, `search-active`, `picker`, `input`, `input-error`, `input-empty`. Default height uses `--field-height`; numeric height overrides are supported. |
 | `components/tree-row.tsx` / `TreeRow` | `public/app.js` `makeRow`, `renderNav`, `selection`, `recent`; `public/style.css` `.tree-row`, `.frame-row` | `panel` → all surfaces and `source-relationships` | Approval unrecorded; in use; embedded specimen data. |
 | `components/menu-item.tsx` / `MenuItem` | `public/index.html` menu buttons/headings; `public/style.css` `.menu button`, `.menu h3` | `panel` → `canvas` → all surfaces | Approval unrecorded; in use; embedded specimen data. |
 | `components/kbd.tsx` / `Kbd` | `public/index.html` `#keys kbd`; `public/style.css` `kbd` | `panel` / `Shortcuts` → `surfaces/menus.tsx` | Approval unrecorded; in use; 6px design versus 7px implementation radius. |
@@ -86,9 +86,9 @@ owning scope resolves them.
 | `surfaces/menus.tsx` / frame renderer | `public/index.html` menus, sidebar, tooltip and `#keys` | Entry source | Approval unrecorded; mapped fixtures below; feature-local frames need relocation. |
 | `surfaces/open-directory.tsx` / frame renderer | `public/index.html` gallery and `#directories` | Entry surface | Approval unrecorded; mapped fixtures below; full-frame scope pending. |
 
-`fixtures/buttons.ts` owns the Button and IconButton specimens and their default labels/icon. Those fixtures have no
-independent implementation mapping. The defining sources are `components/button.tsx` and `components/icon-button.tsx`;
-their frame names are listed above, and their composition is owned by the consumers in the mapping table.
+`fixtures/buttons.ts` and `fixtures/fields.ts` own frame presentation data for Button, IconButton and Field.
+Part defaults belong to their defining components. The fixtures have no independent implementation mapping.
+Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
 ### Captures and artwork budget
 
