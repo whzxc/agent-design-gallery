@@ -9,10 +9,11 @@ implementation mappings and review process. The asset rules take precedence over
 
 - Minimum toolkit: SDG `>=0.5.0`, declared in `sdg.config.mjs`.
 - Design root: `design/`; discovery order: `components`, `modules`, `surfaces`. No explicit source override or
-  import-direction opt-out is configured. The module sources are navigation, inspector, menus, open-directory, shortcuts, view-controls and canvas; there are no studies.
+  import-direction opt-out is configured. The module sources are navigation, inspector, menus, open-directory, shortcuts,
+  view-controls, canvas, hub-home, project-switcher and hub-access; there are no studies.
 - Review platform: macOS with system UI fonts. The declared implementation capture viewport is 1440 × 900,
-  locale `en-US`, timezone `UTC`; ARC artwork retains its own content language. Other viewport and locale forms
-  are not declared.
+  locale `en-US`, timezone `UTC`; ARC artwork retains its own content language. The resident hub also declares
+  390 × 844 home and switcher forms. Other viewport and locale forms are not declared.
 - Codex proposes and implements each authorized batch. The delegating Claude conversation reviews the completed report,
   ownership, mappings and renders after the Codex turn ends. Codex does not dispatch other Agents or answer their
   permission requests.
@@ -41,8 +42,9 @@ implementation mappings and review process. The asset rules take precedence over
 | Directory opening | `modules/open-directory.tsx` / `OpenDialog` | Reviewed; directory states and recent entries have one fixture owner; current visual gaps are listed below. |
 | Shortcuts | `modules/shortcuts.tsx` / `Shortcuts`; `components/kbd.tsx` | Reviewed; keyboard content belongs to shortcuts fixtures; keycap geometry uses dedicated tokens at its current values. |
 | Canvas presentation | `modules/canvas.tsx` / `Drawing`, `Minimap`, `AssetLabel`; `fixtures/canvas.ts`, `scenes/`, `art/arc-previews/` | Reviewed; one canvas feature owner. Drawing owns section/artboard/flow layers; mapped AssetLabel specimens and preview artwork remain in use. |
+| Resident hub | `modules/hub-home.tsx`, `modules/project-switcher.tsx`, `modules/hub-access.tsx`; corresponding hub surfaces; `fixtures/hub.ts` | All 12 frames and presentation choices approved by the user; runtime implementation and compare fixtures are pending. |
 
-The seven feature modules own their parts and specimens. Remaining coverage and fidelity gaps are listed below. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
+The ten feature modules own their parts and specimens. Remaining coverage and fidelity gaps are listed below. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
 not frame sources. The separate `fixtures/arc-sample/design/` tree is acceptance content, not the viewer UI library.
 
 ### Part mappings and state
@@ -54,7 +56,7 @@ usage. Reviewed structural compositions preserve their existing visuals; remaini
 | Source / part | Implementation location | Design consumers | Approval / adoption / remaining gap |
 | --- | --- | --- | --- |
 | `tokens.css` | `public/index.html` `/tokens.css`; `public/style.css`; `public/app.js` `applyTheme` | All sources | Reviewed; in use. Shared theme, typography and geometry values. |
-| `components/button.tsx` / `Button` | `public/index.html` `#directory-form .primary`, `#zoom-options`; `public/style.css` `.primary`, `#zoom-options` | `modules/open-directory`, `modules/view-controls` → surface chrome | Reviewed; in use. Frames: `primary`, `secondary`, `zoom`, `zoom-open`. Secondary is an unadopted generic variant; directory submit-disabled coverage remains a known gap. |
+| `components/button.tsx` / `Button` | `public/index.html` `#directory-form .primary`, `#zoom-options`; `public/style.css` `.primary`, `#zoom-options` | `modules/open-directory`, `modules/view-controls` → surface chrome; `modules/hub-home` Rescan | Reviewed; in use. Frames: `primary`, `secondary`, `zoom`, `zoom-open`. Secondary is adopted by the approved hub Rescan design; directory submit-disabled coverage remains a known gap. |
 | `components/icon-button.tsx` / `IconButton` | `public/index.html` `.icon-button`; `public/style.css` `.icon-button`, pressed/current states | Inspector, navigation, directory, shortcuts and view-controls modules; Toolbar specimens | Reviewed; in use. Approved frames: `default`, `active`, `disabled`. Disabled uses the runtime 45% opacity and is adopted by ZoomBar. |
 | `components/field.tsx` / `Field` | `public/index.html` `.picker`, `.search-field`, `#path`; `public/style.css` corresponding selectors | Navigation, directory and view-controls modules | Reviewed; in use. Frames: `search`, `search-active`, `picker`, `input`, `input-error`, `input-empty`. Default height uses `--field-height`; numeric overrides are supported. |
 | `components/tree-row.tsx` / `TreeRow` | `public/app.js` `makeRow`, `renderNav`, `selection`, `recent`; `public/style.css` `.tree-row`, `.frame-row`, `#recent button` | Navigation, inspector and directory modules | Reviewed; in use. Frames: `root`, `root-selected`, `group`, `group-selected`, `item`, `item-selected`, `two-line`, `two-line-selected`. Heights use row tokens; numeric overrides are supported; multiline follows content. |
@@ -145,7 +147,44 @@ from the npm package. Every referenced bitmap fits the declared per-image and to
 - Canvas scenes use SVG labels; runtime labels use DOM. Minimap specimen geometry differs from runtime.
 - Inspector retains legacy full-window crops and content-fit layout; runtime header/scroll geometry and independent
   source/export captures are missing.
-- Button's secondary variant has no mapped runtime consumer.
+- Button's secondary variant is adopted by the approved hub design; its runtime consumer is pending.
+
+## Resident hub
+
+The resident hub extends Float with a quiet project list on the canvas background. It has no path entry.
+Project names navigate to `/p/<slug>/`; live instances navigate to `/i/<id>/`; All projects returns to `/`.
+Rescan is the only registry mutation. A running rescan replaces its control in place with a disabled Rescanning… state.
+The project switcher replaces the directory picker in the resident viewer app bar; the standalone viewer keeps its existing picker.
+
+The user approved all 12 frames in both themes and every presentation choice below.
+Runtime implementation and compare fixtures are pending. Implementation starts from main after the server branch lands.
+Presentation forms are light/dark, desktop home at 1440 × 900, narrow home at 390 × 844,
+and narrow open switcher at 390 × 844. The access shell uses the existing desktop viewport.
+There are no additional locale, viewport or state combinations. `fixtures/hub.ts` owns the fictional registry snapshot and copy.
+
+| Source / part | Frames | Design consumer | Runtime mapping / approval |
+| --- | --- | --- | --- |
+| `modules/hub-home` / HubBar, HubHeading, Rescan, ProjectList, LiveInstances, HubEmpty | `rescan-pending`, `no-roots`, `no-projects` | `surfaces/hub-home`; HubBar also serves the access shell | Approved; resident `/` implementation pending |
+| `modules/project-switcher` / ProjectPicker, SwitcherRow, SwitcherMenu, Switcher | `project`, `instance`, `open`, `search` | `surfaces/hub-switcher`; reuses `view-controls` AppBar through its optional picker slot | Approved; resident viewer app bar implementation pending |
+| `modules/hub-access` / AccessState, AccessShell | `rejected` | `surfaces/hub-access` | Approved; hub/viewer shell key state implementation pending |
+| `surfaces/hub-home` | `desktop`, `phone` | Entry surface | Approved; resident `/` implementation pending |
+| `surfaces/hub-switcher` | `phone` | Entry surface | Approved; resident viewer narrow layout implementation pending |
+| `surfaces/hub-access` | `key-required` | Entry surface | Approved; hub/viewer access state implementation pending |
+
+The desktop list groups name/path, last design change, Git branch/short HEAD and source/frame counts in columns.
+The narrow layout stacks those same fields. The dot next to relative design time denotes uncommitted design changes;
+its accessible label carries that meaning. Incompatible projects remain visible with their version requirement and hub version,
+and their names are disabled. Instances that cannot be proxied remain visible with Proxy unavailable and have no navigation link.
+Start times use relative time with a Started prefix. Paths and branches truncate with full-value titles where needed.
+
+The switcher marks the current destination, groups Projects and Live instances, and shows search at 5 or more destinations.
+Search matches names, paths and branches, retaining the result's section. The narrow menu fits the available page width.
+Its existing folder/radio icons distinguish projects and instances without another badge. The access state is rendered inside
+the hub/viewer shell after a missing or rejected localStorage key; it contains no form and no key value.
+
+Approved presentation choices are the column home layout, phone stacking density, dirty dot, disabled incompatible/unproxyable
+destinations, search at 5 or more targets, and a full-width phone menu. No open design choices remain.
+No new artwork or tokens are introduced.
 
 ## Direction
 

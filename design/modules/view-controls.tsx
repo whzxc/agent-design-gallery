@@ -22,10 +22,12 @@ export function AppBar({
   empty = false,
   specimen = false,
   directory = 'agent-remote-control',
+  picker,
 }: {
   empty?: boolean;
   specimen?: boolean;
   directory?: string;
+  picker?: unknown;
 }) {
   return (
     <Toolbar wide>
@@ -34,7 +36,7 @@ export function AppBar({
       {!empty && (
         <>
           <Separator />
-          <Field form="picker" label={directory} width={specimen ? 180 : 220} />
+          {picker ?? <Field form="picker" label={directory} width={specimen ? 180 : 220} />}
         </>
       )}
     </Toolbar>
