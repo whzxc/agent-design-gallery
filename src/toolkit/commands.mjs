@@ -1,5 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { availableParallelism } from 'node:os';
 import { buildSource } from './build.mjs';
 import { selectSources, relative, loadTokens, sourceDirectories } from './project.mjs';
 import { importDirectionViolations } from './asset-rules.mjs';
@@ -115,27 +116,35 @@ export async function render(config, args = [], options = {}) {
   const scale = Number(options.scale ?? 2);
   if (!(Number.isFinite(scale) && scale > 0)) throw Error('Invalid --scale; use a positive number');
   const files = selectSources(config,args), browser = await launch();
-  let found = false;
   try {
+    const captures = [];
     for (const file of files) {
       const built = await buildSource(config,file,{allowLegacy:false});
       for (const frame of built.frames.filter(f => !options.frame || f.name === options.frame)) {
-        found = true;
         for (const theme of ['light','dark']) {
-          // Chromium reuses image resampling state across setContent calls.
-          // A fresh page/context per capture keeps PNG bytes independent of history.
-          const page = await browser.newPage({deviceScaleFactor:scale});
-          try {
-            await loadFrame(page,frame,theme);
-            const target = path.join(config.output,path.relative(config.design,file).replace(/\.tsx$/,''),`${encodeURIComponent(frame.name)}-${theme}.png`);
-            mkdirSync(path.dirname(target),{recursive:true});
-            await page.locator('[data-sdg-frame]').screenshot({path:target});
-            console.log(relative(config,target));
-          } finally { await page.close(); }
+          const target = path.join(config.output,path.relative(config.design,file).replace(/\.tsx$/,''),`${encodeURIComponent(frame.name)}-${theme}.png`);
+          captures.push({frame,theme,target});
         }
       }
     }
-    if (options.frame && !found) throw Error(`Unknown frame ${options.frame}; choose a declared frame`);
+    if (options.frame && !captures.length) throw Error(`Unknown frame ${options.frame}; choose a declared frame`);
+    let next = 0;
+    const workers = await Promise.allSettled(Array.from({length:Math.min(4,availableParallelism(),captures.length)},async () => {
+      while (next < captures.length) {
+        const {frame,theme,target} = captures[next++];
+        // Chromium reuses image resampling state across setContent calls.
+        // A fresh page/context per capture keeps PNG bytes independent of history.
+        const page = await browser.newPage({deviceScaleFactor:scale});
+        try {
+          await loadFrame(page,frame,theme);
+          mkdirSync(path.dirname(target),{recursive:true});
+          await page.locator('[data-sdg-frame]').screenshot({path:target});
+        } finally { await page.close(); }
+      }
+    }));
+    const failed = workers.find(worker => worker.status === 'rejected');
+    if (failed) throw failed.reason;
+    for (const {target} of captures) console.log(relative(config,target));
   } finally { await browser.close(); }
   return 0;
 }

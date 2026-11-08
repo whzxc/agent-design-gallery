@@ -104,8 +104,11 @@ test('render produces identical PNG bytes in either frame order',async t=>{
   } finally {await browser.close();}
   const files=[20,90].map(size=>put(c,`surfaces/size-${size}.tsx`,`import preview from '../art/preview.png';import {Frame} from 'sdg';export default()=> <Frame name="sample" width={96} height={96}><svg width={${size}} height={${size}} viewBox="0 0 360 235"><image width="360" height="235" href={preview}/></svg></Frame>;`));
   const images=()=>files.flatMap(file=>['light','dark'].map(theme=>readFileSync(path.join(c.output,'surfaces',path.basename(file,'.tsx'),`sample-${theme}.png`))));
+  const logs=[],expected=order=>order.flatMap(file=>['light','dark'].map(theme=>path.relative(c.root,path.join(c.output,'surfaces',path.basename(file,'.tsx'),`sample-${theme}.png`))));
+  t.mock.method(console,'log',line=>logs.push(line));
   await render(c,files);const first=images();
   await render(c,[...files].reverse());const second=images();
+  assert.deepEqual(logs,[...expected(files),...expected([...files].reverse())]);
   for(let i=0;i<first.length;i++)assert.ok(first[i].equals(second[i]),`${path.basename(files[Math.floor(i/2)])}: ${['light','dark'][i%2]}`);
 });
 test('Tailwind uses rendered classes, inline token aliases and no color, size, font, radius or shadow defaults',async t=>{
