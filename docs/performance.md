@@ -1,159 +1,103 @@
 # Performance
 
+The current large-project workload contains 140 TSX sources, 2,502 frames and 5,004 frame/theme combinations. Persistent geometry and ready-preview caches reduce warm browse and restart latency, and recycled build workers bound server module lifetime. Cold visible-ready latency and Chromium native memory remain the main limitations.
 
-## Current large-project results
+## Current measurements
 
-The current acceptance workload is a verified disposable copy of SACP Client's design directory: 140 TSX sources, 2,502 frames and 5,004 frame/theme combinations. All 244 original files matched the snapshot by SHA-256. The original project remained read-only. Raw data, copied sources and detailed reports stay under `output/perf/`, outside the npm package.
+Three sequential samples per route compare baseline `2533ce9` with the persistent-cache implementation. Browser samples use `57aa025`; saturated-cache retention uses `8eceba7`, including cache-reference recency and legacy embedded-artwork refresh corrections. The workload is one retained disposable SACP Client design snapshot; its 244 source/art files remain identical after all save tests. The original project and resident hub were not used.
 
-Three paired runs compare `4fffc21` with `ed8c068` using `tooling/compare.mjs`, the same snapshot, fresh server processes, preferences and Chromium contexts. Environment: Apple M4 Pro, macOS ARM64, Node 24.22.0, Chromium 156.0.8078.4 headless, 1440 × 900 CSS pixels, DPR 2. Values below are medians. Warm browse means a reload with an already-built server; OS caches were not flushed.
+Environment: Apple M4 Pro, macOS ARM64, Node 24.22.0, Chromium 156 headless, 1440 × 900 CSS pixels, DPR 2. Values below are medians. Browser contexts and server processes are fresh per sample; disk/OS caches are not flushed. Startup is recorded separately from browser navigation.
 
-| Direct viewer metric | Baseline | Current |
+| Latency | Direct baseline | Direct current | Hub baseline | Hub current |
+| --- | ---: | ---: | ---: | ---: |
+| Server / hub creation startup | 105 ms | 85 ms | 4 ms | 5 ms |
+| First layout | 2,876 ms | 176 ms | 3,241 ms | 194 ms |
+| Cold visible-ready | 6,961 ms | 8,941 ms | 7,228 ms | 9,874 ms |
+| Warm reload to visible-ready | 7,911 ms | 2,818 ms | 7,884 ms | 2,522 ms |
+| Warm restart to visible-ready | 8,342 ms | 2,485 ms | 8,056 ms | 2,626 ms |
+| Unchanged-output shared button save | 6,804 ms | 1,713 ms | 7,115 ms | 1,931 ms |
+
+Warm restart closes the viewer, restarts it with the same project/state/cache, then navigates a fresh browser context after server readiness. The hub runs in an isolated process on a free port with fresh registry/preferences per sample. Each restart reuses only that sample's state. Port 4310 and the resident LaunchAgent are excluded.
+
+Cold layout streams partial source results, then produces the same complete arrangement. Cold visible-ready regresses 28.4% direct and 36.6% through the hub. Direct complete cache priming takes 10,629 ms, including metadata writes and offscreen queue drainage. First-run preparation and persistence still cost more than the baseline's eager path.
+
+## Transport and refresh
+
+| Direct transport metric | Baseline | Current |
 | --- | ---: | ---: |
-| CLI startup, discovery complete before builds | 115 ms | 110 ms |
-| First browse to visible previews | 11,748 ms | 6,835 ms |
-| Warm reload to visible previews | 14,173 ms | 7,504 ms |
-| First-view source requests / body bytes | 140 / 81.18 MB | 140 / 81.18 MB |
-| Pointer-pan P95 / maximum frame | 16.7 / 16.8 ms | 16.7 / 16.8 ms |
-| Zoom P95 / maximum frame | 16.8 / 83.3 ms | 16.8 / 50.0 ms |
-| Trackpad-pan P95 / maximum frame | 33.4 / 99.9 ms | 16.8 / 66.6 ms |
-| Pan / zoom / trackpad main-thread task time | 332 / 735 / 3,952 ms | 304 / 573 / 3,383 ms |
-| Theme completion, including 200 ms settle | 14,827 ms | 9,461 ms |
-| Shared button save to refreshed visible previews | 13,891 ms | 6,948 ms |
-| Shared button save source requests | 99 | 99 |
-| Leaf settings source save | 4,314 ms | 705 ms |
-| Main-document DOM elements at overview | 546 | 546 |
-| JS heap after overview pan, without forced GC | 36.6 MB | 50.0 MB |
+| Complete cold source requests | 140 | 140 |
+| Complete cold source response bodies | 81.18 MB | 20.00 MB |
+| Cold derived-cache uploads | 0 | 25.83 MB |
+| Warm source requests | 140 | 0 |
+| Warm ready-preview requests at visible-ready | 0 | 179 |
+| Warm total data response bodies | 81.23 MB | 19.06 MB |
+| Unchanged-output shared save source/preview requests | 99 | 0 |
 
-The leaf metric uses three sequential comment-only saves of `surfaces/settings.tsx`, waiting for the new revision, completed preparation/layout, global drawn readiness and two animation frames. It requests exactly one source. That source can be outside the clamped overview viewport, so this measurement does not guarantee a newly decoded visible settings preview. The shared-button metric measures visible updates and dependency fan-out. Every sample preserves the camera and reports no page errors. Uncollected JS heap samples vary with GC and do not establish native memory usage.
+Cold uploads contain 2.70 MB geometry and 23.13 MB cropped SVGs. Full-source SVGs are not uploaded. Complete cold data download plus uploads is 45.91 MB; warm data responses fall 76.5%. Later background preview requests are recorded separately from the visible-ready cutoff.
 
-Through an isolated hub at `/p/<slug>/`, baseline first browse/reload/shared save measured 12,368 / 13,394 / 13,655 ms in one valid sample. Current medians over three fresh hub processes and isolated registries are 6,652 / 7,649 / 6,717 ms. Current hub pan/zoom/trackpad P95 is 16.7 / 16.8 / 16.8 ms. The resident LaunchAgent and port 4310 were never used. Warm endpoint proxy overhead remains sub-millisecond; no registry, slug or proxy change was justified.
+Compact source responses contain frame HTML and one stylesheet. Input hashes cover actual dependency bytes and the resolution-sensitive code-file inventory; output hashes cover source identity, frame data, CSS and imports. Shared edits evaluate reverse-graph candidates, cancel superseded work and reuse unchanged output hashes. Unchanged consumers receive no source payload, measurement or preview update.
 
-### Retained memory and targets
+A separate isolated refresh sequence takes three samples per case at overview:
 
-A separate harness collects renderer and server garbage, samples CDP DOM counters and renderer RSS, and repeats four detail → overview → shared-save cycles on the same snapshot. Browser preview entries remain at 276 with 7.22 MB of cached canvas pixels after each updated overview. Decoded DOM nodes plateau at 149,345; the baseline rises from 310,055 after the first save to 391,210 after the fourth. Main-document element counts exclude these decoded SVG documents.
+| Refresh case | Current median | Source GETs | Preview GETs |
+| --- | ---: | --- | --- |
+| Unchanged-output leaf comment | 231 ms | [0, 0, 0] | [0, 0, 0] |
+| Changed-output leaf attribute | 599 ms | [1, 1, 1] | [0, 0, 0] |
+| Unchanged-output shared comment, saturated cache | 3,099 ms | [0, 0, 0] | [0, 0, 0] |
 
-Renderer RSS goes from 1.67 to 3.58 GB in the baseline and 1.47 to 2.58 GB currently (initial overview to fourth save). RSS includes native allocations and allocator high-water marks. Server GC heap still grows from 301 to 656 MB, about 88 MB per shared save, because uniquely imported data-URL build modules remain in Node's ESM cache. A plateau in preview counters does not imply bounded total memory.
+The changed-output case temporarily adds a data attribute, changing serialized output while preserving pixels and geometry. Leaf refresh waits for the new revision, preparation, layout, global visible readiness and two animation frames. The settings source can be outside the clamped overview viewport, so a newly visible settings preview decode is not included reliably. Save timing starts after preceding camera/cache work settles. The saturated-cache sequence is separate from the fresh-state shared-save browser row.
 
-| Target | Current status |
-| --- | --- |
-| Warm visible browse <1.5 s | **Not met:** direct 7.50 s; hub 7.65 s. |
-| Pan and zoom P95 ≤16.7 ms, no interaction tasks >50 ms | **Not met:** zoom/trackpad P95 16.8 ms; each direct zoom run has one long task. Hub trackpad also has one long task in one run. |
-| Single-source file-save refresh <300 ms | **Not met:** leaf median 705 ms; shared dependencies take longer. |
-| Bounded overview memory | **Not met overall:** stale preview generations are fixed, but server module retention continues to grow. |
+## Interaction
 
-### Current implementation and remaining costs
+| Phase | Direct P95 baseline → current | Direct maximum baseline → current | Current direct/hub long tasks per run |
+| --- | ---: | ---: | --- |
+| Pointer pan | 16.7 → 16.8 ms | 16.8 → 16.8 ms | [0, 0, 0] / [0, 0, 0] |
+| Zoom | 16.8 → 16.7 ms | 50.0 → 16.8 ms | [0, 0, 0] / [0, 0, 0] |
+| Trackpad pan | 16.8 → 16.7 ms | 66.7 → 100.0 ms | [1, 1, 1] / [1, 1, 1] |
 
-- TSX numeric crops parse only their exact frame range. Identical, unadorned generated stylesheets are submitted once per overview/full preview; legacy, differing and authored styles retain their original cascade. Preview XML shrinks about 70% on the set workload, without changing source documents.
-- Packing skips grid widths with identical placements, retaining the original first-best tie rule. Non-grid SVG widths keep exhaustive search. A bounded cache retains only winning widths and repacks fresh metadata. The 126 component/module set blocks take 3,320 → 1,361 ms on first packing and about 1.3 ms with unchanged geometry; this targeted profile excludes surfaces.
-- Preview eviction uses full source-version/theme/frame identities, so a visible path cannot pin old generations. Refresh lookups use indexes. Current visible previews remain exempt from the small offscreen LRU; this is not a strict byte budget.
-- Export transforms share exact-content work, capped at 256 entries and 8 MiB. Isolated 140-source build passes improve from 2,483/2,160 ms cold/warm to 1,996/1,883/1,801 ms across three current passes. Render documents, CSS and imports remain exact.
+Frame maxima are medians of the per-run maxima. Current zoom has no task over 50 ms in all six direct/hub samples. Trackpad pan still has a long task in every sample, reaching 106 ms direct and 103 ms through the hub. The direct pointer-pan P95 of 16.8 ms exceeds the strict 16.7 ms target.
 
-Remaining browse work still prepares every frame and transfers 81 MB of repeated source data. Full-source SVG decoding and ownership geometry measurement remain substantial. Further work should investigate compact source transport and reusable measurement metadata, a raster/decoded-image byte budget, and recycled build workers to bound ESM module retention. No new placeholder or level-of-detail appearance was introduced or proposed.
+Direct main-thread task medians are 442 ms pan, 462 ms zoom, 454 ms trackpad pan and 7,477 ms theme switch. Main-document DOM elements stay at 546. Pan-phase uncollected JS heap changes from 80.51 to 26.34 MB; retained memory uses separate GC samples below.
 
-Validation: all 5,004 light/dark frame documents, CSS and imports are byte-identical; both full snapshot checks pass all 140 sources. Static preview PNG comparisons match for all 252 set source/theme previews at overview scale and a higher scale bounded to 2,048 pixels on the longest edge (504 pairs). Comparison-only animation freezing was applied identically to both variants because foreignObject SVG image animations ignore the emulated reduced-motion media; product animations are unchanged. Regression/property tests cover cropped XML, stylesheet cascade guards, repeated preview generations, exact-content build invalidation and packing against an exhaustive oracle. `npm test` passes 91 tests in about 26 seconds; the repository's own `sdg check` passes 26 sources.
+## Retained memory
 
-Reproduce the paired browser measurements from a disposable design copy:
+The server runs in a separate forked Node process from Playwright. Sample IPC collects server main-isolate garbage before reading memory. Renderer garbage is collected through CDP. Worker heaps are samples after their last build, without forced worker GC; server process RSS includes worker threads.
 
-```sh
-node tooling/compare.mjs /path/to/snapshot/design output/comparison 3 --sdg-baseline=/path/to/baseline-sdg
-```
+One process performs 24 new output generations, numbered 13 through 36, against a saturated disk cache. The final eight server main GC heaps span **126.22–126.42 MB** (0.15%). Server RSS varies **880.29–986.48 MB** as workers recycle. At the final sample, 86 workers have been recycled; no more than two are active, each has a 256 MiB old-space limit and a 32-attempt lifetime. Maximum sampled last-build worker heap is 159.08 MB.
 
-Use `tooling/benchmark.mjs` against an isolated hub URL for the hub samples, with a fresh hub process, state directory and free port for each run. The local targeted scripts and exact raw samples remain in `output/perf/`; `baseline.md` and `result.md` record the commands, exclusions, endpoint timings and retained-memory samples. The initial interrupted zoom run and premature legacy theme waits are excluded from final comparisons.
+The parent payload LRU holds 33.47 MB, metadata LRU 29.01 MB, and each disk cache has a 256 MiB budget. Every generation retains metadata for all 140 current sources and 276 ready previews. Manifest references refresh LRU recency. Preview count, decoded DOM nodes and raster-cache bytes stay at 276, 148,609 and 7.26 MB.
 
-## Comparison tooling and historical reference workloads
+Chromium renderer RSS grows from **1.48 to 4.15 GB**; its final eight samples rise from 3.63 to 4.15 GB despite stable renderer JS heap and application cache counts. The remaining native-memory task is an SVG/canvas allocation trace over this refresh sequence.
 
-Run from the gallery checkout with Node.js and an ARC checkout whose npm dependencies are installed:
+## Targets and remaining work
 
-```sh
-npm ci
-npx playwright install chromium
-node tooling/compare.mjs /path/to/agent-remote-control output/comparison 3
-```
+| Target | Status | Current result |
+| --- | --- | --- |
+| Warm visible browse <1.5 s | **Not met** | Direct 2.82 s; hub 2.52 s. |
+| Pan/zoom P95 ≤16.7 ms and no interaction tasks >50 ms | **Not met** | Zoom meets the limit; pointer pan and trackpad still miss the combined target. |
+| Changed-output single-source refresh <300 ms | **Not met** | 599 ms; unchanged-output comments take 231 ms. |
+| Bounded total overview memory | **Not met** | Server heap is bounded; renderer RSS continues growing. |
+| Round 2 bounded server-memory requirement | **Met** | Main heap plateaus, worker/module lifetime and caches are bounded. |
+| No zoom tasks over 50 ms | **Met** | Zero in all three direct and all three hub samples. |
 
-To reuse an existing exact source snapshot instead of the current ARC checkout:
+Further work should profile native SVG/canvas retention, visible vector decode cost, trackpad long tasks and ownership-geometry measurement for changed sources. Cold priming also needs reduction. No new placeholder or level-of-detail representation was introduced; no visual design proposal needs approval.
 
-```sh
-node tooling/compare.mjs output/performance-v2 output/comparison-new 3 --reuse-snapshot
-```
+## Verification and reproduction
 
-Use a new output directory for each comparison. The runner exports the exact ARC HEAD into an isolated source snapshot, reuses its installed build dependencies, extracts its product grouping into the snapshot's `design/gallery.json`, and serves the same 46 SVG assets to both implementations. It never saves into the original ARC checkout. Each candidate run uses an isolated preferences directory. ARC and SDG runs are sequential, with fresh browser contexts and server processes. The output retains the source snapshot, JSON samples, screenshots, environment, server logs, and source commit.
+- All 5,004 theme-frame documents, CSS and imports match the baseline builder byte-for-byte.
+- All 552 cropped preview SVGs match before/after compaction and through actual cache POST/disk/GET.
+- Baseline and current full snapshot `sdg check --read-only` both pass all 140 sources with identical output.
+- `npm test` passes 97 tests in 21.21 seconds, within the previous 36-second budget. All fixture assertions remain; independent fixture pages run with concurrency two.
+- Final samples preserve the camera on save and report no page errors.
 
-To compare an SDG change against an earlier SDG checkout using a project's current TSX assets:
+Run the comparison from this repository against a disposable source copy:
 
 ```sh
-node tooling/compare.mjs /path/to/project/design output/loading-comparison 3 --sdg-baseline=/path/to/baseline-sdg
+node tooling/compare.mjs /path/to/snapshot/design output/comparison 3 --sdg-baseline=/path/to/baseline-code --warm-restart
 ```
 
-This mode copies the design directory once, excluding generated `.sdg` files, then runs both viewers sequentially against that snapshot with separate preferences. The original project is never written. The baseline needs access to its installed dependencies. Results include first browse and a subsequent reload, plus the first animation frames showing the catalog, completed layout and loaded visible previews. Reload measures browser measurement and preview work with an already-running, warm server.
+The runner derives an isolated design copy, uses separate preferences and free ports, and retains raw JSON, screenshots and logs. A baseline archive needs its dependencies available. `tooling/benchmark.mjs <url> <output.json> [snapshot-design-directory]` measures an existing direct or isolated hub URL; `--browse-only` records restart navigation without interactions. The save phase modifies only the supplied disposable copy and restores it in `finally`.
 
-The benchmark opens Fit all through the Float zoom menu and switches to the opposite theme through the Display menu. Its zoom anchor stays inside the viewport, including very large worlds clamped to 2.5% scale. SDG theme timing waits for SDG readiness rather than the legacy image fallback. Legacy buttons and radios remain supported for the baseline viewers; gesture counts, timing, and measurements are unchanged.
+The benchmark uses Fit all and an interior viewport zoom anchor, switches to the opposite theme, and waits for SDG readiness. Resource entries distinguish source/preview GETs from cache uploads. Metadata, image queues and cache writes settle before warm/restart samples and isolated save timing.
 
-`tooling/benchmark.mjs <url> <output.json> [snapshot-design-directory]` can measure an already-running instance. Supply only a disposable copied fixture directory as the final argument: the file-save phase appends a comment to `components/button.tsx` (falling back to `.svg`) and restores it in `finally`. A shared component save includes all transitive consumers; it is not an isolated-source rebuild.
-
-## Workload and measurements
-
-- First browse: navigation until visible assets load. Server process startup is recorded separately; their sum excludes browser launch time. Disk and OS caches are not flushed.
-- Reload: refresh the same browser page after first browse, with the server's compiled assets cached. Catalog and layout milestones are sampled on animation frames independently of loaded previews.
-- Pan: 120 pointer moves on a fixed sinusoidal path, paced by an 8 ms delay after each dispatched event.
-- Zoom: overview to the first asset's detail and back. Wheel deltas account for the two implementations' different zoom sensitivities. A reach check requires detail zoom; the baseline reaches the same 877% peak in both viewers.
-- Trackpad-style scrolling: 90 two-axis wheel events. ARC maps these to zoom; SDG maps them to pan. This row measures each implementation's response to the same input, not equivalent camera trajectories. Physical trackpad hardware is not part of the automated workload.
-- Theme: switch from system dark to light, wait for loaded assets and a settling interval.
-- File save: time from writing the copied asset to refreshed visible assets and two animation frames. Record asset requests and before/after cameras.
-
-Frame intervals come from `requestAnimationFrame`. P95 and maximum describe scheduling smoothness; they are not display latency measurements. Chromium Performance metrics provide main-thread task, layout, and script durations plus JavaScript heap usage. Heap usage excludes raster, GPU, and total browser memory. Raw files also retain long tasks and DOM counts.
-
-## Initial result, 2026-11-06
-
-ARC source: `963560b2eb805910f8b6f0507a43baed1fc06359`. Asset set: 46 SVGs. Environment: Apple M4 Pro, 14 cores, macOS Darwin 27.2.0 ARM64, Node 24.22.0, Chromium 156.0.8078.4 headless, 1440 × 900 CSS pixels, DPR 2. Three runs per implementation; values below are medians. Raw data is retained locally at `output/performance-v2/`.
-
-| Metric                          |      ARC |     SDG |
-| ------------------------------- | -------: | ------: |
-| Server startup                  | 2,277 ms |   53 ms |
-| First browse after server ready |   644 ms |  611 ms |
-| Startup + first browse          | 2,998 ms |  672 ms |
-| Pan frame P95                   |  50.1 ms | 16.7 ms |
-| Pan maximum frame interval      |  83.4 ms | 16.8 ms |
-| Pan main-thread task time       | 4,728 ms |  540 ms |
-| Zoom frame P95                  |  16.8 ms | 16.7 ms |
-| Zoom maximum frame interval     |  50.0 ms | 16.8 ms |
-| Zoom main-thread task time      |   298 ms |  606 ms |
-| Two-axis scroll frame P95       |  16.7 ms | 16.7 ms |
-| Theme switch frame P95          |  66.7 ms | 16.8 ms |
-| File-save refresh               |   340 ms |  206 ms |
-| Asset requests after one save   |       46 |       2 |
-| JavaScript heap after pan       |  7.39 MB | 2.87 MB |
-
-The second refresh request is an embedded dependent asset. All three runs preserve the camera during the file-save phase and report no page errors. Canvas drawing spends more main-thread time during continuous zoom, while avoiding the original frame spikes; retain both measurements when evaluating future changes.
-
-Use the initial numbers as a regression reference on this environment. Compare the same source snapshot, browser, viewport, pixel ratio, and input workload. Investigate sustained frame intervals above the display's frame budget, changed camera behavior, missing detail, or renewed full-set refreshes before accepting a rendering change. Visual review also covers SVG sharpness, both themes, directory switching, keyboard focus, and recent-directory camera restoration.
-
-## TSX loading, 2026-11-07
-
-Compared the SDG baseline at `38e2253` with sandbox-document reuse and early catalog rendering using a copied SCNet design snapshot containing 34 TSX sources. Three sequential runs per implementation used fresh servers, preferences and browser contexts on Apple M4 Pro, macOS ARM64, Node 24.22.0 and Chromium 156.0.8078.4 at 1440 × 900, DPR 2. Values are medians. Raw samples, copied sources and screenshots remain local under `output/loading-20261107/client-comparison/`.
-
-| Metric | Baseline | Updated |
-| --- | ---: | ---: |
-| First browse | 1,045 ms | 635 ms |
-| Reload to visible previews | 885 ms | 600 ms |
-| Reload to catalog | 526 ms | 27 ms |
-| Reload to completed layout | 526 ms | 211 ms |
-| Pan frame P95 | 16.7 ms | 16.7 ms |
-| File-save refresh | 428 ms | 334 ms |
-
-All six runs reported no page errors and preserved the camera on file save. The viewer regression suite also checks the reference layout, both-theme fixture readiness and selection queued before asset preparation finishes.
-
-## Selection and label refresh, 2026-11-07
-
-The state-persistence and label changes were compared with `15f80c9` using the same 34-source snapshot, environment and three sequential runs per implementation. Raw data is retained under `output/state-labels-20261107/performance/`. Median reload time was 598 ms before and 580 ms after; catalog time was 27 ms and 26 ms. Pan frame P95 stayed at 16.8 ms and zoom frame P95 at 16.7 ms. Refreshing visible labels during pans increased main-thread task time from 259 ms to 282 ms across 120 moves. Zoom task time was 603 ms and 601 ms. File-save refresh was 341 ms and 339 ms; all runs preserved the camera and reported no page errors.
-
-## Click-to-copy labels, 2026-11-07
-
-One paired run against `6b07f5e` used the same 34-source snapshot and benchmark environment. Raw output remains under `output/copy-labels-20261107/performance/`. Reload measured 577 ms before and 543 ms after; catalog time was 24 ms and 23 ms. Pan frame P95 stayed at 16.7 ms; zoom frame P95 was 16.8 ms and 16.7 ms. Both runs preserved the camera on file save and reported no page errors.
-
-## Selection and source exports, 2026-11-07
-
-Three paired runs against `2891fba` used one copied SCNet snapshot with 63 TSX sources. Raw samples remain under `output/selection-details/performance/`. Medians: first browse 1,909 → 1,959 ms, reload 1,628 → 1,692 ms, catalog visibility 23.9 → 24.2 ms, pan P95 16.8 → 16.8 ms, and file-save refresh 2,344 → 2,354 ms. All six runs preserved the camera on file save and reported no page errors. Source-export registration and root-bound measurement add about 65 ms to reload in this workload. The selection tests separately exercise frame/element hit regions, inspector navigation and collapse persistence, clipboard controls, Back and Escape, and confirm that camera pans retain the existing label work bounds.
-
-## Default layers and studies discovery, 2026-11-07
-
-One paired run against `da9e0af` used the same copied 63-source SCNet snapshot to check discovery and file refresh. Raw samples remain under `output/asset-rules/performance/`. First browse measured 2,028 → 2,044 ms, reload 1,768 → 1,726 ms, catalog visibility 27.7 → 23.7 ms, pan P95 16.7 → 16.7 ms, and file-save refresh 2,509 → 2,378 ms. Both runs preserved the camera and reported no page errors. These are single-run observations; the study-discovery regression separately checks adding the first study and removing the last one through the live file watcher.
+Detailed commands and raw results are retained locally in `output/perf-round2/baseline.md`, `result.md` and `summary.json`. The local retention harness records server/driver process identities, worker statistics, current metadata coverage and renderer RSS. Copied acceptance assets and raw measurements stay under ignored `output/` and are excluded from the npm package.
