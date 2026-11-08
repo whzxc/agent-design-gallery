@@ -20,7 +20,7 @@ A project may set `requires` in `sdg.config.mjs`, such as `'>=0.4.0'`. Older ver
 
 ## Project layout
 
-- `sdg.config.mjs` at the project root configures paths, `sources`, `check` and `compare`. Every field is optional.
+- `sdg.config.mjs`, `sdg.config.js` or `sdg.config.ts` at the project root configures paths, `sources`, `check` and `compare`. Every field is optional.
 - `design/tokens.css` holds color, type, radius, size and shadow tokens for the light and dark themes.
 - `design/components/<name>.tsx` holds one shared component. It exports the functions other sources use, and its default export returns the component's declared forms as frames.
 - `design/modules/<feature>.tsx` owns feature parts and their states, composed from components and other modules' exported parts.
@@ -35,7 +35,7 @@ A project may set `requires` in `sdg.config.mjs`, such as `'>=0.4.0'`. Older ver
 
 Production directories in `sources` are ordered from lower to higher layers. `check` rejects imports into a higher layer and permits imports within the same layer. With the default order, components cannot import modules or surfaces, and modules cannot import surfaces. Custom names use the configured order; studies are exempt. A consumer can set `check: { importDirection: false }` in `sdg.config.mjs` to disable only this lint and document its alternative policy locally. The check uses resolved direct source imports from the relationship graph, including extension/index resolution and re-exports.
 
-Commands run from any directory inside the project. They find the nearest `sdg.config.mjs` or, without one, the nearest `package.json`, and resolve paths from there.
+Commands run from any directory inside the project. They find the nearest `sdg.config.mjs`, `.js` or `.ts` (in that priority order), or, without one, the nearest `package.json`, and resolve paths from there.
 
 ## Tokens
 
@@ -264,3 +264,7 @@ For non-interactive inspection, `GET /relationships` on the local viewer server 
 - Sources name the system font stack. Linux renders use fallback fonts, so final visual review runs on macOS.
 - Frames are static. They do not show hover response, focus movement, dragging, springs or interruption; a state the user declares is its own form.
 - An `.svg` file directly in `design/components/` or `design/surfaces/` stops a command that runs over all sources, including `compare --all`, with exit code 2 and names the file to convert. Commands that name sources check only those, so a project can convert in stages. Illustrations belong in `design/art/`.
+
+## Resident discovery
+
+`sdg root add <dir> [--depth 2]` registers a scan root; `root remove`, `root list` and `root scan [dir]` manage it without browser filesystem input. Only a config file identifies a hub project. TypeScript configs are bundled with the existing esbuild and keep relative imports and `import.meta.url` rooted at the original config. `sdg serve` runs the resident hub; `sdg open <dir>` remains a standalone ephemeral viewer. Config `name` overrides the directory basename in project metadata, and `requires` reports compatibility against the running hub version. Opening an incompatible project returns the normal update guidance. Scanning never builds frames; frame counts become available after viewer builds.

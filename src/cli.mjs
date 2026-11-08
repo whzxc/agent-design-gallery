@@ -4,14 +4,18 @@ import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 
-export const commands = ['open', 'init', 'check', 'render', 'compare'];
+export const commands = ['open', 'serve', 'root', 'init', 'check', 'render', 'compare'];
 const usage = {
   open: '[directory] [--port=<n>] [--no-open] [--state-dir=<path>]',
+  serve: '[--port=4310] [--state-dir=<path>]',
+  root: 'add <dir> [--depth=2] | remove <dir> | list | scan [dir] [--state-dir=<path>]',
   init: '', check: '[source...] [--read-only]', render: '[source...] [--frame=<name>] [--scale=2]',
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
 };
 const details = {
-  open: 'Browse TSX sources and legacy SVG designs.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
+  serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes.',
+  root: 'Manage registered scan roots. add scans immediately. scan rescans registered roots only; depth is 0 through 3. Hidden directories, node_modules and Git worktrees are skipped.',
+  open: 'Browse TSX sources and legacy SVG designs on an independent random-port server.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
   check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render each selected frame in both themes. Scale defaults to 2.',
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
 };
@@ -22,7 +26,7 @@ export function help(command) {
 export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' } };
-  const strings = { open: ['port', 'state-dir'], render: ['scale', 'frame'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
+  const strings = { open: ['port', 'state-dir'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], render: ['scale', 'frame'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
   if (command === 'check') options['read-only'] = { type: 'boolean' };
@@ -42,6 +46,25 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd()) {
   if (values.help) { console.log(help(explicit ? command : undefined)); return 0; }
   if (values.version) { console.log(VERSION); return 0; }
   if (command === 'open') return (await import('./open.mjs')).open(positionals, values);
+  if (command === 'root') {
+    const [action, directory, ...extra] = positionals;
+    if (extra.length || !['add', 'remove', 'list', 'scan'].includes(action) || (['add', 'remove'].includes(action) && !directory) || (action === 'list' && directory) || (values.depth !== undefined && action !== 'add')) throw new Error('Invalid arguments; run sdg root --help');
+    const registry = await import('./hub/registry.mjs');
+    const state = values['state-dir'];
+    const result = action === 'add' ? await registry.addRoot(directory, values.depth === undefined ? 2 : Number(values.depth), state)
+      : action === 'remove' ? await registry.removeRoot(directory, state)
+      : action === 'scan' ? await registry.scanRoots(directory, state) : await registry.listRoots(state);
+    console.log(JSON.stringify(result, null, 2)); return 0;
+  }
+  if (command === 'serve') {
+    if (positionals.length) throw new Error('Invalid arguments; run sdg serve --help');
+    const port = values.port === undefined ? 4310 : Number(values.port);
+    if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('--port must be an integer from 0 to 65535.');
+    const hub = await (await import('./hub.mjs')).startHub({ port, stateDirectory: values['state-dir'] });
+    console.log(`SDG: ${hub.url}`);
+    for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => hub.close().catch(error => { console.error(error.message); process.exitCode = 2; }));
+    return 0;
+  }
   const config = await loadConfig(cwd);
   if (command === 'init') return (await import('./toolkit/project.mjs'))[command](config);
   if (command === 'compare') return (await import('./toolkit/compare.mjs')).compare(config, positionals, values);

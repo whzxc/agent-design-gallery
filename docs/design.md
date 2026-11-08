@@ -242,3 +242,5 @@ The ARC snapshot at `b9e18beb` contains 51 sources (31 components and 20 surface
 
 The inspector exposes source, frame and export detail. Canvas labels occluded by the selection inspector are omitted.
 Browser text metrics can differ from SVG central-baseline metrics by about one pixel.
+
+The server-only resident hub ships minimal unstyled navigation pending the separate hub UI approval. The viewer directory dialog is retired: `open-dialog` and `open-error` fixture IDs now resolve to the baseline canvas; their existing design snapshots await the UI lane update. The `open-empty` fixture retains an empty canvas without a filesystem input.

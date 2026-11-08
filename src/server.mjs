@@ -12,7 +12,6 @@ import { watch } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 
 import { buildSource } from './toolkit/build.mjs';
 import { refreshTypes, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
@@ -47,6 +46,7 @@ export async function startServer({
     closing = false;
   const clients = new Set(),
     svgCache = new Map(),
+    frameCounts = new Map(),
     touched = new Set();
   let writes = Promise.resolve();
   const persist = () => {
@@ -106,8 +106,8 @@ export async function startServer({
     const nextSources = project.design === next ? project.sources : sourceDirectories({design:next});
     const nextFiles = await collect(next, "", new Map(), nextSources),
       nextGroups = await readGroups(next, nextSources);
-    if (!nextFiles.size) throw new Error("No SVG files in this directory.");
-    // Complete reads before switching, so an invalid directory leaves the current canvas intact.
+
+    // Complete discovery before starting the watcher.
     const nextWatcher = watch(next, { recursive: true }, (_event, filename) => {
       if (filename && String(filename).split(path.sep).some(part => part.startsWith("."))) return;
       if (filename) touched.add(String(filename).split(path.sep).join("/"));
@@ -180,6 +180,7 @@ export async function startServer({
             changed.push(dependent);
           }
         }
+      for (const name of changed) frameCounts.delete(name);
       files = next;
       sources = nextSources;
       groups = nextGroups;
@@ -228,6 +229,7 @@ export async function startServer({
     if (cached?.version === asset.version) return cached;
     if (name.endsWith('.tsx')) {
       const built = await buildSource({root:path.dirname(root),design:root,output:path.join(root,'.sdg/build'),sources},path.join(root,name),{write:false});
+      frameCounts.set(name, built.frames.length);
       const result = {version:asset.version,imports:built.imports,dependencies:built.dependencies.map(p=>path.relative(root,p).split(path.sep).join('/')),body:JSON.stringify({format:'tsx',imports:built.imports,component:!name.startsWith('surfaces/'),frames:built.frames.map(f=>({...f,document:f.document(theme)}))})};
       svgCache.set(key,result); return result;
     }
@@ -310,24 +312,19 @@ export async function startServer({
           return;
         }
         const data = await body(request);
-        if (url.pathname === "/open") {
-          if (typeof data.directory !== "string")
-            throw new Error("Enter a directory path.");
-          await openDirectory(fixtures && url.searchParams.has("fixture") ? fixtures.paths[data.directory] ?? root : data.directory);
-        } else if (url.pathname === "/preferences") {
+        if (url.pathname === "/preferences") {
           for (const key of ["sidebar", "inspector"])
             if (typeof data[key] === "boolean") state[key] = data[key];
           if (["system", "light", "dark"].includes(data.theme))
             state.theme = data.theme;
           if (
             root &&
-            data.directory === root &&
             data.view &&
             ["x", "y", "scale"].every((k) => Number.isFinite(data.view[k])) &&
             data.view.scale > 0
           )
             state.views[root] = data.view;
-          if (root && data.directory === root && data.selection &&
+          if (root && data.selection &&
               (data.selection.path === null || files.has(data.selection.path))) {
             state.selections[root] = {
               path: data.selection.path,
@@ -337,30 +334,6 @@ export async function startServer({
             };
           }
           await persist();
-        } else if (url.pathname === "/reveal") {
-          if (!files.has(data.path)) throw new Error("Select an existing SVG.");
-          const file = path.join(root, data.path),
-            command =
-              process.platform === "darwin"
-                ? "open"
-                : process.platform === "win32"
-                  ? "explorer.exe"
-                  : "xdg-open";
-          const args =
-            process.platform === "darwin"
-              ? ["-R", file]
-              : process.platform === "win32"
-                ? [`/select,${file}`]
-                : [path.dirname(file)];
-          await new Promise((resolve, reject) => {
-            const p = spawn(command, args, { stdio: "ignore" });
-            p.on("error", reject);
-            p.on("exit", (code) =>
-              code === 0
-                ? resolve()
-                : reject(new Error("Could not reveal file.")),
-            );
-          });
         } else {
           response.writeHead(404);
           response.end();
@@ -482,5 +455,9 @@ export async function startServer({
     await writes;
     await new Promise((resolve) => server.close(resolve));
   };
-  return { url: `http://127.0.0.1:${server.address().port}/`, close };
+  return { url: `http://127.0.0.1:${server.address().port}/`, port: server.address().port, close,
+    stats: () => {
+      const entries = [...files.keys()].filter(name => name.endsWith('.tsx'));
+      return { sourceCount: entries.length, frameCount: entries.every(name => frameCounts.has(name)) ? entries.reduce((n, name) => n + frameCounts.get(name), 0) : null };
+    } };
 }

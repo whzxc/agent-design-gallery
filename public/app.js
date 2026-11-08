@@ -102,7 +102,6 @@ function updateChrome() {
   if (!opened) $("#minimap").hidden = true;
   $("#sidebar-toggle").setAttribute('aria-expanded', String(sidebar));
   $("#expand-sidebar").setAttribute('aria-expanded', String(sidebar));
-  $("#close").hidden = !opened;
   const right = width - (inspector && selected ? 312 : 0);
   $(".zoom").style.left = `${((sidebar && opened ? 272 : 0) + right) / 2}px`;
   positionZoomMenu();
@@ -143,7 +142,7 @@ function error(message) {
   $("#error").hidden = !message;
 }
 async function api(url, data, keepalive = false) {
-  if(fixtureName && ["/manifest","/open"].includes(url)) url += `?fixture=${encodeURIComponent(fixtureName)}`;
+  if(fixtureName && url === "manifest") url += `?fixture=${encodeURIComponent(fixtureName)}`;
   const response = await fetch(
     url,
     data
@@ -161,7 +160,6 @@ async function api(url, data, keepalive = false) {
 }
 function preferences() {
   return {
-    directory: manifest?.directory,
     view,
     selection: {
       path: selected,
@@ -175,7 +173,7 @@ function preferences() {
 function persistPreferences(keepalive = false) {
   clearTimeout(saveTimer);
   if (fixtureState || catalog || !manifest?.directory) return;
-  return api('/preferences', preferences(), keepalive).catch(e => error(e.message));
+  return api('preferences', preferences(), keepalive).catch(e => error(e.message));
 }
 function save() {
   if(fixtureState || catalog || !manifest?.directory) return;
@@ -869,8 +867,6 @@ for (const [id, action] of Object.entries({
 $("#back").onclick = back;
 $("#sidebar-toggle").onclick = () => toggleSidebar(false);
 $("#expand-sidebar").onclick = () => toggleSidebar(true);
-$("#app-directory").onclick = () => showOpen();
-$("#directory").onclick = () => showOpen();
 $("#inspect").onclick = () => {
   inspector = !inspector;
   selection();
@@ -977,52 +973,6 @@ function resizeViewport() {
   requestDraw();
 }
 new ResizeObserver(resizeViewport).observe(viewport);
-function recent() {
-  const paths=(catalog ?? manifest)?.recent??[];
-  $("#recent-heading").hidden=!paths.length;
-  $("#recent").replaceChildren(...paths.map((path,index)=>{
-    const button=document.createElement('button');button.type='button';button.innerHTML=icon('folder',16);
-    const text=document.createElement('span');text.className='recent-text';
-    const name=document.createElement('strong'),detail=document.createElement('small');
-    const pieces=path.split('/').filter(Boolean);name.textContent=pieces.at(-1)==='design'?pieces.at(-2):pieces.at(-1);
-    detail.textContent=path.replace(/^\/Users\/[^/]+/,'~').replace(/^\/home\/[^/]+/,'~');text.append(name,detail);button.append(text);
-    button.setAttribute('aria-current',String(index===0&&!$("#path").value));
-    button.onclick=()=>{$("#path").value=path;for(const row of $("#recent").children)row.setAttribute('aria-current',String(row===button));$("#path").focus()};
-    button.ondblclick=()=>open(path);return button;
-  }));
-}
-function showOpen() {
-  $("#path").value='';$("#path").removeAttribute('aria-invalid');$("#open-error").hidden=true;
-  recent();updateChrome();hideTooltip();$("#directories").showModal();$("#path").blur();requestDraw();
-}
-
-$("#close").onclick = () => $("#directories").close();
-$("#path").oninput=()=>{$("#path").removeAttribute("aria-invalid");$("#open-error").hidden=true};
-$("#directory-form").onsubmit = (e) => {
-  e.preventDefault();
-  void open($("#path").value);
-};
-async function open(directory) {
-  if (catalog) {
-    pendingNavigation = () => void open(directory);
-    return;
-  }
-  const button = $("#directory-form button[type=submit]");
-  button.disabled = true;
-  try {
-    await persistPreferences();
-    const data = await api("/open", { directory });
-    await applyManifest(data);
-    $("#directories").close();
-    viewport.focus();
-  } catch (e) {
-    $("#open-error span:last-child").textContent = e.message;
-    $("#path").setAttribute("aria-invalid","true");
-    $("#open-error").hidden = false;
-  } finally {
-    button.disabled = false;
-  }
-}
 async function applyManifest(data, force = false) {
   const changedRoot = manifest?.directory !== data.directory,
     first = !manifest && !catalog;
@@ -1181,7 +1131,6 @@ for(const button of document.querySelectorAll('[data-tooltip]')) {
   button.addEventListener('pointerleave',()=>{hideTooltip();requestDraw()});button.addEventListener('blur',hideTooltip);button.addEventListener('click',hideTooltip);
 }
 $("#keys-close").onclick=()=>$("#keys").close();
-$("#directories").addEventListener('cancel',event=>{if(!(catalog ?? manifest)?.directory)event.preventDefault()});
 for(const dialog of document.querySelectorAll('dialog')) {
   dialog.addEventListener('toggle', () => requestDraw());
   dialog.addEventListener('close',()=>{viewport.focus({preventScroll:true});requestDraw()});
@@ -1212,9 +1161,7 @@ async function applyFixture() {
   // Fixtures retain a useful Back button just as a user navigating from the overview would.
   if(state.asset){history=[{view:fitView(world,fitArea(width,height,state.sidebar,false)),active:null,selected:null,selectedId:null,selectedForm:null,inspection:null,inspector:false}];$("#back").disabled=false}
   if(state.menu){positionZoomMenu();$("#"+state.menu).showPopover()}
-  if(state.dialog==='directories') showOpen();
-  else if(state.dialog) $("#"+state.dialog).showModal();
-  if(state.submit){$("#path").value=state.submit;await open(state.submit)}
+  if(state.dialog) $("#"+state.dialog).showModal();
   fixtureApplied=true;requestDraw();
 }
 let fetching = false,
@@ -1226,7 +1173,7 @@ async function refresh(force = false) {
   }
   fetching = true;
   try {
-    await applyManifest(await api("/manifest"), force);
+    await applyManifest(await api("manifest"), force);
     error("");
   } catch (e) {
     error(e.message);
@@ -1240,8 +1187,7 @@ async function refresh(force = false) {
 }
 await refresh();
 if(fixtureState) { try { await applyFixture(); } catch(e) { error(e.message); } }
-else if (!manifest?.directory) showOpen();
-const events = new EventSource("/events");
+const events = new EventSource("events");
 events.onmessage = (e) => {
   const data = JSON.parse(e.data);
   if (data.error) error(data.error);
@@ -1267,7 +1213,7 @@ document.addEventListener("keydown", (e) => {
     $("#search").focus();
     return;
   }
-  if (e.key !== "Escape" || $("#directories").open || $("#keys").open) return;
+  if (e.key !== "Escape" || $("#keys").open) return;
   if (document.querySelector(":popover-open")) return;
   if (searchReturn) {
     const old = searchReturn;

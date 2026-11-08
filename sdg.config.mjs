@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { startServer } from './src/server.mjs';
@@ -12,9 +12,8 @@ export default {
     async start({ port, root }) {
       const temporary = await mkdtemp(path.join(tmpdir(), 'sdg-fixture-'));
       try {
-        const empty = path.join(temporary, 'empty'); await mkdir(empty);
         const server = await startServer({ directory: path.join(root, 'fixtures/arc-sample/design'), port, stateDirectory: temporary,
-          fixtures: { states, recent, assetModifiedAt, paths: { [states['open-error'].submit]: empty } } });
+          fixtures: { states, recent, assetModifiedAt } });
         return async () => { try { await server.close(); } finally { await rm(temporary, { recursive: true, force: true }); } };
       } catch (error) { await rm(temporary, { recursive: true, force: true }); throw error; }
     },

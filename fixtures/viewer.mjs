@@ -1,5 +1,3 @@
-import directoryFixtures from '../design/fixtures/open-directory.json' with { type: 'json' };
-
 // Repository-only deterministic Float states; the installed viewer has no fixtures.
 export const assetModifiedAt = Date.UTC(2026, 10, 7, 13, 24, 8);
 const components = { theme: 'light', sidebar: true, group: 'Essentials', asset: 'components/field.tsx', camera: 'group' };
@@ -17,8 +15,8 @@ export const states = {
   'sidebar-search': { theme: 'light', sidebar: true, group: 'Agents & quota', asset: 'components/state-pill.tsx', query: 'pill', camera: 'selection' },
   'tooltip-inspector': { ...components, tooltip: true },
   'dialog-shortcuts': { ...components, dialog: 'keys' },
-  'open-empty': { theme: 'light', sidebar: false, empty: true, camera: 'all', dialog: 'directories' },
-  'open-dialog': { ...overview, dialog: 'directories' },
-  'open-error': { ...overview, theme: 'light', dialog: 'directories', submit: directoryFixtures.states.error.path },
+  'open-empty': { theme: 'light', sidebar: false, empty: true, camera: 'all' },
+  'open-dialog': { ...overview },
+  'open-error': { ...overview, theme: 'light' },
 };
-export const recent = directoryFixtures.recent.map(entry => entry.path);
+export const recent = [];

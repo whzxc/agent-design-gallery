@@ -52,7 +52,7 @@ test('server serves the packaged token source and ignores fixture queries in nor
   assert.ok(manifest.directory);assert.equal(manifest.fixture,undefined);
   const empty=path.join(temporaryRoot,'empty');await mkdir(empty);
   const response=await fetch(new URL('/open',server.url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({directory:empty})});
-  assert.equal(response.status,400);assert.equal((await response.json()).error,'No SVG files in this directory.');
+  assert.equal(response.status,404);
   assert.equal((await (await fetch(new URL('/manifest',server.url))).json()).directory,manifest.directory);
 });
 test('missing directory CLI errors name the path on one plain line', async t => {
@@ -126,8 +126,8 @@ test('camera and selected form survive immediate reload and a server restart', {
   } finally {await browser.close();await server.close()}
 });
 test('all fixture states reach drawn readiness without screenshots or persisted preferences', {timeout:90000}, async t => {
-  const temporaryRoot=await temporary(t),empty=path.join(temporaryRoot,'empty');await mkdir(empty);
-  const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot,fixtures:{states,recent,paths:{'~/projects/empty':empty}}});
+  const temporaryRoot=await temporary(t);
+  const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot,fixtures:{states,recent}});
   const browser=await launch();
   try {
     for(const [name,state] of Object.entries(states)) {
@@ -143,8 +143,7 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
         if(state.menu) assert.equal(await page.locator('#'+state.menu).evaluate(el=>el.matches(':popover-open')),true,name);
         if(state.inspector) assert.equal(await page.locator('#source').isVisible(),true,name);
         if(state.dialog) assert.equal(await page.locator('#'+state.dialog).evaluate(el=>el.open),true,name);
-        if(state.empty) assert.equal(await page.locator('#close').isVisible(),false);
-        if(state.submit) assert.equal(await page.locator('#open-error span:last-child').textContent(),'No SVG files in this directory.');
+        assert.equal(await page.locator('#directories').count(),0);
         if(state.query) { assert.equal(await page.locator('.search-result').count(),2);assert.match(await page.locator('.search-result').first().textContent(),/state-pill/); }
         const relativeBox = async (selector, parent) => page.locator(selector).first().evaluate((el, parent) => {
           const box=el.getBoundingClientRect(), origin=document.querySelector(parent).getBoundingClientRect();

@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { loadConfig } from "./toolkit/config.mjs";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { startServer } from "./server.mjs";
 
 export async function open(positionals, values) {
@@ -7,8 +10,11 @@ export async function open(positionals, values) {
     const port = values.port === undefined ? 0 : Number(values.port);
     if (!Number.isInteger(port) || port < 0 || port > 65535)
       throw new Error("--port must be an integer from 0 to 65535.");
+    const input = path.resolve(positionals[0] ?? process.cwd());
+    const config = await loadConfig(input);
+    const directory = config.root === input && existsSync(config.design) ? config.design : input;
     const server = await startServer({
-      directory: positionals[0],
+      directory,
       port,
       stateDirectory: values["state-dir"],
     });

@@ -7,13 +7,13 @@ npm install -g @whzxc/svg-design-gallery
 sdg /path/to/design
 ```
 
-Requires Node.js 22 or newer. Installation starts without a build step. Browser toolkit commands use the bundled Playwright dependency; the viewer and build do not load it. `sdg` opens a loopback server in your default browser. Use `--no-open` to print its URL, `--port 5200` to select a port, or omit the directory to open recent directories. Stop the server with Ctrl+C.
+Requires Node.js 22 or newer. Installation starts without a build step. Browser toolkit commands use the bundled Playwright dependency; the viewer and build do not load it. `sdg` opens a loopback server in your default browser. Use `--no-open` to print its URL, `--port 5200` to select a port, or omit the directory to use the current project. Stop the server with Ctrl+C.
 
 ## Viewer controls
 
 Drag or scroll to pan. Pinch, or hold Control/Command while scrolling, to zoom around the pointer. Click a frame to select its variant; double-click or press Enter to focus it. Hover an exported component inside a frame to outline its root, then click to inspect its source and export. Arrow keys pan; +/− zoom; 0 fits all; 1 sets the canvas to 100% around the usable canvas center. Escape clears the selection (or closes the current search, dialog or menu). Back returns to the previous selection and camera.
 
-The floating sidebar holds the directory picker, search, and project groups. Control/Command+F opens search; results replace the tree. Clear the query to return to the tree, or Escape to restore the previous selection, camera, and sidebar state. Group names fit their collection, and asset names focus their set or first frame. Collapse the sidebar to keep only the app bar. Collapsing panels does not move the world.
+The floating sidebar holds the project name, search, and project groups. Control/Command+F opens search; results replace the tree. Clear the query to return to the tree, or Escape to restore the previous selection, camera, and sidebar state. Group names fit their collection, and asset names focus their set or first frame. Collapse the sidebar to keep only the app bar. Collapsing panels does not move the world.
 
 The right inspector follows the selection and remembers its open state. It shows source path, frame name, dimensions, frames, and **Uses** / **Used by**, grouped by source directory. Indirect relationships are muted with their shortest `via` path. Click a relationship to select and focus that source. An element selection shows its owning export and the frames in that source that render it; click one to jump there. `GET /relationships` returns the underlying direct graph as JSON, keyed by source path with `uses` and `usedBy` arrays.
 
@@ -23,7 +23,7 @@ The tool pill opens **Display**, **Inspector**, **Fullscreen**, and **More**. Di
 
 The bottom zoom bar holds Back, zoom out, the zoom menu, zoom in, Fit, and Minimap. The zoom menu offers Fit all, Fit group, Fit selection, and Zoom to 100%. Fit uses the selected frame or element, source, or current group. The minimap moves the camera when clicked. The inspector lists forms or frames with their geometric sizes and notes.
 
-The directory picker opens **Open a design directory**. Enter a path or select a recent directory, then choose Open; double-click a recent directory to open it immediately. Inline errors leave the current directory intact. With no directory open, the dialog has no close button.
+
 
 ## Sources and layout
 
@@ -48,7 +48,7 @@ Files group by directory unless `gallery.json` supplies project groups. Entries 
 }
 ```
 
-Unlisted assets remain in directory groups. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Recent directories, theme, sidebar, inspector, and per-directory camera and selection preferences stay in `$XDG_STATE_HOME/svg-design-gallery/state.json`, defaulting to `~/.local/state/svg-design-gallery/state.json`. Refreshing or reopening a directory restores its zoom, position, selected component and form. Canvas asset headings show the source's last modification time in local time; hover for the complete timestamp. `--state-dir` isolates preferences.
+Unlisted assets remain in directory groups. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Theme, sidebar, inspector, and per-directory camera and selection preferences stay in `$XDG_STATE_HOME/svg-design-gallery/state.json`, defaulting to `~/.local/state/svg-design-gallery/state.json`. Refreshing or reopening a directory restores its zoom, position, selected component and form. Canvas asset headings show the source's last modification time in local time; hover for the complete timestamp. `--state-dir` isolates preferences.
 
 ## Design toolkit
 
@@ -78,3 +78,40 @@ npm test
 The server serves the checked-in frontend and `design/tokens.css` directly. Reload after frontend edits; restart after server edits. `npm pack` copies the shared viewer tokens into the packaged browser files. No frontend framework is required. Maintainers publish to the public npm registry; a scope registry in the local npm config takes precedence over `publishConfig`, so override it with `npm publish --@whzxc:registry=https://registry.npmjs.org/`.
 
 See [SDG design](docs/design.md), [architecture](docs/architecture.md), and [performance](docs/performance.md). ARC's MIT-licensed gallery is the starting point; the MIT license and Lucide/Feather icon notices are retained in `LICENSE`.
+
+## Resident hub
+
+`sdg open <dir>` stays independent: no registry or hub is required, and the port is random by default. It accepts a design directory or a configured project root. The browser is read-only apart from viewer preferences. Open and reveal filesystem actions are CLI-only.
+
+```sh
+sdg root add ~/Developer --depth 2
+sdg root list
+sdg root scan                 # Explicit rescan of registered roots
+sdg root scan ~/Developer
+sdg root remove ~/Developer
+sdg serve --port 4310
+```
+
+Root commands output JSON. `--state-dir <path>` isolates registry and preferences. Scans run on add and explicit CLI/web rescan only. Depth defaults to 2 and accepts 0–3; hidden directories, node_modules, symlinks and Git worktrees (`.git` is a file) are skipped. Only directories containing `sdg.config.mjs`, `.js` or `.ts` are projects. TypeScript configs load through esbuild.
+
+The hub binds 127.0.0.1. `GET /api/projects` returns name, path, design directory, stable slug and `/p/<slug>/` route, branch, short HEAD, last design commit time and dirty flag, source count and version compatibility. `frameCount` is null until an active viewer has built every source, then reports the exact count. Config errors are returned per project. `GET /api/roots` lists roots; `POST /api/rescan` rescans registered roots with no path input. Project viewers start on demand and stop after five idle minutes; an open SSE stream keeps a viewer active. The initial hub page is intentionally unstyled pending design approval.
+
+### Reverse proxy transport
+
+Phase 1 has no remote authentication; keep the listener local until the key boundary lands. nginx must preserve the original Host and URI prefix, supply forwarded headers on every request, and disable SSE buffering. Use these settings inside the location forwarding to the hub:
+
+```nginx
+proxy_pass http://127.0.0.1:4310;
+proxy_http_version 1.1;
+proxy_set_header Host $http_host;
+proxy_set_header X-Forwarded-Host $http_host;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header Forwarded "";
+proxy_set_header Connection "";
+proxy_buffering off;
+proxy_cache off;
+proxy_read_timeout 1h;
+```
+
+Do not rewrite `/p/<slug>/` prefixes. Forward Authorization and X-SDG-Key headers and retain query parameters for the upcoming header/query key contract. The corrected Phase 2 design uses a public data-free shell, localStorage, header-authenticated data requests and query keys for SSE; no cookies or redirects.

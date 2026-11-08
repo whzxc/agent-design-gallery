@@ -1,15 +1,19 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
+import { build } from 'esbuild';
 import { sourceDirectories } from './project.mjs';
 
 export const VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url))).version;
 export const UPDATE = 'npm install -g @whzxc/svg-design-gallery';
+export const CONFIG_NAMES = ['sdg.config.mjs', 'sdg.config.js', 'sdg.config.ts'];
+export const configFile = directory => CONFIG_NAMES.map(name => path.join(directory, name)).find(file => statSync(file, { throwIfNoEntry: false })?.isFile());
 
 export function discoverRoot(cwd = process.cwd()) {
   let directory = path.resolve(cwd), packageRoot;
   while (true) {
-    if (existsSync(path.join(directory, 'sdg.config.mjs'))) return directory;
+    if (configFile(directory)) return directory;
     if (!packageRoot && existsSync(path.join(directory, 'package.json'))) packageRoot = directory;
     const parent = path.dirname(directory);
     if (parent === directory) return packageRoot ?? path.resolve(cwd);
@@ -68,15 +72,40 @@ export function viewport(value) {
   if (!match) throw new Error(`Invalid viewport ${value}; use <width>x<height>, for example 1280x800`);
   return { width: Number(match[1]), height: Number(match[2]) };
 }
-export async function loadConfig(cwd = process.cwd()) {
-  const root = discoverRoot(cwd), file = path.join(root, 'sdg.config.mjs');
+async function importConfig(file) {
+  if (!file.endsWith('.ts')) {
+    const info = statSync(file), url = pathToFileURL(file);
+    url.searchParams.set('revision', `${info.mtimeMs}-${info.size}`);
+    return (await import(url.href)).default;
+  }
+  const require = createRequire(pathToFileURL(file));
+  const result = await build({ entryPoints: [file], bundle: true, write: false, format: 'esm', platform: 'node', logLevel: 'silent',
+    define: { 'import.meta.url': JSON.stringify(pathToFileURL(file).href) },
+    plugins: [{ name: 'config-imports', setup(api) {
+      api.onResolve({filter: /.*/}, args => {
+        if (args.kind === 'entry-point' || args.path.startsWith('node:')) return;
+        const candidate = args.path.startsWith('.') ? path.resolve(args.resolveDir, args.path) : args.path;
+        // Keep JS modules at their original URLs, including their own import.meta.url.
+        // TypeScript helpers are bundled by esbuild without writing generated files.
+        if (/\.[cm]?js$/.test(candidate) || !candidate.startsWith('/')) {
+          const resolved = require.resolve(candidate);
+          return { path: resolved.startsWith('/') ? pathToFileURL(resolved).href : resolved, external: true };
+        }
+      });
+    }}] });
+  return (await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)).default;
+}
+export async function loadConfig(cwd = process.cwd(), { checkVersion = true } = {}) {
+  const root = discoverRoot(cwd), file = configFile(root);
   let config = {};
-  if (existsSync(file)) {
-    try { config = (await import(pathToFileURL(file).href)).default; }
-    catch (error) { throw new Error(`Cannot load ${file}: ${error.message}; fix sdg.config.mjs`); }
+  if (file) {
+    try { config = await importConfig(file); }
+    catch (error) { throw new Error(`Cannot load ${file}: ${error.message}; fix ${path.basename(file)}`); }
   }
   if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('Export a default object from sdg.config.mjs');
-  if (config.requires !== undefined && !satisfies(VERSION, config.requires)) throw new Error(`SDG ${VERSION} does not satisfy requires ${config.requires}; run ${UPDATE}`);
+  if (config.name !== undefined && (typeof config.name !== 'string' || !config.name.trim())) throw new Error('Set name to a non-empty project name in the SDG config');
+  const compatible = config.requires === undefined || satisfies(VERSION, config.requires);
+  if (checkVersion && !compatible) throw new Error(`SDG ${VERSION} does not satisfy requires ${config.requires}; run ${UPDATE}`);
   for (const key of ['design', 'output']) if (config[key] !== undefined && (typeof config[key] !== 'string' || !config[key].trim())) throw new Error(`Set ${key} to a directory path in sdg.config.mjs`);
   if (config.check !== undefined && (!config.check || typeof config.check!=='object' || Array.isArray(config.check))) throw new Error('Set check to an object in sdg.config.mjs');
   if (config.check?.importDirection !== undefined && typeof config.check.importDirection!=='boolean') throw new Error('Set check.importDirection to true or false in sdg.config.mjs');
@@ -86,5 +115,5 @@ export async function loadConfig(cwd = process.cwd()) {
   for (const key of ['start', 'fixture', 'ready', 'texts']) if (compare[key] !== undefined && typeof compare[key] !== 'function') throw new Error(`Set compare.${key} to a function in sdg.config.mjs`);
   if (compare.block !== undefined && (!Array.isArray(compare.block) || compare.block.some(value => typeof value !== 'string'))) throw new Error('Set compare.block to an array of request patterns in sdg.config.mjs');
   const design=path.resolve(root,config.design??'design');
-  return { root, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{importDirection:true,...config.check}, compare };
+  return { root, name: config.name ?? path.basename(root), requires: config.requires ?? null, compatible, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{importDirection:true,...config.check}, compare };
 }
