@@ -11,6 +11,7 @@ export async function launch() {
   }
 }
 export async function loadFrame(page, frame, theme = 'light') {
+  // Raster captures need a fresh page/context: setContent does not reset Chromium's image resampling state.
   await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
   await page.setViewportSize({ width: Math.ceil(frame.width ?? 1600), height: Math.ceil(frame.height ?? 1200) });
   await page.setContent(frame.document(theme));

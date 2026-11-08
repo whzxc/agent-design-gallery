@@ -117,17 +117,21 @@ export async function render(config, args = [], options = {}) {
   const files = selectSources(config,args), browser = await launch();
   let found = false;
   try {
-    const page = await browser.newPage({deviceScaleFactor:scale});
     for (const file of files) {
       const built = await buildSource(config,file,{allowLegacy:false});
       for (const frame of built.frames.filter(f => !options.frame || f.name === options.frame)) {
         found = true;
         for (const theme of ['light','dark']) {
-          await loadFrame(page,frame,theme);
-          const target = path.join(config.output,path.relative(config.design,file).replace(/\.tsx$/,''),`${encodeURIComponent(frame.name)}-${theme}.png`);
-          mkdirSync(path.dirname(target),{recursive:true});
-          await page.locator('[data-sdg-frame]').screenshot({path:target});
-          console.log(relative(config,target));
+          // Chromium reuses image resampling state across setContent calls.
+          // A fresh page/context per capture keeps PNG bytes independent of history.
+          const page = await browser.newPage({deviceScaleFactor:scale});
+          try {
+            await loadFrame(page,frame,theme);
+            const target = path.join(config.output,path.relative(config.design,file).replace(/\.tsx$/,''),`${encodeURIComponent(frame.name)}-${theme}.png`);
+            mkdirSync(path.dirname(target),{recursive:true});
+            await page.locator('[data-sdg-frame]').screenshot({path:target});
+            console.log(relative(config,target));
+          } finally { await page.close(); }
         }
       }
     }

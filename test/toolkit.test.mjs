@@ -79,10 +79,34 @@ test('check permits whole-pixel dimensions, custom properties and inherited free
 });
 test('frames without dimensions follow their content, including a changed button label',async t=>{
   const c=await project(t);put(c,'components/button.tsx',readFileSync(new URL('../design/components/button.tsx',import.meta.url),'utf8'));
+  put(c,'fixtures/buttons.ts',readFileSync(new URL('../design/fixtures/buttons.ts',import.meta.url),'utf8'));
+  put(c,'tokens.css',readFileSync(new URL('../design/tokens.css',import.meta.url),'utf8'));
   const f=put(c,'components/content.tsx',`import {Frame} from 'sdg';import {Button} from './button';const labels=['Open','Open a design directory'];export default()=>labels.map((label,i)=><Frame name={String(i)}><Button label={label}/></Frame>);`);
   const {frames}=await buildSource(c,f),browser=await launch();
   try {const page=await browser.newPage(),widths=[];for(const frame of frames){const size=await loadFrame(page,frame,'light');widths.push(size.width);assert.equal(size.height,32);}assert.ok(widths[1]>widths[0]+50);}
   finally{await browser.close();}
+});
+// Regression: a frame's PNG bytes depend on previously rendered image sizes in a shared page.
+test('render produces identical PNG bytes in either frame order',async t=>{
+  const c=await project(t),browser=await launch();
+  try {
+    const page=await browser.newPage();
+    const png=await page.evaluate(()=>{
+      const canvas=document.createElement('canvas');canvas.width=360;canvas.height=235;
+      const context=canvas.getContext('2d'),pixels=context.createImageData(canvas.width,canvas.height);
+      for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width;x++){
+        const i=(y*canvas.width+x)*4;
+        pixels.data.set([x*17%256,y*13%256,(x+y)*7%256,255],i);
+      }
+      context.putImageData(pixels,0,0);return canvas.toDataURL().split(',')[1];
+    });
+    put(c,'art/preview.png',Buffer.from(png,'base64'));
+  } finally {await browser.close();}
+  const files=[20,90].map(size=>put(c,`surfaces/size-${size}.tsx`,`import preview from '../art/preview.png';import {Frame} from 'sdg';export default()=> <Frame name="sample" width={96} height={96}><svg width={${size}} height={${size}} viewBox="0 0 360 235"><image width="360" height="235" href={preview}/></svg></Frame>;`));
+  const images=()=>files.flatMap(file=>['light','dark'].map(theme=>readFileSync(path.join(c.output,'surfaces',path.basename(file,'.tsx'),`sample-${theme}.png`))));
+  await render(c,files);const first=images();
+  await render(c,[...files].reverse());const second=images();
+  for(let i=0;i<first.length;i++)assert.ok(first[i].equals(second[i]),`${path.basename(files[Math.floor(i/2)])}: ${['light','dark'][i%2]}`);
 });
 test('Tailwind uses rendered classes, inline token aliases and no color, size, font, radius or shadow defaults',async t=>{
   const c=await project(t);writeFileSync(path.join(c.design,'tokens.css'),starterTokens.replace('--canvas: #ffffff;','--canvas: #ffffff;\n  --surface: #eeeeee;\n  --text-body: 13px;\n  --radius-panel: 7px;\n  --shadow-card: 0 1px 3px #171717;').replace('--canvas: #171717;','--canvas: #171717;\n  --surface: #222222;'));
