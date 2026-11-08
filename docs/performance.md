@@ -1,4 +1,66 @@
-# Performance baseline
+# Performance
+
+
+## Current large-project results
+
+The current acceptance workload is a verified disposable copy of SACP Client's design directory: 140 TSX sources, 2,502 frames and 5,004 frame/theme combinations. All 244 original files matched the snapshot by SHA-256. The original project remained read-only. Raw data, copied sources and detailed reports stay under `output/perf/`, outside the npm package.
+
+Three paired runs compare `4fffc21` with `ed8c068` using `tooling/compare.mjs`, the same snapshot, fresh server processes, preferences and Chromium contexts. Environment: Apple M4 Pro, macOS ARM64, Node 24.22.0, Chromium 156.0.8078.4 headless, 1440 × 900 CSS pixels, DPR 2. Values below are medians. Warm browse means a reload with an already-built server; OS caches were not flushed.
+
+| Direct viewer metric | Baseline | Current |
+| --- | ---: | ---: |
+| CLI startup, discovery complete before builds | 115 ms | 110 ms |
+| First browse to visible previews | 11,748 ms | 6,835 ms |
+| Warm reload to visible previews | 14,173 ms | 7,504 ms |
+| First-view source requests / body bytes | 140 / 81.18 MB | 140 / 81.18 MB |
+| Pointer-pan P95 / maximum frame | 16.7 / 16.8 ms | 16.7 / 16.8 ms |
+| Zoom P95 / maximum frame | 16.8 / 83.3 ms | 16.8 / 50.0 ms |
+| Trackpad-pan P95 / maximum frame | 33.4 / 99.9 ms | 16.8 / 66.6 ms |
+| Pan / zoom / trackpad main-thread task time | 332 / 735 / 3,952 ms | 304 / 573 / 3,383 ms |
+| Theme completion, including 200 ms settle | 14,827 ms | 9,461 ms |
+| Shared button save to refreshed visible previews | 13,891 ms | 6,948 ms |
+| Shared button save source requests | 99 | 99 |
+| Leaf settings source save | 4,314 ms | 705 ms |
+| Main-document DOM elements at overview | 546 | 546 |
+| JS heap after overview pan, without forced GC | 36.6 MB | 50.0 MB |
+
+The leaf metric uses three sequential comment-only saves of `surfaces/settings.tsx`, waiting for the new revision, completed preparation/layout, global drawn readiness and two animation frames. It requests exactly one source. That source can be outside the clamped overview viewport, so this measurement does not guarantee a newly decoded visible settings preview. The shared-button metric measures visible updates and dependency fan-out. Every sample preserves the camera and reports no page errors. Uncollected JS heap samples vary with GC and do not establish native memory usage.
+
+Through an isolated hub at `/p/<slug>/`, baseline first browse/reload/shared save measured 12,368 / 13,394 / 13,655 ms in one valid sample. Current medians over three fresh hub processes and isolated registries are 6,652 / 7,649 / 6,717 ms. Current hub pan/zoom/trackpad P95 is 16.7 / 16.8 / 16.8 ms. The resident LaunchAgent and port 4310 were never used. Warm endpoint proxy overhead remains sub-millisecond; no registry, slug or proxy change was justified.
+
+### Retained memory and targets
+
+A separate harness collects renderer and server garbage, samples CDP DOM counters and renderer RSS, and repeats four detail → overview → shared-save cycles on the same snapshot. Browser preview entries remain at 276 with 7.22 MB of cached canvas pixels after each updated overview. Decoded DOM nodes plateau at 149,345; the baseline rises from 310,055 after the first save to 391,210 after the fourth. Main-document element counts exclude these decoded SVG documents.
+
+Renderer RSS goes from 1.67 to 3.58 GB in the baseline and 1.47 to 2.58 GB currently (initial overview to fourth save). RSS includes native allocations and allocator high-water marks. Server GC heap still grows from 301 to 656 MB, about 88 MB per shared save, because uniquely imported data-URL build modules remain in Node's ESM cache. A plateau in preview counters does not imply bounded total memory.
+
+| Target | Current status |
+| --- | --- |
+| Warm visible browse <1.5 s | **Not met:** direct 7.50 s; hub 7.65 s. |
+| Pan and zoom P95 ≤16.7 ms, no interaction tasks >50 ms | **Not met:** zoom/trackpad P95 16.8 ms; each direct zoom run has one long task. Hub trackpad also has one long task in one run. |
+| Single-source file-save refresh <300 ms | **Not met:** leaf median 705 ms; shared dependencies take longer. |
+| Bounded overview memory | **Not met overall:** stale preview generations are fixed, but server module retention continues to grow. |
+
+### Current implementation and remaining costs
+
+- TSX numeric crops parse only their exact frame range. Identical, unadorned generated stylesheets are submitted once per overview/full preview; legacy, differing and authored styles retain their original cascade. Preview XML shrinks about 70% on the set workload, without changing source documents.
+- Packing skips grid widths with identical placements, retaining the original first-best tie rule. Non-grid SVG widths keep exhaustive search. A bounded cache retains only winning widths and repacks fresh metadata. The 126 component/module set blocks take 3,320 → 1,361 ms on first packing and about 1.3 ms with unchanged geometry; this targeted profile excludes surfaces.
+- Preview eviction uses full source-version/theme/frame identities, so a visible path cannot pin old generations. Refresh lookups use indexes. Current visible previews remain exempt from the small offscreen LRU; this is not a strict byte budget.
+- Export transforms share exact-content work, capped at 256 entries and 8 MiB. Isolated 140-source build passes improve from 2,483/2,160 ms cold/warm to 1,996/1,883/1,801 ms across three current passes. Render documents, CSS and imports remain exact.
+
+Remaining browse work still prepares every frame and transfers 81 MB of repeated source data. Full-source SVG decoding and ownership geometry measurement remain substantial. Further work should investigate compact source transport and reusable measurement metadata, a raster/decoded-image byte budget, and recycled build workers to bound ESM module retention. No new placeholder or level-of-detail appearance was introduced or proposed.
+
+Validation: all 5,004 light/dark frame documents, CSS and imports are byte-identical; both full snapshot checks pass all 140 sources. Static preview PNG comparisons match for all 252 set source/theme previews at overview scale and a higher scale bounded to 2,048 pixels on the longest edge (504 pairs). Comparison-only animation freezing was applied identically to both variants because foreignObject SVG image animations ignore the emulated reduced-motion media; product animations are unchanged. Regression/property tests cover cropped XML, stylesheet cascade guards, repeated preview generations, exact-content build invalidation and packing against an exhaustive oracle. `npm test` passes 91 tests in about 26 seconds; the repository's own `sdg check` passes 26 sources.
+
+Reproduce the paired browser measurements from a disposable design copy:
+
+```sh
+node tooling/compare.mjs /path/to/snapshot/design output/comparison 3 --sdg-baseline=/path/to/baseline-sdg
+```
+
+Use `tooling/benchmark.mjs` against an isolated hub URL for the hub samples, with a fresh hub process, state directory and free port for each run. The local targeted scripts and exact raw samples remain in `output/perf/`; `baseline.md` and `result.md` record the commands, exclusions, endpoint timings and retained-memory samples. The initial interrupted zoom run and premature legacy theme waits are excluded from final comparisons.
+
+## Comparison tooling and historical reference workloads
 
 Run from the gallery checkout with Node.js and an ARC checkout whose npm dependencies are installed:
 
@@ -24,9 +86,9 @@ node tooling/compare.mjs /path/to/project/design output/loading-comparison 3 --s
 
 This mode copies the design directory once, excluding generated `.sdg` files, then runs both viewers sequentially against that snapshot with separate preferences. The original project is never written. The baseline needs access to its installed dependencies. Results include first browse and a subsequent reload, plus the first animation frames showing the catalog, completed layout and loaded visible previews. Reload measures browser measurement and preview work with an already-running, warm server.
 
-The benchmark opens Fit all through the Float zoom menu and Light through the Display menu. Legacy buttons and radios remain supported for the baseline viewers; gesture counts, timing, and measurements are unchanged.
+The benchmark opens Fit all through the Float zoom menu and switches to the opposite theme through the Display menu. Its zoom anchor stays inside the viewport, including very large worlds clamped to 2.5% scale. SDG theme timing waits for SDG readiness rather than the legacy image fallback. Legacy buttons and radios remain supported for the baseline viewers; gesture counts, timing, and measurements are unchanged.
 
-`tooling/benchmark.mjs <url> <output.json> [snapshot-design-directory]` can measure an already-running instance. Supply only a disposable copied fixture directory as the final argument: the file-save phase appends a comment to `components/button.svg` and restores it in `finally`.
+`tooling/benchmark.mjs <url> <output.json> [snapshot-design-directory]` can measure an already-running instance. Supply only a disposable copied fixture directory as the final argument: the file-save phase appends a comment to `components/button.tsx` (falling back to `.svg`) and restores it in `finally`. A shared component save includes all transitive consumers; it is not an isolated-source rebuild.
 
 ## Workload and measurements
 
