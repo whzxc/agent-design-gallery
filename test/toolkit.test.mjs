@@ -364,3 +364,24 @@ test('compare uses Frame capture, flags override it, both sides share a reader, 
   const sizes=[];await compare(c,[f],{frame:'frame-sample',collect:sizes});assert.deepEqual(sizes[0].size.implementation,[200,100]);assert.match(sizes[0].report,/frame-sample/);
   c.compare.fixture=()=>({url:'http://localhost',theme:'dark',locale:'en',timezone:'Invalid/Zone',clock:'2026-01-01'});await assert.rejects(compare(c,[f],{frame:'frame-sample'}),/timezone/);
 });
+
+// Regression: overlapping source bundles repeated every imported export transform.
+// Cached registrations must preserve render bytes and observe edits to an import.
+test('shared source transforms preserve documents and invalidate changed exports',async t=>{
+  const c=await project(t);
+  const shared=put(c,'components/shared.tsx',`export const Part=()=> <span>Original</span>;export {Part as Named};export default()=>null;`);
+  const a=put(c,'surfaces/a.tsx',`import {Named} from '../components/shared';${source('<div><Named/></div>')}`);
+  const b=put(c,'surfaces/b.tsx',`import {Named} from '../components/shared';${source('<div><Named/></div>')}`);
+  const output = built => ({css:built.css,imports:built.imports,frames:built.frames.map(frame=>({html:frame.html,light:frame.document('light'),dark:frame.document('dark')}))});
+  const cold=output(await buildSource(c,a,{write:false}));
+  const [warm,other]=await Promise.all([buildSource(c,a,{write:false}),buildSource(c,b,{write:false})]);
+  assert.deepEqual(output(warm),cold);
+  assert.match(other.frames[0].html,/Original/);
+  assert.match(cold.frames[0].html,/&quot;export&quot;:&quot;Named&quot;/);
+  writeFileSync(shared,`export const Changed=()=> <span>Modified</span>;export {Changed as Named};export default()=>null;`);
+  const edited=await buildSource(c,a,{write:false});
+  assert.match(edited.frames[0].html,/Modified/);
+  assert.doesNotMatch(edited.frames[0].html,/Original|&quot;export&quot;:&quot;Part&quot;/);
+  assert.match(edited.frames[0].html,/&quot;export&quot;:&quot;Changed&quot;/);
+  assert.doesNotMatch(edited.frames[0].html,/&quot;export&quot;:&quot;Named&quot;/);
+});

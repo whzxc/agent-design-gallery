@@ -10,6 +10,53 @@ import { escape } from './runtime.mjs';
 const require = createRequire(import.meta.url);
 const runtime = fileURLToPath(new URL('./runtime.mjs', import.meta.url));
 const tailwind = path.dirname(require.resolve('tailwindcss/package.json'));
+// Imported source entries recur in many bundles. Retain their registration
+// transforms by exact content, including pending work, without retaining a
+// project's entire build graph or trusting modification times.
+const sourceTransforms = new Map();
+let transformBytes = 0;
+const transformLimit = 8 * 1024 * 1024;
+function forgetTransform(file) {
+  const entry = sourceTransforms.get(file);
+  if (entry) { transformBytes -= entry.bytes; sourceTransforms.delete(file); }
+}
+async function registeredSource(file, sourcePath, original) {
+  let entry = sourceTransforms.get(file);
+  if (entry?.original === original && entry.sourcePath === sourcePath) {
+    sourceTransforms.delete(file); sourceTransforms.set(file, entry);
+    return entry.result;
+  }
+  forgetTransform(file);
+  entry = { original, sourcePath, bytes: Buffer.byteLength(original) * 2, result: null };
+  entry.result = (async () => {
+    // esbuild's normalized export list supplies public names; static namespace
+    // accesses preserve aliases and let the bundler drop imported frame renderers.
+    const compiled = await transform(original, {loader:'tsx',format:'esm',jsx:'preserve'});
+    const names = [...compiled.code.matchAll(/\nexport\s*\{([^}]+)\}\s*;\s*$/g)].flatMap(match => match[1].split(',').map(item => item.trim().split(/\s+as\s+/).at(-1)).filter(name => name && name !== 'default'));
+    const registrations = names.map(name => `__sdgRegister(__sdgExports[${JSON.stringify(name)}],${JSON.stringify(sourcePath)},${JSON.stringify(name)});`).join('\n');
+    const contents = `${original}
+import * as __sdgExports from 'sdg:self';
+import {registerComponent as __sdgRegister} from 'sdg';
+${registrations}
+`;
+    // Account for the generated text too; large individual sources need not
+    // occupy the cache even though their current callers can finish normally.
+    if (sourceTransforms.get(file) === entry) {
+      transformBytes += Buffer.byteLength(contents) - Buffer.byteLength(original);
+      entry.bytes = Buffer.byteLength(original) + Buffer.byteLength(contents);
+      trimTransforms();
+    }
+    return {contents,loader:'tsx'};
+  })();
+  sourceTransforms.set(file, entry); transformBytes += entry.bytes;
+  trimTransforms();
+  try { return await entry.result; }
+  catch (error) { if (sourceTransforms.get(file) === entry) forgetTransform(file); throw error; }
+}
+function trimTransforms() {
+  while (sourceTransforms.size > 256 || transformBytes > transformLimit)
+    forgetTransform(sourceTransforms.keys().next().value);
+}
 export function validateFrame(frame) {
   if (!frame?.frame || typeof frame.name !== 'string' || !frame.name.trim()) throw Error('Default export must return named Frames');
   for (const key of ['width', 'height']) if (frame[key] !== undefined && !(Number.isFinite(frame[key]) && frame[key] > 0)) throw Error(`Invalid Frame ${key}; use positive CSS pixels`);
@@ -47,16 +94,7 @@ export async function buildSource(config, file, { write = true, allowLegacy = tr
       const sourcePath = path.relative(base, args.path).split(path.sep).join('/');
       if (!isSourcePath(sourcePath, sources)) return;
       const original=readFileSync(args.path,'utf8');
-      // esbuild's normalized export list supplies public names; static namespace
-      // accesses preserve aliases and let the bundler drop imported frame renderers.
-      const compiled=await transform(original,{loader:'tsx',format:'esm',jsx:'preserve'});
-      const names=[...compiled.code.matchAll(/\nexport\s*\{([^}]+)\}\s*;\s*$/g)].flatMap(match=>match[1].split(',').map(entry=>entry.trim().split(/\s+as\s+/).at(-1)).filter(name=>name && name!=='default'));
-      const registrations=names.map(name=>`__sdgRegister(__sdgExports[${JSON.stringify(name)}],${JSON.stringify(sourcePath)},${JSON.stringify(name)});`).join('\n');
-      return {contents:`${original}
-import * as __sdgExports from 'sdg:self';
-import {registerComponent as __sdgRegister} from 'sdg';
-${registrations}
-`,loader:'tsx'};
+      return registeredSource(args.path, sourcePath, original);
     });
     api.onLoad({ filter: /\.(png|jpe?g|webp)$/i }, args => ({ contents: readFileSync(args.path), loader: 'dataurl' }));
     api.onLoad({ filter: /\.svg$/i }, args => {
