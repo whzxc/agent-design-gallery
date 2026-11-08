@@ -19,6 +19,6 @@ export const states = {
   'dialog-shortcuts': { ...components, dialog: 'keys' },
   'open-empty': { theme: 'light', sidebar: false, empty: true, camera: 'all', dialog: 'directories' },
   'open-dialog': { ...overview, dialog: 'directories' },
-  'open-error': { ...overview, theme: 'light', dialog: 'directories', submit: '~/projects/empty' },
+  'open-error': { ...overview, theme: 'light', dialog: 'directories', submit: directoryFixtures.states.error.path },
 };
 export const recent = directoryFixtures.recent.map(entry => entry.path);

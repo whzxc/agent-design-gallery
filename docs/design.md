@@ -21,9 +21,9 @@ implementation mappings and review process. The asset rules take precedence over
   existing renders and content-cropped new part frames. Missing states and visual corrections remain known gaps.
   New visual changes or unresolved choices otherwise go to the user for gallery approval.
 - Capture a baseline in a disposable copy outside the checkout before editing. Run `sdg check`, render all affected
-  frames in both themes, inspect them and compare decoded pixels per frame and theme. Use a fresh page and browser context for each
-  frame/theme; decode all SVG images, await fonts and two animation frames before capture. Commit only the authorized
-  batch. Open review with `sdg open <design-directory> --port=<free-port>`; port 4310 is reserved.
+  frames in both themes and compare decoded pixels per frame/theme. Use the repository `src/cli.mjs` render command,
+  which waits for fonts and captures each frame/theme in an isolated page/context with bounded concurrency.
+  Commit only the authorized batch. Open review with `sdg open <design-directory> --port=<free-port>`; port 4310 is reserved.
 - This document keeps current mappings, approval/adoption state, exceptions and scope. Render, pixel-comparison and
   controller-review evidence stays in local `output/` or the external baseline copy. This document has no batch log.
 
@@ -33,7 +33,7 @@ implementation mappings and review process. The asset rules take precedence over
 | --- | --- | --- |
 | Shared values and controls | `tokens.css`, button, icon-button, field, tree-row and menu-item components; their fixtures | Reviewed; IconButton disabled is approved; defaults belong to parts and frame presentation data belongs to fixtures. |
 | Generic containers | `components/panel.tsx`, `components/toolbar.tsx`, `components/canvas.tsx`, `fixtures/containers.ts` | Independent source entries and minimal specimens; Reviewed. |
-| Surface layout | `surfaces/canvas.tsx` / `ViewerChrome`; three surface renderers | Canvas composition Reviewed; select and position approved feature chrome around the generic Screen. Each surface owns its capture/layout records in fixtures. |
+| Surface layout | `surfaces/canvas.tsx` / `ViewerChrome`; three surface renderers | Reviewed; all three surfaces compose approved parts around the generic Screen and own their capture/layout records in fixtures. |
 | Navigation | `modules/navigation.tsx` / `Sidebar` | Reviewed; navigation/search fixtures are separate. |
 | Inspector | `modules/inspector.tsx` / `Inspector`; `fixtures/inspector.json` | Reviewed; one Inspector composition with separate fixtures and approved source, exported-element, nested-element and empty-match states. |
 | Menus | `modules/menus.tsx` / `Menu` | Reviewed; menu captures and their fixtures belong to the menus module. |
@@ -42,21 +42,19 @@ implementation mappings and review process. The asset rules take precedence over
 | Shortcuts | `modules/shortcuts.tsx` / `Shortcuts`; `components/kbd.tsx` | Reviewed; keyboard content belongs to shortcuts fixtures; keycap geometry uses dedicated tokens at its current values. |
 | Canvas presentation | `modules/canvas.tsx` / `Drawing`, `Minimap`, `AssetLabel`; `fixtures/canvas.ts`, `scenes/`, `art/arc-previews/` | Reviewed; one canvas feature owner. Drawing owns section/artboard/flow layers; mapped AssetLabel specimens and preview artwork remain in use. |
 
-The seven feature modules own their existing parts and specimens. Their remaining content, coverage and fidelity gaps
-are assigned above. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
+The seven feature modules own their parts and specimens. Remaining coverage and fidelity gaps are listed below. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
 not frame sources. The separate `fixtures/arc-sample/design/` tree is acceptance content, not the viewer UI library.
 
 ### Part mappings and state
 
 Paths in the source column are relative to `design/`. An implementation mapping names the corresponding runtime
 location; the application does not import design TSX. "In use" includes a composed design consumer or mapped runtime
-usage. "Unrecorded" means current approval evidence has not been linked. Unknown mappings stay explicit until their
-owning scope resolves them.
+usage. Reviewed structural compositions preserve their existing visuals; remaining fidelity and capture gaps stay explicit below.
 
 | Source / part | Implementation location | Design consumers | Approval / adoption / remaining gap |
 | --- | --- | --- | --- |
 | `tokens.css` | `public/index.html` `/tokens.css`; `public/style.css`; `public/app.js` `applyTheme` | All sources | Reviewed; in use. Shared theme, typography and geometry values. |
-| `components/button.tsx` / `Button` | `public/index.html` `#directory-form .primary`, `#zoom-options`; `public/style.css` `.primary`, `#zoom-options` | `modules/open-directory`, `modules/view-controls` → surface chrome | Reviewed; in use. Frames: `primary`, `secondary`, `zoom`, `zoom-open`. Secondary runtime usage is unknown; submit-disabled coverage belongs to the view-controls scope. |
+| `components/button.tsx` / `Button` | `public/index.html` `#directory-form .primary`, `#zoom-options`; `public/style.css` `.primary`, `#zoom-options` | `modules/open-directory`, `modules/view-controls` → surface chrome | Reviewed; in use. Frames: `primary`, `secondary`, `zoom`, `zoom-open`. Secondary is an unadopted generic variant; directory submit-disabled coverage remains a known gap. |
 | `components/icon-button.tsx` / `IconButton` | `public/index.html` `.icon-button`; `public/style.css` `.icon-button`, pressed/current states | Inspector, navigation, directory, shortcuts and view-controls modules; Toolbar specimens | Reviewed; in use. Approved frames: `default`, `active`, `disabled`. Disabled uses the runtime 45% opacity and is adopted by ZoomBar. |
 | `components/field.tsx` / `Field` | `public/index.html` `.picker`, `.search-field`, `#path`; `public/style.css` corresponding selectors | Navigation, directory and view-controls modules | Reviewed; in use. Frames: `search`, `search-active`, `picker`, `input`, `input-error`, `input-empty`. Default height uses `--field-height`; numeric overrides are supported. |
 | `components/tree-row.tsx` / `TreeRow` | `public/app.js` `makeRow`, `renderNav`, `selection`, `recent`; `public/style.css` `.tree-row`, `.frame-row`, `#recent button` | Navigation, inspector and directory modules | Reviewed; in use. Frames: `root`, `root-selected`, `group`, `group-selected`, `item`, `item-selected`, `two-line`, `two-line-selected`. Heights use row tokens; numeric overrides are supported; multiline follows content. |
@@ -73,7 +71,7 @@ owning scope resolves them.
 | `modules/inspector.tsx` / `Inspector` | `public/index.html` `#source`, `#relationships`; `public/app.js` `selection`, `renderRelationships`; `public/selection.js` `exportFrames` | ViewerChrome → inspector surface; mapped source and export selection | Reviewed; in use. Approved states: `frames`, `frame`, `element`, `source`, `export-element`, `export-element-nested`, `export-element-empty`. Export rows show owning-frame sizes while the header shows the selected element size; export rows have no selected frame highlight. |
 | `modules/menus.tsx` / `Menu` | `public/index.html` `#display-menu`, `#zoom-menu`, `#more-menu` | Menus module captures; mapped runtime menus | Reviewed; in use; frames: `default`, `display`, `zoom`, `more`, with separate menu fixtures. |
 | `modules/open-directory.tsx` / `OpenDialog` | `public/index.html` `#directories`; `public/app.js` `showOpen`, `open`, `recent` | ViewerChrome → open-directory surface | Reviewed; in use; `error` specimen and captured states preserve existing visuals. Recent labels/paths are shared with runtime fixtures. Two-line rows use their existing height token. |
-| `modules/shortcuts.tsx` / `Shortcuts` | `public/index.html` `#keys`; `public/style.css` `#keys` | ViewerChrome and module capture | Reviewed; in use; captured `default` consumes shared keyboard fixtures; its module owns the local dialog capture. |
+| `modules/shortcuts.tsx` / `Shortcuts` | `public/index.html` `#keys`; `public/style.css` `#keys` | Mapped runtime usage; module capture | Reviewed; in use; captured `default` consumes shared keyboard fixtures; its module owns the local dialog capture. |
 | `modules/view-controls.tsx` / `Tools` | `public/index.html` `#tools`; display/inspector/fullscreen handlers | ViewerChrome → surfaces; menus and view-controls module captures | Reviewed; in use; frames: `tools`, `tools-tooltip`. |
 | `modules/view-controls.tsx` / `AppBar` | `public/index.html` `#app-bar`; `public/app.js` `updateChrome` | ViewerChrome → canvas/open-directory surfaces | Reviewed; in use; `app-bar` uses a separate presentation fixture. |
 | `modules/view-controls.tsx` / `ZoomBar` | `public/index.html` `.zoom`; zoom/fit handlers | ViewerChrome → surfaces; menus module | Reviewed; in use; Fit uses `scan`, Back exposes `backDisabled`, and Minimap exposes `minimapPressed` through the existing active form. All four state specimens are approved. Frames: `zoom-bar`, `zoom-bar-menu-open`, `zoom-bar-back-disabled`, `zoom-bar-minimap-pressed`. |
@@ -83,7 +81,7 @@ owning scope resolves them.
 | `modules/canvas.tsx` / `AssetLabel` | `public/labels.js` `Labels`; `public/app.js` `drawLabels`; `.label-copy` | Mapped runtime usage; no imported design consumer | Reviewed; in use; frames: `asset-label-modified`, `asset-label-hover`, `asset-label-copied`. Drawing retains SVG labels under this same feature owner. |
 | `surfaces/canvas.tsx` / frame renderer | Gallery layout/camera/chrome | Entry surface | Reviewed structural composition; existing full-region layouts and camera states retained; capture identities remain mapped below. |
 | `surfaces/inspector.tsx` / frame renderer | Gallery and source inspector | Entry surface | Reviewed structural composition; frame/component captures use the unified Inspector and retain their existing full-window crops. Approved source/export states belong to the module. |
-| `surfaces/open-directory.tsx` / frame renderer | Gallery and directories dialog | Entry surface | Full-frame approval unrecorded; mapped fixtures below; boundary Reviewed. |
+| `surfaces/open-directory.tsx` / frame renderer | Gallery and directories dialog | Entry surface | Reviewed structural composition; empty/dialog/error captures retain their current crops, chrome and shared directory fixtures. |
 
 `fixtures/buttons.ts`, `fixtures/fields.ts` and `fixtures/rows.ts` own frame presentation data for Button, IconButton,
 Field, TreeRow and MenuItem. `fixtures/containers.ts` owns only neutral generic-container specimen dimensions and icon content.
@@ -95,7 +93,7 @@ Part defaults belong to their defining components. The fixtures have no independ
 retain illustrative external source names; `source` and exported-element states use the local ARC snapshot.
 Their part mappings are `StatePill` in `components/state-pill.tsx` and nested `Input` in `components/field.tsx`;
 `SetupAction` in `components/setup-choice.tsx` has no owning-frame match when selected in `surfaces/setup.tsx` / `source-empty`.
-These local design specimens have no independent implementation capture. Existing frame/component captures remain unchanged.
+Only frame/component states have dedicated runtime captures; extra local source/export specimens use ARC owner/geometry data.
 `fixtures/open-directory.json` owns recent labels/paths and dialog presentation states; `fixtures/viewer.mjs`
 derives runtime recent paths from that same record.
 `fixtures/shortcuts.json` owns shortcut labels/key sequences and the keycap specimen.
@@ -103,6 +101,7 @@ derives runtime recent paths from that same record.
 `fixtures/canvas-surfaces.ts` owns the canvas surface's four frame/capture records and chrome placement.
 `fixtures/inspector-surfaces.ts` owns inspector surface capture/layout records; content remains in `fixtures/inspector.json`.
 `fixtures/menu-captures.ts` owns the three local menu capture/layout records; no menus surface source remains.
+`fixtures/open-directory-surfaces.ts` owns the empty/dialog/error surface capture and placement records.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
 
@@ -141,13 +140,12 @@ from the npm package. Every referenced bitmap fits the declared per-image and to
 
 ### Known gaps
 
-- Directory opening retains the redundant SVG-only description and empty-directory error copy; submit disabled/pending states lack design coverage.
-
-- Keycaps retain a 6px design radius while runtime `kbd` uses 7px.
-
-- Canvas designs retain SVG labels while runtime uses DOM labels; the minimap specimen retains its current geometry instead of runtime geometry.
-
-- Inspector retains full-window legacy captures and content-fit lists; runtime scroll limits and independent captures of the extra source/export states remain uncovered.
+- Directory copy remains SVG-specific and includes a redundant description; disabled/pending submit states are missing.
+- Keycap radius is 6px in design and 7px at runtime.
+- Canvas scenes use SVG labels; runtime labels use DOM. Minimap specimen geometry differs from runtime.
+- Inspector retains legacy full-window crops and content-fit layout; runtime header/scroll geometry and independent
+  source/export captures are missing.
+- Button's secondary variant has no mapped runtime consumer.
 
 ## Direction
 

@@ -14,7 +14,7 @@ export default {
       try {
         const empty = path.join(temporary, 'empty'); await mkdir(empty);
         const server = await startServer({ directory: path.join(root, 'fixtures/arc-sample/design'), port, stateDirectory: temporary,
-          fixtures: { states, recent, assetModifiedAt, paths: { '~/projects/empty': empty } } });
+          fixtures: { states, recent, assetModifiedAt, paths: { [states['open-error'].submit]: empty } } });
         return async () => { try { await server.close(); } finally { await rm(temporary, { recursive: true, force: true }); } };
       } catch (error) { await rm(temporary, { recursive: true, force: true }); throw error; }
     },

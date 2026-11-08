@@ -11,7 +11,7 @@ const root = path.resolve(import.meta.dirname, '..');
 const temporary = await mkdtemp(path.join(tmpdir(), 'sdg-refresh-'));
 await mkdir(path.join(temporary, 'empty'));
 const server = await startServer({ directory: path.join(root, 'fixtures/arc-sample/design'), stateDirectory: temporary,
-  fixtures: { states, recent, assetModifiedAt, paths: { '~/projects/empty': path.join(temporary, 'empty') } } });
+  fixtures: { states, recent, assetModifiedAt, paths: { [states['open-error'].submit]: path.join(temporary, 'empty') } } });
 const browser = await launch();
 const art = path.join(root, 'design/art/arc-previews');
 const navigationFile = path.join(root, 'design/fixtures/navigation.json');
@@ -40,7 +40,7 @@ try {
   const previews = new Map(), scenesBySource = new Map();
   for (const [entry, source, frameFixture] of [
     ['surfaces/canvas', 'canvas', 'design/fixtures/canvas-surfaces.ts'], ['surfaces/inspector', 'inspector', 'design/fixtures/inspector-surfaces.ts'],
-    ['surfaces/open-directory', 'open-directory'], ['modules/menus', 'menus', 'design/fixtures/menu-captures.ts'],
+    ['surfaces/open-directory', 'open-directory', 'design/fixtures/open-directory-surfaces.ts'], ['modules/menus', 'menus', 'design/fixtures/menu-captures.ts'],
     ['modules/shortcuts', 'shortcuts'], ['modules/navigation', 'navigation'], ['modules/view-controls', 'view-controls'],
   ]) {
     const file = path.join(root, frameFixture ?? `design/${entry}.tsx`);

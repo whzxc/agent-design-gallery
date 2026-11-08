@@ -90,6 +90,8 @@ export function AssetLabel({
   copied?: boolean;
   hovered?: boolean;
 }) {
+  const visibility =
+    copied || hovered ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100';
   return (
     <div class="flex items-center gap-[6px] text-meta leading-[1.2]">
       <button
@@ -98,11 +100,7 @@ export function AssetLabel({
         class="group flex items-center gap-1 text-left font-[550] text-text-secondary"
       >
         <span>{name}</span>
-        <Icon
-          name={copied ? 'check' : 'copy'}
-          size={12}
-          class={`text-text-tertiary ${copied || hovered ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'}`}
-        />
+        <Icon name={copied ? 'check' : 'copy'} size={12} class={`text-text-tertiary ${visibility}`} />
       </button>
       <span class="text-text-tertiary">{count}</span>
       <time class="ml-1 text-text-tertiary" title={timestamp}>
