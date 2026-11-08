@@ -5,17 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="same-origin">
   <title>SDG</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="hub.css">
+  <link rel="stylesheet" href="access.css">
   <script type="module" src="hub.js"></script>
 </head>
 <body>
-  <main id="hub">
-    <h1>SDG</h1>
-    <button id="rescan" type="button">Rescan registered roots</button>
-    <p id="error" role="alert" hidden></p>
-    <h2>Projects</h2>
-    <ul id="projects"></ul>
-    <h2>Instances</h2>
-    <ul id="instances"></ul>
-  </main>
+  <div id="hub">
+    <header class="hub-bar"><span>SDG</span></header>
+    <main>
+      <section aria-labelledby="projects-title">
+        <div class="hub-heading">
+          <h1 id="projects-title">Projects</h1>
+          <button id="rescan" type="button"><span data-icon="refresh-cw" data-size="14"></span><span>Rescan</span></button>
+        </div>
+        <p id="error" role="alert" hidden></p>
+        <div id="projects"></div>
+      </section>
+      <section class="live-section" aria-labelledby="instances-title">
+        <h2 id="instances-title">Live instances</h2>
+        <div id="instances"></div>
+      </section>
+    </main>
+  </div>
 </body>
 </html>

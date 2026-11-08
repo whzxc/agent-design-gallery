@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SVG Design Gallery</title>
-  <link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="switcher.css"><link rel="stylesheet" href="access.css">
   <script type="module" src="app.js"></script>
 </head>
 <body>
@@ -14,11 +14,11 @@
   </main>
   <aside id="sidebar" class="floating" aria-label="Design sidebar">
     <div class="sidebar-heading"><button id="sidebar-toggle" class="icon-button" aria-label="Collapse sidebar" aria-expanded="true" data-tooltip="Collapse sidebar"><span data-icon="panel-left"></span></button><h1>SDG</h1></div>
-    <div id="directory" class="picker" aria-label="Current project"><span data-icon="folder"></span><span class="directory-name"></span></div>
+    <button type="button" id="directory" class="picker" aria-label="Current project"><span data-icon="folder"></span><span class="directory-name"></span></button>
     <div class="search-field"><span data-icon="search" data-size="14"></span><input id="search" type="search" placeholder="Find assets…" aria-label="Find assets" autocomplete="off"><span id="search-key">⌘F</span><button id="search-clear" aria-label="Clear search" hidden><span data-icon="x" data-size="14"></span></button></div>
     <nav id="modules" aria-label="Design modules"></nav>
   </aside>
-  <div id="app-bar" class="floating" hidden><button id="expand-sidebar" class="icon-button" aria-label="Expand sidebar" data-tooltip="Expand sidebar"><span data-icon="panel-left"></span></button><h1>SDG</h1><span class="separator"></span><div id="app-directory" class="picker" aria-label="Current project"><span data-icon="folder"></span><span class="directory-name"></span></div></div>
+  <div id="app-bar" class="floating" hidden><button id="expand-sidebar" class="icon-button" aria-label="Expand sidebar" data-tooltip="Expand sidebar"><span data-icon="panel-left"></span></button><h1>SDG</h1><span class="separator"></span><button type="button" id="app-directory" class="picker" aria-label="Current project"><span data-icon="folder"></span><span class="directory-name"></span></button></div>
   <div id="tools" class="floating" role="toolbar" aria-label="View controls">
     <button id="display" class="icon-button" popovertarget="display-menu" aria-label="Display" data-tooltip="Display"><span data-icon="sun-moon"></span></button>
     <button id="inspect" class="icon-button" aria-label="Inspector" aria-pressed="false" data-tooltip="Inspector"><span data-icon="panel-right"></span></button>

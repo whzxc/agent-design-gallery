@@ -1,3 +1,4 @@
+import { icon } from './icons.js';
 const storageKey = 'sdg-key';
 let unauthorized = false;
 
@@ -14,15 +15,23 @@ export function isUnauthorized() { return unauthorized; }
 export function showUnauthorized() {
   if (unauthorized) return;
   unauthorized = true;
+  const theme = window.localStorage.getItem('sdg-theme');
+  document.documentElement.dataset.theme = theme === 'light' || theme === 'dark'
+    ? theme : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   document.documentElement.dataset.sdgUnauthorized = 'true';
   const gallery = document.querySelector('.gallery');
   if (gallery) gallery.hidden = true;
   const hub = document.querySelector('#hub');
   if (hub) hub.hidden = true;
-  const message = document.createElement('h1');
-  message.textContent = '401 Unauthorized';
-  message.setAttribute('role', 'alert');
-  document.body.append(message);
+  for (const popover of document.querySelectorAll(':popover-open')) popover.hidePopover();
+  for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+  const shell = document.createElement('main');
+  shell.className = 'access-shell';
+  shell.setAttribute('aria-label', 'Hub access');
+  shell.innerHTML = `<div class="access-brand">SDG</div><div class="access-center"><section class="access-card" role="alert" aria-labelledby="access-title"><div class="access-code">${icon('key-round', 20)}<span>401</span></div><div class="access-copy"><h1 id="access-title">Key required</h1><p></p></div></section></div>`;
+  shell.querySelector('p').textContent = storedKey()
+    ? 'The key saved in this browser was rejected.' : 'This browser needs an access key.';
+  document.body.append(shell);
   window.dispatchEvent(new Event('sdg-unauthorized'));
 }
 function storedKey() {

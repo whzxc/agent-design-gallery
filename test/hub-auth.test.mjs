@@ -127,8 +127,12 @@ test('browser captures localStorage key, cleans URL, authenticates prefixed view
     assert.deepEqual(errors,[]);
     const denied=await browser.newContext({extraHTTPHeaders:forwarded}),deniedPage=await denied.newPage();
     await deniedPage.goto(hub.url);
-    await deniedPage.waitForSelector('h1[role="alert"]');
-    assert.equal(await deniedPage.locator('h1[role="alert"]').textContent(),'401 Unauthorized');
+    await deniedPage.getByRole('heading', { name: 'Key required', exact: true }).waitFor();
+    assert.match(await deniedPage.getByRole('alert').innerText(), /This browser needs an access key\./);
+    await deniedPage.evaluate(() => localStorage.setItem('sdg-key', 'rejected'));
+    await deniedPage.reload();
+    await deniedPage.getByRole('heading', { name: 'Key required', exact: true }).waitFor();
+    assert.match(await deniedPage.getByRole('alert').innerText(), /The key saved in this browser was rejected\./);
     await denied.close();await context.close();
   } finally {await browser.close();}
 });

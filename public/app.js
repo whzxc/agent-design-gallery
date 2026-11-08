@@ -1,3 +1,4 @@
+import { initSwitcher, updateSwitcherLabels } from './switcher.js';
 import { dataFetch, keyURL, isUnauthorized } from './auth.js';
 import { Labels } from "./labels.js";
 import { fitArea, fitView } from "./layout.js";
@@ -92,6 +93,7 @@ function toggleSidebar(value = !sidebar) {
   save();
 }
 function updateChrome() {
+  updateSwitcherLabels();
   const opened = !!(catalog ?? manifest)?.directory;
   $("#sidebar").hidden = !opened || !sidebar;
   $("#app-bar").hidden = opened && sidebar;
@@ -986,7 +988,7 @@ async function applyManifest(data, force = false) {
     fixtureState=data.fixture ?? null;
     theme = data.theme;
     applyTheme();
-    toggleSidebar(data.sidebar);
+    toggleSidebar(/^\/(p|i)\//.test(location.pathname) && innerWidth <= 600 ? false : data.sidebar);
     inspector = data.inspector;
   }
   if (first || changedRoot) {
@@ -1237,3 +1239,5 @@ document.addEventListener("keydown", (e) => {
   } else clearSelection();
   viewport.focus({ preventScroll: true });
 });
+
+initSwitcher();

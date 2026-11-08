@@ -42,7 +42,7 @@ implementation mappings and review process. The asset rules take precedence over
 | Directory opening | `modules/open-directory.tsx` / `OpenDialog` | Reviewed; directory states and recent entries have one fixture owner; current visual gaps are listed below. |
 | Shortcuts | `modules/shortcuts.tsx` / `Shortcuts`; `components/kbd.tsx` | Reviewed; keyboard content belongs to shortcuts fixtures; keycap geometry uses dedicated tokens at its current values. |
 | Canvas presentation | `modules/canvas.tsx` / `Drawing`, `Minimap`, `AssetLabel`; `fixtures/canvas.ts`, `scenes/`, `art/arc-previews/` | Reviewed; one canvas feature owner. Drawing owns section/artboard/flow layers; mapped AssetLabel specimens and preview artwork remain in use. |
-| Resident hub | `modules/hub-home.tsx`, `modules/project-switcher.tsx`, `modules/hub-access.tsx`; corresponding hub surfaces; `fixtures/hub.ts` | All 12 frames and presentation choices approved by the user; runtime implementation and compare fixtures are pending. |
+| Resident hub | `modules/hub-home.tsx`, `modules/project-switcher.tsx`, `modules/hub-access.tsx`; corresponding hub surfaces; `fixtures/hub.ts` | All 12 frames and presentation choices approved by the user; runtime implemented in `public/hub.js`, `public/switcher.js` and `public/auth.js`; automated design compare fixtures remain pending. |
 
 The ten feature modules own their parts and specimens. Remaining coverage and fidelity gaps are listed below. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
 not frame sources. The separate `fixtures/arc-sample/design/` tree is acceptance content, not the viewer UI library.
@@ -164,12 +164,12 @@ There are no additional locale, viewport or state combinations. `fixtures/hub.ts
 
 | Source / part | Frames | Design consumer | Runtime mapping / approval |
 | --- | --- | --- | --- |
-| `modules/hub-home` / HubBar, HubHeading, Rescan, ProjectList, LiveInstances, HubEmpty | `rescan-pending`, `no-roots`, `no-projects` | `surfaces/hub-home`; HubBar also serves the access shell | Approved; resident `/` implementation pending |
-| `modules/project-switcher` / ProjectPicker, SwitcherRow, SwitcherMenu, Switcher | `project`, `instance`, `open`, `search` | `surfaces/hub-switcher`; reuses `view-controls` AppBar through its optional picker slot | Approved; resident viewer app bar implementation pending |
-| `modules/hub-access` / AccessState, AccessShell | `rejected` | `surfaces/hub-access` | Approved; hub/viewer shell key state implementation pending |
-| `surfaces/hub-home` | `desktop`, `phone` | Entry surface | Approved; resident `/` implementation pending |
-| `surfaces/hub-switcher` | `phone` | Entry surface | Approved; resident viewer narrow layout implementation pending |
-| `surfaces/hub-access` | `key-required` | Entry surface | Approved; hub/viewer access state implementation pending |
+| `modules/hub-home` / HubBar, HubHeading, Rescan, ProjectList, LiveInstances, HubEmpty | `rescan-pending`, `no-roots`, `no-projects` | `surfaces/hub-home`; HubBar also serves the access shell | Approved; implemented by `public/hub.html`, `hub.js` and `hub.css` |
+| `modules/project-switcher` / ProjectPicker, SwitcherRow, SwitcherMenu, Switcher | `project`, `instance`, `open`, `search` | `surfaces/hub-switcher`; reuses `view-controls` AppBar through its optional picker slot | Approved; implemented by `public/switcher.js`, `switcher.css` and the viewer picker buttons |
+| `modules/hub-access` / AccessState, AccessShell | `rejected` | `surfaces/hub-access` | Approved; implemented by `public/auth.js` and `access.css` |
+| `surfaces/hub-home` | `desktop`, `phone` | Entry surface | Approved; implemented by `public/hub.html`, `hub.js` and `hub.css` |
+| `surfaces/hub-switcher` | `phone` | Entry surface | Approved; implemented by the responsive viewer switcher |
+| `surfaces/hub-access` | `key-required` | Entry surface | Approved; implemented by `public/auth.js` and `access.css` |
 
 The desktop list groups name/path, last design change, Git branch/short HEAD and source/frame counts in columns.
 The narrow layout stacks those same fields. The dot next to relative design time denotes uncommitted design changes;
@@ -282,4 +282,4 @@ The ARC snapshot at `b9e18beb` contains 51 sources (31 components and 20 surface
 The inspector exposes source, frame and export detail. Canvas labels occluded by the selection inspector are omitted.
 Browser text metrics can differ from SVG central-baseline metrics by about one pixel.
 
-The server-only resident hub ships minimal unstyled navigation pending the separate hub UI approval. The viewer directory dialog is retired: `open-dialog` and `open-error` fixture IDs now resolve to the baseline canvas; their existing design snapshots await the UI lane update. The `open-empty` fixture retains an empty canvas without a filesystem input.
+The resident hub adopts the approved home, project switcher and access shell. Unknown frame counts remain `—` until a viewer computes them; paths, Git metadata and instance order come from the live registry. The viewer directory dialog is retired: `open-dialog` and `open-error` fixture IDs now resolve to the baseline canvas; their existing design snapshots await the UI lane update. The `open-empty` fixture retains an empty canvas without a filesystem input.

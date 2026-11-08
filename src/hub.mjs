@@ -21,7 +21,7 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
       const projectRoute = url.pathname.match(/^\/p\/([A-Za-z0-9_-]+)(\/.*)?$/);
       const instanceRoute = url.pathname.match(/^\/i\/([A-Za-z0-9_-]+)(\/.*)?$/);
       const route = projectRoute ?? instanceRoute;
-      const publicFile = read && (route ? viewerFiles[route[2] ?? '/'] : { '/': 'hub.html', '/hub.js': 'hub.js', '/auth.js': 'auth.js' }[url.pathname]);
+      const publicFile = read && (route ? viewerFiles[route[2] ?? '/'] : { '/': 'hub.html', '/hub.js': 'hub.js', '/auth.js': 'auth.js', '/icons.js': 'icons.js', '/tokens.css': 'tokens.css', '/hub.css': 'hub.css', '/access.css': 'access.css' }[url.pathname]);
       // Project shells do not discover, build, watch, or embed any project data.
       if (publicFile && !instanceRoute) {
         if (route && !route[2]) { response.writeHead(302, { Location: `${url.pathname}/${url.search}` }); response.end(); return; }
