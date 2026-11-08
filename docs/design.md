@@ -79,7 +79,7 @@ owning scope resolves them.
 | `modules/view-controls.tsx` / `ZoomBar` | `public/index.html` `.zoom`; zoom/fit handlers | ViewerChrome → surfaces; menus module | Reviewed; in use; Fit uses `scan`, Back exposes `backDisabled`, and Minimap exposes `minimapPressed` through the existing active form. All four state specimens are approved. Frames: `zoom-bar`, `zoom-bar-menu-open`, `zoom-bar-back-disabled`, `zoom-bar-minimap-pressed`. |
 | `surfaces/canvas.tsx` / `ViewerChrome` | `public/index.html` floating chrome; `public/app.js` `updateChrome` | All three surface renderers | In use; boundary Reviewed. Only chooses and positions imported feature parts. |
 | `modules/canvas.tsx` / `Minimap` | `public/index.html` `#minimap`; `public/app.js` `drawMap` | ViewerChrome → canvas surface | Reviewed; in use; `minimap` preserves the existing specimen geometry; its fidelity gap is listed below. |
-| `components/tooltip.tsx` / `Tooltip` | `public/index.html` `#tooltip`; tooltip handlers; `public/style.css` `#tooltip` | View-controls module capture | Approval unrecorded; in use. |
+| `components/tooltip.tsx` / `Tooltip` | `public/index.html` `#tooltip`; tooltip handlers; `public/style.css` `#tooltip` | View-controls module capture | Reviewed; in use; existing tooltip geometry and its default specimen are preserved. |
 | `modules/canvas.tsx` / `AssetLabel` | `public/labels.js` `Labels`; `public/app.js` `drawLabels`; `.label-copy` | Mapped runtime usage; no imported design consumer | Reviewed; in use; frames: `asset-label-modified`, `asset-label-hover`, `asset-label-copied`. Drawing retains SVG labels under this same feature owner. |
 | `surfaces/canvas.tsx` / frame renderer | Gallery layout/camera/chrome | Entry surface | Reviewed structural composition; existing full-region layouts and camera states retained; capture identities remain mapped below. |
 | `surfaces/inspector.tsx` / frame renderer | Gallery and source inspector | Entry surface | Reviewed structural composition; frame/component captures use the unified Inspector and retain their existing full-window crops. Approved source/export states belong to the module. |
@@ -102,6 +102,7 @@ derives runtime recent paths from that same record.
 `fixtures/canvas.ts` owns neutral drawing/minimap data and AssetLabel presentation content.
 `fixtures/canvas-surfaces.ts` owns the canvas surface's four frame/capture records and chrome placement.
 `fixtures/inspector-surfaces.ts` owns inspector surface capture/layout records; content remains in `fixtures/inspector.json`.
+`fixtures/menu-captures.ts` owns the three local menu capture/layout records; no menus surface source remains.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
 
