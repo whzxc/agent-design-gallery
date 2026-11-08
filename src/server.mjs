@@ -186,7 +186,8 @@ export async function startServer({
       const affected=new Set(await buildStore.invalidate(structural?[...knownBuilds.keys(),...observedPaths]:observedPaths));
       for(const name of failedSources)affected.add(name);
       for(const name of stamps)if(name.endsWith('.tsx')&&next.has(name))affected.add(name);
-      if(!stamps.length&&!affected.size&&!grouping)return;
+      const legacyDirty=[...legacyDependencies.values()].some(dependencies=>dependencies.some(name=>observedPaths.includes(name)));
+      if(!stamps.length&&!affected.size&&!grouping&&!legacyDirty)return;
       const changed=[];
       let cursor=0;
       const names=[...affected].filter(name=>next.has(name)&&name.endsWith('.tsx'));
