@@ -123,6 +123,16 @@ export function imageURL(asset, crop) {
   );
 }
 
+// Keep current visible previews and a small LRU of offscreen previews. Identity
+// includes theme and source version so visible paths cannot pin stale generations.
+export function evictPreviews(cache, activeKeys) {
+  if (cache.size <= 100) return;
+  for (const entry of [...cache.values()].sort((a, b) => a.used - b.used)) {
+    if (cache.size <= 80) break;
+    if (!activeKeys.has(entry.key)) cache.delete(entry.key);
+  }
+}
+
 export function groupAssets(data) {
   const used = new Set(),
     grouped = [];

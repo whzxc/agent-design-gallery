@@ -4,7 +4,7 @@ import { Labels } from "./labels.js";
 import { fitArea, fitView } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
-import { prepare, imageURL, arrange, groupAssets } from "./assets.js";
+import { prepare, imageURL, arrange, groupAssets, evictPreviews } from "./assets.js";
 import { sourceRelationships, relatedSources } from './relationships.js';
 import { hitSelection, frameBox, exportFrames } from './selection.js';
 // ARC's gallery layout and camera model, decoupled from its React runtime.
@@ -125,6 +125,10 @@ window.__sdg = {
   get assets() {
     return assets.length;
   },
+  get previews() {
+    return {entries: cache.size, decoded: [...cache.values()].filter(e => e.image).length,
+      rasterBytes: [...cache.values()].reduce((n, e) => n + (e.bitmap ? e.bitmap.width * e.bitmap.height * 4 : 0), 0)};
+  },
   get selection() {return {path:selected, frame:currentItem()?.parts.find(p=>p.id===selectedForm)?.name ?? null, element:selectedElement?.owner ?? null}},
   get items() {
     return assets.map(({ id, path, x, y, width, height, group }) => ({
@@ -194,18 +198,22 @@ function layout(data, preserve = false) {
   assets = result.items;
   world = result.world;
   if (preserve) {
+    const previousById = new Map(previous.map(item => [item.id, item]));
+    const currentIds = new Set(assets.map(item => item.id));
+    const previousByTitle = new Map();
+    for (const group of previousGroups) if (!previousByTitle.has(group.title)) previousByTitle.set(group.title, group);
     for (const group of groups) {
-      const old = previousGroups.find((g) => g.title === group.title);
+      const old = previousByTitle.get(group.title);
       if (old) {
         group.x = old.x;
         group.y = old.y;
       }
     }
-    const occupied = previous.filter((p) => assets.some((a) => a.id === p.id));
+    const occupied = previous.filter((p) => currentIds.has(p.id));
     const shape = (a) =>
       JSON.stringify(a.shown.map(p => [p.width, p.height]));
     for (const a of assets) {
-      const old = previous.find((p) => p.id === a.id);
+      const old = previousById.get(a.id);
       if (old) {
         a.x = old.x;
         a.y = old.y;
@@ -627,9 +635,10 @@ function draw() {
   window.__sdg.revision = manifest?.revision;
   window.__sdg.visibleReady = drawingReady; window.__sdg.visibleCount = drawingCount;
   drawMap();
-  if (cache.size > 100) for (const e of [...cache.values()].sort((a,b) => a.used - b.used)) {
-    if (cache.size <= 80) break;
-    if (!displayed.some(a => a.path === e.asset.path && visible(a, drawingMargin))) cache.delete(e.key);
+  if (cache.size > 100) {
+    const activeKeys = new Set(displayed.filter(a => visible(a, drawingMargin))
+      .flatMap(a => placements(a).map(({part}) => assetURL(a, part))));
+    evictPreviews(cache, activeKeys);
   }
 }
 function backgroundColor() { return backgroundChoice === 'theme' ? palette.canvas : backgroundColors[backgroundChoice]; }
