@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadTokens, refreshTypes, rejectLegacy, relative, isSourcePath, sourceDirectories } from './project.mjs';
-import { themeCss } from './tokens.mjs';
+import { themeCss, parseTokens } from './tokens.mjs';
 import { escape } from './runtime.mjs';
 const require = createRequire(import.meta.url);
 const runtime = fileURLToPath(new URL('./runtime.mjs', import.meta.url));
@@ -65,8 +65,14 @@ export function validateFrame(frame) {
     if (!c || typeof c !== 'object' || ['region','selector','page'].filter(k => c[k] !== undefined).length !== 1 || (c.page !== undefined && c.page !== true) || ['region','selector'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim())) || (c.viewport !== undefined && !/^[1-9]\d*x[1-9]\d*$/.test(c.viewport)) || (c.origin !== undefined && (!c.page || !/^\d+(?:\.\d+)? \d+(?:\.\d+)?$/.test(c.origin))) || (c.clicks !== undefined && (!Array.isArray(c.clicks) || c.clicks.some(v => typeof v !== 'string' || !v)))) throw Error('Invalid capture; use region, selector or page with viewport, origin and clicks');
   }
 }
-export async function buildSource(config, file, { write = true, allowLegacy = true } = {}) {
+export async function buildSource(config, file, { write = true, allowLegacy = true, snapshot } = {}) {
   if (write) refreshTypes(config);
+  const read = (name, encoding) => {
+    if (!snapshot) return readFileSync(name, encoding);
+    if (!snapshot.has(name)) snapshot.set(name, readFileSync(name));
+    const value = snapshot.get(name);
+    return encoding ? value.toString(encoding) : value;
+  };
   file = realpathSync(file);
   const base = realpathSync(config.design), dependencies = new Set([path.join(base, 'tokens.css')]);
   const imports = new Set(), sources = sourceDirectories(config);
@@ -89,16 +95,17 @@ export async function buildSource(config, file, { write = true, allowLegacy = tr
       if (url && !resolved.startsWith(path.join(base,'art')+path.sep)) return {errors:[{text:'?url imports must be under design/art/'}]};
       return { path: resolved, ...(url ? {namespace:'art-url'} : {}) };
     });
-    api.onLoad({filter:/.*/,namespace:'art-url'}, args => ({contents:readFileSync(args.path),loader:'dataurl'}));
+    api.onLoad({filter:/.*/,namespace:'art-url'}, args => ({contents:read(args.path),loader:'dataurl'}));
     api.onLoad({filter:/\.tsx$/}, async args => {
       const sourcePath = path.relative(base, args.path).split(path.sep).join('/');
-      if (!isSourcePath(sourcePath, sources)) return;
-      const original=readFileSync(args.path,'utf8');
+      if (!isSourcePath(sourcePath, sources)) return snapshot ? {contents:read(args.path,'utf8'),loader:'tsx'} : undefined;
+      const original=read(args.path,'utf8');
       return registeredSource(args.path, sourcePath, original);
     });
-    api.onLoad({ filter: /\.(png|jpe?g|webp)$/i }, args => ({ contents: readFileSync(args.path), loader: 'dataurl' }));
+    if (snapshot) api.onLoad({filter:/\.(?:[cm]?js|jsx|ts|json)$/}, args => ({contents:read(args.path,'utf8'),loader:args.path.endsWith('.ts')?'ts':args.path.endsWith('.jsx')?'jsx':args.path.endsWith('.json')?'json':'js'}));
+    api.onLoad({ filter: /\.(png|jpe?g|webp)$/i }, args => ({ contents: read(args.path), loader: 'dataurl' }));
     api.onLoad({ filter: /\.svg$/i }, args => {
-      const source = readFileSync(args.path,'utf8');
+      const source = read(args.path,'utf8');
       const forbidden = /<(?:style|script)\b|\s(?:on[\w-]+|className)\s*=/i.exec(source);
       if (forbidden) { const before=source.slice(0,forbidden.index); return {errors:[{text:'Forbidden SVG markup; remove styles, scripts and event attributes',location:{file:args.path,line:before.split('\n').length,column:before.length-before.lastIndexOf('\n')-1}}]}; }
       return { contents: `import { artwork } from 'sdg'; export default props => artwork(${JSON.stringify(source)}, props);`, loader:'js' };
@@ -113,7 +120,7 @@ export async function buildSource(config, file, { write = true, allowLegacy = tr
     try { validateFrame(frame); if (names.has(frame.name)) throw Error(`Duplicate frame name ${frame.name}`); names.add(frame.name); }
     catch(error) { throw Error(`${relative(config,file)}: ${frame?.name ?? '-'}: ${error.message}`); }
   }
-  const tokens = loadTokens(config), tokenSource = readFileSync(path.join(base,'tokens.css'),'utf8');
+  const tokenSource = read(path.join(base,'tokens.css'),'utf8'), tokens = snapshot ? parseTokens(tokenSource) : loadTokens(config);
   const compiler = await compile(`${readFileSync(path.join(tailwind,'theme.css'),'utf8')}\n${themeCss(tokens)}\n${readFileSync(path.join(tailwind,'preflight.css'),'utf8')}\n@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));\n@tailwind utilities;`);
   const classes = [...new Set(frames.flatMap(f => [...f.html.matchAll(/\bclass="([^"]*)"/g)].flatMap(m => m[1].split(/\s+/))))];
   const css = `${compiler.build(classes)}\n${tokenSource}\nhtml,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-sdg-frame]{display:flex;align-items:flex-start;position:relative;background:var(--canvas)}[data-sdg-frame]>*,svg{flex-shrink:0} @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}`;
