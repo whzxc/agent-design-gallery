@@ -9,6 +9,7 @@ import { Tools, AppBar, ZoomBar } from '../modules/view-controls';
 import { Tooltip } from '../components/tooltip';
 import { Minimap } from '../components/minimap';
 import { scenes } from '../scenes/canvas';
+import navigationFixtures from '../fixtures/navigation.json';
 
 const chromeComponents: Record<string, (props: any) => unknown> = {
   sidebar: Sidebar,
@@ -23,12 +24,12 @@ const chromeComponents: Record<string, (props: any) => unknown> = {
   minimap: Minimap,
 };
 export function ViewerChrome({ chrome }: any) {
-  return chrome.map(({ kind, left, top, ...props }: any) => {
+  return chrome.map(({ kind, left, top, navigation, ...props }: any) => {
     if (kind === 'scrim') return <Scrim />;
     const Component = chromeComponents[kind];
     return (
       <div class="absolute" style={{ left, top }}>
-        <Component {...props} />
+        <Component {...(kind === 'sidebar' ? navigationFixtures[navigation] : props)} />
       </div>
     );
   });
@@ -50,92 +51,7 @@ const frames = [
         "left": 12,
         "top": 12,
         "kind": "sidebar",
-        "search": false,
-        "rows": [
-          {
-            "form": "root",
-            "label": "All designs",
-            "meta": "51",
-            "icon": "layout-grid"
-          },
-          {
-            "form": "group",
-            "label": "Essentials",
-            "meta": "8",
-            "icon": "chevron-down"
-          },
-          {
-            "form": "item",
-            "label": "button",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "icon-button",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "switch",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "search",
-            "icon": "component"
-          },
-          {
-            "form": "item-selected",
-            "label": "field",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "tag",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "card",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "single-choice",
-            "icon": "component"
-          },
-          {
-            "form": "group",
-            "label": "Agents & quota",
-            "meta": "6",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "Tasks & interactions",
-            "meta": "5",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "Connections & MCP",
-            "meta": "6",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "components",
-            "meta": "14",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "surfaces",
-            "meta": "12",
-            "icon": "chevron-right"
-          }
-        ],
-        "height": 876
+        "navigation": "canvas-components"
       },
       {
         "left": 1276,
@@ -167,92 +83,7 @@ const frames = [
         "left": 12,
         "top": 12,
         "kind": "sidebar",
-        "search": false,
-        "rows": [
-          {
-            "form": "root",
-            "label": "All designs",
-            "meta": "51",
-            "icon": "layout-grid"
-          },
-          {
-            "form": "group",
-            "label": "Essentials",
-            "meta": "8",
-            "icon": "chevron-down"
-          },
-          {
-            "form": "item",
-            "label": "button",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "icon-button",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "switch",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "search",
-            "icon": "component"
-          },
-          {
-            "form": "item-selected",
-            "label": "field",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "tag",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "card",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "single-choice",
-            "icon": "component"
-          },
-          {
-            "form": "group",
-            "label": "Agents & quota",
-            "meta": "6",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "Tasks & interactions",
-            "meta": "5",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "Connections & MCP",
-            "meta": "6",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "components",
-            "meta": "14",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "surfaces",
-            "meta": "12",
-            "icon": "chevron-right"
-          }
-        ],
-        "height": 876
+        "navigation": "canvas-zoomed"
       },
       {
         "left": 1276,
@@ -333,82 +164,7 @@ const frames = [
         "left": 12,
         "top": 12,
         "kind": "sidebar",
-        "search": false,
-        "rows": [
-          {
-            "form": "root",
-            "label": "All designs",
-            "meta": "51",
-            "icon": "layout-grid"
-          },
-          {
-            "form": "group",
-            "label": "Essentials",
-            "meta": "8",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "Agents & quota",
-            "meta": "6",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "Tasks & interactions",
-            "meta": "5",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "Connections & MCP",
-            "meta": "6",
-            "icon": "chevron-down"
-          },
-          {
-            "form": "item",
-            "label": "copy-field",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "setup-choice",
-            "icon": "component"
-          },
-          {
-            "form": "item-selected",
-            "label": "mcp-hub",
-            "icon": "app-window"
-          },
-          {
-            "form": "item",
-            "label": "connections",
-            "icon": "app-window"
-          },
-          {
-            "form": "item",
-            "label": "relay-hosting",
-            "icon": "app-window"
-          },
-          {
-            "form": "item",
-            "label": "platforms",
-            "icon": "app-window"
-          },
-          {
-            "form": "group",
-            "label": "components",
-            "meta": "14",
-            "icon": "chevron-right"
-          },
-          {
-            "form": "group",
-            "label": "surfaces",
-            "meta": "12",
-            "icon": "chevron-right"
-          }
-        ],
-        "height": 876
+        "navigation": "canvas-surfaces"
       },
       {
         "left": 1276,

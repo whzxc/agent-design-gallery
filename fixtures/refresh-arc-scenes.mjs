@@ -14,6 +14,8 @@ const server = await startServer({ directory: path.join(root, 'fixtures/arc-samp
   fixtures: { states, recent, assetModifiedAt, paths: { '~/projects/empty': path.join(temporary, 'empty') } } });
 const browser = await launch();
 const art = path.join(root, 'design/art/arc-previews');
+const navigationFile = path.join(root, 'design/fixtures/navigation.json');
+const navigation = JSON.parse(await readFile(navigationFile, 'utf8'));
 try {
   const catalog = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await catalog.goto(new URL('/manifest', server.url).href);
@@ -37,7 +39,7 @@ try {
   for (const [entry, source] of [
     ['surfaces/canvas', 'canvas'], ['surfaces/inspector', 'inspector'],
     ['surfaces/open-directory', 'open-directory'], ['surfaces/menus', 'menus'],
-    ['modules/shortcuts', 'shortcuts'],
+    ['modules/shortcuts', 'shortcuts'], ['modules/navigation', 'navigation'],
   ]) {
     const file = path.join(root, `design/${entry}.tsx`);
     let text = await readFile(file, 'utf8');
@@ -63,11 +65,12 @@ try {
       if (state.dialog && !state.empty && !frame.chrome.some(c => c.kind === 'scrim')) frame.chrome.unshift({kind: 'scrim'});
       const selected = reference.sources.find(a => a.path === state.asset);
       for (const chrome of frame.chrome) {
-        if (chrome.kind === 'sidebar' && !chrome.search) {
-          chrome.rows = [{ form: 'root', label: 'All designs', meta: String(reference.sources.length), icon: 'layout-grid' }];
+        const sidebar = chrome.kind === 'sidebar' ? navigation[chrome.navigation] : null;
+        if (sidebar && !sidebar.search) {
+          sidebar.rows = [{ form: 'root', label: 'All designs', meta: String(reference.sources.length), icon: 'layout-grid' }];
           for (const section of reference.sections) {
-            chrome.rows.push({ form: 'group', label: section.title, meta: String(section.blocks.length), icon: state.group === section.title ? 'chevron-down' : 'chevron-right' });
-            if (state.group === section.title) for (const block of section.blocks) chrome.rows.push({ form: block.asset === state.asset ? 'item-selected' : 'item', label: path.basename(block.asset, '.tsx'), icon: block.kind === 'set' ? 'component' : 'app-window' });
+            sidebar.rows.push({ form: 'group', label: section.title, meta: String(section.blocks.length), icon: state.group === section.title ? 'chevron-down' : 'chevron-right' });
+            if (state.group === section.title) for (const block of section.blocks) sidebar.rows.push({ form: block.asset === state.asset ? 'item-selected' : 'item', label: path.basename(block.asset, '.tsx'), icon: block.kind === 'set' ? 'component' : 'app-window' });
           }
         }
         if (chrome.kind === 'inspector') {
@@ -114,6 +117,7 @@ try {
     await writeFile(file, text);
     scenesBySource.set(source, scenes);
   }
+  await writeFile(navigationFile, JSON.stringify(navigation, null, 2) + '\n');
   await rm(art, { recursive: true, force: true }); await mkdir(art, { recursive: true });
   for (const [name, { item, scale }] of previews) for (const theme of ['light', 'dark']) {
     const png = await catalog.evaluate(async ({ id, scale, theme }) => {

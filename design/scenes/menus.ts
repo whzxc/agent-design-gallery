@@ -1,14 +1,13 @@
 // Generated from fixtures/arc-sample.layout.json by fixtures/refresh-arc-scenes.mjs.
 import image0 from '../art/arc-previews/components-card-dark.png';
 import image1 from '../art/arc-previews/components-card-light.png';
-import image2 from '../art/arc-previews/components-field-dark.png';
-import image3 from '../art/arc-previews/components-field-light.png';
 import image4 from '../art/arc-previews/components-search-dark.png';
 import image5 from '../art/arc-previews/components-search-light.png';
 import image6 from '../art/arc-previews/components-single-choice-dark.png';
 import image7 from '../art/arc-previews/components-single-choice-light.png';
 import image8 from '../art/arc-previews/components-tag-dark.png';
 import image9 from '../art/arc-previews/components-tag-light.png';
+
 export const scenes = {
   "display": [
     {
@@ -732,153 +731,6 @@ export const scenes = {
           475.6262512207031,
           "count",
           "Nov 7, 13:24"
-        ]
-      ]
-    }
-  ],
-  "search": [
-    {
-      "at": [
-        -1351.162055335969,
-        147.53359683794463
-      ],
-      "size": [
-        4610.213438735178,
-        3240.7588932806325
-      ],
-      "kind": "section"
-    },
-    {
-      "at": [
-        0,
-        0
-      ],
-      "size": [
-        0,
-        0
-      ],
-      "kind": "asset",
-      "outline": false,
-      "labels": [
-        [
-          316,
-          356.68304443359375,
-          "selected-set",
-          "state-pill"
-        ],
-        [
-          372.703125,
-          356.67523193359375,
-          "copy",
-          ""
-        ],
-        [
-          390.703125,
-          356.68304443359375,
-          "count",
-          "5 forms"
-        ],
-        [
-          444.078125,
-          356.68304443359375,
-          "count",
-          "Nov 7, 13:24"
-        ],
-        [
-          367.03558349609375,
-          435.7411193847656,
-          "form",
-          "running"
-        ],
-        [
-          410.78558349609375,
-          435.7411193847656,
-          "copy",
-          ""
-        ],
-        [
-          575.4308471679688,
-          435.7411193847656,
-          "form",
-          "waiting"
-        ],
-        [
-          616.8683471679688,
-          435.7411193847656,
-          "copy",
-          ""
-        ],
-        [
-          809.3438720703125,
-          435.7411193847656,
-          "form",
-          "done"
-        ],
-        [
-          839.5626220703125,
-          435.7411193847656,
-          "copy",
-          ""
-        ],
-        [
-          1017.7391357421875,
-          435.7411193847656,
-          "form",
-          "failed"
-        ],
-        [
-          1050.5672607421875,
-          435.7411193847656,
-          "copy",
-          ""
-        ],
-        [
-          1200.6165771484375,
-          435.7411193847656,
-          "form",
-          "stopped"
-        ],
-        [
-          1247.6634521484375,
-          435.7411193847656,
-          "copy",
-          ""
-        ],
-        [
-          8,
-          356.68304443359375,
-          "set",
-          "tile"
-        ],
-        [
-          30.1875,
-          356.67523193359375,
-          "copy",
-          ""
-        ],
-        [
-          48.1875,
-          356.68304443359375,
-          "count",
-          "2 forms"
-        ],
-        [
-          101.390625,
-          356.68304443359375,
-          "count",
-          "Nov 7, 13:24"
-        ],
-        [
-          60.82213592529297,
-          435.7411193847656,
-          "form",
-          "phase"
-        ],
-        [
-          96.44713592529297,
-          435.7411193847656,
-          "copy",
-          ""
         ]
       ]
     }

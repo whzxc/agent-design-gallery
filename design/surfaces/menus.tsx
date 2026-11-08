@@ -153,40 +153,6 @@ const frames = [
     ]
   },
   {
-    "name": "search",
-    "width": 284,
-    "height": 272,
-    "fixture": "sidebar-search",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "0 0"
-    },
-    "chrome": [
-      {
-        "left": 12,
-        "top": 12,
-        "kind": "sidebar",
-        "search": true,
-        "rows": [
-          {
-            "form": "item-selected",
-            "label": "state-pill",
-            "meta": "5 forms",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "single-choice · pills",
-            "meta": "form",
-            "icon": "component"
-          }
-        ],
-        "height": 248
-      }
-    ]
-  },
-  {
     "name": "tooltip",
     "width": 420,
     "height": 120,
