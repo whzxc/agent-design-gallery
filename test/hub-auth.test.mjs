@@ -143,7 +143,7 @@ test('sdg open records actual health identity and cleans records on exit without
     child.once('exit',()=>{clearTimeout(timeout);reject(new Error(output));});child.once('error',reject);
   });
   const [record]=await listInstances(state);
-  assert.equal(record.pid,child.pid);assert.equal(record.proxyable,true);assert.equal(record.worktree,true);
+  assert.equal(record.pid,child.pid);assert.equal(record.proxyable,true);assert.equal(record.worktree,(await stat(new URL("../.git",import.meta.url))).isFile());
   assert.equal((await(await fetch(new URL('api/health',url))).json()).id,record.id);
   const hub=await startHub({port:0,stateDirectory:state});
   const browser=await launch();
