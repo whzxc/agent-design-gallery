@@ -4,8 +4,14 @@ import { Button } from '../components/button';
 import { Field } from '../components/field';
 import { IconButton } from '../components/icon-button';
 import { TreeRow } from '../components/tree-row';
-const recent = ['arc', 'hub', 'gateway'];
-export function OpenDialog({ error = false, close = true, specimen = false }: any) {
+import directoryFixtures from '../fixtures/open-directory.json';
+export function OpenDialog({
+  error = false,
+  close = true,
+  specimen = false,
+  recent = [],
+  path = '/path/to/design',
+}: any) {
   return (
     <Panel form="dialog" width={specimen ? 360 : 440}>
       <div class={specimen ? 'px-5 pt-5 pb-4' : 'px-6 pt-6 pb-[22px]'}>
@@ -19,11 +25,7 @@ export function OpenDialog({ error = false, close = true, specimen = false }: an
         </div>
         <p class="text-body text-text-secondary leading-4 mt-2">Choose a folder that contains SVG designs.</p>
         <div class={specimen ? 'mt-[14px]' : 'mt-4'}>
-          <Field
-            form={error ? 'input-error' : 'input-empty'}
-            label={error ? '~/projects/empty' : '/path/to/design'}
-            width={specimen ? 320 : 392}
-          />
+          <Field form={error ? 'input-error' : 'input-empty'} label={path} width={specimen ? 320 : 392} />
         </div>
         {error && (
           <div class="flex items-center gap-[6px] text-meta text-danger leading-[14px] mt-[10px]">
@@ -42,14 +44,13 @@ export function OpenDialog({ error = false, close = true, specimen = false }: an
           <>
             <h3 class="text-meta text-text-tertiary font-[550] leading-4 mt-4 mb-[6px]">Recent</h3>
             <div class="flex flex-col gap-[2px] -mx-2">
-              {recent.map((label, i) => (
+              {recent.map(({ label, path }: any, i: number) => (
                 <TreeRow
                   form={i === 0 && !error ? 'two-line-selected' : 'two-line'}
                   label={label}
-                  meta={`~/projects/${label}/design`}
+                  meta={path}
                   icon="folder"
                   width={408}
-                  height={44}
                 />
               ))}
             </div>
@@ -64,6 +65,6 @@ export function OpenDialog({ error = false, close = true, specimen = false }: an
 }
 export default () => (
   <Frame name="error">
-    <OpenDialog error specimen />
+    <OpenDialog {...directoryFixtures.states['error-specimen']} recent={directoryFixtures.recent} />
   </Frame>
 );

@@ -1,0 +1,38 @@
+{
+  "recent": [
+    {
+      "label": "arc",
+      "path": "~/projects/arc/design"
+    },
+    {
+      "label": "hub",
+      "path": "~/projects/hub/design"
+    },
+    {
+      "label": "gateway",
+      "path": "~/projects/gateway/design"
+    }
+  ],
+  "states": {
+    "empty": {
+      "error": false,
+      "close": false,
+      "path": "/path/to/design"
+    },
+    "dialog": {
+      "error": false,
+      "close": true,
+      "path": "/path/to/design"
+    },
+    "error": {
+      "error": true,
+      "close": true,
+      "path": "~/projects/empty"
+    },
+    "error-specimen": {
+      "error": true,
+      "specimen": true,
+      "path": "~/projects/empty"
+    }
+  }
+}

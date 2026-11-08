@@ -1,3 +1,5 @@
+import directoryFixtures from '../design/fixtures/open-directory.json' with { type: 'json' };
+
 // Repository-only deterministic Float states; the installed viewer has no fixtures.
 export const assetModifiedAt = Date.UTC(2026, 10, 7, 13, 24, 8);
 const components = { theme: 'light', sidebar: true, group: 'Essentials', asset: 'components/field.tsx', camera: 'group' };
@@ -19,4 +21,4 @@ export const states = {
   'open-dialog': { ...overview, dialog: 'directories' },
   'open-error': { ...overview, theme: 'light', dialog: 'directories', submit: '~/projects/empty' },
 };
-export const recent = ['~/projects/arc/design','~/projects/hub/design','~/projects/gateway/design'];
+export const recent = directoryFixtures.recent.map(entry => entry.path);

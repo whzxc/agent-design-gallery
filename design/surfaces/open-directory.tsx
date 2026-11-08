@@ -25,8 +25,7 @@ const frames = [
         "left": 500,
         "top": 270,
         "kind": "dialog",
-        "error": false,
-        "close": false
+        "directory": "empty"
       }
     ]
   },
@@ -69,8 +68,7 @@ const frames = [
         "left": 500,
         "top": 270,
         "kind": "dialog",
-        "error": false,
-        "close": true
+        "directory": "dialog"
       }
     ]
   },
@@ -92,8 +90,7 @@ const frames = [
         "left": 60,
         "top": 40,
         "kind": "dialog",
-        "error": true,
-        "close": true
+        "directory": "error"
       }
     ]
   }

@@ -38,7 +38,7 @@ implementation mappings and review process. The asset rules take precedence over
 | Inspector | `modules/inspector.tsx` / `Inspector`; `fixtures/inspector.json` | Reviewed; one Inspector composition with separate fixtures and approved source, exported-element, nested-element and empty-match states. |
 | Menus | `modules/menus.tsx` / `Menu` | Reviewed; menu captures and their fixtures belong to the menus module. |
 | View controls | `modules/view-controls.tsx` / `Tools`, `AppBar`, `ZoomBar` | Reviewed; tools, AppBar, ZoomBar and tooltip capture are approved, including Fit scan, Back disabled and Minimap pressed. |
-| Directory opening | `modules/open-directory.tsx` / `OpenDialog` | Boundary Reviewed; recent data, errors and dialog copy remain in the directory scope. |
+| Directory opening | `modules/open-directory.tsx` / `OpenDialog` | Reviewed; directory states and recent entries have one fixture owner; current visual gaps are listed below. |
 | Shortcuts | `modules/shortcuts.tsx` / `Shortcuts`; `components/kbd.tsx` | Boundary Reviewed; keycap radius and content governance remain in the shortcuts scope. |
 | Canvas presentation | `Drawing`, `Artboard`, `Flow`, `Section`, `AssetLabel`, `Minimap`, `Tooltip`, `scenes/`, `art/arc-previews/` | Resolve duplicate ownership, unknown consumers and artwork governance in the canvas scope. |
 
@@ -72,7 +72,7 @@ owning scope resolves them.
 | `modules/navigation.tsx` / `Sidebar` | `public/index.html` `#sidebar`; `public/app.js` `renderNav` | ViewerChrome → surfaces | Reviewed; in use; frames: `search`, captured `search-results`. Fixtures own rows, directory, query and count. |
 | `modules/inspector.tsx` / `Inspector` | `public/index.html` `#source`, `#relationships`; `public/app.js` `selection`, `renderRelationships`; `public/selection.js` `exportFrames` | ViewerChrome → inspector surface; mapped source and export selection | Reviewed; in use. Approved states: `frames`, `frame`, `element`, `source`, `export-element`, `export-element-nested`, `export-element-empty`. Export rows show owning-frame sizes while the header shows the selected element size; export rows have no selected frame highlight. |
 | `modules/menus.tsx` / `Menu` | `public/index.html` `#display-menu`, `#zoom-menu`, `#more-menu` | Menus module captures; mapped runtime menus | Reviewed; in use; frames: `default`, `display`, `zoom`, `more`, with separate menu fixtures. |
-| `modules/open-directory.tsx` / `OpenDialog` | `public/index.html` `#directories`; `public/app.js` `showOpen`, `open`, `recent` | ViewerChrome → open-directory surface | In use; `error` Reviewed. Recent data and SVG-specific copy need reconciliation. |
+| `modules/open-directory.tsx` / `OpenDialog` | `public/index.html` `#directories`; `public/app.js` `showOpen`, `open`, `recent` | ViewerChrome → open-directory surface | Reviewed; in use; `error` specimen and captured states preserve existing visuals. Recent labels/paths are shared with runtime fixtures. Two-line rows use their existing height token. |
 | `modules/shortcuts.tsx` / `Shortcuts` | `public/index.html` `#keys`; `public/style.css` `#keys` | ViewerChrome and module capture | In use; captured `default` Reviewed. Shortcut data and keycap fidelity remain. |
 | `modules/view-controls.tsx` / `Tools` | `public/index.html` `#tools`; display/inspector/fullscreen handlers | ViewerChrome → surfaces; menus and view-controls module captures | Reviewed; in use; frames: `tools`, `tools-tooltip`. |
 | `modules/view-controls.tsx` / `AppBar` | `public/index.html` `#app-bar`; `public/app.js` `updateChrome` | ViewerChrome → canvas/open-directory surfaces | Reviewed; in use; `app-bar` uses a separate presentation fixture. |
@@ -99,6 +99,8 @@ retain illustrative external source names; `source` and exported-element states 
 Their part mappings are `StatePill` in `components/state-pill.tsx` and nested `Input` in `components/field.tsx`;
 `SetupAction` in `components/setup-choice.tsx` has no owning-frame match when selected in `surfaces/setup.tsx` / `source-empty`.
 These local design specimens have no independent implementation capture. Existing frame/component captures remain unchanged.
+`fixtures/open-directory.json` owns recent labels/paths and dialog presentation states; `fixtures/viewer.mjs`
+derives runtime recent paths from that same record.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
 
@@ -134,6 +136,10 @@ capture of their own; their composed usage is reachable through the surface fixt
 The preview snapshot has 188 PNGs representing 94 ARC artboards in both themes. All are referenced by scene data.
 Source provenance and palette ownership remain with the ARC fixture. Preview artwork is repository-only and excluded
 from the npm package. Per-image downsizing and owner consolidation belong to the canvas scope.
+
+### Known gaps
+
+- Directory opening retains the redundant SVG-only description and empty-directory error copy; submit disabled/pending states lack design coverage.
 
 ## Direction
 
