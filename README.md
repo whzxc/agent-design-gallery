@@ -11,17 +11,17 @@ Requires Node.js 22 or newer. Installation starts without a build step. Browser 
 
 ## Viewer controls
 
-Drag or scroll to pan. Pinch, or hold Control/Command while scrolling, to zoom around the pointer. Click a drawing to select it; double-click or press Enter to focus it. Arrow keys pan; +/− zoom; 0 fits all; 1 sets the canvas to 100% around the usable canvas center. Escape closes search or the inspector before returning to the previous camera.
+Drag or scroll to pan. Pinch, or hold Control/Command while scrolling, to zoom around the pointer. Click a frame to select its variant; double-click or press Enter to focus it. Hover an exported component inside a frame to outline its root, then click to inspect its source and export. Arrow keys pan; +/− zoom; 0 fits all; 1 sets the canvas to 100% around the usable canvas center. Escape clears the selection (or closes the current search, dialog or menu). Back returns to the previous selection and camera.
 
 The floating sidebar holds the directory picker, search, and project groups. Control/Command+F opens search; results replace the tree. Clear the query to return to the tree, or Escape to restore the previous selection, camera, and sidebar state. Group names fit their collection, and asset names focus their set or first frame. Collapse the sidebar to keep only the app bar. Collapsing panels does not move the world.
 
-`GET /relationships` on the local server returns a JSON graph of direct source imports and importers, keyed by source path with `uses` and `usedBy` arrays. Relationships follow the bundler's resolved imports and update on file changes.
+The right inspector follows the selection and remembers its open state. It shows source path, frame name, dimensions, frames, and **Uses** / **Used by**, grouped by source directory. Indirect relationships are muted with their shortest `via` path. Click a relationship to select and focus that source. An element selection shows its owning export and the frames in that source that render it; click one to jump there. `GET /relationships` returns the underlying direct graph as JSON, keyed by source path with `uses` and `usedBy` arrays.
 
-Click a canvas component, block or section title to copy the displayed name. Its copy icon appears on hover or keyboard focus. Enter and Space also activate a focused title. A check confirms a successful copy for 1.2 seconds.
+Click a canvas source or frame title to select it and copy its name. The copy icon copies without changing the selection and appears on hover or keyboard focus. Section titles also copy their names. Enter and Space activate a focused title. A check confirms a successful copy for 1.2 seconds. The inspector has separate source-path and frame-name copy controls.
 
 The tool pill opens **Display**, **Inspector**, **Fullscreen**, and **More**. Display chooses System, Light, or Dark and an independent canvas background. More contains **Arrange current group** and **Keyboard shortcuts** (also available with ?).
 
-The bottom zoom bar holds Back, zoom out, the zoom menu, zoom in, Fit, and Minimap. The zoom menu offers Fit all, Fit group, Fit selection, and Zoom to 100%. Fit uses the selected drawing or current group. The minimap moves the camera when clicked. The inspector lists forms or frames with their geometric sizes, their notes, Copy path, and Reveal file.
+The bottom zoom bar holds Back, zoom out, the zoom menu, zoom in, Fit, and Minimap. The zoom menu offers Fit all, Fit group, Fit selection, and Zoom to 100%. Fit uses the selected frame or element, source, or current group. The minimap moves the camera when clicked. The inspector lists forms or frames with their geometric sizes and notes.
 
 The directory picker opens **Open a design directory**. Enter a path or select a recent directory, then choose Open; double-click a recent directory to open it immediately. Inline errors leave the current directory intact. With no directory open, the dialog has no close button.
 

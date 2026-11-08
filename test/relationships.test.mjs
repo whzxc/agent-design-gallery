@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { buildSource } from '../src/toolkit/build.mjs';
 import { starterTokens, listSources } from '../src/toolkit/project.mjs';
-import { sourceRelationships } from '../public/relationships.js';
+import { sourceRelationships, relatedSources } from '../public/relationships.js';
 import { startServer } from '../src/server.mjs';
 
 function project(t) {
@@ -32,6 +32,47 @@ async function graph(config) {
   })));
   return sourceRelationships(assets);
 }
+
+test('transitive relationships retain shortest via paths, prefer direct edges and terminate cycles', () => {
+  const result=sourceRelationships([
+    {path:'surfaces/home.tsx',imports:['modules/home.tsx','modules/scenarios.tsx','components/direct.tsx']},
+    {path:'modules/home.tsx',imports:['modules/composer.tsx','components/alert.tsx','components/direct.tsx']},
+    {path:'modules/scenarios.tsx',imports:['modules/composer.tsx']},
+    {path:'modules/composer.tsx',imports:['components/alert.tsx','modules/home.tsx']},
+    {path:'components/alert.tsx',imports:[]},{path:'components/direct.tsx',imports:[]},
+  ]);
+  const uses=relatedSources(result,'surfaces/home.tsx');
+  assert.deepEqual(uses.find(r=>r.path==='modules/composer.tsx'),{path:'modules/composer.tsx',direct:false,via:['modules/home.tsx']});
+  assert.deepEqual(uses.find(r=>r.path==='components/alert.tsx').via,['modules/home.tsx']);
+  assert.equal(uses.find(r=>r.path==='components/direct.tsx').direct,true);
+  assert.equal(new Set(uses.map(r=>r.path)).size,5);
+  assert.ok(!relatedSources(result,'modules/home.tsx').some(r=>r.path==='modules/home.tsx'));
+  const usedBy=relatedSources(result,'components/alert.tsx','usedBy');
+  assert.deepEqual(usedBy.find(r=>r.path==='surfaces/home.tsx').via,['modules/home.tsx']);
+  assert.deepEqual(relatedSources(result,'missing.tsx'),[]);
+});
+
+test('build stamps exported JSX roots, nested wrappers, aliases and fragments without layout wrappers', async t => {
+  const c=project(t);
+  put(c,'components/box.tsx',`import {Frame} from 'sdg';
+    export function Box(){return <button>Box</button>}
+    const Arrow=()=> <><i>A</i><i>B</i></>; export {Arrow as Pair};
+    export const count=2;
+    export default()=> <Frame name="box"><div><Box/><Arrow/></div></Frame>;`);
+  put(c,'modules/wrapper.tsx',`import {Frame} from 'sdg';import {Box} from '../components/box';
+    export const Wrapper=()=> <Box/>;
+    export default()=> <Frame name="wrapper"><Wrapper/></Frame>;`);
+  const file=put(c,'surfaces/home.tsx',`import {Frame} from 'sdg';import {Wrapper} from '../modules/wrapper';import {Pair} from '../components/box';
+    function Local(){return <p>Local</p>}
+    export default()=> <Frame name="home"><main><Wrapper/><Pair/><Local/></main></Frame>;`);
+  const built=await buildSource(c,file,{write:false});
+  const html=built.frames[0].html;
+  const owners=[...html.matchAll(/data-sdg-owners="([^"]+)"/g)].map(m=>JSON.parse(m[1].replaceAll('&quot;','"')));
+  assert.deepEqual(owners[0],[{source:'components/box.tsx',export:'Box'},{source:'modules/wrapper.tsx',export:'Wrapper'}]);
+  assert.deepEqual(owners.slice(1),[[{source:'components/box.tsx',export:'Pair'}],[{source:'components/box.tsx',export:'Pair'}]]);
+  assert.match(html,/<main><button /);assert.match(html,/<p>Local<\/p>/);
+  assert.ok(!html.includes('data-sdg-owners="[]"'));
+});
 
 test('relationships resolve relative imports, explicit extensions, duplicates and direct edges only', async t => {
   const c = project(t);

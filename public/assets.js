@@ -179,17 +179,30 @@ async function prepareSource(asset, built, theme) {
       await frame.contentDocument.fonts.ready;
       const shell=frame.contentDocument.querySelector('[data-sdg-frame]');
       const box=shell.getBoundingClientRect();
+      const elements = [...shell.querySelectorAll('[data-sdg-owners]')].flatMap((node,index) => {
+        const rect = node.getBoundingClientRect();
+        let left=Math.max(rect.left,box.left),top=Math.max(rect.top,box.top),right=Math.min(rect.right,box.right),bottom=Math.min(rect.bottom,box.bottom);
+        for (let parent=node.parentElement;parent && parent!==shell;parent=parent.parentElement) {
+          const style=frame.contentWindow.getComputedStyle(parent);
+          if (!/(hidden|clip|auto|scroll)/.test(style.overflowX+' '+style.overflowY)) continue;
+          const clip=parent.getBoundingClientRect();
+          if (/(hidden|clip|auto|scroll)/.test(style.overflowX)) {left=Math.max(left,clip.left);right=Math.min(right,clip.right)}
+          if (/(hidden|clip|auto|scroll)/.test(style.overflowY)) {top=Math.max(top,clip.top);bottom=Math.min(bottom,clip.bottom)}
+        }
+        if (right<=left || bottom<=top || frame.contentWindow.getComputedStyle(node).visibility==='hidden') return [];
+        return [{id:String(index),owners:JSON.parse(node.dataset.sdgOwners),x:left-box.x,y:top-box.y,width:right-left,height:bottom-top}];
+      });
       if (built.component && x && x+box.width>1600) { x=0;y+=rowHeight+48;rowHeight=0; }
       const content=frame.contentDocument.createElement('div');
       content.setAttribute('xmlns','http://www.w3.org/1999/xhtml');
       content.setAttribute('style','font:16px/1.5 var(--font-ui);color:var(--text);');
       content.append(frame.contentDocument.querySelector('style').cloneNode(true),shell.cloneNode(true));
-      parts.push({id:String(index),name:form.name,note:form.note,x,y,width:box.width,height:box.height,markup:new XMLSerializer().serializeToString(content)});
+      parts.push({id:String(index),name:form.name,note:form.note,x,y,width:box.width,height:box.height,elements,markup:new XMLSerializer().serializeToString(content)});
       x+=box.width+32;rowHeight=Math.max(rowHeight,box.height);
     }
     const width=Math.max(1,...parts.map(p=>p.x+p.width)),height=Math.max(1,...parts.map(p=>p.y+p.height));
     const xml = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
     const source=`<svg xmlns="http://www.w3.org/2000/svg" data-theme="${theme}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.map(p=>`<g ${built.component ? 'data-component="source" data-form="'+xml(p.name)+'"' : 'data-part="frame-'+xml(p.name)+'"'}><foreignObject overflow="visible" x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}">${p.markup}</foreignObject></g>`).join('')}</svg>`;
-    return {...asset,format:'tsx',source,full:{x:0,y:0,width,height},parts:parts.map(({markup,...p})=>p),component:built.component,background:frame.contentWindow.getComputedStyle(frame.contentDocument.documentElement).getPropertyValue('--canvas').trim()};
+    return {...asset,imports:built.imports,format:'tsx',source,full:{x:0,y:0,width,height},parts:parts.map(({markup,...p})=>p),component:built.component,background:frame.contentWindow.getComputedStyle(frame.contentDocument.documentElement).getPropertyValue('--canvas').trim()};
   } finally { frame.remove(); }
 }

@@ -17,6 +17,8 @@ SDG uses the Float direction. A dotted canvas fills the window. Chrome floats ab
 - The zoom bar is back, then zoom out, the zoom menu and zoom in, then Fit and the minimap toggle. The zoom menu holds Fit all (0), Fit group, Fit selection and Zoom to 100% (1).
 - More holds Arrange current group and Keyboard shortcuts (?).
 - Collapsing the sidebar leaves the app bar: the sidebar toggle, SDG and the directory picker.
+- The right inspector follows source, frame and exported-element selection. It opens by default and remembers its collapsed state. Source path and frame name have inline copy controls, followed by frame sizes, a scrollable frame list and Relationships. Uses and Used by group direct and indirect sources by directory; indirect entries are muted and name their shortest route. The TSX review states are in `design/components/source-relationships.tsx`; the shared inspector shell is in `design/components/panel.tsx`.
+- Frame clicks select the variant. Hovering an exported component outlines its root; clicking it shows the owning source/export and matching frames. Selecting a relationship focuses its source, and selecting a matching frame focuses that variant. Source-title clicks select the source and retain copying; the copy icon alone copies. Escape clears selection and Back restores selection and camera.
 - With no directory open, the screen shows only the app bar and the open-directory dialog without a close button.
 
 Geometry, in CSS pixels at a 1440 × 900 viewport:
@@ -89,4 +91,4 @@ Ordinary controls use flex/grid layout and shared component functions. Only the 
 
 The ARC snapshot at `b9e18beb` contains 51 sources (31 components and 20 surfaces), 94 artboards and six sections: Essentials (8), Agents & quota (6), Tasks & interactions (5), Connections & MCP (6), components (14) and surfaces (12). The four curated groups retain their source order; the final two contain unlisted sources. Fit all is about 7% at the declared viewport. The MCP inspector includes the source frame notes and its empty frame is 960 × 434.
 
-Full sheet is removed from both the inspector and design frames. The shorter component inspector exposes the adjacent icon-button set label. Token names and light/dark theme selection are unchanged. Browser text metrics can differ from SVG central-baseline metrics by about one pixel.
+Full sheet is removed from both the inspector and design frames. Canvas labels occluded by the selection inspector are omitted. Token names and light/dark theme selection are unchanged. Browser text metrics can differ from SVG central-baseline metrics by about one pixel.

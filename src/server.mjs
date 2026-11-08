@@ -203,7 +203,7 @@ export async function startServer({
     selection: state.selections[root] ?? null,
     theme: state.theme,
     sidebar: state.sidebar ?? true,
-    inspector: state.inspector ?? false,
+    inspector: state.inspector ?? true,
   });
   function fixtureManifest(name) {
     const data = manifest();
@@ -330,6 +330,7 @@ export async function startServer({
               path: data.selection.path,
               form: typeof data.selection.form === 'string' ? data.selection.form : null,
               group: typeof data.selection.group === 'string' ? data.selection.group : null,
+              element: data.selection.element ?? null,
             };
           }
           await persist();
@@ -419,6 +420,7 @@ export async function startServer({
           "/layout.js": "layout.js",
           "/labels.js": "labels.js",
           "/relationships.js": "relationships.js",
+          "/selection.js": "selection.js",
           "/style.css": "style.css",
         }[url.pathname];
         if (!file) {
@@ -435,6 +437,7 @@ export async function startServer({
           "layout.js": "text/javascript",
           "labels.js": "text/javascript",
           "relationships.js": "text/javascript",
+          "selection.js": "text/javascript",
           "style.css": "text/css",
         }[file];
       }

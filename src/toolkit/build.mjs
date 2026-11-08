@@ -1,4 +1,4 @@
-import { build } from 'esbuild';
+import { build, transform } from 'esbuild';
 import { compile } from 'tailwindcss';
 import { statSync, readFileSync, realpathSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -25,6 +25,7 @@ export async function buildSource(config, file, { write = true, allowLegacy = tr
   const imports = new Set(), sources = sourceDirectories(config);
   const result = await build({ entryPoints: [file], bundle: true, write: false, format: 'esm', platform: 'node', jsx: 'automatic', jsxImportSource: 'sdg', jsxDev: true, metafile: true, logLevel: 'silent', plugins: [{ name: 'sdg-sources', setup(api) {
     api.onResolve({ filter: /.*/ }, args => {
+      if (args.path === 'sdg:self') return {path:args.importer};
       if (['sdg','sdg/jsx-runtime','sdg/jsx-dev-runtime'].includes(args.path)) return { path: pathToFileURL(runtime).href, external: true };
       if (args.kind !== 'entry-point' && !args.path.startsWith('.')) return { errors: [{ text: `Bare import ${args.path} is unavailable; import sdg or a relative file inside design/` }] };
       const url = args.path.endsWith('?url');
@@ -42,6 +43,21 @@ export async function buildSource(config, file, { write = true, allowLegacy = tr
       return { path: resolved, ...(url ? {namespace:'art-url'} : {}) };
     });
     api.onLoad({filter:/.*/,namespace:'art-url'}, args => ({contents:readFileSync(args.path),loader:'dataurl'}));
+    api.onLoad({filter:/\.tsx$/}, async args => {
+      const sourcePath = path.relative(base, args.path).split(path.sep).join('/');
+      if (!isSourcePath(sourcePath, sources)) return;
+      const original=readFileSync(args.path,'utf8');
+      // esbuild's normalized export list supplies public names; static namespace
+      // accesses preserve aliases and let the bundler drop imported frame renderers.
+      const compiled=await transform(original,{loader:'tsx',format:'esm',jsx:'preserve'});
+      const names=[...compiled.code.matchAll(/\nexport\s*\{([^}]+)\}\s*;\s*$/g)].flatMap(match=>match[1].split(',').map(entry=>entry.trim().split(/\s+as\s+/).at(-1)).filter(name=>name && name!=='default'));
+      const registrations=names.map(name=>`__sdgRegister(__sdgExports[${JSON.stringify(name)}],${JSON.stringify(sourcePath)},${JSON.stringify(name)});`).join('\n');
+      return {contents:`${original}
+import * as __sdgExports from 'sdg:self';
+import {registerComponent as __sdgRegister} from 'sdg';
+${registrations}
+`,loader:'tsx'};
+    });
     api.onLoad({ filter: /\.(png|jpe?g|webp)$/i }, args => ({ contents: readFileSync(args.path), loader: 'dataurl' }));
     api.onLoad({ filter: /\.svg$/i }, args => {
       const source = readFileSync(args.path,'utf8');

@@ -58,11 +58,11 @@ const forms = [
   }
 ];
 
-export function TreeRow({form='item',label='button',meta,icon,indent=0,width=236,height=form.startsWith('two-line')?44:28}: {form?:string;label?:string;meta?:string;icon?:string;indent?:number;width?:number;height?:number}) {
+export function TreeRow({form='item',label='button',meta,icon,indent=0,width=236,height=form.startsWith('two-line')?44:28,multiline=false}: {form?:string;label?:string;meta?:string;icon?:string;indent?:number;width?:number;height?:number;multiline?:boolean}) {
   const two=form.startsWith('two-line'),group=form.startsWith('group');
-  return <div class={`flex items-center shrink-0 pr-2 rounded-row leading-[1.2] ${indent===20?'pl-7':indent===-2?'pl-[6px]':'pl-2'} ${form.endsWith('selected')?'bg-surface-sunken':''} ${form==='item'?'text-text-secondary':'text-text'}`} style={{width,height}}>
+  return <div class={`flex items-center shrink-0 pr-2 rounded-row leading-[1.2] ${multiline?'min-h-7 py-[6px]':''} ${indent===20?'pl-7':indent===-2?'pl-[6px]':'pl-2'} ${form.endsWith('selected')?'bg-surface-sunken':''} ${form==='item'?'text-text-secondary':'text-text'}`} style={{width,...(multiline?{}:{height})}}>
     <Icon name={icon??(group?'chevron-down':two?'folder-open':form.startsWith('root')?'layout-grid':'component')} size={two?16:14} class={form.endsWith('selected')?'text-text':'text-text-tertiary'}/>
-    <div class={two?'ml-3 flex flex-col gap-[3px]':group?'ml-[6px]':'ml-2'}><span class={`text-body ${two||group||form.startsWith('root')?'font-[550]':''}`}>{label}</span>{two&&<span class="text-caption font-mono text-text-tertiary">{meta}</span>}</div>
+    <div class={`${two?'ml-3 flex flex-col gap-[3px]':group?'ml-[6px]':'ml-2'} ${multiline?'min-w-0 flex-1 mr-[6px]':''}`}><span class={`text-body ${multiline?'break-words whitespace-normal':''} ${two||group||form.startsWith('root')?'font-[550]':''}`}>{label}</span>{two&&<span class="text-caption font-mono text-text-tertiary">{meta}</span>}</div>
     {!two&&meta&&<span class="ml-auto text-meta text-text-tertiary">{meta}</span>}
   </div>;
 }

@@ -3,6 +3,8 @@ import { fitArea, fitView } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
 import { prepare, imageURL, arrange, groupAssets } from "./assets.js";
+import { sourceRelationships, relatedSources } from './relationships.js';
+import { hitSelection, frameBox, exportFrames } from './selection.js';
 // ARC's gallery layout and camera model, decoupled from its React runtime.
 const $ = (selector) => document.querySelector(selector);
 const viewport = $(".gallery-viewport"),
@@ -34,6 +36,10 @@ let raf = 0,
 const labelLayer = new Labels($("#labels"), copyError => {
   if (copyError) error(`Cannot copy name: ${copyError.message}`);
   else if ($('#error').textContent.startsWith('Cannot copy name:')) error('');
+}, target => {
+  const a=assets.find(a=>a.path===target.path && (target.form===undefined || a.component || a.shown[0].id===target.form));
+  if (target.form !== undefined) selectFrame(a,a?.parts.find(p=>p.id===target.form));
+  else selectSource(a);
 });
 document.fonts.ready.then(() => {labelLayer.metrics.clear();requestDraw()});
 let labelsDirty = true, labelObstacles = null;
@@ -46,6 +52,8 @@ let sidebar = true,
   inspector = false,
   selectedId = null,
   selectedForm = null,
+  selectedElement = null,
+  hoveredElement = null,
   inspection = null;
 let backgroundChoice = "theme", backgroundColors = {};
 let history = [],
@@ -62,6 +70,7 @@ function remember() {
     selected,
     selectedId,
     selectedForm,
+    selectedElement,
     inspection,
     inspector,
   });
@@ -70,7 +79,7 @@ function remember() {
 function back() {
   const old = history.pop();
   if (old) {
-    ({ active, selected, selectedId, selectedForm, inspection, inspector } = old);
+    ({ active, selected, selectedId, selectedForm, selectedElement = null, inspection } = old);
     selection();
     commit(old.view);
   }
@@ -114,6 +123,7 @@ window.__sdg = {
   get assets() {
     return assets.length;
   },
+  get selection() {return {path:selected, frame:currentItem()?.parts.find(p=>p.id===selectedForm)?.name ?? null, element:selectedElement?.owner ?? null}},
   get items() {
     return assets.map(({ id, path, x, y, width, height, group }) => ({
       id,
@@ -156,6 +166,7 @@ function preferences() {
     selection: {
       path: selected,
       form: currentItem()?.parts.find(p => p.id === selectedForm)?.name ?? null,
+      element: selectedElement ? {id:selectedElement.id, owner:selectedElement.owner} : null,
       group: groups[active]?.title ?? null,
     },
     theme, sidebar, inspector,
@@ -297,7 +308,7 @@ function renderNav() {
       toggle.onclick=()=>{expanded.has(i)?expanded.delete(i):expanded.add(i);renderNav()};
       button.className='group-name';button.dataset.navkey=`group:${g.title}`;
       const title=document.createElement('span'), count=document.createElement('span'); title.textContent=g.title;count.textContent=g.assets.length;count.className='count';button.append(title,count);
-      button.onclick=()=>navigate(()=>{remember();inspection=null;active=i;selected=null;selectedId=null;selectedForm=null;expanded.add(i);selection();frame(groups[i])});
+      button.onclick=()=>navigate(()=>{remember();inspection=null;active=i;selected=null;selectedId=null;selectedForm=null;selectedElement=null;expanded.add(i);selection();frame(groups[i])});
       row.append(toggle,button);section.append(row);
       if(expanded.has(i)) { const files=document.createElement('div');files.className='group-files';
         for(const a of g.assets) {const item=makeRow((a.component ?? a.path.startsWith('components/'))?'component':'app-window',a.name,undefined,'tree-row file');item.dataset.navkey=`file:${a.path}`;item.setAttribute('aria-current',String(selected===a.path));item.onclick=()=>navigate(()=>focusAsset(assets.find(x=>x.path===a.path)));files.append(item)}
@@ -310,24 +321,88 @@ function renderNav() {
   if(focusKey) $("#modules").querySelector(`[data-navkey="${CSS.escape(focusKey)}"]`)?.focus({preventScroll:true});
   requestDraw();
 }
+function renderRelationships(source) {
+  const basename = path => path.split('/').at(-1).replace(/\.tsx$/, '');
+  for (const [id,direction] of [['uses','uses'],['used-by','usedBy']]) {
+    const entries=relatedSources(manifest?.relationships ?? {},source,direction), directories=new Map();
+    for (const entry of entries) {
+      const directory=entry.path.split('/')[0];
+      if (!directories.has(directory)) directories.set(directory,[]);
+      directories.get(directory).push(entry);
+    }
+    const nodes=[];
+    for (const directory of [...directories.keys()].sort().reverse()) {
+      const group=document.createElement('section'),heading=document.createElement('h5');
+      heading.className='relationship-directory';heading.textContent=directory;group.append(heading);
+      for (const entry of directories.get(directory)) {
+        const via=entry.via.map(path=>basename(path)===basename(entry.path)?path.replace(/\.tsx$/,''):basename(path)).join(' → ');
+        const button=makeRow(directory==='surfaces'?'app-window':'component',basename(entry.path)+(via?` · via ${via}`:''),undefined,'tree-row relationship-row'+(entry.direct?'':' indirect'));
+        button.dataset.relatedPath=entry.path;button.dataset.direct=String(entry.direct);
+        button.title=entry.path+(entry.via.length?` via ${entry.via.join(' → ')}`:'');
+        button.setAttribute('aria-label',`Open ${entry.path}`+(via?` via ${via}`:''));
+        button.onclick=()=>navigate(()=>focusAsset(assets.find(a=>a.path===entry.path)));
+        group.append(button);
+      }
+      nodes.push(group);
+    }
+    if (!nodes.length) {const empty=document.createElement('p');empty.className='relationship-empty';empty.textContent='None';nodes.push(empty)}
+    $('#'+id).replaceChildren(...nodes);
+  }
+}
 function selection() {
+  hoveredElement=null;
   renderNav(); updateChrome();
-  $("#back").disabled=!history.length;
-  $("#inspect").setAttribute('aria-pressed',String(inspector));
-  const a=currentItem();
+  $('#back').disabled=!history.length;
+  $('#inspect').setAttribute('aria-pressed',String(inspector));
+  const host=currentItem(), part=host?.parts.find(p=>p.id===selectedForm);
+  const owner=selectedElement?.owner;
+  const a=owner ? manifest?.assets.find(a=>a.path===owner.source) : host;
   if(a) {
-    $("#source-name").textContent=a.name;$("#source-path").textContent=a.path;
-    $("#forms-heading").textContent=a.component?'Forms':'Frames';
-    $("#forms").replaceChildren(...a.parts.map(p=>{
+    $('#source-name').textContent=owner?.export ?? a.name;$('#source-path').textContent=a.path;
+    $('#source-path').title=a.path;
+    $('#frame-detail').hidden=!part;
+    $('#frame-name').textContent=part?.name ?? '';
+    const size=selectedElement ?? part;
+    $('#frame-size').textContent=size?`${Math.round(size.width)} × ${Math.round(size.height)}`:'';
+    $('#forms-heading').textContent=owner?'Frames using this export':a.component?'Forms':'Frames';
+    const forms=owner?exportFrames(a,owner):a.parts;
+    $('#forms').replaceChildren(...forms.map(p=>{
       const button=makeRow(a.component?'component':'app-window',p.name,`${Math.round(p.width)} × ${Math.round(p.height)}`);
-      button.setAttribute('aria-current',String(!inspection && (a.component ? (selectedForm??a.parts[0]?.id)===p.id : a.shown[0].id===p.id)));
+      button.classList.add('frame-row');button.title=p.name;
+      button.dataset.frame=p.name;
+      button.setAttribute('aria-current',String(!owner && selectedForm===p.id));
       button.onclick=()=>inspectForm(a,p);
-      if (p.note) { const row=document.createElement('div');row.append(button);const note=document.createElement('p');note.textContent=p.note;note.style.cssText='margin:4px 8px 8px;color:var(--text-secondary)';row.append(note);return row; }
+      if (p.note) { const row=document.createElement('div');row.append(button);const note=document.createElement('p');note.textContent=p.note;note.className='frame-note';row.append(note);return row; }
       return button;
     }));
+    if (!forms.length) {const empty=document.createElement('p');empty.className='relationship-empty';empty.textContent='No matching frames';$('#forms').append(empty)}
+    renderRelationships(a.path);
   }
-  requestDraw();
-  save();
+  updateOutlines();requestDraw();save();
+}
+function selectSource(a) {
+  if (!a) return;
+  remember();inspection=null;selected=a.path;selectedId=a.id;selectedForm=null;selectedElement=null;active=a.group;expanded.add(active);selection();
+}
+function selectFrame(a,p,element=null) {
+  if (!a || !p) return;
+  remember();selected=a.path;selectedId=a.id;selectedForm=p.id;active=a.group;selectedElement=element?{...element,owner:element.owners.at(-1)}:null;
+  expanded.add(active);selection();
+}
+function clearSelection() { selected=null;selectedId=null;selectedForm=null;selectedElement=null;inspection=null;selection(); }
+function selectedBox() {
+  const a=currentItem(),p=a?.parts.find(p=>p.id===selectedForm);
+  if (!p) return null;
+  const box=frameBox(a,p);
+  return selectedElement?{...selectedElement,x:box.x+selectedElement.x,y:box.y+selectedElement.y}:box;
+}
+function updateOutlines() {
+  const hover=hoveredElement,origin=hover?.part?frameBox(hover.asset,hover.part):null;
+  const hoverBox=hover?.element?{...hover.element,x:origin.x+hover.element.x,y:origin.y+hover.element.y}:null;
+  for (const [id,box] of [['selection-outline',selectedBox()],['hover-outline',hoverBox]]) {
+    const el=$('#'+id);el.hidden=!box || moving;
+    if (box) Object.assign(el.style,{left:`${view.x+box.x*view.scale}px`,top:`${view.y+box.y*view.scale}px`,width:`${box.width*view.scale}px`,height:`${box.height*view.scale}px`});
+  }
 }
 
 function cameraArea() { return fitArea(width, height, sidebar, inspector && !!selected); }
@@ -340,41 +415,21 @@ function fit() {
   remember();
   inspection = null;
   selected = null;
-  selectedId = null;
+  selectedId = null;selectedForm=null;selectedElement=null;
   active = null;
   selection();
   frame(world);
 }
 function focusAsset(a) {
   if (!a) return;
-  if (a === inspection) {
-    frame(a);
-    return;
-  }
-  remember();
-  inspection = null;
-  selected = a.path;
-  selectedId = a.id;
-  active = a.group;
-  selectedForm = a.parts[0]?.id ?? null;
-  expanded.add(active);
-  selection();
-  frame(a, 24);
+  selectSource(a);
+  frame(a,24);
 }
-function inspectForm(a, p) {
+function inspectForm(a,p) {
   if (!a || !p) return;
-  remember();
-  const item=assets.find(item=>item.path===a.path && (a.component || item.shown[0].id===p.id)) ?? assets.find(item=>item.path===a.path);
-  selected=a.path;selectedId=item.id;selectedForm=p.id;active=item.group;expanded.add(active);inspector=true;
-  if(p.id==='full') {
-    inspection={...item,id:item.id+'@full',x:0,y:0,width:p.width,height:p.height,shown:[p],kind:'sheet'};
-    selection();frame(inspection,24);
-  } else {
-    inspection=null;selection();
-    if(a.component) {const crop=item.shown[0];frame({x:item.x+p.x-crop.x,y:item.y+p.y-crop.y,width:p.width,height:p.height},24)}
-    else frame(item,24);
-  }
-  save();
+  const item=assets.find(item=>item.path===a.path && (a.component || item.shown[0].id===p.id));
+  if (!item) return;
+  inspection=null;selectFrame(item,p);frame(frameBox(item,p),24);
 }
 
 function zoom(scale, x = cameraArea().x + cameraArea().width / 2, y = cameraArea().y + cameraArea().height / 2) {
@@ -551,7 +606,7 @@ function draw() {
         } else ctx.drawImage(source, pos.x, pos.y, pos.part.width, pos.part.height);
       }
       ctx.restore();
-      const chosen = inspection ? true : selectedId === a.id;
+      const chosen = selected === a.path && selectedForm === null;
       ctx.strokeStyle = chosen ? palette.accent : palette.border;
       ctx.lineWidth = (chosen ? 2 : 1) / view.scale; ctx.stroke();
     }
@@ -560,6 +615,7 @@ function draw() {
     drawingView = { ...view }; drawingDirty = false;
   }
   canvas.style.transform = `translate(${view.x - drawingView.x - drawingMargin}px,${view.y - drawingView.y - drawingMargin}px)`;
+  updateOutlines();
   drawLabels(displayed);
   const percentage = `${Math.round(view.scale * 100)}%`;
   if (zoomValue.textContent !== percentage) zoomValue.textContent = percentage;
@@ -593,6 +649,8 @@ function drawLabels(displayed) {
   const caption = Number.parseFloat(palette['text-caption']), meta = Number.parseFloat(palette['text-meta']), section = Number.parseFloat(palette['text-section']);
   const part = (text, size, weight, color, gap = 0) => ({ text, size, weight, color, gap });
   const title = (...args) => ({...part(...args),copyText:args[0]});
+  const sourceTitle = (a,...args) => ({...title(...args),selection:{path:a.path}});
+  const frameTitle = (a,p,...args) => ({...title(...args),selection:{path:a.path,form:p.id}});
   const modified = a => a.modified ? [{...part(a.modified.text,meta,400,palette['text-tertiary'],10),...a.modified,optional:true}] : [];
   const heading = (x, y, right) => {
     const half = meta * .6;
@@ -619,20 +677,20 @@ function drawLabels(displayed) {
       const p = screen(a), chosen = selectedId === a.id;
       if (a.kind === 'set' || inspection) {
         candidates.push({ id: `set:${a.id}`, ...heading(p.x,p.y-12,p.x+(a.width+64)*view.scale-10),
-          parts:[title(inspection ? a.shown[0].name : a.name,meta,550,chosen ? palette.text : palette['text-secondary']), ...(!inspection ? [{ ...part(`${a.parts.length} ${a.parts.length === 1 ? 'form' : 'forms'}`,meta,400,palette['text-tertiary'],6), optional: true },...modified(a)] : [])] });
+          parts:[sourceTitle(a,inspection ? a.shown[0].name : a.name,meta,550,chosen ? palette.text : palette['text-secondary']), ...(!inspection ? [{ ...part(`${a.parts.length} ${a.parts.length === 1 ? 'form' : 'forms'}`,meta,400,palette['text-tertiary'],6), optional: true },...modified(a)] : [])] });
         if (!inspection && view.scale >= .75 && a.parts.length > 1) {
           const crop = a.shown[0];
           candidates.push(...a.parts.map(form => ({ id:`form:${a.id}:${form.id}`,x:p.x+(form.x-crop.x)*view.scale,y:p.y+(form.y-crop.y)*view.scale-9.5,slot:Infinity,height:13,paddingRight:6,within:{x:p.x,y:p.y,width:a.width*view.scale,height:a.height*view.scale},
-            parts:[title(form.name,caption,400,palette['text-tertiary'])] })));
+            parts:[frameTitle(a,form,form.name,caption,400,palette['text-tertiary'])] })));
         }
       } else {
         if (!flows.has(a.path)) {
           flows.add(a.path);
           const family = displayed.filter(item => item.path === a.path), first = family[0];
           const origin = screen(first), right = Math.max(...family.map(item => item.x+item.width));
-          candidates.push({ id:`flow:${a.path}`,...heading(origin.x,origin.y-34,origin.x+(right-first.x)*view.scale),parts:[title(a.name,meta,600,palette['text-secondary']),{...part(`${a.parts.length} ${a.parts.length === 1 ? 'frame' : 'frames'}`,meta,400,palette['text-tertiary'],6),optional:true},...modified(a)] });
+          candidates.push({ id:`flow:${a.path}`,...heading(origin.x,origin.y-34,origin.x+(right-first.x)*view.scale),parts:[sourceTitle(a,a.name,meta,600,palette['text-secondary']),{...part(`${a.parts.length} ${a.parts.length === 1 ? 'frame' : 'frames'}`,meta,400,palette['text-tertiary'],6),optional:true},...modified(a)] });
         }
-        candidates.push({ id:`frame:${a.id}`,x:p.x,y:p.y-12,slot:(a.width+64)*view.scale,parts:[title(a.shown[0].name,caption,chosen?550:400,chosen?palette.text:palette['text-tertiary'])] });
+        candidates.push({ id:`frame:${a.id}`,x:p.x,y:p.y-12,slot:(a.width+64)*view.scale,parts:[frameTitle(a,a.shown[0],a.shown[0].name,caption,chosen?550:400,chosen?palette.text:palette['text-tertiary'])] });
       }
     }
   }
@@ -719,7 +777,12 @@ viewport.addEventListener("pointerdown", (e) => {
 });
 viewport.addEventListener("pointermove", (e) => {
   const old = pointers.get(e.pointerId);
-  if (!old) return;
+  if (!old) {
+    const rect=viewport.getBoundingClientRect();
+    hoveredElement=hitSelection(inspection?[inspection]:assets,(e.clientX-rect.left-view.x)/view.scale,(e.clientY-rect.top-view.y)/view.scale);
+    updateOutlines();return;
+  }
+  hoveredElement=null;updateOutlines();
   const before = [...pointers.values()];
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) > 4)
@@ -748,23 +811,17 @@ viewport.addEventListener("pointermove", (e) => {
     });
   }
 });
+viewport.addEventListener('pointerleave',()=>{hoveredElement=null;updateOutlines()});
 function up(e) {
   if (!pointers.delete(e.pointerId)) return;
   if (e.type === "pointerup" && !gesture.moved) {
     const rect = viewport.getBoundingClientRect(),
       x = (e.clientX - rect.left - view.x) / view.scale,
       y = (e.clientY - rect.top - view.y) / view.scale;
-    const a = (inspection ? [inspection] : assets).find(
-      (a) => x >= a.x && x <= a.x + a.width && y >= a.y && y <= a.y + a.height,
-    );
-    if (a) {
-      selected = a.path;
-      selectedId = a.id;
-      active = a.group;
-      selectedForm = a.component ? a.parts[0]?.id ?? null : a.shown[0].id;
-      selection();
-
-    }
+    const hit=hitSelection(inspection?[inspection]:assets,x,y);
+    if(hit?.part) selectFrame(hit.asset,hit.part,hit.element);
+    else if(hit) selectSource(hit.asset);
+    else clearSelection();
   }
   if (viewport.hasPointerCapture(e.pointerId))
     viewport.releasePointerCapture(e.pointerId);
@@ -779,7 +836,10 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "-") zoom(v.scale / 1.25);
   else if (e.key === "0") fit();
   else if (e.key === "Escape") return;
-  else if (e.key === "Enter") focusAsset(currentItem());
+  else if (e.key === "Enter") {
+    if (e.target.closest('button,a,[role="button"]')) return;
+    const a=currentItem(),p=a?.parts.find(p=>p.id===selectedForm);if(p) inspectForm(a,p);else focusAsset(a);
+  }
   else if (e.key === "1") zoom(1);
   else if (e.key.startsWith("Arrow"))
     commit({
@@ -792,13 +852,14 @@ document.addEventListener("keydown", (e) => {
 });
 viewport.addEventListener("dblclick", () => {
   const a = currentItem();
-  if (a) focusAsset(a);
+  const p=a?.parts.find(p=>p.id===selectedForm);
+  if (p) inspectForm(a,p); else if(a) focusAsset(a);
 });
 for (const [id, action] of Object.entries({
   "zoom-fit-all": fit,
   "zoom-fit-group": () => frame(active === null ? world : groups[active]),
   "zoom-fit-selection": () =>
-    frame(currentItem() || (active === null ? world : groups[active]), currentItem() ? 24 : 0),
+    frame(selectedBox() || currentItem() || (active === null ? world : groups[active]), currentItem() ? 24 : 0),
   "zoom-actual": () => zoom(1),
 }))
   $("#" + id).onclick = () => {
@@ -820,10 +881,8 @@ $("#close-inspector").onclick = () => {
   selection();
   save();
 };
-$("#copy-path").onclick = () =>
-  navigator.clipboard
-    .writeText(manifest.directory + "/" + selected)
-    .catch((e) => error(e.message));
+$('#copy-path').onclick=()=>navigator.clipboard.writeText($('#source-path').textContent).catch(e=>error(e.message));
+$('#copy-frame').onclick=()=>navigator.clipboard.writeText($('#frame-name').textContent).catch(e=>error(e.message));
 $("#fullscreen").onclick = () => {
   const p = document.fullscreenElement
     ? document.exitFullscreen()
@@ -831,7 +890,7 @@ $("#fullscreen").onclick = () => {
   p.catch((e) => error(e.message));
 };
 $("#fit-current").onclick = () =>
-  frame(currentItem() || (active !== null ? groups[active] : world), currentItem() ? 24 : 0);
+  frame(selectedBox() || currentItem() || (active !== null ? groups[active] : world), currentItem() ? 24 : 0);
 $("#map-toggle").onclick = () => {
   $("#minimap").hidden = !$("#minimap").hidden;
   $("#map-toggle").setAttribute("aria-pressed", String(!$("#minimap").hidden));
@@ -887,6 +946,7 @@ $("#search").onfocus = () => {
       active,
       selected,
       selectedId,
+      selectedForm,selectedElement,
       inspection,
       inspector,
     };
@@ -899,8 +959,6 @@ $("#search").onkeydown = (e) => {
 };
 $("#minus").onclick = () => zoom(view.scale / 1.25);
 $("#plus").onclick = () => zoom(view.scale * 1.25);
-$("#reveal").onclick = () =>
-  api("/reveal", { path: selected }).catch((e) => error(e.message));
 function resizeViewport() {
   window.__sdg.ready = false;
   const oldW = width,
@@ -1021,7 +1079,7 @@ async function applyManifest(data, force = false) {
     )
       prepared.delete(key);
   const previous = manifest;
-  manifest = { ...data, assets: results, renderTheme: versionTheme };
+  manifest = { ...data, assets: results, relationships:sourceRelationships(results), renderTheme: versionTheme };
   catalog = null;
   if (changedRoot) {
     cache.clear();
@@ -1029,6 +1087,7 @@ async function applyManifest(data, force = false) {
     queued = [];
     selected = null;
     selectedId = null;
+    selectedForm = null;selectedElement=null;
     inspection = null;
     active = null;
     history = [];
@@ -1053,7 +1112,9 @@ async function applyManifest(data, force = false) {
       if (item) {
         selected = item.path;
         selectedId = item.id;
-        selectedForm = form?.id ?? item.parts[0]?.id ?? null;
+        selectedForm = form?.id ?? null;
+        const element=restored.element && form?.elements?.find(e=>e.id===restored.element.id);
+        selectedElement=element?.owners.some(o=>o.source===restored.element.owner?.source && o.export===restored.element.owner?.export)?{...element,owner:restored.element.owner}:null;
         active = item.group;
         expanded.add(active);
       } else {
@@ -1066,8 +1127,18 @@ async function applyManifest(data, force = false) {
   if (selected && !assets.some((a) => a.path === selected)) {
     selected = null;
     selectedId = null;
+    selectedForm = null;selectedElement=null;
     inspection = null;
-  } else if (inspection) {
+  } else if (selected) {
+    const a=currentItem(),p=a?.parts.find(p=>p.id===selectedForm);
+    if (!a) {selectedId=assets.find(a=>a.path===selected)?.id;selectedForm=null;selectedElement=null}
+    else if (selectedForm!==null && !p) {selectedForm=null;selectedElement=null}
+    else if (selectedElement) {
+      const next=p?.elements?.find(e=>e.id===selectedElement.id);
+      selectedElement=next?.owners.some(o=>o.source===selectedElement.owner.source && o.export===selectedElement.owner.export)?{...next,owner:selectedElement.owner}:null;
+    }
+  }
+  if (inspection) {
     const a=assets.find(a=>a.path===selected),p={...a.full,id:'full',name:'Full sheet'};
     inspection={...a,id:a.id+'@full',x:0,y:0,width:p.width,height:p.height,shown:[p],kind:'sheet'};
   }
@@ -1121,7 +1192,7 @@ document.addEventListener('keydown',event=>{
 async function applyFixture() {
   const state=fixtureState;if(!state)return;
   fixtureApplied=false;delete document.documentElement.dataset.fixtureReady;
-  sidebar=state.sidebar;inspector=!!state.inspector;history=[];inspection=null;selected=null;selectedId=null;selectedForm=null;expanded.clear();
+  sidebar=state.sidebar;inspector=!!state.inspector;history=[];inspection=null;selected=null;selectedId=null;selectedForm=null;selectedElement=null;expanded.clear();
   active=state.group ? groups.findIndex(g=>g.title===state.group) : null;
   if(active===-1) throw new Error(`Fixture group not found: ${state.group}`);
   if(active!==null) expanded.add(active);
@@ -1188,6 +1259,7 @@ document.addEventListener("keydown", (e) => {
         active,
         selected,
         selectedId,
+        selectedForm,selectedElement,
         inspection,
         inspector,
       };
@@ -1202,13 +1274,9 @@ document.addEventListener("keydown", (e) => {
     searchReturn = null;
     $("#search").value = "";
     toggleSidebar(old.sidebar);
-    ({ active, selected, selectedId, selectedForm, inspection, inspector } = old);
+    ({ active, selected, selectedId, selectedForm, selectedElement = null, inspection } = old);
     selection();
     commit(old.view);
-  } else if (inspector && selected) {
-    inspector = false;
-    selection();
-    save();
-  } else back();
+  } else clearSelection();
   viewport.focus({ preventScroll: true });
 });

@@ -37,9 +37,10 @@ export function placeLabels(candidates, obstacles, width, height, measure) {
   return result;
 }
 export class Labels {
-  constructor(root, onCopyError) {
+  constructor(root, onCopyError, onSelect) {
     this.root = root;
     this.onCopyError = onCopyError;
+    this.onSelect = onSelect;
     this.layer = document.createElement('div');
     this.layer.className = 'label-layer';
     root.append(this.layer);
@@ -70,13 +71,17 @@ export class Labels {
       shown.add(label.id);
       let node = this.nodes.get(label.id);
       if (!node) { node = document.createElement('div'); node.className = 'canvas-label'; this.nodes.set(label.id, node); this.layer.append(node); }
-      const signature = JSON.stringify(label.parts);
+      const signature = JSON.stringify(label.parts.map(({color,weight,width,...part})=>part));
       if (node.dataset.signature !== signature) {
         node.replaceChildren(...label.parts.map(part => {
           const span = document.createElement(part.copyText !== undefined ? 'button' : part.timestamp ? 'time' : 'span'); span.textContent = part.text;
           if (part.copyText !== undefined) {
             span.type = 'button';
             span.className = 'label-copy';
+            if (part.selection) {
+              span.dataset.sourcePath=part.selection.path;
+              if (part.selection.form!==undefined) span.dataset.form=part.selection.form;
+            }
             const glyph = document.createElement('span'); glyph.className = 'label-copy-icon';
             glyph.hidden = part.copyIcon === false;
             const feedback = copied => {
@@ -91,6 +96,7 @@ export class Labels {
             let timer;
             span.onclick = async e => {
               e.stopPropagation();
+              if (part.selection && !e.target.closest('.label-copy-icon')) this.onSelect?.(part.selection);
               try {
                 await navigator.clipboard.writeText(part.copyText);
                 this.onCopyError?.(null);
@@ -104,6 +110,7 @@ export class Labels {
         }));
         node.dataset.signature = signature;
       }
+      for (const [i,part] of label.parts.entries()) Object.assign(node.children[i].style,{fontSize:`${part.size}px`,fontWeight:part.weight??400,color:part.color,marginLeft:`${part.gap??0}px`});
       if (node.hidden) node.hidden = false;
       node.style.transform = `translate(${label.x}px,${label.y}px)`;
       const height = `${label.height}px`;

@@ -15,11 +15,21 @@ export function attributes(props) {
     return ` ${key}="${escape(value === true ? '' : value)}"`;
   }).join('');
 }
-export const Fragment = ({ children: value }) => markup(children(value));
+const componentOwners = new WeakMap();
+export function registerComponent(component, source, name) {
+  if (typeof component === 'function' && !componentOwners.has(component)) componentOwners.set(component, {source, export:name});
+}
+const stamp = (value, owner) => Array.isArray(value) ? value.map(item => stamp(item, owner)) : value?.withOwner ? value.withOwner(owner) : value;
+export const Fragment = ({ children: value }) => ({...markup(children(value)), withOwner:owner => Fragment({children:stamp(value,owner)})});
 export function jsx(type, props = {}) {
-  if (typeof type === 'function') return type(props);
+  if (typeof type === 'function') {
+    const value = type(props), owner = componentOwners.get(type);
+    return owner ? stamp(value, owner) : value;
+  }
   if (['script', 'style'].includes(type.toLowerCase())) throw Error(`Forbidden <${type}>; use tokens and utility classes`);
-  return markup(`<${type}${attributes(props)}>${voids.has(type) ? '' : children(props.children) + `</${type}>`}`);
+  const result = markup(`<${type}${attributes(props)}>${voids.has(type) ? '' : children(props.children) + `</${type}>`}`);
+  result.withOwner = owner => jsx(type, {...props, 'data-sdg-owners':JSON.stringify([...(props['data-sdg-owners'] ? JSON.parse(props['data-sdg-owners']) : []), owner])});
+  return result;
 }
 export const jsxs = jsx;
 export function jsxDEV(type, props, key, isStatic, source) {
@@ -38,5 +48,7 @@ export function artwork(source, props) {
   if (!match) throw Error('Invalid SVG artwork');
   let attrs = match[1];
   for (const key of Object.keys(props)) attrs = attrs.replace(new RegExp(`\\s${key}\\s*=\\s*(["']).*?\\1`, 'g'), '');
-  return markup(`<svg${attrs}${attributes(props)}>${match[2]}</svg>`);
+  const result = markup(`<svg${attrs}${attributes(props)}>${match[2]}</svg>`);
+  result.withOwner = owner => artwork(source, {...props, 'data-sdg-owners':JSON.stringify([...(props['data-sdg-owners'] ? JSON.parse(props['data-sdg-owners']) : []), owner])});
+  return result;
 }

@@ -9,7 +9,7 @@
 <body>
 <div class="gallery">
   <main class="gallery-viewport" tabindex="0" aria-label="Design canvas" aria-describedby="controls">
-    <canvas id="canvas-background" aria-hidden="true"></canvas><canvas id="drawings" aria-hidden="true"></canvas><div id="labels"></div><div id="asset-access" class="sr"></div>
+    <canvas id="canvas-background" aria-hidden="true"></canvas><canvas id="drawings" aria-hidden="true"></canvas><div id="hover-outline" hidden></div><div id="selection-outline" hidden></div><div id="labels"></div><div id="asset-access" class="sr"></div>
     <div id="empty" hidden>No SVG files in this directory.</div>
   </main>
   <aside id="sidebar" class="floating" aria-label="Design sidebar">
@@ -26,8 +26,9 @@
     <button id="more" class="icon-button" popovertarget="more-menu" aria-label="More" data-tooltip="More"><span data-icon="ellipsis"></span></button>
   </div>
   <aside id="source" class="floating" hidden aria-label="Inspector">
-    <div class="inspector-heading"><h2 id="source-name"></h2><button id="close-inspector" class="icon-button" aria-label="Close inspector"><span data-icon="x" data-size="14"></span></button><p id="source-path"></p><div class="source-actions"><button id="copy-path"><span data-icon="copy" data-size="14"></span>Copy path</button><button id="reveal"><span data-icon="folder-open" data-size="14"></span>Reveal file</button></div></div>
-    <div class="rule"></div><h3 id="forms-heading">Forms</h3><div id="forms"></div>
+    <div class="inspector-heading"><h2 id="source-name"></h2><button id="close-inspector" class="icon-button" aria-label="Close inspector"><span data-icon="panel-right" data-size="14"></span></button><button id="copy-path" class="detail-copy" aria-label="Copy source path"><span id="source-path"></span><span data-icon="copy" data-size="12"></span></button><div id="frame-detail"><button id="copy-frame" class="detail-copy" aria-label="Copy frame name"><span id="frame-name"></span><span data-icon="copy" data-size="12"></span></button><span id="frame-size"></span></div></div>
+    <div class="rule"></div><h3 id="forms-heading">Frames</h3><div id="forms"></div>
+    <div class="rule"></div><section id="relationships"><h3>Relationships</h3><section aria-labelledby="uses-heading"><h4 id="uses-heading">Uses</h4><div id="uses"></div></section><section aria-labelledby="used-by-heading"><h4 id="used-by-heading">Used by</h4><div id="used-by"></div></section></section>
   </aside>
   <div class="zoom floating" role="toolbar" aria-label="Canvas zoom">
     <button id="back" class="icon-button" aria-label="Back" data-tooltip="Back" disabled><span data-icon="arrow-left"></span></button><span class="separator"></span>

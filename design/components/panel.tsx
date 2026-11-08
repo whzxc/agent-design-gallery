@@ -18,7 +18,7 @@ const frameRows = ['ready','failed','empty'].map((label,i)=>({label,form:i===1?'
 export function Panel({ form = 'sidebar', width = 260, height, children }: { form?: string; width?: number; height?: number; children?: unknown }) {
   return <section class={`flex flex-col bg-surface ${form === 'menu' ? 'rounded-menu shadow-menu' : form === 'dialog' ? 'rounded-dialog shadow-menu' : 'rounded-panel shadow-float'}`} style={{ width, height }}>{children}</section>;
 }
-export function Sidebar({ rows = sampleRows, search = false, height, specimen = false, footer }: any) {
+export function Sidebar({ rows = sampleRows, search = false, height, specimen = false }: any) {
   return <Panel height={search ? undefined : height}>
     <div class="flex items-center gap-[10px] p-[6px]"><IconButton icon="panel-left" /><span class="text-section font-[650]">SDG</span></div>
     <div class="flex flex-col gap-3 px-3 mt-1"><Field form="picker" label={specimen?'arc':'agent-remote-control'} /><Field form={search?'search-active':'search'} label={search?'pill':'Find assets…'} /></div>
@@ -30,18 +30,24 @@ export function Sidebar({ rows = sampleRows, search = false, height, specimen = 
         {!search && row.form.startsWith('item') && !rows[i+1]?.form.startsWith('item') && <div class="h-[6px]"/>}
       </>)}
     </div>
-    {footer && <div class="mt-auto">{footer}</div>}
   </Panel>;
 }
-export function Inspector({ title='mcp-hub', path='surfaces/mcp-hub.tsx', heading='Frames', rows=frameRows, actions=true }:any) {
+export function Inspector({ title='mcp-hub', path='surfaces/mcp-hub.tsx', heading='Frames', rows=frameRows, frameName, frameSize, children }:any) {
+  const chosen=rows.find((row:any)=>row.form?.endsWith('selected'));
+  const label=frameName??chosen?.label, size=frameSize??chosen?.meta;
   return <Panel width={300}>
-    <div class={`px-4 pt-[10px] ${actions?'pb-4':'pb-3'}`}>
-      <div class="flex items-center justify-between -mr-[6px]"><h2 class="text-title leading-5 font-[650]">{title}</h2><IconButton icon="x"/></div>
-      <div class={`font-mono text-meta text-text-tertiary leading-[14px] ${actions?'mt-[1px]':''}`}>{path}</div>
-      {actions && <div class="flex gap-2 mt-[11px]"><Button form="secondary" label="Copy path" icon="copy"/><Button form="secondary" label="Reveal file" icon="folder-open"/></div>}
+    <div class="p-4 pb-3">
+      <div class="flex items-center justify-between"><h2 class="text-title leading-5 font-[650]">{title}</h2><IconButton icon="panel-right"/></div>
+      <button class="mt-1 flex items-center gap-2 font-mono text-meta leading-4 text-text-secondary"><span>{path}</span><Icon name="copy" size={12}/></button>
+      {label && <div class="mt-3 flex items-center justify-between text-body leading-4"><button class="flex items-center gap-2"><span>{label}</span><Icon name="copy" size={12}/></button><span class="text-meta text-text-tertiary">{size}</span></div>}
     </div>
-    <div class="h-px bg-border mx-4"/><h3 class="text-meta text-text-tertiary font-[550] leading-4 mt-[13px] mb-[6px] mx-4">{heading}</h3>
-    <div class={`px-2 ${actions?'pb-[10px]':'pb-3'}`}>{rows.map((row:any)=><div><TreeRow {...row} width={284} indent={-2}/>{row.note && <p class="mx-2 mt-1 mb-2 text-body leading-[1.2] text-text-secondary">{row.note}</p>}</div>)}</div>
+    <div class="h-px bg-border mx-4"/>
+    <section class="py-3">
+      <h3 class="text-meta text-text-tertiary font-[550] leading-4 mb-[6px] mx-4">{heading}</h3>
+      <div class="px-2">{rows.map((row:any)=><div><TreeRow {...row} width={284} indent={-2} multiline/>{row.note && <p class="mx-2 mt-1 mb-2 text-body leading-[1.2] text-text-secondary">{row.note}</p>}</div>)}</div>
+    </section>
+    <div class="h-px bg-border mx-4"/>
+    {children??<section class="p-4 pt-3"><h3 class="text-body leading-4 font-[550] mb-3">Relationships</h3><div class="flex flex-col gap-3">{['Uses','Used by'].map(title=><section><h4 class="mb-1 text-meta leading-4 font-[550] text-text-tertiary">{title}</h4><p class="mx-2 text-meta leading-4 text-text-secondary">None</p></section>)}</div></section>}
   </Panel>;
 }
 export function Menu({ rows, width=220 }:any) {

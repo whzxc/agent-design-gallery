@@ -93,7 +93,7 @@ test('camera and selected form survive immediate reload and a server restart', {
     await page.goto(server.url);await page.waitForFunction(()=>window.__sdg?.ready);
     await page.getByRole('button',{name:'Toggle Essentials',exact:true}).click();
     await page.locator('[data-navkey="file:components/button.tsx"]').click();
-    await page.locator('#inspect').click();
+    if (await page.locator('#inspect').getAttribute('aria-pressed') === 'false') await page.locator('#inspect').click();
     await page.locator('#forms button').filter({hasText:/^secondary/}).click();
     await page.locator('#plus').click();
     const camera=await page.evaluate(()=>window.__sdg.view);
@@ -103,7 +103,7 @@ test('camera and selected form survive immediate reload and a server restart', {
     assert.equal(await page.locator('[data-navkey="file:components/button.tsx"]').getAttribute('aria-current'),'true');
     assert.match(await page.locator('#forms [aria-current=true]').textContent(),/^secondary/);
     const data=await(await fetch(new URL('/manifest',server.url))).json();
-    assert.deepEqual(data.selection,{path:'components/button.tsx',form:'secondary',group:'Essentials'});
+    assert.deepEqual(data.selection,{path:'components/button.tsx',form:'secondary',group:'Essentials',element:null});
     assert.equal(data.assets.find(a=>a.path==='components/button.tsx').modifiedAt,(await stat(path.join(directory,'components/button.tsx'))).mtimeMs);
     const time=page.locator('.canvas-label:not([hidden]) time').first();
     await time.waitFor({timeout:3000});assert.ok(await time.getAttribute('datetime'));assert.ok(await time.getAttribute('title'));
@@ -164,8 +164,9 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
         }
         if(name==='sample-inspect-frame') {
           assert.equal(Math.round(await page.evaluate(()=>window.__sdg.view.scale)*100),71);
-          assert.equal((await relativeBox('.source-actions','#source'))[1],68);
-          assert.deepEqual(await relativeBox('#forms .tree-row','#source'),[8,152,284,28]);
+          assert.equal(await page.locator('#frame-name').textContent(),'failed');
+          assert.equal(await page.locator('#frame-size').textContent(),'960 × 912');
+          assert.equal(await page.locator('#relationships').isVisible(),true);
           assert.equal(await page.locator('#source-path').evaluate(el=>getComputedStyle(el).fontSize),'12px');
         }
         if(name==='sidebar-search') assert.equal((await relativeBox('.search-result','#sidebar'))[1],164);
@@ -263,7 +264,7 @@ test('camera pans retain labels, while scale, settle and viewport changes refres
   } finally {await browser.close();await server.close()}
 });
 
-test('canvas names copy by pointer and keyboard without changing the camera or selection', {timeout:30000}, async t => {
+test('canvas names retain copy behavior and select their source or frame without moving the camera', {timeout:30000}, async t => {
   const stateDirectory=await temporary(t);
   const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory,fixtures:{states,recent}});
   const browser=await launch();
@@ -389,4 +390,76 @@ test('dedicated legacy SVG sheets retain measurement, form crops and renderable 
     assert.deepEqual(result.blocks,[['set',258,94],['flow',428,112]]);
     assert.deepEqual(result.previews,[{notes:0,frames:0},{notes:0,frames:1},{notes:0,frames:1}]);
   } finally {await browser.close();await server.close();}
+});
+
+test('frame and element selection expose transitive relationships, matching exports and persisted inspector state', {timeout:30000}, async t => {
+  const {writeFile}=await import('node:fs/promises');
+  const {init}=await import('../src/toolkit/project.mjs');
+  const temporaryRoot=await temporary(t);init({root:temporaryRoot},()=>{});
+  const directory=path.join(temporaryRoot,'design');
+  await mkdir(path.join(directory,'modules'));
+  await writeFile(path.join(temporaryRoot,'sdg.config.mjs'),"export default {sources:['components','modules','surfaces']};");
+  await writeFile(path.join(directory,'components/alert.tsx'),`import {Frame} from 'sdg';export const Alert=()=> <span>Alert</span>;export default()=> <Frame name="alert"><Alert/></Frame>;`);
+  await writeFile(path.join(directory,'modules/composer.tsx'),`import {Frame} from 'sdg';import {Alert} from '../components/alert';export const Composer=()=> <section class="w-[200px] h-[80px] bg-text text-canvas"><Alert/></section>;export default()=> ['composer-home-enhancement-ready','compact'].map(name=><Frame name={name}><Composer/></Frame>);`);
+  await writeFile(path.join(directory,'modules/home.tsx'),`import {Frame} from 'sdg';import {Composer} from './composer';export const Hero=()=> <div><Composer/></div>;export default()=> <Frame name="hero"><Hero/></Frame>;`);
+  await writeFile(path.join(directory,'surfaces/home.tsx'),`import {Frame} from 'sdg';import {Hero} from '../modules/home';export default()=> ['one','two'].map(name=><Frame name={name} width={400} height={200}><main class="w-[400px] h-[200px]"><Hero/></main></Frame>);`);
+  const server=await startServer({directory,stateDirectory:path.join(temporaryRoot,'state')});const browser=await launch();
+  try {
+    const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+    await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:new URL(server.url).origin});
+    await page.goto(server.url);await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.getByRole('button',{name:'Toggle surfaces',exact:true}).click();
+    await page.locator('[data-navkey="file:surfaces/home.tsx"]').click();
+    await page.waitForFunction(()=>window.__sdg.ready);
+    assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
+    assert.equal(await page.locator('#source').isVisible(),true);
+    assert.equal(await page.locator('#uses [data-related-path="modules/home.tsx"]').getAttribute('data-direct'),'true');
+    assert.match(await page.locator('#uses [data-related-path="modules/composer.tsx"]').textContent(),/composer · via home/);
+    assert.match(await page.locator('#uses [data-related-path="components/alert.tsx"]').textContent(),/via home → composer/);
+    await page.locator('#forms [data-frame="two"]').click();await page.waitForFunction(()=>window.__sdg.ready);
+    assert.equal(await page.locator('#frame-name').textContent(),'two');
+    assert.equal(await page.locator('#frame-size').textContent(),'400 × 200');
+    assert.equal(await page.locator('#selection-outline').isVisible(),true);
+    await page.locator('#labels [data-source-path="surfaces/home.tsx"][data-form="1"]').click();
+    assert.equal((await page.evaluate(()=>window.__sdg.selection)).frame,'two');
+    await page.locator('#labels [data-source-path="surfaces/home.tsx"]:not([data-form])').click();
+    assert.equal((await page.evaluate(()=>window.__sdg.selection)).frame,null);
+    await page.locator('#forms [data-frame="two"]').click();await page.waitForFunction(()=>window.__sdg.ready);
+    await page.locator('#copy-frame').click();assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'two');
+    await page.locator('#copy-path').click();assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'surfaces/home.tsx');
+    const point=await page.evaluate(()=>{
+      const a=window.__sdg.items.find(a=>a.id==='surfaces/home.tsx#1'),v=window.__sdg.view;
+      return {x:v.x+(a.x+16+100)*v.scale,y:v.y+(a.y+16+40)*v.scale};
+    });
+    await page.mouse.move(point.x,point.y);assert.equal(await page.locator('#hover-outline').isVisible(),true);
+    await page.mouse.click(point.x,point.y);await page.waitForFunction(()=>window.__sdg.ready);
+    assert.deepEqual((await page.evaluate(()=>window.__sdg.selection)).element,{source:'modules/composer.tsx',export:'Composer'});
+    assert.equal(await page.locator('#source-path').textContent(),'modules/composer.tsx');
+    assert.equal(await page.locator('#source-name').textContent(),'Composer');
+    assert.equal(await page.locator('#forms-heading').textContent(),'Frames using this export');
+    assert.equal(await page.locator('#forms button').count(),2);
+    assert.ok((await page.locator('#forms [data-frame="composer-home-enhancement-ready"]').boundingBox()).height>28,'long variant names wrap instead of sharing a truncated prefix');
+    assert.equal(await page.locator('#used-by [data-related-path="surfaces/home.tsx"]').getAttribute('data-direct'),'false');
+    // Reload flushes the pending selection save, retaining the host variant and owner.
+    await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
+    assert.equal((await page.evaluate(()=>window.__sdg.selection)).element.export,'Composer');
+    await page.locator('#forms [data-frame="compact"]').focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>window.__sdg.ready);
+    assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'modules/composer.tsx',frame:'compact',element:null});
+    await page.locator('#back').click();await page.waitForFunction(()=>window.__sdg.ready);
+    assert.equal((await page.evaluate(()=>window.__sdg.selection)).element.export,'Composer');
+    await page.locator('#used-by [data-related-path="surfaces/home.tsx"]').click();await page.waitForFunction(()=>window.__sdg.ready);
+    assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
+    await page.locator('#close-inspector').click();
+    await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
+    assert.equal(await page.locator('#source').isVisible(),false);
+    await page.locator('[data-navkey="file:surfaces/home.tsx"]').click();
+    assert.equal(await page.locator('#source').isVisible(),false,'navigation retains the collapsed inspector');
+    await page.locator('#inspect').click();await page.locator('#forms [data-frame="one"]').click();await page.waitForFunction(()=>window.__sdg.ready);
+    const blank=await page.evaluate(()=>{const a=window.__sdg.items.find(a=>a.id==='surfaces/home.tsx#0'),v=window.__sdg.view;return{x:v.x+(a.x+16+300)*v.scale,y:v.y+(a.y+16+100)*v.scale}});
+    await page.mouse.click(blank.x,blank.y);assert.equal((await page.evaluate(()=>window.__sdg.selection)).frame,'one');
+    assert.equal((await page.evaluate(()=>window.__sdg.selection)).element,null);
+    await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:null,frame:null,element:null});
+    assert.equal(await page.locator('#source').isVisible(),false);
+    assert.deepEqual(errors,[]);
+  } finally {await browser.close();await server.close()}
 });

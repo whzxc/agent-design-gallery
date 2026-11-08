@@ -87,3 +87,7 @@ The state-persistence and label changes were compared with `15f80c9` using the s
 ## Click-to-copy labels, 2026-11-07
 
 One paired run against `6b07f5e` used the same 34-source snapshot and benchmark environment. Raw output remains under `output/copy-labels-20261107/performance/`. Reload measured 577 ms before and 543 ms after; catalog time was 24 ms and 23 ms. Pan frame P95 stayed at 16.7 ms; zoom frame P95 was 16.8 ms and 16.7 ms. Both runs preserved the camera on file save and reported no page errors.
+
+## Selection and source exports, 2026-11-07
+
+Three paired runs against `2891fba` used one copied SCNet snapshot with 63 TSX sources. Raw samples remain under `output/selection-details/performance/`. Medians: first browse 1,909 → 1,959 ms, reload 1,628 → 1,692 ms, catalog visibility 23.9 → 24.2 ms, pan P95 16.8 → 16.8 ms, and file-save refresh 2,344 → 2,354 ms. All six runs preserved the camera on file save and reported no page errors. Source-export registration and root-bound measurement add about 65 ms to reload in this workload. The selection tests separately exercise frame/element hit regions, inspector navigation and collapse persistence, clipboard controls, Back and Escape, and confirm that camera pans retain the existing label work bounds.
