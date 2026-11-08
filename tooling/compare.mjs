@@ -2,6 +2,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { mkdir, readFile, writeFile, symlink, cp } from "node:fs/promises";
 import path from "node:path";
 import { createServer } from "node:net";
+import { loadConfig } from '../src/toolkit/config.mjs';
 const [arc, destination = `output/comparison-${Date.now()}`, count = "3"] =
   process.argv.slice(2);
 const baseline = process.argv.find(arg => arg.startsWith('--sdg-baseline='))?.slice('--sdg-baseline='.length);
@@ -20,6 +21,8 @@ if (baseline) {
     recursive: true,
     filter: source => path.basename(source) !== '.sdg',
   });
+  const config = await loadConfig(path.resolve(arc));
+  await writeFile(path.join(snapshot, 'sdg.config.mjs'), `export default { sources: ${JSON.stringify(config.sources)} };\n`);
 } else if (process.argv.includes("--reuse-snapshot")) {
   const previous = JSON.parse(
     await readFile(path.join(arc, "comparison.json"), "utf8"),

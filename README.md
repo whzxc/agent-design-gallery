@@ -15,6 +15,8 @@ Drag or scroll to pan. Pinch, or hold Control/Command while scrolling, to zoom a
 
 The floating sidebar holds the directory picker, search, and project groups. Control/Command+F opens search; results replace the tree. Clear the query to return to the tree, or Escape to restore the previous selection, camera, and sidebar state. Group names fit their collection, and asset names focus their set or first frame. Collapse the sidebar to keep only the app bar. Collapsing panels does not move the world.
 
+`GET /relationships` on the local server returns a JSON graph of direct source imports and importers, keyed by source path with `uses` and `usedBy` arrays. Relationships follow the bundler's resolved imports and update on file changes.
+
 Click a canvas component, block or section title to copy the displayed name. Its copy icon appears on hover or keyboard focus. Enter and Space also activate a focused title. A check confirms a successful copy for 1.2 seconds.
 
 The tool pill opens **Display**, **Inspector**, **Fullscreen**, and **More**. Display chooses System, Light, or Dark and an independent canvas background. More contains **Arrange current group** and **Keyboard shortcuts** (also available with ?).

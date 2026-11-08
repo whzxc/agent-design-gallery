@@ -1,10 +1,10 @@
 import { build } from 'esbuild';
 import { compile } from 'tailwindcss';
-import { existsSync, readFileSync, realpathSync, mkdirSync, writeFileSync } from 'node:fs';
+import { statSync, readFileSync, realpathSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadTokens, refreshTypes, rejectLegacy, relative } from './project.mjs';
+import { loadTokens, refreshTypes, rejectLegacy, relative, isSourcePath, sourceDirectories } from './project.mjs';
 import { themeCss } from './tokens.mjs';
 import { escape } from './runtime.mjs';
 const require = createRequire(import.meta.url);
@@ -19,9 +19,10 @@ export function validateFrame(frame) {
   }
 }
 export async function buildSource(config, file, { write = true, allowLegacy = true } = {}) {
-  refreshTypes(config);
+  if (write) refreshTypes(config);
   file = realpathSync(file);
   const base = realpathSync(config.design), dependencies = new Set([path.join(base, 'tokens.css')]);
+  const imports = new Set(), sources = sourceDirectories(config);
   const result = await build({ entryPoints: [file], bundle: true, write: false, format: 'esm', platform: 'node', jsx: 'automatic', jsxImportSource: 'sdg', jsxDev: true, metafile: true, logLevel: 'silent', plugins: [{ name: 'sdg-sources', setup(api) {
     api.onResolve({ filter: /.*/ }, args => {
       if (['sdg','sdg/jsx-runtime','sdg/jsx-dev-runtime'].includes(args.path)) return { path: pathToFileURL(runtime).href, external: true };
@@ -29,12 +30,14 @@ export async function buildSource(config, file, { write = true, allowLegacy = tr
       const url = args.path.endsWith('?url');
       const requested = url ? args.path.slice(0,-4) : args.path;
       let resolved = args.kind === 'entry-point' ? path.resolve(requested) : path.resolve(args.resolveDir, requested);
-      resolved = [resolved, ...['.tsx','.ts','.js','/index.tsx','/index.ts'].map(ext => resolved + ext)].find(existsSync);
+      resolved = [resolved, ...['.tsx','.ts','.js','/index.tsx','/index.ts','/index.js'].map(ext => resolved + ext)].find(candidate => statSync(candidate, { throwIfNoEntry: false })?.isFile());
       if (!resolved) return { errors: [{ text: `Cannot resolve ${args.path}` }] };
       resolved = realpathSync(resolved);
       if (!resolved.startsWith(base + path.sep)) return { errors: [{ text: `Import ${args.path} leaves design/; move it inside design/` }] };
       if (!allowLegacy) rejectLegacy(config, [path.join(config.design, path.relative(base, resolved))]);
       dependencies.add(resolved);
+      const sourcePath = path.relative(base, resolved).split(path.sep).join('/');
+      if (args.importer === file && isSourcePath(sourcePath, sources)) imports.add(sourcePath);
       if (url && !resolved.startsWith(path.join(base,'art')+path.sep)) return {errors:[{text:'?url imports must be under design/art/'}]};
       return { path: resolved, ...(url ? {namespace:'art-url'} : {}) };
     });
@@ -64,5 +67,5 @@ export async function buildSource(config, file, { write = true, allowLegacy = tr
     frame.document = theme => `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-sdg-frame="${escape(frame.name)}" style="${frame.width ? `width:${frame.width}px;` : 'width:max-content;'}${frame.height ? `height:${frame.height}px;` : ''}">${frame.html}</div></body></html>`;
     if (write) { const destination = path.join(config.output, path.relative(base,file).replace(/\.tsx$/, ''), `${encodeURIComponent(frame.name)}.html`); mkdirSync(path.dirname(destination),{recursive:true}); writeFileSync(destination,frame.document('light')); }
   }
-  return { frames, dependencies: [...dependencies], css };
+  return { frames, dependencies: [...dependencies], imports: [...imports].sort(), css };
 }

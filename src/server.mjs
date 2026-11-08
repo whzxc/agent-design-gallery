@@ -17,6 +17,7 @@ import { spawn } from "node:child_process";
 import { buildSource } from './toolkit/build.mjs';
 import { refreshTypes, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
 import { loadConfig } from './toolkit/config.mjs';
+import { sourceRelationships } from '../public/relationships.js';
 const publicRoot = fileURLToPath(new URL("../public/", import.meta.url));
 const defaultState = path.join(
   process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
@@ -224,7 +225,7 @@ export async function startServer({
     if (cached?.version === asset.version) return cached;
     if (name.endsWith('.tsx')) {
       const built = await buildSource({root:path.dirname(root),design:root,output:path.join(root,'.sdg/build'),sources},path.join(root,name),{write:false});
-      const result = {version:asset.version,dependencies:built.dependencies.map(p=>path.relative(root,p).split(path.sep).join('/')),body:JSON.stringify({format:'tsx',component:!name.startsWith('surfaces/'),frames:built.frames.map(f=>({...f,document:f.document(theme)}))})};
+      const result = {version:asset.version,imports:built.imports,dependencies:built.dependencies.map(p=>path.relative(root,p).split(path.sep).join('/')),body:JSON.stringify({format:'tsx',imports:built.imports,component:!name.startsWith('surfaces/'),frames:built.frames.map(f=>({...f,document:f.document(theme)}))})};
       svgCache.set(key,result); return result;
     }
     let content = await readFile(path.join(root, name), "utf8");
@@ -388,6 +389,10 @@ export async function startServer({
       } else if (url.pathname === "/manifest") {
         content = JSON.stringify(fixtureManifest(url.searchParams.get("fixture")));
         type = "application/json";
+      } else if (url.pathname === "/relationships") {
+        const assets = await Promise.all([...files.keys()].filter(name => name.endsWith('.tsx')).map(async name => ({path:name, imports:(await svg(name, 'light')).imports})));
+        content = JSON.stringify(sourceRelationships(assets));
+        type = "application/json";
       } else if (url.pathname.startsWith("/asset/")) {
         const name = decodeURIComponent(url.pathname.slice(7));
         if (!files.has(name)) {
@@ -413,6 +418,7 @@ export async function startServer({
           "/icons.js": "icons.js",
           "/layout.js": "layout.js",
           "/labels.js": "labels.js",
+          "/relationships.js": "relationships.js",
           "/style.css": "style.css",
         }[url.pathname];
         if (!file) {
@@ -428,6 +434,7 @@ export async function startServer({
           "icons.js": "text/javascript",
           "layout.js": "text/javascript",
           "labels.js": "text/javascript",
+          "relationships.js": "text/javascript",
           "style.css": "text/css",
         }[file];
       }

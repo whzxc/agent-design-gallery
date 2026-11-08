@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,readdirSync,symlinkSync,realpathSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,readdirSync,symlinkSync,realpathSync,existsSync} from 'node:fs';
 import path from 'node:path';
 import {tmpdir} from 'node:os';
 import {execFile} from 'node:child_process';
@@ -253,8 +253,10 @@ test('reader merges adjacent line segments and pairs duplicate content nearest-f
 
 test('root discovery prefers nearest config over package and defaults to nearest package', async t => {
   const root = temporary(t), nested = path.join(root, 'a/b'); mkdirSync(nested, { recursive: true });
+  // A repository-local TMPDIR may inherit an ancestor's config before this fixture creates its own.
+  const ancestor = discoverRoot(root), inheritedConfig = existsSync(path.join(ancestor, 'sdg.config.mjs'));
   writeFileSync(path.join(root, 'package.json'), '{}'); writeFileSync(path.join(root, 'a/package.json'), '{}');
-  assert.equal(discoverRoot(nested), path.join(root, 'a'));
+  assert.equal(discoverRoot(nested), inheritedConfig ? ancestor : path.join(root, 'a'));
   writeFileSync(path.join(root, 'sdg.config.mjs'), "export default { design: 'drawings' };");
   assert.equal(discoverRoot(nested), root);
   const config = await loadConfig(nested); assert.equal(config.design, path.join(root, 'drawings')); assert.equal(config.compare.port, 5188);

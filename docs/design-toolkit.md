@@ -239,6 +239,10 @@ export default {
 
 The viewer reads the same sources and rebuilds a source, and the sources that import it, when it is saved. A component source is one set of its forms; a surface source is one flow of its frames. Frame notes appear in the inspector. `gallery.json` lists groups of source paths; unlisted sources stay in directory groups. See the [README](../README.md) for viewer controls.
 
+Since 0.4.5, source relationships come from direct imports resolved by the existing bundler, including relative extensions, directory indexes and re-exports. Only TSX entries directly in configured `sources` directories are nodes. Fixtures, nested helper modules, tokens, artwork and the `sdg` runtime are excluded. Imports removed by the TypeScript transform, such as type-only imports, are excluded. Relationships stop at each source boundary: if `surfaces/home` imports `modules/home`, which imports `modules/composer`, the graph contains those two edges. Saving, adding or removing a source refreshes the graph through the existing file watcher.
+
+For non-interactive inspection, `GET /relationships` on the local viewer server returns an object keyed by source path, each with `uses` and `usedBy` arrays of source paths. For example, `curl http://127.0.0.1:<port>/relationships`. It reuses compiled source caches; asset responses also carry their direct source paths in `imports`. Clicking elements inside a rendered frame to navigate to their owning source is outside this feature.
+
 ## Limits
 
 - Sources name the system font stack. Linux renders use fallback fonts, so final visual review runs on macOS.

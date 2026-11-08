@@ -18,7 +18,7 @@ const frameRows = ['ready','failed','empty'].map((label,i)=>({label,form:i===1?'
 export function Panel({ form = 'sidebar', width = 260, height, children }: { form?: string; width?: number; height?: number; children?: unknown }) {
   return <section class={`flex flex-col bg-surface ${form === 'menu' ? 'rounded-menu shadow-menu' : form === 'dialog' ? 'rounded-dialog shadow-menu' : 'rounded-panel shadow-float'}`} style={{ width, height }}>{children}</section>;
 }
-export function Sidebar({ rows = sampleRows, search = false, height, specimen = false }: any) {
+export function Sidebar({ rows = sampleRows, search = false, height, specimen = false, footer }: any) {
   return <Panel height={search ? undefined : height}>
     <div class="flex items-center gap-[10px] p-[6px]"><IconButton icon="panel-left" /><span class="text-section font-[650]">SDG</span></div>
     <div class="flex flex-col gap-3 px-3 mt-1"><Field form="picker" label={specimen?'arc':'agent-remote-control'} /><Field form={search?'search-active':'search'} label={search?'pill':'Find assets…'} /></div>
@@ -30,6 +30,7 @@ export function Sidebar({ rows = sampleRows, search = false, height, specimen = 
         {!search && row.form.startsWith('item') && !rows[i+1]?.form.startsWith('item') && <div class="h-[6px]"/>}
       </>)}
     </div>
+    {footer && <div class="mt-auto">{footer}</div>}
   </Panel>;
 }
 export function Inspector({ title='mcp-hub', path='surfaces/mcp-hub.tsx', heading='Frames', rows=frameRows, actions=true }:any) {
