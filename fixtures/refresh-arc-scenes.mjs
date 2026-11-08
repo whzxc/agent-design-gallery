@@ -39,7 +39,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, timezoneId:'UTC' });
   const previews = new Map(), scenesBySource = new Map();
   for (const [entry, source, frameFixture] of [
-    ['surfaces/canvas', 'canvas', 'design/fixtures/canvas-surfaces.ts'], ['surfaces/inspector', 'inspector'],
+    ['surfaces/canvas', 'canvas', 'design/fixtures/canvas-surfaces.ts'], ['surfaces/inspector', 'inspector', 'design/fixtures/inspector-surfaces.ts'],
     ['surfaces/open-directory', 'open-directory'], ['modules/menus', 'menus'],
     ['modules/shortcuts', 'shortcuts'], ['modules/navigation', 'navigation'], ['modules/view-controls', 'view-controls'],
   ]) {

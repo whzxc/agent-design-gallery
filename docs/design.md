@@ -82,7 +82,7 @@ owning scope resolves them.
 | `components/tooltip.tsx` / `Tooltip` | `public/index.html` `#tooltip`; tooltip handlers; `public/style.css` `#tooltip` | View-controls module capture | Approval unrecorded; in use. |
 | `modules/canvas.tsx` / `AssetLabel` | `public/labels.js` `Labels`; `public/app.js` `drawLabels`; `.label-copy` | Mapped runtime usage; no imported design consumer | Reviewed; in use; frames: `asset-label-modified`, `asset-label-hover`, `asset-label-copied`. Drawing retains SVG labels under this same feature owner. |
 | `surfaces/canvas.tsx` / frame renderer | Gallery layout/camera/chrome | Entry surface | Reviewed structural composition; existing full-region layouts and camera states retained; capture identities remain mapped below. |
-| `surfaces/inspector.tsx` / frame renderer | Gallery and source inspector | Entry surface | Full-frame approval unrecorded; boundary Reviewed; captured content lives in inspector fixtures. Approved local source/export states belong to the inspector module. |
+| `surfaces/inspector.tsx` / frame renderer | Gallery and source inspector | Entry surface | Reviewed structural composition; frame/component captures use the unified Inspector and retain their existing full-window crops. Approved source/export states belong to the module. |
 | `surfaces/open-directory.tsx` / frame renderer | Gallery and directories dialog | Entry surface | Full-frame approval unrecorded; mapped fixtures below; boundary Reviewed. |
 
 `fixtures/buttons.ts`, `fixtures/fields.ts` and `fixtures/rows.ts` own frame presentation data for Button, IconButton,
@@ -101,6 +101,7 @@ derives runtime recent paths from that same record.
 `fixtures/shortcuts.json` owns shortcut labels/key sequences and the keycap specimen.
 `fixtures/canvas.ts` owns neutral drawing/minimap data and AssetLabel presentation content.
 `fixtures/canvas-surfaces.ts` owns the canvas surface's four frame/capture records and chrome placement.
+`fixtures/inspector-surfaces.ts` owns inspector surface capture/layout records; content remains in `fixtures/inspector.json`.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
 
@@ -144,6 +145,8 @@ from the npm package. Every referenced bitmap fits the declared per-image and to
 - Keycaps retain a 6px design radius while runtime `kbd` uses 7px.
 
 - Canvas designs retain SVG labels while runtime uses DOM labels; the minimap specimen retains its current geometry instead of runtime geometry.
+
+- Inspector retains full-window legacy captures and content-fit lists; runtime scroll limits and independent captures of the extra source/export states remain uncovered.
 
 ## Direction
 
