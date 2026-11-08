@@ -96,6 +96,16 @@ export function imageURL(asset, crop) {
     : asset.source;
   const doc = new DOMParser().parseFromString(source, "image/svg+xml"),
     root = doc.documentElement;
+  if (asset.format === 'tsx' && ['overview','full'].includes(crop.id)) {
+    const styles = [...root.querySelectorAll('style')];
+    // Prepared TSX sets repeat the same generated stylesheet in every frame.
+    // Keep the elements and nonempty text for structural selectors, but submit
+    // its CSS rules only once. Authored or differing styles keep their cascade.
+    if (styles.length > 1 && styles.length === asset.parts.length &&
+        styles.every(style => !style.attributes.length && style.textContent === styles[0].textContent)) {
+      for (const style of styles.slice(1)) style.textContent = '/* shared stylesheet */';
+    }
+  }
   if (crop.id !== "full")
     for (const note of root.querySelectorAll(":scope > text.note"))
       note.remove();

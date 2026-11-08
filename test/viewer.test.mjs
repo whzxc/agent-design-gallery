@@ -373,6 +373,41 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
       assert.equal(crop.parsedBytes[1],crop.sourceBytes);
       assert.ok(crop.parsedBytes[0]<crop.sourceBytes,'individual previews must not parse sibling frames');
     }
+    for (const theme of ['light','dark']) {
+      const preview=await page.evaluate(async theme=>{
+        const {prepare,imageURL}=await import('/assets.js');const {blockForAsset}=await import('/layout.js');
+        const data=await(await fetch('/manifest')).json();
+        const asset=await prepare(data.assets.find(a=>a.path==='components/forms.tsx'),theme),block=blockForAsset(asset);
+        const crop={...block.crop,width:block.crop.w,height:block.crop.h,id:'overview'};
+        const urls=[imageURL({...asset,format:undefined},crop),imageURL(asset,crop)];
+        const documents=await Promise.all(urls.map(async url=>new DOMParser().parseFromString(await(await fetch(url)).text(),'image/svg+xml')));
+        const styles=documents.map(document=>[...document.querySelectorAll('style')].map(style=>style.textContent));
+        const guards=[];
+        for(const kind of ['differing','attributes','count','legacy']) {
+          const candidate=documents[0].cloneNode(true),styleNodes=[...candidate.querySelectorAll('style')];
+          if(kind==='differing')styleNodes[1].textContent+=' .custom{color:red}';
+          if(kind==='attributes')styleNodes[1].setAttribute('data-authored','true');
+          if(kind==='count')candidate.documentElement.append(styleNodes[0].cloneNode(true));
+          const guarded={...asset,source:new XMLSerializer().serializeToString(candidate),format:kind==='legacy'?'svg':'tsx'};
+          const variants=[imageURL({...guarded,format:undefined},crop),imageURL(guarded,crop)];
+          try {guards.push({kind,identical:(await(await fetch(variants[0])).text())===(await(await fetch(variants[1])).text())})}
+          finally {variants.forEach(URL.revokeObjectURL)}
+        }
+        const scale=Math.min(1,1024/crop.width,600/crop.height),width=Math.ceil(crop.width*scale),height=Math.ceil(crop.height*scale);
+        const host=document.createElement('div');host.id='dedup-preview';host.style.cssText=`position:fixed;left:0;top:0;z-index:2147483647;width:${width}px;height:${height}px;background:${asset.background};overflow:hidden;`;
+        for(const [index,url] of urls.entries()){const image=new Image();image.dataset.variant=String(index);image.src=url;await image.decode();image.style.cssText=`position:absolute;left:0;top:0;width:${width}px;height:${height}px;display:${index===0?'block':'none'};`;host.append(image)}
+        document.body.append(host);window.cleanupDedupPreview=()=>{host.remove();urls.forEach(URL.revokeObjectURL)};
+        return {styles,guards};
+      },theme);
+      for(const guard of preview.guards)assert.equal(guard.identical,true,`${guard.kind} styles must preserve their original XML and cascade`);
+      assert.equal(preview.styles[0].filter(css=>css===preview.styles[0][0]).length,3);
+      assert.equal(preview.styles[1][0],preview.styles[0][0]);
+      assert.deepEqual(preview.styles[1].slice(1),['/* shared stylesheet */','/* shared stylesheet */']);
+      const original=await page.locator('#dedup-preview').screenshot();
+      await page.evaluate(()=>{for(const image of document.querySelectorAll('#dedup-preview img'))image.style.display=image.dataset.variant==='1'?'block':'none'});
+      assert.deepEqual(await page.locator('#dedup-preview').screenshot(),original,`${theme} shared stylesheet preview pixels must remain exact`);
+      await page.evaluate(()=>window.cleanupDedupPreview());
+    }
     await writeFile(path.join(directory,'scenes/sizes.tsx'),'export const widths=[901,700,500];');
     await page.evaluate(async version=>{
       for(let i=0;i<100;i++) {
