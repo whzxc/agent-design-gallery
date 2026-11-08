@@ -80,6 +80,6 @@ export async function createViewerCache(directory, {memoryBytes=32*1024*1024,dis
     try {const body=await readFile(path.join(directory,entry.key,item.filename));entry.used=Date.now();return body;}
     catch(error){if(error.code==='ENOENT')return null;throw error;}
   }
-  const reference=(hash,theme,context)=>{const entry=entries.get(keyFor(hash,theme,context));return entry?{previewIds:Object.keys(entry.previews)}:null;};
+  const reference=(hash,theme,context)=>{const entry=entries.get(keyFor(hash,theme,context));if(entry)entry.used=Date.now();return entry?{previewIds:Object.keys(entry.previews)}:null;};
   return {get,reference,save,savePreview,preview,close:()=>pending,stats:()=>({entries:entries.size,residentBytes,diskBytes:total})};
 }

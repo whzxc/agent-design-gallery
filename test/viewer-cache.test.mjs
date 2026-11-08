@@ -29,14 +29,15 @@ test('measured geometry and exact Unicode previews survive restart in their brow
 });
 
 test('viewer cache evicts least-recently used sources within memory and disk budgets',async t=>{
-  const directory=await temporary(t),bytes=Buffer.byteLength(JSON.stringify(metadata));
-  const cache=await createViewerCache(directory,{memoryBytes:bytes,diskBytes:bytes*2});
+  const bytes=Buffer.byteLength(JSON.stringify(metadata));
+  for(const access of ['get','reference']) {
+  const directory=await temporary(t),cache=await createViewerCache(directory,{memoryBytes:bytes,diskBytes:bytes*2});
   t.after(()=>cache.close());
   const now=Date.now;let clock=0;Date.now=()=>++clock;
   try {
     await cache.save('a','light','browser',metadata);
     await cache.save('b','light','browser',metadata);
-    await cache.get('a','light','browser');
+    await cache[access]('a','light','browser');
     await cache.save('c','light','browser',metadata);
     assert.equal(await cache.get('b','light','browser'),null);
     assert.equal(cache.reference('b','light','browser'),null);
@@ -48,4 +49,5 @@ test('viewer cache evicts least-recently used sources within memory and disk bud
     assert.equal(await cache.get('c','light','browser'),null);
     assert.ok(cache.stats().diskBytes<=bytes*2);
   } finally {Date.now=now;}
+  }
 });
