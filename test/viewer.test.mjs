@@ -130,7 +130,10 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
   const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot,fixtures:{states,recent}});
   const browser=await launch();
   try {
-    for(const [name,state] of Object.entries(states)) {
+    const fixtureEntries=Object.entries(states);let nextFixture=0;
+    await Promise.all(Array.from({length:2},async()=>{
+      while(nextFixture<fixtureEntries.length) {
+      const [name,state]=fixtureEntries[nextFixture++];
       const page=await browser.newPage({viewport:{width:1440,height:900},colorScheme:state.theme,reducedMotion:'reduce',locale:'en-US'});
       let fail;const pageError=new Promise((_,reject)=>{fail=reject});page.on('pageerror',error=>fail(new Error(`${name}: ${error.message}`)));
       try {
@@ -197,7 +200,8 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
           assert.ok(await page.evaluate(()=>window.__sdg.view.scale)<.2);
         }
       } finally { await page.close(); }
-    }
+      }
+    }));
     await assert.rejects(access(path.join(temporaryRoot,'state.json')), {code:'ENOENT'});
   } finally { await browser.close();await server.close(); }
 });
@@ -341,9 +345,14 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
   await writeFile(path.join(directory,'surfaces/flow.tsx'),`import {Frame} from 'sdg';export default()=>['one','two'].map(name=><Frame name={name} width={100} height={50}><div class="w-[100px] h-[50px] bg-text">{name}</div></Frame>);`);
   const server=await startServer({directory,stateDirectory:path.join(temporaryRoot,'state')});const browser=await launch();
   try{
-    const page=await browser.newPage();await page.goto(server.url);await page.waitForFunction(()=>window.__sdg?.ready);
+    const page=await browser.newPage();
+    let releaseSource;const sourceGate=new Promise(resolve=>{releaseSource=resolve});
+    await page.route('**/asset/components%2Fforms.tsx?*',async route=>{await sourceGate;await route.continue()});
+    await page.goto(server.url);
+    await page.waitForFunction(()=>window.__sdg?.assets>0&&!window.__sdg.metadataComplete);
+    releaseSource();await page.waitForFunction(()=>window.__sdg?.ready);
     const result=await page.evaluate(async()=>{
-      const {prepare,arrange,imageURL}=await import('/assets.js');const data=await(await fetch('/manifest')).json();const assets=await Promise.all(data.assets.map(a=>prepare(a,'light')));
+      const {prepare,arrange,imageURL,compactPreparedSource}=await import('/assets.js');const data=await(await fetch('/manifest')).json();const assets=await Promise.all(data.assets.map(a=>prepare(a,'light')));
       const set=assets.find(a=>a.component),flow=assets.find(a=>!a.component),world=arrange({...data,assets});
       const src=imageURL(set,{...set.full,id:'overview'});await new Promise((resolve,reject)=>{const img=new Image();img.onload=resolve;img.onerror=reject;img.src=src});URL.revokeObjectURL(src);
       const crops=[];
@@ -353,16 +362,18 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
         for(const part of source.parts) {
           const parse=DOMParser.prototype.parseFromString,inputs=[];
           DOMParser.prototype.parseFromString=function(text,type) {if(type==='image/svg+xml')inputs.push(text.length);return parse.call(this,text,type)};
-          let optimized,original;
-          try {optimized=imageURL(source,part);original=imageURL(legacy,part)}
+          let optimized,original,compact;
+          const compactSource=compactPreparedSource(source);
+          try {optimized=imageURL(source,part);original=imageURL(legacy,part);compact=imageURL(compactSource,part)}
           finally {DOMParser.prototype.parseFromString=parse}
           try {
             const xml=await(await fetch(optimized)).text(),previous=await(await fetch(original)).text();
-            crops.push({theme,id:part.id,identical:xml===previous,parsedBytes:inputs,sourceBytes:source.source.length});
-          } finally {URL.revokeObjectURL(optimized);URL.revokeObjectURL(original)}
+            const compactXml=await(await fetch(compact)).text();
+            crops.push({theme,id:part.id,identical:xml===previous,compactIdentical:compactXml===previous,compactBytes:compactSource.source.length,parsedBytes:inputs,sourceBytes:source.source.length});
+          } finally {URL.revokeObjectURL(optimized);URL.revokeObjectURL(original);URL.revokeObjectURL(compact)}
         }
       }
-      return {paths:data.assets.map(a=>a.path),parts:set.parts,blocks:world.groups.flatMap(g=>g.blocks).map(b=>({kind:b.kind,w:b.w,h:b.h,frames:b.frames})),note:set.parts[0].note,version:data.assets.find(a=>a.path===set.path).version,crops};
+      return {paths:data.assets.map(a=>a.path),parts:set.parts,blocks:world.groups.flatMap(g=>g.blocks).map(b=>({kind:b.kind,w:b.w,h:b.h,frames:b.frames})),note:set.parts[0].note,version:data.assets.find(a=>a.path===set.path).version,crops,items:world.items.map(({id,path,x,y,width,height,group})=>({id,path,x,y,width,height,group}))};
     });
     assert.deepEqual(result.paths,['components/forms.tsx','surfaces/flow.tsx']);
     assert.deepEqual(result.parts.map(p=>[p.x,p.y]),[[0,0],[0,68],[732,68]]);assert.equal(result.note,'Note 0');
@@ -370,16 +381,18 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
     assert.equal(result.crops.length,4);
     for(const crop of result.crops) {
       assert.equal(crop.identical,true,`${crop.theme} frame ${crop.id} XML must remain exact`);
+      assert.equal(crop.compactIdentical,true,'compacted cache crops must retain exact XML');
+      assert.ok(crop.compactBytes<crop.sourceBytes,'cache must retain one generated stylesheet');
       assert.equal(crop.parsedBytes[1],crop.sourceBytes);
       assert.ok(crop.parsedBytes[0]<crop.sourceBytes,'individual previews must not parse sibling frames');
     }
     for (const theme of ['light','dark']) {
       const preview=await page.evaluate(async theme=>{
-        const {prepare,imageURL}=await import('/assets.js');const {blockForAsset}=await import('/layout.js');
+        const {prepare,imageURL,compactPreparedSource}=await import('/assets.js');const {blockForAsset}=await import('/layout.js');
         const data=await(await fetch('/manifest')).json();
         const asset=await prepare(data.assets.find(a=>a.path==='components/forms.tsx'),theme),block=blockForAsset(asset);
         const crop={...block.crop,width:block.crop.w,height:block.crop.h,id:'overview'};
-        const urls=[imageURL({...asset,format:undefined},crop),imageURL(asset,crop)];
+        const urls=[imageURL({...asset,format:undefined},crop),imageURL(asset,crop),imageURL(compactPreparedSource(asset),crop)];
         const documents=await Promise.all(urls.map(async url=>new DOMParser().parseFromString(await(await fetch(url)).text(),'image/svg+xml')));
         const styles=documents.map(document=>[...document.querySelectorAll('style')].map(style=>style.textContent));
         const guards=[];
@@ -397,8 +410,9 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
         const host=document.createElement('div');host.id='dedup-preview';host.style.cssText=`position:fixed;left:0;top:0;z-index:2147483647;width:${width}px;height:${height}px;background:${asset.background};overflow:hidden;`;
         for(const [index,url] of urls.entries()){const image=new Image();image.dataset.variant=String(index);image.src=url;await image.decode();image.style.cssText=`position:absolute;left:0;top:0;width:${width}px;height:${height}px;display:${index===0?'block':'none'};`;host.append(image)}
         document.body.append(host);window.cleanupDedupPreview=()=>{host.remove();urls.forEach(URL.revokeObjectURL)};
-        return {styles,guards};
+        return {styles,guards,cacheExact:new XMLSerializer().serializeToString(documents[1])===new XMLSerializer().serializeToString(documents[2])};
       },theme);
+      assert.equal(preview.cacheExact,true,`${theme} compacted set cache must retain exact preview XML`);
       for(const guard of preview.guards)assert.equal(guard.identical,true,`${guard.kind} styles must preserve their original XML and cascade`);
       assert.equal(preview.styles[0].filter(css=>css===preview.styles[0][0]).length,3);
       assert.equal(preview.styles[1][0],preview.styles[0][0]);
@@ -408,6 +422,27 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
       assert.deepEqual(await page.locator('#dedup-preview').screenshot(),original,`${theme} shared stylesheet preview pixels must remain exact`);
       await page.evaluate(()=>window.cleanupDedupPreview());
     }
+    assert.deepEqual(await page.evaluate(()=>window.__sdg.items),result.items,'streamed completion must preserve the full-source layout');
+    await page.evaluate(()=>window.__sdg.cacheFlush);
+    assert.equal(await page.evaluate(()=>window.__sdg.cacheFailures),0);
+    const warmRequests=[];const warmRequest=request=>{if(new URL(request.url()).pathname.startsWith('/asset/'))warmRequests.push(request.url())};
+    page.on('request',warmRequest);await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
+    page.off('request',warmRequest);
+    assert.deepEqual(warmRequests,[],'warm metadata and cropped previews must bypass source preparation');
+    assert.deepEqual(await page.evaluate(()=>window.__sdg.items),result.items);
+    let lostPreview;
+    await page.route('**/preview/**',async route=>{
+      const address=route.request().url();
+      if(route.request().method()==='GET'&&(!lostPreview||lostPreview===address)) {
+        lostPreview=address;await route.fulfill({status:404,body:'Evicted preview'});
+      } else await route.continue();
+    });
+    const recoveredSources=[];const recoverRequest=request=>{if(new URL(request.url()).pathname.startsWith('/asset/'))recoveredSources.push(request.url())};
+    page.on('request',recoverRequest);await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.evaluate(()=>window.__sdg.cacheFlush);page.off('request',recoverRequest);await page.unroute('**/preview/**');
+    assert.equal(recoveredSources.length,1,'an evicted preview must regenerate only its source');
+    assert.equal(await page.locator('#error').textContent(),'');
+    assert.deepEqual(await page.evaluate(()=>window.__sdg.items),result.items);
     await writeFile(path.join(directory,'scenes/sizes.tsx'),'export const widths=[901,700,500];');
     await page.evaluate(async version=>{
       for(let i=0;i<100;i++) {

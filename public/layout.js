@@ -26,6 +26,12 @@ export function skyline(blocks, limit, nextWidth) {
 // Cache only the winning width, never source objects or placed coordinates.
 // Repacking at that width gives fresh metadata after saves with unchanged geometry.
 const widthChoices = new Map();
+export function packingSnapshot() {return [...widthChoices];}
+export function restorePacking(entries=[]) {
+  for(const [key,width] of entries.slice(-32))
+    if(typeof key==='string'&&key.length<=32768&&Number.isFinite(width)&&width>0)widthChoices.set(key,width);
+  while(widthChoices.size>32)widthChoices.delete(widthChoices.keys().next().value);
+}
 function chooseWidth(blocks, step, ratio, pack) {
   if (!blocks.length) return [];
   const key = JSON.stringify([step, ratio, blocks.map(b => [b.kind, b.w, b.h])]);

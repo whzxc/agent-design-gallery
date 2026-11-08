@@ -1,13 +1,28 @@
 import { dataFetch } from './auth.js';
 import { blockForAsset, layoutWorld } from "./layout.js";
 // Measure declared SVG content in an isolated, script-disabled document.
-export async function prepare(asset, theme) {
+export const metadataContext = () => `${navigator.userAgent}|${devicePixelRatio}`;
+export function measuredMetadata(asset) {
+  const {format,full,component,parts,background,imports,frameRanges}=asset;
+  return {format,full,component,parts,background,imports,frameRanges};
+}
+export function previewAddress(asset,theme,crop) {
+  const query=new URLSearchParams({theme,context:metadataContext(),crop});
+  return `preview/${asset.hash}?${query}`;
+}
+
+export async function prepare(asset, theme, {signal} = {}) {
   const response = await dataFetch(
     `asset/${encodeURIComponent(asset.path)}?theme=${theme}&v=${encodeURIComponent(asset.version)}`,
+    {signal},
   );
+  if(response.status===409)throw Object.assign(Error('Source rebuild superseded'),{name:'AbortError'});
   if (!response.ok) throw new Error(`Cannot load ${asset.path}`);
   const source = await response.text();
-  if (asset.path.endsWith(".tsx")) return prepareSource(asset, JSON.parse(source), theme);
+  if (asset.path.endsWith(".tsx")) {
+    const built=JSON.parse(source);
+    return prepareSource({...asset,hash:built.hash??asset.hash,version:built.hash??asset.version},built,theme,signal);
+  }
 
   const frame = document.createElement("iframe");
   frame.setAttribute("sandbox", "allow-same-origin");
@@ -83,7 +98,26 @@ export async function prepare(asset, theme) {
     frame.remove();
   }
 }
-export function imageURL(asset, crop) {
+// Retain one stylesheet in the bounded in-memory source cache. Individual
+// crops restore that exact stylesheet before XML parsing, so their bytes match.
+export function compactPreparedSource(asset) {
+  if(asset.format!=='tsx'||!asset.frameRanges?.length||asset.frameRanges.length<2)return asset;
+  const frames=asset.frameRanges.map(([start,end])=>asset.source.slice(start,end));
+  const sheets=frames.map(frame=>[...frame.matchAll(/<style>[\s\S]*?<\/style>/g)]);
+  if(sheets.some(styles=>styles.length!==1)||sheets.some(styles=>styles[0][0]!==sheets[0][0][0]))return asset;
+  const shared=sheets[0][0][0],comment='<style>/* shared stylesheet */</style>';
+  const pieces=[asset.source.slice(0,asset.frameRanges[0][0])],frameRanges=[];
+  let offset=pieces[0].length;
+  const sharedStyleRange=[offset+sheets[0][0].index,offset+sheets[0][0].index+shared.length];
+  for(const [index,frame] of frames.entries()) {
+    const content=index?frame.replace(shared,comment):frame;
+    frameRanges.push([offset,offset+content.length]);pieces.push(content);offset+=content.length;
+  }
+  pieces.push(asset.source.slice(asset.frameRanges.at(-1)[1]));
+  return {...asset,source:pieces.join(''),frameRanges,sharedStyleRange};
+}
+
+export function imageURL(asset, crop, onSource) {
   if (!crop)
     return URL.createObjectURL(
       new Blob([asset.source], { type: "image/svg+xml" }),
@@ -91,8 +125,11 @@ export function imageURL(asset, crop) {
   // TSX preparation records the exact character range of each top-level frame.
   // Parse only the requested frame instead of reparsing all its siblings.
   const range = typeof crop.id === 'string' && /^\d+$/.test(crop.id) && asset.frameRanges?.[crop.id];
+  let fragment=range?asset.source.slice(...range):null;
+  if(range&&asset.sharedStyleRange)
+    fragment=fragment.replace('<style>/* shared stylesheet */</style>',asset.source.slice(...asset.sharedStyleRange));
   const source = range
-    ? asset.source.slice(0, asset.frameRanges[0][0]) + asset.source.slice(...range) + '</svg>'
+    ? asset.source.slice(0, asset.frameRanges[0][0]) + fragment + '</svg>'
     : asset.source;
   const doc = new DOMParser().parseFromString(source, "image/svg+xml"),
     root = doc.documentElement;
@@ -126,11 +163,9 @@ export function imageURL(asset, crop) {
   );
   root.setAttribute("width", crop.width);
   root.setAttribute("height", crop.height);
-  return URL.createObjectURL(
-    new Blob([new XMLSerializer().serializeToString(doc)], {
-      type: "image/svg+xml",
-    }),
-  );
+  const rendered=new XMLSerializer().serializeToString(doc);
+  onSource?.(rendered);
+  return URL.createObjectURL(new Blob([rendered], {type:"image/svg+xml"}));
 }
 
 // Keep current visible previews and a small LRU of offscreen previews. Identity
@@ -185,38 +220,53 @@ export function arrange(data) {
   return { groups, items, world: { x: 0, y: 0, width: Math.max(1, ...groups.map(g => g.x + g.width)), height: Math.max(1, ...groups.map(g => g.y + g.height)) } };
 }
 
-async function prepareSource(asset, built, theme) {
+function formDocument(form,css,theme) {
+  if(form.document)return form.document;
+  const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-sdg-frame="${escape(form.name)}" style="${form.width ? `width:${form.width}px;` : 'width:max-content;'}${form.height ? `height:${form.height}px;` : ''}">${form.html}</div></body></html>`;
+}
+async function prepareSource(asset, built, theme, signal) {
   const parts = []; let x=0,y=0,rowHeight=0;
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox','allow-same-origin');
   frame.style.cssText='position:fixed;left:-100000px;top:0;visibility:hidden';
   document.body.append(frame);
   try {
+    let sliceStart=performance.now();
     for (const [index, form] of built.frames.entries()) {
+      signal?.throwIfAborted();
+      if(performance.now()-sliceStart>8) {
+        await (globalThis.scheduler?.yield?.()??new Promise(resolve=>setTimeout(resolve,0)));
+        sliceStart=performance.now();
+      }
+      const documentSource=formDocument(form,built.css,theme);
       frame.style.width=(form.width ?? 1600)+'px'; frame.style.height=(form.height ?? 1200)+'px';
       if (index === 0) {
-        await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=form.document;});
+        await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=documentSource;});
       } else {
         // Frames from one source share CSS. Keep its sandbox document and viewport,
         // replacing only the specimen instead of navigating for every form.
-        const parsed = new DOMParser().parseFromString(form.document, 'text/html');
+        const parsed = new DOMParser().parseFromString(documentSource, 'text/html');
         frame.contentDocument.body.replaceChildren(frame.contentDocument.importNode(parsed.querySelector('[data-sdg-frame]'), true));
         await Promise.all([...frame.contentDocument.images].map(image => image.decode().catch(() => {})));
       }
       await frame.contentDocument.fonts.ready;
       const shell=frame.contentDocument.querySelector('[data-sdg-frame]');
       const box=shell.getBoundingClientRect();
+      const styles=new Map(),rects=new Map();
+      const styleFor=node=>{if(!styles.has(node))styles.set(node,frame.contentWindow.getComputedStyle(node));return styles.get(node)};
+      const rectFor=node=>{if(!rects.has(node))rects.set(node,node.getBoundingClientRect());return rects.get(node)};
       const elements = [...shell.querySelectorAll('[data-sdg-owners]')].flatMap((node,index) => {
-        const rect = node.getBoundingClientRect();
+        const rect = rectFor(node);
         let left=Math.max(rect.left,box.left),top=Math.max(rect.top,box.top),right=Math.min(rect.right,box.right),bottom=Math.min(rect.bottom,box.bottom);
         for (let parent=node.parentElement;parent && parent!==shell;parent=parent.parentElement) {
-          const style=frame.contentWindow.getComputedStyle(parent);
+          const style=styleFor(parent);
           if (!/(hidden|clip|auto|scroll)/.test(style.overflowX+' '+style.overflowY)) continue;
-          const clip=parent.getBoundingClientRect();
+          const clip=rectFor(parent);
           if (/(hidden|clip|auto|scroll)/.test(style.overflowX)) {left=Math.max(left,clip.left);right=Math.min(right,clip.right)}
           if (/(hidden|clip|auto|scroll)/.test(style.overflowY)) {top=Math.max(top,clip.top);bottom=Math.min(bottom,clip.bottom)}
         }
-        if (right<=left || bottom<=top || frame.contentWindow.getComputedStyle(node).visibility==='hidden') return [];
+        if (right<=left || bottom<=top || styleFor(node).visibility==='hidden') return [];
         return [{id:String(index),owners:JSON.parse(node.dataset.sdgOwners),x:left-box.x,y:top-box.y,width:right-left,height:bottom-top}];
       });
       if (built.component && x && x+box.width>1600) { x=0;y+=rowHeight+48;rowHeight=0; }

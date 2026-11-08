@@ -161,6 +161,31 @@ test('graph endpoint refreshes both directions after import edits, source additi
     updated = await readGraph();
     assert.equal(updated['modules/new.tsx'], undefined);
     assert.deepEqual(updated['components/alert.tsx'].usedBy, ['surfaces/home.tsx']);
+
+    // A helper edit must survive cancellation caused by an unrelated source save.
+    // The worker delay makes the superseding edit deterministic without delaying
+    // the server's main thread or replacing its real build implementation.
+    const helper=put(c,'fixtures/value.ts',"export const value='before';");
+    put(c,'modules/slow.tsx',source("import {value} from '../fixtures/value';", "(()=>{Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,250);return value})()"));
+    await reader.read();
+    const readManifest=async()=> (await fetch(new URL('/manifest',server.url))).json();
+    const stats=async()=> (await fetch(new URL('/api/cache-stats',server.url))).json();
+    const before=await readManifest(),hash=(manifest,name)=>manifest.assets.find(asset=>asset.path===name)?.hash;
+    const previousCancelled=(await stats()).builds.cancelled;
+    writeFileSync(helper,"export const value='after';");
+    const waitFor=async predicate=>{
+      const deadline=Date.now()+4000;
+      while(Date.now()<deadline){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,5));}
+      assert.fail('Timed out waiting for superseded helper refresh');
+    };
+    await waitFor(async()=> (await stats()).builds.active>0);
+    writeFileSync(path.join(c.design,'modules/home.tsx'),source('', '"Unrelated save"'));
+    await waitFor(async()=> (await stats()).builds.cancelled>previousCancelled);
+    await waitFor(async()=>{
+      const manifest=await readManifest();
+      return hash(manifest,'modules/slow.tsx')!==hash(before,'modules/slow.tsx')&&
+        hash(manifest,'modules/home.tsx')!==hash(before,'modules/home.tsx');
+    });
     await reader.cancel();
   } finally { controller.abort(); await server.close(); }
 });

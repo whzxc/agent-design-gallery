@@ -36,7 +36,7 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
       if (url.pathname === '/api/roots' && request.method === 'GET') return json(response, 200, await listRoots(stateDirectory));
       if (url.pathname === '/api/rescan' && request.method === 'POST') return json(response, 200, await scanRoots(undefined, stateDirectory));
       if (route) {
-        if (!read && !(request.method === 'POST' && route[2] === '/preferences')) return json(response, 405, { error: 'Only viewer preferences may be changed.' });
+        if (!read && !(request.method === 'POST' && (route[2] === '/preferences' || route[2] === '/catalog' || /^\/(metadata|preview)\/[a-f0-9]{64}$/.test(route[2]??'')))) return json(response, 405, { error: 'Only viewer preferences and derived cache data may be changed.' });
         if (instanceRoute) {
           const instance = (await listInstances(stateDirectory)).find(item => item.id === instanceRoute[1]);
           if (!instance) return json(response, 404, { error: 'Instance is no longer live.' });

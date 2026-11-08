@@ -1,5 +1,5 @@
 // Adapted from ARC's MIT-licensed tooling/design-server.mjs.
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { directLocal, viewerFiles, shell, json } from './http.mjs';
 import { createServer } from "node:http";
 import {
@@ -14,10 +14,13 @@ import { watch } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { buildSource } from './toolkit/build.mjs';
+import { createBuildStore } from './toolkit/build-store.mjs';
+import { createViewerCache } from './viewer-cache.mjs';
 import { refreshTypes, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
 import { loadConfig } from './toolkit/config.mjs';
 import { sourceRelationships } from '../public/relationships.js';
+const digest = value => createHash('sha256').update(value).digest('hex');
+const viewerVersion = Promise.all(['assets.js','layout.js','selection.js'].map(file => readFile(new URL('../public/'+file,import.meta.url)))).then(parts => digest(Buffer.concat(parts)));
 const defaultState = path.join(
   process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
   "svg-design-gallery",
@@ -44,7 +47,10 @@ export async function startServer({
     watcher,
     refreshTimer,
     revision = 0,
-    closing = false;
+    closing = false,
+    buildStore, viewerCache, codePaths=new Set();
+  const knownBuilds = new Map(), legacyDependencies = new Map(), failedSources=new Set();
+  const describe=built=>({...built,css:undefined,frames:built.frames.map(({html,...frame})=>frame)});
   const clients = new Set(),
     svgCache = new Map(),
     frameCounts = new Map(),
@@ -65,14 +71,16 @@ export async function startServer({
     for (const client of clients)
       client.write(`data: ${JSON.stringify(data)}\n\n`);
   };
-  async function collect(base, relative = "", out = new Map(), sourceNames = sources) {
+  async function collect(base, relative = "", out = new Map(), sourceNames = sources, discoveredCode = new Set()) {
     for (const entry of await readdir(path.join(base, relative), {
       withFileTypes: true,
     })) {
       if (entry.name.startsWith(".") || entry.name === "node_modules" || (relative === "" && entry.name === "art" && !sourceNames.includes("art"))) continue;
       const name = path.posix.join(relative, entry.name);
-      if (entry.isDirectory()) await collect(base, name, out, sourceNames);
-      else if (entry.isFile() && (/\.svg$/i.test(name) || isSourcePath(name, sourceNames))) {
+      if (entry.isDirectory()) await collect(base, name, out, sourceNames, discoveredCode);
+      else if (entry.isFile()) {
+        if(/\.[jt]sx?$/.test(name))discoveredCode.add(name);
+        if(!(/\.svg$/i.test(name)||isSourcePath(name,sourceNames)))continue;
         const info = await stat(path.join(base, name));
         const version = `${info.mtimeMs}-${info.size}`;
         const old = base === root ? files.get(name) : undefined;
@@ -105,13 +113,25 @@ export async function startServer({
     if ((await readdir(next)).includes("tokens.css")) refreshTypes({design:next});
     const project = await loadConfig(next);
     const nextSources = project.design === next ? project.sources : sourceDirectories({design:next});
-    const nextFiles = await collect(next, "", new Map(), nextSources),
+    const nextCode=new Set(), nextFiles = await collect(next, "", new Map(), nextSources, nextCode),
       nextGroups = await readGroups(next, nextSources);
 
+    const cacheBase=path.join(stateDirectory,'cache',digest(next));
+    const nextStore=await createBuildStore({config:{...project,design:next,sources:nextSources,sourceFiles:[...nextCode].sort()},cacheDirectory:path.join(cacheBase,'build')});
+    const nextViewerCache=await createViewerCache(path.join(cacheBase,'viewer'));
+    await buildStore?.close();await viewerCache?.close();
+    buildStore=nextStore;viewerCache=nextViewerCache;knownBuilds.clear();
+    for(const built of await buildStore.metadata()) {
+      if(nextFiles.has(built.path)) {knownBuilds.set(built.path,built);Object.assign(nextFiles.get(built.path),{hash:built.hash,version:built.hash});frameCounts.set(built.path,built.frames.length);}
+    }
     // Complete discovery before starting the watcher.
     const nextWatcher = watch(next, { recursive: true }, (_event, filename) => {
       if (filename && String(filename).split(path.sep).some(part => part.startsWith("."))) return;
-      if (filename) touched.add(String(filename).split(path.sep).join("/"));
+      if (filename) {
+        const name=String(filename).split(path.sep).join('/');
+        touched.add(name);
+        buildStore?.invalidate([name]);
+      }
       clearTimeout(refreshTimer);
       refreshTimer = setTimeout(
         () => refresh().catch((e) => emit({ error: e.message })),
@@ -124,6 +144,7 @@ export async function startServer({
     watcher?.close();
     watcher = nextWatcher;
     root = next;
+    codePaths=nextCode;
     sources = nextSources;
     touched.clear();
     files = nextFiles;
@@ -140,6 +161,7 @@ export async function startServer({
   let refreshing = false,
     refreshAgain = false;
   async function refresh() {
+    if(closing)return;
     if (refreshing) {
       refreshAgain = true;
       return;
@@ -151,51 +173,59 @@ export async function startServer({
       const base = root,
         project = await loadConfig(base),
         nextSources = project.design===base ? project.sources : sourceDirectories({design:base}),
-        next = await collect(base,'',new Map(),nextSources),
+        nextCode=new Set(),
+        next = await collect(base,'',new Map(),nextSources,nextCode),
         nextGroups = await readGroups(base, nextSources);
       if (root !== base) return;
-      const changed = [...new Set([...files.keys(), ...next.keys()])].filter(
-        (k) => files.get(k)?.version !== next.get(k)?.version,
-      );
-      for (const name of observed) {
-        if (
-          !/\.svg$/i.test(name) &&
-          [...svgCache.values()].some((entry) =>
-            entry.dependencies.includes(name),
-          )
-        )
-          changed.push(name);
-      }
-      const grouping = JSON.stringify(groups) !== JSON.stringify(nextGroups);
-      if (!changed.length && !grouping) return;
-      // Relative embedded SVG dependencies inherit their dependency's revision.
-      for (const [key, entry] of svgCache)
-        if (entry.dependencies.some((p) => changed.includes(p))) {
-          svgCache.delete(key);
-          const dependent = key.split("\0")[0];
-          if (next.has(dependent) && !changed.includes(dependent)) {
-            next.set(dependent, {
-              ...next.get(dependent),
-              version: `${next.get(dependent).version}-${revision + 1}`,
-            });
-            changed.push(dependent);
+      const stamps=[...new Set([...files.keys(),...next.keys()])].filter(name=>files.get(name)?.stamp!==next.get(name)?.stamp);
+      const grouping=JSON.stringify(groups)!==JSON.stringify(nextGroups);
+      const configChanged=JSON.stringify(sources)!==JSON.stringify(nextSources);
+      const structural=configChanged || [...new Set([...codePaths,...nextCode])].some(name=>codePaths.has(name)!==nextCode.has(name));
+      if(structural){await buildStore.close();buildStore=await createBuildStore({config:{...project,design:base,sources:nextSources,sourceFiles:[...nextCode].sort()},cacheDirectory:path.join(stateDirectory,'cache',digest(base),'build')});}
+      const observedPaths=[...new Set([...observed,...stamps])];
+      const affected=new Set(await buildStore.invalidate(structural?[...knownBuilds.keys(),...observedPaths]:observedPaths));
+      for(const name of failedSources)affected.add(name);
+      for(const name of stamps)if(name.endsWith('.tsx')&&next.has(name))affected.add(name);
+      if(!stamps.length&&!affected.size&&!grouping)return;
+      const changed=[];
+      let cursor=0;
+      const names=[...affected].filter(name=>next.has(name)&&name.endsWith('.tsx'));
+      try {
+        await Promise.all(Array.from({length:2},async()=>{
+          while(cursor<names.length) {
+            const name=names[cursor++],built=await buildStore.get(name);
+            if(knownBuilds.get(name)?.hash!==built.hash)changed.push(name);
+            knownBuilds.set(name,describe(built));failedSources.delete(name);frameCounts.set(name,built.frames.length);
+            Object.assign(next.get(name),{hash:built.hash,version:built.hash});
           }
+        }));
+      } catch(error) {if(error.name==='AbortError'){if(!closing){for(const name of observedPaths)touched.add(name);refreshAgain=true;}return;}throw error;}
+      for(const [name,entry] of next)if(name.endsWith('.tsx')&&knownBuilds.has(name)&&!affected.has(name))Object.assign(entry,{hash:knownBuilds.get(name).hash,version:knownBuilds.get(name).hash});
+      for(const name of [...knownBuilds.keys()])if(!next.has(name)){knownBuilds.delete(name);frameCounts.delete(name);changed.push(name);}
+      const dirty=new Set(observedPaths);
+      for(const [name,dependencies] of legacyDependencies) {
+        if(!next.has(name)){legacyDependencies.delete(name);continue;}
+        if(dependencies.some(dependency=>dirty.has(dependency))) {
+          for(const theme of ['light','dark'])svgCache.delete(`${name}\0${theme}`);
+          next.set(name,{...next.get(name),version:`${next.get(name).stamp}-${revision+1}`});changed.push(name);
         }
-      for (const name of changed) frameCounts.delete(name);
+      }
+      for(const name of stamps)if(!name.endsWith('.tsx')&&!changed.includes(name))changed.push(name);
       files = next;
+      codePaths=nextCode;
       sources = nextSources;
       groups = nextGroups;
       revision++;
       emit({ revision, changed });
     } finally {
       refreshing = false;
-      if (refreshAgain) {
+      if (refreshAgain && !closing) {
         refreshAgain = false;
         await refresh();
       }
     }
   }
-  const manifest = () => ({
+  const baseManifest = () => ({
     directory: root ?? null,
     label: root
       ? path.basename(root) === "design" ? path.basename(path.dirname(root)) : path.basename(root)
@@ -210,8 +240,7 @@ export async function startServer({
     sidebar: state.sidebar ?? true,
     inspector: state.inspector ?? true,
   });
-  function fixtureManifest(name) {
-    const data = manifest();
+  function applyFixtureManifest(data,name) {
     if (!fixtures || !name) return data;
     if (Number.isFinite(fixtures.assetModifiedAt)) data.assets = data.assets.map(a => ({...a,modifiedAt:fixtures.assetModifiedAt}));
     const preset = fixtures.states[name];
@@ -219,6 +248,35 @@ export async function startServer({
     return { ...data, ...(preset.empty ? { directory: null, assets: [], groups: [] } : {}),
       label: 'agent-remote-control', recent: fixtures.recent, view: null, theme: preset.themeChoice ?? preset.theme,
       sidebar: preset.sidebar, inspector: !!preset.inspector, fixture: { name, ...preset } };
+  }
+  const contextFor=async url=>(await viewerVersion)+'|'+(url.searchParams.get('context')??'');
+  async function manifest(url) {
+    const data=baseManifest(),context=await contextFor(url);
+    if(viewerCache) {
+      const includeMetadata=url.searchParams.get('metadata')==='1';
+      const requestedTheme=url.searchParams.get('initial')==='1'&&['light','dark'].includes(state.theme)?state.theme:(url.searchParams.get('theme')==='light'?'light':'dark');
+      data.metadataTheme=requestedTheme;
+      data.assets=await Promise.all(data.assets.map(async asset=>{
+        if(!asset.hash)return {...asset};
+        const metadata={},metadataRefs={},previewIds={};
+        for(const theme of ['light','dark']) {
+          const reference=viewerCache.reference(asset.hash,theme,context);
+          if(reference){metadataRefs[theme]=true;previewIds[theme]=reference.previewIds;}
+          if(includeMetadata&&theme===requestedTheme&&reference){const saved=await viewerCache.get(asset.hash,theme,context);if(saved)metadata[theme]=saved.metadata;}
+        }
+        return {...asset,metadata,metadataRefs,previewIds};
+      }));
+      data.packing=(await viewerCache.get(digest('catalog'),'light',context))?.metadata.packing??[];
+    }
+    data.features={compactSources:1,persistedMetadata:1,incrementalHashes:1};
+    return applyFixtureManifest(data,url.searchParams.get('fixture'));
+  }
+  async function sourceBuild(name) {
+    let built;
+    try{built=await buildStore.get(name);}catch(error){if(error.name!=='AbortError')failedSources.add(name);throw error;}
+    knownBuilds.set(name,describe(built));failedSources.delete(name);frameCounts.set(name,built.frames.length);
+    if(files.has(name))Object.assign(files.get(name),{hash:built.hash,version:built.hash});
+    return built;
   }
   async function svg(name, theme, chain = []) {
     if (chain.includes(name))
@@ -229,10 +287,9 @@ export async function startServer({
       cached = svgCache.get(key);
     if (cached?.version === asset.version) return cached;
     if (name.endsWith('.tsx')) {
-      const built = await buildSource({root:path.dirname(root),design:root,output:path.join(root,'.sdg/build'),sources},path.join(root,name),{write:false});
-      frameCounts.set(name, built.frames.length);
-      const result = {version:asset.version,imports:built.imports,dependencies:built.dependencies.map(p=>path.relative(root,p).split(path.sep).join('/')),body:JSON.stringify({format:'tsx',imports:built.imports,component:!name.startsWith('surfaces/'),frames:built.frames.map(f=>({...f,document:f.document(theme)}))})};
-      svgCache.set(key,result); return result;
+      const built=await sourceBuild(name);
+      return {version:built.hash,imports:built.imports,dependencies:built.dependencies,
+        body:JSON.stringify({format:'tsx',hash:built.hash,css:built.css,imports:built.imports,component:!name.startsWith('surfaces/'),frames:built.frames})};
     }
     let content = await readFile(path.join(root, name), "utf8");
     content = content.replace(
@@ -283,16 +340,17 @@ export async function startServer({
       body: Buffer.from(content),
       dependencies: [...new Set(dependencies)],
     };
-    svgCache.set(key, entry);
+    legacyDependencies.set(name,entry.dependencies);
+    svgCache.delete(key);svgCache.set(key,entry);
+    let bytes=[...svgCache.values()].reduce((n,item)=>n+item.body.length,0);
+    while(svgCache.size>128||bytes>32*1024*1024){const first=svgCache.keys().next().value;bytes-=svgCache.get(first).body.length;svgCache.delete(first);}
     return entry;
   }
-  async function body(request) {
-    let text = "";
-    for await (const chunk of request) {
-      text += chunk;
-      if (text.length > 16384) throw new Error("Request too large.");
-    }
-    return JSON.parse(text || "{}");
+  async function body(request,limit=16384,raw=false) {
+    const chunks=[];let size=0;
+    for await(const chunk of request){size+=chunk.length;if(size>limit)throw Error('Request too large.');chunks.push(chunk);}
+    const text=Buffer.concat(chunks).toString('utf8');
+    return raw?text:JSON.parse(text||'{}');
   }
   const server = createServer(async (request, response) => {
     try {
@@ -300,6 +358,7 @@ export async function startServer({
       const url = new URL(request.url, 'http://localhost');
       if (['GET', 'HEAD'].includes(request.method) && viewerFiles[url.pathname]) return await shell(request, response, viewerFiles[url.pathname]);
       if (!directLocal(request)) return json(response, 401, { error: 'Unauthorized' });
+      if(url.pathname==='/api/cache-stats'&&request.method==='GET')return json(response,200,{process:process.memoryUsage(),builds:buildStore?.stats(),viewer:viewerCache?.stats()});
       if (url.pathname === '/api/health' && request.method === 'GET') return json(response, 200, { id: instanceId, capabilities: { keyAuth: 1 } });
       if (request.method === "POST") {
         if (
@@ -309,6 +368,27 @@ export async function startServer({
           response.writeHead(403);
           response.end("Cross-origin request refused.");
           return;
+        }
+        const cacheRoute=url.pathname.match(/^\/(metadata|preview)\/([a-f0-9]{64})$/);
+        if(cacheRoute) {
+          const [,kind,hash]=cacheRoute,theme=url.searchParams.get('theme')==='dark'?'dark':'light',context=await contextFor(url);
+          if(![...knownBuilds.values()].some(built=>built.hash===hash))return json(response,409,{error:'Source changed; reload its metadata.'});
+          if(kind==='metadata') {
+            const data=await body(request,32*1024*1024),metadata=data.metadata;
+            if(!metadata||!Array.isArray(metadata.parts)||!metadata.full||!Number.isFinite(metadata.full.width)||!Number.isFinite(metadata.full.height))throw Error('Invalid measured source metadata.');
+            await viewerCache.save(hash,theme,context,metadata);
+          } else {
+            const source=await body(request,32*1024*1024,true),crop=url.searchParams.get('crop')??'overview';
+            if(!/^\s*<svg\b/.test(source))throw Error('Expected an SVG preview.');
+            await viewerCache.savePreview(hash,theme,context,crop,source);
+          }
+          return json(response,200,{ok:true});
+        }
+        if(url.pathname==='/catalog') {
+          const data=await body(request,1024*1024),context=await contextFor(url);
+          if(!Array.isArray(data.packing)||data.packing.length>32)throw Error('Invalid packing cache.');
+          await viewerCache.save(digest('catalog'),'light',context,{packing:data.packing});
+          return json(response,200,{ok:true});
         }
         const data = await body(request);
         if (url.pathname === "/preferences") {
@@ -339,7 +419,7 @@ export async function startServer({
           return;
         }
         response.writeHead(200, { "Content-Type": "application/json" });
-        response.end(JSON.stringify(fixtureManifest(url.searchParams.get("fixture"))));
+        response.end(JSON.stringify(await manifest(url)));
         return;
       }
       if (!["GET", "HEAD"].includes(request.method)) {
@@ -357,12 +437,21 @@ export async function startServer({
         response.on("close", () => clients.delete(response));
         return;
       }
+      const metadataRoute=url.pathname.match(/^\/metadata\/([a-f0-9]{64})$/);
+      if(metadataRoute){const saved=await viewerCache?.get(metadataRoute[1],url.searchParams.get('theme')==='dark'?'dark':'light',await contextFor(url));return json(response,saved?200:404,saved??{error:'Source metadata is not cached.'});}
+      const previewRoute=url.pathname.match(/^\/preview\/([a-f0-9]{64})$/);
+      if(previewRoute) {
+        const content=await viewerCache?.preview(previewRoute[1],url.searchParams.get('theme')==='dark'?'dark':'light',await contextFor(url),url.searchParams.get('crop')??'overview');
+        if(!content){response.writeHead(404);response.end('Preview is not cached.');return;}
+        response.writeHead(200,{'Content-Type':'image/svg+xml','Cache-Control':'private, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'});
+        response.end(request.method==='HEAD'?undefined:content);return;
+      }
       let content, type, etag;
       if (url.pathname === "/manifest") {
-        content = JSON.stringify(fixtureManifest(url.searchParams.get("fixture")));
+        content = JSON.stringify(await manifest(url));
         type = "application/json";
       } else if (url.pathname === "/relationships") {
-        const assets = await Promise.all([...files.keys()].filter(name => name.endsWith('.tsx')).map(async name => ({path:name, imports:(await svg(name, 'light')).imports})));
+        const assets = await Promise.all([...files.keys()].filter(name => name.endsWith('.tsx')).map(async name => ({path:name, imports:(await sourceBuild(name)).imports})));
         content = JSON.stringify(sourceRelationships(assets));
         type = "application/json";
       } else if (url.pathname.startsWith("/asset/")) {
@@ -380,7 +469,8 @@ export async function startServer({
           response.end();
           return;
         }
-        content = (await svg(name, theme)).body;
+        const rendered=await svg(name,theme);
+        content=rendered.body;etag=`"${rendered.version}-${theme}"`;
         type = name.endsWith(".tsx") ? "application/json" : "image/svg+xml";
       } else {
         response.writeHead(404); response.end('Not found.'); return;
@@ -393,7 +483,7 @@ export async function startServer({
       });
       response.end(request.method === "HEAD" ? undefined : content);
     } catch (error) {
-      response.writeHead(400, { "Content-Type": "application/json" });
+      response.writeHead(error.name==='AbortError'?409:400, { "Content-Type": "application/json" });
       response.end(JSON.stringify({ error: error.message }));
     }
   });
@@ -421,9 +511,11 @@ export async function startServer({
     watcher?.close();
     for (const c of clients) c.end();
     await writes;
+    await buildStore?.close();await viewerCache?.close();
     await new Promise((resolve) => server.close(resolve));
   };
   return { id: instanceId, directory: root, url: `http://127.0.0.1:${server.address().port}/`, port: server.address().port, close,
+    cacheStats:()=>({builds:buildStore?.stats(),viewer:viewerCache?.stats()}),
     stats: () => {
       const entries = [...files.keys()].filter(name => name.endsWith('.tsx'));
       return { sourceCount: entries.length, frameCount: entries.every(name => frameCounts.has(name)) ? entries.reduce((n, name) => n + frameCounts.get(name), 0) : null };

@@ -1,10 +1,10 @@
 import { initSwitcher, updateSwitcherLabels } from './switcher.js';
 import { dataFetch, keyURL, isUnauthorized } from './auth.js';
 import { Labels } from "./labels.js";
-import { fitArea, fitView } from "./layout.js";
+import { fitArea, fitView, packingSnapshot, restorePacking } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
-import { prepare, imageURL, arrange, groupAssets, evictPreviews } from "./assets.js";
+import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext, measuredMetadata, previewAddress, compactPreparedSource } from "./assets.js";
 import { sourceRelationships, relatedSources } from './relationships.js';
 import { hitSelection, frameBox, exportFrames } from './selection.js';
 // ARC's gallery layout and camera model, decoupled from its React runtime.
@@ -61,7 +61,68 @@ let backgroundChoice = "theme", backgroundColors = {};
 let history = [],
   searchReturn = null;
 const expanded = new Set(),
-  prepared = new Map();
+  prepared = new Map(), metadataCache = new Map(), preparingSources = new Map();
+let initializedDirectory, uploadActive = 0, cacheWrites = 0, cacheFailures = 0;
+const uploadQueue=[], uploadPromises=new Set();
+function cacheWrite(url,data,raw=false) {
+  cacheWrites++;
+  const promise=new Promise(resolve=>uploadQueue.push({url,data,raw,resolve}));
+  uploadPromises.add(promise);promise.finally(()=>uploadPromises.delete(promise));
+  pumpUploads();return promise;
+}
+function pumpUploads() {
+  while(uploadActive<3&&uploadQueue.length) {
+    const task=uploadQueue.shift();uploadActive++;
+    dataFetch(task.url,{method:'POST',headers:{'Content-Type':task.raw?'image/svg+xml':'application/json'},body:task.raw?task.data:JSON.stringify(task.data)})
+      .then(response=>{if(response.status===409)return false;if(!response.ok)throw Error(`Derived cache HTTP ${response.status}`);return true})
+      .catch(()=>{cacheFailures++;return false})
+      .then(result=>{uploadActive--;cacheWrites--;task.resolve(result);pumpUploads()});
+  }
+}
+async function flushCache() {
+  while(cacheWrites||loading||queued.length) {
+    await Promise.all([...uploadPromises]);
+    await new Promise(resolve=>setTimeout(resolve,20));
+  }
+}
+const sourceKey=(asset,theme,directory=manifest?.directory??catalog?.directory)=>`${directory}|${asset.path}|${asset.hash??asset.version}|${theme}`;
+function keepSource(key,entry) {
+  entry=compactPreparedSource(entry);
+  prepared.delete(key);prepared.set(key,entry);
+  let bytes=[...prepared.values()].reduce((n,a)=>n+(a.source?.length??0)*2,0);
+  for(const [old,value] of prepared) {
+    if(bytes<=32*1024*1024)break;
+    bytes-=(value.source?.length??0)*2;prepared.delete(old);
+  }
+}
+function decorateMetadata(asset,metadata) {
+  const entry={...asset,...metadata};
+  if(Number.isFinite(asset.modifiedAt)) {
+    const date=new Date(asset.modifiedAt);
+    entry.modified={text:modifiedDate.format(date),timestamp:date.toISOString(),title:date.toLocaleString(undefined,{dateStyle:'full',timeStyle:'long'})};
+  }
+  return entry;
+}
+function persistSource(entry,theme) {
+  if(!entry.hash)return Promise.resolve(false);
+  const query=new URLSearchParams({theme,context:metadataContext()});
+  const promise=cacheWrite(`metadata/${entry.hash}?${query}`,{metadata:measuredMetadata(entry)});
+  entry.cacheWrite=promise;
+  return promise;
+}
+async function sourceFor(asset,theme) {
+  const key=sourceKey(asset,theme),cached=prepared.get(key);
+  if(cached?.source)return cached;
+  if(preparingSources.has(key))return preparingSources.get(key);
+  const pending=(async()=>{
+    const entry=await prepare(asset,theme);
+    persistSource(entry,theme);
+    keepSource(sourceKey(entry,theme),entry);return entry;
+  })();
+  preparingSources.set(key,pending);
+  try{return await pending}finally{preparingSources.delete(key)}
+}
+
 const fixtureName = new URL(location.href).searchParams.get("fixture");
 let fixtureState = null, fixtureApplied = false;
 const currentItem = () => inspection || assets.find((a) => a.id === selectedId);
@@ -119,6 +180,10 @@ const media = matchMedia("(prefers-color-scheme: dark)");
 const modifiedDate = new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 window.__sdg = {
   ready: false,
+  get metadataComplete() {return !!manifest&&!manifest.loading;},
+  get cachePending() {return cacheWrites+loading+queued.length;},
+  get cacheFlush() {return flushCache();},
+  get cacheFailures() {return cacheFailures;},
   get view() {
     return { ...view };
   },
@@ -150,7 +215,7 @@ function error(message) {
   $("#error").hidden = !message;
 }
 async function api(url, data, keepalive = false) {
-  if(fixtureName && url === "manifest") url += `?fixture=${encodeURIComponent(fixtureName)}`;
+  if(fixtureName && url.startsWith("manifest")) url += `${url.includes("?")?"&":"?"}fixture=${encodeURIComponent(fixtureName)}`;
   const response = await dataFetch(
     url,
     data
@@ -489,43 +554,82 @@ function ensureImage(a, p) {
   const key = assetURL(a, p);
   let e = cache.get(key);
   if (e) {
-    e.used = performance.now();
+    e.used = performance.now();e.asset=a;e.part=p;
     return e;
   }
-  e = { key, asset: a, part: p, used: performance.now(), state: "queued" };
+  e = { key, asset: a, part: p, theme:effectiveTheme, used: performance.now(), state: "queued" };
   cache.set(key, e);
   queued.push(e);
-  pump();
+  queueMicrotask(pump);
   return e;
 }
 function pump() {
+  // New vector parsing/decoding waits until the gesture settles. Existing exact
+  // raster previews continue to move with the camera during interaction.
+  if(moving)return;
+  queued.sort((a,b)=>Number(visible(b.asset))-Number(visible(a.asset))||
+    Math.hypot(view.x+(a.asset.x+a.asset.width/2)*view.scale-width/2,view.y+(a.asset.y+a.asset.height/2)*view.scale-height/2)-
+    Math.hypot(view.x+(b.asset.x+b.asset.width/2)*view.scale-width/2,view.y+(b.asset.y+b.asset.height/2)*view.scale-height/2));
   while (loading < 3 && queued.length) {
     const e = queued.shift();
     if (!cache.has(e.key)) continue;
-    loading++;
-    e.state = "loading";
-    const img = new Image();
-    e.image = img;
-    img.decoding = "async";
-    const url = imageURL(e.asset, e.part);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      e.state = "ready";
-      loading--;
-      requestDraw(false);
-      pump();
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      e.state = "error";
-      loading--;
-      error(`Cannot render ${e.asset.path}`);
-      requestDraw(false);
-      pump();
-    };
-    img.src = url;
+    loading++;e.state='loading';
+    void loadPreview(e);
   }
 }
+async function loadPreview(e) {
+  let url,local=false;
+  const theme=e.theme??effectiveTheme;
+  const generated=async restore=>{
+    const asset=await sourceFor(e.asset,theme);
+    if(e.asset.hash&&asset.hash!==e.asset.hash)throw Object.assign(Error('Preview superseded'),{name:'AbortError',waitForRevision:true});
+    if(restore)persistSource(asset,theme);
+    while(moving)await new Promise(resolve=>setTimeout(resolve,16));
+    // Yield the parse/serialization task to pending input before starting it.
+    await (globalThis.scheduler?.yield?.()??new Promise(resolve=>setTimeout(resolve,0)));
+    local=true;
+    return imageURL(asset,e.part,source=>{
+      if(!asset.hash)return;
+      const saved=asset.cacheWrite??Promise.resolve(true);
+      void saved.then(ok=>{
+        if(!ok)return;
+        const query=new URLSearchParams({theme,context:metadataContext(),crop:e.part.id});
+        return cacheWrite(`preview/${asset.hash}?${query}`,source,true);
+      });
+    });
+  };
+  const decode=async source=>{
+    if(!cache.has(e.key))return;
+    while(moving)await new Promise(resolve=>setTimeout(resolve,16));
+    const img=new Image();e.image=img;img.decoding='async';img.src=source;
+    await img.decode();e.state='ready';
+  };
+  try {
+    const cached=e.asset.hash&&e.asset.previewIds?.[theme]?.includes(e.part.id);
+    if(cached) {
+      const address=previewAddress(e.asset,theme,e.part.id);
+      url=keyURL(address);
+      try {await decode(url)}
+      catch(failure) {
+        // A disk LRU eviction after the manifest is a cache miss. dataFetch also
+        // preserves the normal unauthorized flow if an access key was rotated.
+        const response=await dataFetch(address);
+        if(response.ok){local=true;url=URL.createObjectURL(await response.blob());await decode(url);}
+        else if(response.status===404){url=await generated(true);await decode(url);}
+        else throw failure;
+      }
+    } else {url=await generated(false);await decode(url);}
+  } catch(failure) {
+    e.state='error';
+    if(failure.name==='AbortError'&&!failure.waitForRevision&&cache.get(e.key)===e)cache.delete(e.key);
+    if(failure.name!=='AbortError'&&cache.get(e.key)===e&&theme===effectiveTheme&&manifest?.assets.some(a=>a.path===e.asset.path&&a.version===e.asset.version))
+      error(`Cannot render ${e.asset.path}: ${failure.message}`);
+  } finally {
+    if(local&&url)URL.revokeObjectURL(url);
+    loading--;requestDraw(false);pump();
+  }
+}
+
 function thumbnail(e, upgrade = false) {
   const scale = Math.min(2, view.scale) * dpr;
   if (e.bitmap && (!upgrade || e.bitmapScale >= scale)) return e.bitmap;
@@ -630,11 +734,12 @@ function draw() {
   const percentage = `${Math.round(view.scale * 100)}%`;
   if (zoomValue.textContent !== percentage) zoomValue.textContent = percentage;
   if (zoomOutput.value !== percentage) zoomOutput.value = percentage;
-  window.__sdg.ready = !!manifest && manifest.renderTheme === effectiveTheme && drawingReady === drawingCount && !moving;
+  window.__sdg.ready = !!manifest && !manifest.loading && manifest.renderTheme === effectiveTheme && drawingReady === drawingCount && !moving;
   if(fixtureState && fixtureApplied && window.__sdg.ready) document.documentElement.dataset.fixtureReady=fixtureState.name;
   window.__sdg.revision = manifest?.revision;
   window.__sdg.visibleReady = drawingReady; window.__sdg.visibleCount = drawingCount;
   drawMap();
+  if(!moving&&queued.length)pump();
   if (cache.size > 100) {
     const activeKeys = new Set(displayed.filter(a => visible(a, drawingMargin))
       .flatMap(a => placements(a).map(({part}) => assetURL(a, part))));
@@ -988,7 +1093,7 @@ function resizeViewport() {
 new ResizeObserver(resizeViewport).observe(viewport);
 async function applyManifest(data, force = false) {
   const changedRoot = manifest?.directory !== data.directory,
-    first = !manifest && !catalog;
+    first = initializedDirectory!==data.directory;
   if (!force && !changedRoot && !first && manifest.revision === data.revision)
     return;
   if (changedRoot && catalog?.directory !== data.directory) expanded.clear();
@@ -1008,42 +1113,6 @@ async function applyManifest(data, force = false) {
     renderNav();
   }
   window.__sdg.ready = false;
-  const versionTheme = effectiveTheme;
-  let next = 0;
-  const results = [];
-  await Promise.all(
-    Array.from({ length: 4 }, async () => {
-      while (next < data.assets.length) {
-        const i = next++,
-          a = data.assets[i],
-          key = `${data.directory}|${a.path}|${a.version}|${versionTheme}`;
-        let entry = prepared.get(key);
-        if (!entry) {
-          entry = await prepare(a, versionTheme);
-          if (Number.isFinite(a.modifiedAt)) {
-            const date = new Date(a.modifiedAt);
-            entry.modified = {text:modifiedDate.format(date),timestamp:date.toISOString(),title:date.toLocaleString(undefined,{dateStyle:'full',timeStyle:'long'})};
-          }
-          prepared.set(key, entry);
-        }
-        results[i] = entry;
-      }
-    }),
-  );
-  if (versionTheme !== effectiveTheme) {
-    pending = true;
-    return;
-  }
-  for (const key of prepared.keys())
-    if (
-      !data.assets.some((a) =>
-        key.startsWith(`${data.directory}|${a.path}|${a.version}|`),
-      )
-    )
-      prepared.delete(key);
-  const previous = manifest;
-  manifest = { ...data, assets: results, relationships:sourceRelationships(results), renderTheme: versionTheme };
-  catalog = null;
   if (changedRoot) {
     cache.clear();
     labelLayer.clear();
@@ -1055,9 +1124,67 @@ async function applyManifest(data, force = false) {
     active = null;
     history = [];
   }
+  const versionTheme = effectiveTheme;
+  restorePacking(data.packing);
+  const previous=manifest, results=new Array(data.assets.length), signal=refreshController?.signal;
+  let next=0,publishFrame=0,streamView=null,streamMoved=false,publishedCount=0,nextPublish=1;
+  const streaming=first||changedRoot;
+  const publish=()=>{
+    publishFrame=0;
+    if(signal?.aborted||versionTheme!==effectiveTheme)return;
+    const available=results.filter(Boolean);
+    if(!available.length)return;
+    publishedCount=available.length;nextPublish=Math.max(publishedCount+1,publishedCount*2);
+    if(streamView&&view!==streamView)streamMoved=true;
+    manifest={...data,assets:available,relationships:sourceRelationships(available),renderTheme:versionTheme,loading:true};
+    layout(manifest,false);
+    if(streaming&&!streamMoved){view=data.view??fitView(world,cameraArea());streamView=view;}
+    requestDraw();
+  };
+  for(let i=0;i<data.assets.length;i++) {
+    const a=data.assets[i],key=sourceKey(a,versionTheme,data.directory);
+    const metadata=a.metadata?.[versionTheme]??metadataCache.get(key);
+    if(metadata){results[i]=decorateMetadata(a,metadata);metadataCache.set(key,metadata);}
+  }
+  let completed=results.filter(Boolean).length;
+  if(streaming&&completed)publish();
+  await Promise.all(Array.from({length:4},async()=>{
+    while(next<data.assets.length) {
+      signal?.throwIfAborted();
+      const i=next++,a=data.assets[i];
+      if(results[i])continue;
+      let entry;
+      if(a.hash&&a.metadataRefs?.[versionTheme]) {
+        const query=new URLSearchParams({theme:versionTheme,context:metadataContext()});
+        const response=await dataFetch(`metadata/${a.hash}?${query}`,{signal});
+        if(response.ok){const saved=await response.json();entry=decorateMetadata({...a,previewIds:{...a.previewIds,[versionTheme]:saved.previewIds}},saved.metadata);}
+      }
+      if(!entry) {
+        entry=await prepare(a,versionTheme,{signal});
+        Object.assign(a,{hash:entry.hash,version:entry.version});
+        persistSource(entry,versionTheme);
+        keepSource(sourceKey(entry,versionTheme,data.directory),entry);
+      }
+      const metadata=measuredMetadata(entry);
+      metadataCache.set(sourceKey(entry,versionTheme,data.directory),metadata);
+      results[i]=decorateMetadata(a,metadata);completed++;
+      if(streaming&&completed>=nextPublish&&!publishFrame)publishFrame=requestAnimationFrame(publish);
+    }
+  }));
+  if(publishFrame)cancelAnimationFrame(publishFrame);
+  if(versionTheme!==effectiveTheme){pending=true;return;}
+  signal?.throwIfAborted();
+  for(const [key,entry] of prepared)if(!data.assets.some(a=>key===sourceKey(a,versionTheme,data.directory)||key===sourceKey(a,versionTheme==='dark'?'light':'dark',data.directory)))prepared.delete(key);
+  const live=new Set(data.assets.flatMap(a=>['light','dark'].map(t=>sourceKey(a,t,data.directory))));
+  for(const key of metadataCache.keys())if(!live.has(key))metadataCache.delete(key);
+  manifest = { ...data, assets: results, relationships:sourceRelationships(results), renderTheme: versionTheme };
+  // Early streamed worlds can use a much larger camera scale. Discard those
+  // raster intermediates so the completed world starts at its exact final scale.
+  if(streaming&&publishedCount<data.assets.length)for(const entry of cache.values()){delete entry.bitmap;delete entry.bitmapScale;}
+  catalog = null;
   layout(
     manifest,
-    !!previous &&
+    !streaming && !!previous &&
       !changedRoot &&
       JSON.stringify(previous.groups) === JSON.stringify(data.groups),
   );
@@ -1066,7 +1193,7 @@ async function applyManifest(data, force = false) {
   document.title = `${data.label} — SVG Design Gallery`;
   if (changedRoot || first) {
     if (data.view) view = data.view;
-    else frame(world);
+    else if(!streamMoved)frame(world);
     const restored = data.selection;
     if (!fixtureState && restored) {
       const source = manifest.assets.find(a => a.path === restored.path);
@@ -1105,6 +1232,8 @@ async function applyManifest(data, force = false) {
     const a=assets.find(a=>a.path===selected),p={...a.full,id:'full',name:'Full sheet'};
     inspection={...a,id:a.id+'@full',x:0,y:0,width:p.width,height:p.height,shown:[p],kind:'sheet'};
   }
+  initializedDirectory=data.directory;
+  if(data.features?.persistedMetadata)cacheWrite(`catalog?context=${encodeURIComponent(metadataContext())}`,{packing:packingSnapshot()});
   selection();
   if (pendingNavigation) {
     const action = pendingNavigation;
@@ -1178,18 +1307,21 @@ async function applyFixture() {
   fixtureApplied=true;requestDraw();
 }
 let fetching = false,
-  pending = false;
+  pending = false, refreshController=null;
 async function refresh(force = false) {
   if (fetching) {
-    pending = true;
+    pending = true;refreshController?.abort();
     return;
   }
-  fetching = true;
+  fetching = true;refreshController=new AbortController();
   try {
-    await applyManifest(await api("manifest"), force);
+    const query=new URLSearchParams({context:metadataContext(),theme:effectiveTheme});
+    if(!manifest){query.set('initial','1');query.set('metadata','1');}
+    else if(manifest.renderTheme!==effectiveTheme)query.set('metadata','1');
+    await applyManifest(await api(`manifest?${query}`), force);
     error("");
   } catch (e) {
-    error(e.message);
+    if(e.name!=='AbortError')error(e.message);
   } finally {
     fetching = false;
     if (pending) {
