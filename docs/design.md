@@ -33,7 +33,7 @@ implementation mappings and review process. The asset rules take precedence over
 | --- | --- | --- |
 | Shared values and controls | `tokens.css`, button, icon-button, field, tree-row and menu-item components; their fixtures | Reviewed; IconButton disabled is approved; defaults belong to parts and frame presentation data belongs to fixtures. |
 | Generic containers | `components/panel.tsx`, `components/toolbar.tsx`, `components/canvas.tsx`, `fixtures/containers.ts` | Independent source entries and minimal specimens; Reviewed. |
-| Surface layout | `surfaces/canvas.tsx` / `ViewerChrome`; three surface renderers | Select and position feature chrome around the generic Screen. Boundary Reviewed. Review one full-region source at a time after feature dependencies. |
+| Surface layout | `surfaces/canvas.tsx` / `ViewerChrome`; three surface renderers | Canvas composition Reviewed; select and position approved feature chrome around the generic Screen. Each surface owns its capture/layout records in fixtures. |
 | Navigation | `modules/navigation.tsx` / `Sidebar` | Reviewed; navigation/search fixtures are separate. |
 | Inspector | `modules/inspector.tsx` / `Inspector`; `fixtures/inspector.json` | Reviewed; one Inspector composition with separate fixtures and approved source, exported-element, nested-element and empty-match states. |
 | Menus | `modules/menus.tsx` / `Menu` | Reviewed; menu captures and their fixtures belong to the menus module. |
@@ -81,7 +81,7 @@ owning scope resolves them.
 | `modules/canvas.tsx` / `Minimap` | `public/index.html` `#minimap`; `public/app.js` `drawMap` | ViewerChrome → canvas surface | Reviewed; in use; `minimap` preserves the existing specimen geometry; its fidelity gap is listed below. |
 | `components/tooltip.tsx` / `Tooltip` | `public/index.html` `#tooltip`; tooltip handlers; `public/style.css` `#tooltip` | View-controls module capture | Approval unrecorded; in use. |
 | `modules/canvas.tsx` / `AssetLabel` | `public/labels.js` `Labels`; `public/app.js` `drawLabels`; `.label-copy` | Mapped runtime usage; no imported design consumer | Reviewed; in use; frames: `asset-label-modified`, `asset-label-hover`, `asset-label-copied`. Drawing retains SVG labels under this same feature owner. |
-| `surfaces/canvas.tsx` / frame renderer | Gallery layout/camera/chrome | Entry surface | Full-frame approval unrecorded; mapped fixtures below; boundary Reviewed. |
+| `surfaces/canvas.tsx` / frame renderer | Gallery layout/camera/chrome | Entry surface | Reviewed structural composition; existing full-region layouts and camera states retained; capture identities remain mapped below. |
 | `surfaces/inspector.tsx` / frame renderer | Gallery and source inspector | Entry surface | Full-frame approval unrecorded; boundary Reviewed; captured content lives in inspector fixtures. Approved local source/export states belong to the inspector module. |
 | `surfaces/open-directory.tsx` / frame renderer | Gallery and directories dialog | Entry surface | Full-frame approval unrecorded; mapped fixtures below; boundary Reviewed. |
 
@@ -100,6 +100,7 @@ These local design specimens have no independent implementation capture. Existin
 derives runtime recent paths from that same record.
 `fixtures/shortcuts.json` owns shortcut labels/key sequences and the keycap specimen.
 `fixtures/canvas.ts` owns neutral drawing/minimap data and AssetLabel presentation content.
+`fixtures/canvas-surfaces.ts` owns the canvas surface's four frame/capture records and chrome placement.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
 
