@@ -30,9 +30,49 @@ export function inspectFrame(tokenNames) {
   }
   sample.remove();
   const outside = r => r.left < box.left - 1 || r.right > box.right + 1 || r.top < box.top - 1 || r.bottom > box.bottom + 1;
-  const lines = [];
+  const styles = new Map(), bounds = new Map(), effects = new Map();
+  const style = el => { if (!styles.has(el)) styles.set(el,getComputedStyle(el)); return styles.get(el); };
+  const rectFor = el => { if (!bounds.has(el)) bounds.set(el,el.getBoundingClientRect()); return bounds.get(el); };
+  const intersect = (a,b) => ({left:Math.max(a.left,b.left),right:Math.min(a.right,b.right),top:Math.max(a.top,b.top),bottom:Math.min(a.bottom,b.bottom)});
+  const nonempty = r => r.right > r.left && r.bottom > r.top;
+  const clipped = (rect,start) => {
+    let visible = {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom};
+    for (let p=start;p;p=p.parentElement) {
+      const ps=style(p),pr=rectFor(p);
+      // Overflow does not clip non-replaced inline boxes. Client bounds exclude
+      // borders/scrollbars and include padding, unlike the border-box DOMRect.
+      if (!(p instanceof HTMLElement && ps.display==='inline')) {
+        const sx=pr.width/(p.offsetWidth || p.clientWidth || pr.width || 1);
+        const sy=pr.height/(p.offsetHeight || p.clientHeight || pr.height || 1);
+        const left=pr.left+p.clientLeft*sx,top=pr.top+p.clientTop*sy;
+        if (ps.overflowX!=='visible') visible={...visible,left:Math.max(visible.left,left),right:Math.min(visible.right,left+p.clientWidth*sx)};
+        if (ps.overflowY!=='visible') visible={...visible,top:Math.max(visible.top,top),bottom:Math.min(visible.bottom,top+p.clientHeight*sy)};
+      }
+      if (p===frame) break;
+    }
+    return visible;
+  };
+  const opaqueEffects = el => {
+    if (!el) return true;
+    if (!effects.has(el)) {
+      const s=style(el);
+      effects.set(el,Number(s.opacity)===1 && s.filter==='none' && s.clipPath==='none' &&
+        s.maskImage==='none' && s.mixBlendMode==='normal' && opaqueEffects(el.parentElement));
+    }
+    return effects.get(el);
+  };
+  const opaqueColor = value => {
+    // Float16 canvas alpha rounds near-opaque colors up to 1. Read an explicit
+    // computed alpha before using canvas normalization for opaque color syntax.
+    if (value.startsWith('rgba(') || value.includes('/')) {
+      const alpha=value.match(/(?:,|\/)\s*([\d.e+-]+)(%)?\s*\)$/i);
+      return !!alpha && Number(alpha[1])===(alpha[2]?100:1);
+    }
+    return normalize(value)[3]===1;
+  };
+  const lines = [], covers = [];
   for (const el of [frame, ...frame.querySelectorAll('*')]) {
-    const s = getComputedStyle(el), r = el.getBoundingClientRect();
+    const s = style(el), r = rectFor(el);
     if (['STYLE','SCRIPT'].includes(el.tagName.toUpperCase())) problems.add(`Forbidden <${el.tagName.toLowerCase()}> in output`);
     for (const attr of el.attributes) if (/^on/i.test(attr.name) || attr.name === 'classname') problems.add(`Forbidden attribute ${attr.name} in output`);
     if (!el.closest('[data-free]')) {
@@ -41,12 +81,13 @@ export function inspectFrame(tokenNames) {
       for (const [,property] of (el.getAttribute('style') ?? '').matchAll(/(?:^|;)\s*([-\w]+)\s*:/g)) if (!['width','height'].includes(property) && !property.startsWith('--')) problems.add(`Style ${property} outside data-free; use layout classes`);
     }
     if (s.display === 'none' || s.visibility === 'hidden' || r.width === 0 || r.height === 0) continue;
-    const clipped = rect => {
-      let left=rect.left,right=rect.right,top=rect.top,bottom=rect.bottom;
-      for(let p=el.parentElement;p && p!==frame;p=p.parentElement) { const ps=getComputedStyle(p),pr=p.getBoundingClientRect(); if (/(hidden|clip|auto|scroll)/.test(ps.overflowX)) {left=Math.max(left,pr.left);right=Math.min(right,pr.right);} if (/(hidden|clip|auto|scroll)/.test(ps.overflowY)) {top=Math.max(top,pr.top);bottom=Math.min(bottom,pr.bottom);} }
-      return {left,right,top,bottom};
-    };
-    if (outside(clipped(r))) problems.add('Content overflows the frame');
+    const visibleBox=clipped(r,el.parentElement);
+    if (nonempty(visibleBox) && outside(visibleBox)) problems.add('Content overflows the frame');
+    // A border-box background has the same rounded hit shape as its element.
+    // Other background clips/masks cannot establish rectangular opaque coverage.
+    if (el instanceof HTMLElement && s.backgroundClip==='border-box' && opaqueColor(s.backgroundColor) && opaqueEffects(el)) {
+      covers.push({el,rect:intersect(visibleBox,box)});
+    }
     if (!el.closest('[data-brand]')) {
       const paints = [s.color, s.backgroundColor];
       for (const side of ['Top','Right','Bottom','Left']) if (parseFloat(s[`border${side}Width`]) > 0) paints.push(s[`border${side}Color`]);
@@ -69,16 +110,64 @@ export function inspectFrame(tokenNames) {
       for (const rect of range.getClientRects()) {
         if (rect.width < 1) continue;
         const label = node.textContent.trim().replace(/\s+/g, ' ');
-        if (outside(clipped(rect))) problems.add(`Text leaves frame: ${label}`);
-        if ((rect.left < r.left - 1 || rect.right > r.right + 1 || (rect.top+rect.bottom)/2 < r.top - 1 || (rect.top+rect.bottom)/2 > r.bottom + 1) && s.textOverflow !== 'ellipsis') problems.add(`Text overflows its box: ${label}`);
-        lines.push({rect, label, el});
+        const visible=clipped(rect,el);
+        if (!nonempty(visible)) continue;
+        if (outside(visible)) problems.add(`Text leaves frame: ${label}`);
+        if (visible.left < r.left - 1 || visible.right > r.right + 1 ||
+            (visible.top+visible.bottom)/2 < r.top - 1 || (visible.top+visible.bottom)/2 > r.bottom + 1) problems.add(`Text overflows its box: ${label}`);
+        const inFrame=intersect(visible,box);
+        if (nonempty(inFrame)) lines.push({rect:inFrame,label,el});
       }
     }
   }
-  for (let i=0;i<lines.length;i++) for(let j=i+1;j<lines.length;j++) {
-    const a=lines[i], b=lines[j];
-    if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
-    if (Math.min(a.rect.right,b.rect.right)-Math.max(a.rect.left,b.rect.left)>1 && Math.min(a.rect.bottom,b.rect.bottom)-Math.max(a.rect.top,b.rect.top)>2) problems.add(`Text overlaps: ${a.label} / ${b.label}`);
+  // Hit testing omits inert and pointer-events:none content, though it still paints.
+  // Normalize only the text/cover nodes after validating authored styles, then
+  // restore their exact attributes so inspection has no lasting DOM changes.
+  const restored = [], inert = [];
+  for (let el=frame;el;el=el.parentElement) if (el.hasAttribute('inert')) inert.push([el,el.getAttribute('inert')]);
+  for (const el of frame.querySelectorAll('[inert]')) inert.push([el,el.getAttribute('inert')]);
+  for (const [el] of inert) el.removeAttribute('inert');
+  for (const el of new Set([...lines.map(line=>line.el),...covers.map(cover=>cover.el)])) {
+    if (style(el).pointerEvents==='none') {
+      restored.push([el,el.getAttribute('style')]);el.style.setProperty('pointer-events','auto','important');
+    }
+  }
+  const hits = new Map();
+  const paintStack = (x,y) => {
+    const key=`${x},${y}`;
+    if (!hits.has(key)) hits.set(key,document.elementsFromPoint(x,y));
+    return hits.get(key);
+  };
+  const occluded = (el,rect) => {
+    const dx=Math.min(.01,(rect.right-rect.left)/100),dy=Math.min(.01,(rect.bottom-rect.top)/100);
+    const points=[[rect.left+dx,rect.top+dy],[rect.right-dx,rect.top+dy],
+      [rect.left+dx,rect.bottom-dy],[rect.right-dx,rect.bottom-dy],[(rect.left+rect.right)/2,(rect.top+rect.bottom)/2]];
+    return covers.some(cover => !cover.el.contains(el) && cover.rect.left<=rect.left && cover.rect.right>=rect.right &&
+      cover.rect.top<=rect.top && cover.rect.bottom>=rect.bottom && points.every(([x,y])=>{
+        const stack=paintStack(x,y),subject=stack.indexOf(el),foreground=stack.indexOf(cover.el);
+        // The SAME convex background must contain every corner and sit above
+        // this text. Central samples alone miss uncovered strips and corners.
+        return subject>=0 && foreground>=0 && foreground<subject;
+      }));
+  };
+  try {
+    for (let i=0;i<lines.length;i++) for(let j=i+1;j<lines.length;j++) {
+      const a=lines[i], b=lines[j];
+      // Each Range belongs to a direct text node; an ancestor's own text and a
+      // positioned child's text are distinct visible lines, not duplicate ranges.
+      if (a.el===b.el) continue;
+      const overlap=intersect(a.rect,b.rect);
+      if (overlap.right-overlap.left>1 && overlap.bottom-overlap.top>2 &&
+          !occluded(a.el,overlap) && !occluded(b.el,overlap)) problems.add(`Text overlaps: ${a.label} / ${b.label}`);
+    }
+  } finally {
+    for (const [el,authored] of restored) {
+      // Flush a CSSOM-created attribute before removing it (Chromium creates it lazily).
+      el.getAttribute('style');
+      if (authored===null) el.removeAttribute('style');
+      else el.setAttribute('style',authored);
+    }
+    for (const [el,authored] of inert) el.setAttribute('inert',authored);
   }
   return [...problems];
 }
