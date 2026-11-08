@@ -16,6 +16,9 @@
   --toolbar-height: 44px;
   --field-height: 32px;
   --row-height: 28px;
+  --row-height-two-line: 44px;
+  --menu-item-height: 30px;
+  --menu-label-height: 24px;
   --control-size: 32px;
 
   --canvas: #ecece9;

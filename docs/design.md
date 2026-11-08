@@ -29,8 +29,8 @@ implementation mappings and review process. The asset rules take precedence over
 | Owner | Current assets | Current scope / remaining work |
 | --- | --- | --- |
 | Shared values and button controls | `tokens.css`, `components/button.tsx`, `components/icon-button.tsx`, `fixtures/buttons.ts` | Reviewed; part defaults belong to components and frame specimens belong to fixtures. |
-| Fields | `components/field.tsx`, `fixtures/fields.ts` | Field specimens, existing field-height token, fixture data and states. Controller review pending. |
-| Rows | `components/tree-row.tsx`, `components/menu-item.tsx` | Row family governance. |
+| Fields | `components/field.tsx`, `fixtures/fields.ts` | Reviewed; part defaults belong to the component and frame specimens belong to fixtures. |
+| Rows | `components/tree-row.tsx`, `components/menu-item.tsx`, `fixtures/rows.ts` | Row/menu specimens, dimension tokens, fixture data and states. Controller review pending. |
 | Viewer shell | `Panel`, `Toolbar`, `Separator`, `Canvas`, `Screen` | Separate generic containers from feature composition before moving their consumers. |
 | Navigation | `Sidebar` | Own the sidebar/search feature and its fixture data. |
 | View controls | `Tools`, `AppBar`, `ZoomBar`, `Menu` | Own tool and menu states; reconcile Fit geometry and disabled/pressed states. |
@@ -53,12 +53,12 @@ owning scope resolves them.
 
 | Source / part | Implementation location | Design consumers | Approval / adoption / remaining gap |
 | --- | --- | --- | --- |
-| `tokens.css` | `public/index.html` `/tokens.css`; `public/style.css`; `public/app.js` `applyTheme` | All sources | Reviewed; in use. Shared theme, typography and geometry values. |
+| `tokens.css` | `public/index.html` `/tokens.css`; `public/style.css`; `public/app.js` `applyTheme` | All sources | In use. Shared button/field values Reviewed; row/menu sizing pending controller review. |
 | `components/button.tsx` / `Button` | `public/index.html` `#directory-form .primary`, `#zoom-options`; `public/style.css` `.primary`, `#zoom-options` | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Reviewed; in use. Frames: `primary`, `secondary`, `zoom`, `zoom-open`. `secondary` is a specimen variant with unknown current runtime usage, assigned to the view-controls scope. Submit-disabled state remains a later gap. |
 | `components/icon-button.tsx` / `IconButton` | `public/index.html` `.icon-button`; `public/style.css` `.icon-button`, pressed/current states | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Reviewed; in use. Frames: `default`, `active`. Disabled Back and Minimap pressed coverage belong to the view-controls scope. |
-| `components/field.tsx` / `Field` | `public/index.html` `.picker`, `.search-field`, `#path`; `public/style.css` `.picker`, `.search-field`, `.searching .search-field`, `#path`, `#path[aria-invalid="true"]` | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Controller review pending; in use. Frames: `search`, `search-active`, `picker`, `input`, `input-error`, `input-empty`. Default height uses `--field-height`; numeric height overrides are supported. |
-| `components/tree-row.tsx` / `TreeRow` | `public/app.js` `makeRow`, `renderNav`, `selection`, `recent`; `public/style.css` `.tree-row`, `.frame-row` | `panel` → all surfaces and `source-relationships` | Approval unrecorded; in use; embedded specimen data. |
-| `components/menu-item.tsx` / `MenuItem` | `public/index.html` menu buttons/headings; `public/style.css` `.menu button`, `.menu h3` | `panel` → `canvas` → all surfaces | Approval unrecorded; in use; embedded specimen data. |
+| `components/field.tsx` / `Field` | `public/index.html` `.picker`, `.search-field`, `#path`; `public/style.css` `.picker`, `.search-field`, `.searching .search-field`, `#path`, `#path[aria-invalid="true"]` | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Reviewed; in use. Frames: `search`, `search-active`, `picker`, `input`, `input-error`, `input-empty`. Default height uses `--field-height`; numeric height overrides are supported. |
+| `components/tree-row.tsx` / `TreeRow` | `public/app.js` `makeRow`, `renderNav`, `selection`, `recent`; `public/style.css` `.tree-row`, `.frame-row`, `#recent button` | `panel` → `canvas` → all surfaces; `panel` → `source-relationships` | Controller review pending; in use. Frames: `root`, `root-selected`, `group`, `group-selected`, `item`, `item-selected`, `two-line`, `two-line-selected`. Single-line/multiline minimum height uses `--row-height`; two-line height uses `--row-height-two-line`. Numeric height overrides are supported; multiline rows follow content. |
+| `components/menu-item.tsx` / `MenuItem` | `public/index.html` menu buttons/headings; `public/style.css` `.menu button`, `.menu h3` | `panel` → `canvas` → all surfaces | Controller review pending; in use. Frames: `item`, `item-active`, `check`, `option`, `label`. Heights use `--menu-item-height` and `--menu-label-height`. |
 | `components/kbd.tsx` / `Kbd` | `public/index.html` `#keys kbd`; `public/style.css` `kbd` | `panel` / `Shortcuts` → `surfaces/menus.tsx` | Approval unrecorded; in use; 6px design versus 7px implementation radius. |
 | `components/panel.tsx` / `Panel` | `public/style.css` `.floating`, `.menu`, `dialog` | Other parts in `panel`; `source-relationships`; via `canvas` to surfaces | Approval unrecorded; in use; separate the generic shell. |
 | `components/panel.tsx` / `Sidebar` | `public/index.html` `#sidebar`; `public/app.js` `renderNav`; `public/style.css` `#sidebar` | `canvas` / `Screen` → canvas, inspector and menus surfaces | Approval unrecorded; in use; navigation module pending. |
@@ -86,7 +86,8 @@ owning scope resolves them.
 | `surfaces/menus.tsx` / frame renderer | `public/index.html` menus, sidebar, tooltip and `#keys` | Entry source | Approval unrecorded; mapped fixtures below; feature-local frames need relocation. |
 | `surfaces/open-directory.tsx` / frame renderer | `public/index.html` gallery and `#directories` | Entry surface | Approval unrecorded; mapped fixtures below; full-frame scope pending. |
 
-`fixtures/buttons.ts` and `fixtures/fields.ts` own frame presentation data for Button, IconButton and Field.
+`fixtures/buttons.ts`, `fixtures/fields.ts` and `fixtures/rows.ts` own frame presentation data for Button, IconButton,
+Field, TreeRow and MenuItem.
 Part defaults belong to their defining components. The fixtures have no independent implementation mapping.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
