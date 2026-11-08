@@ -38,8 +38,8 @@ try {
   const previews = new Map(), scenesBySource = new Map();
   for (const [entry, source] of [
     ['surfaces/canvas', 'canvas'], ['surfaces/inspector', 'inspector'],
-    ['surfaces/open-directory', 'open-directory'], ['surfaces/menus', 'menus'],
-    ['modules/shortcuts', 'shortcuts'], ['modules/navigation', 'navigation'],
+    ['surfaces/open-directory', 'open-directory'], ['modules/menus', 'menus'],
+    ['modules/shortcuts', 'shortcuts'], ['modules/navigation', 'navigation'], ['modules/view-controls', 'view-controls'],
   ]) {
     const file = path.join(root, `design/${entry}.tsx`);
     let text = await readFile(file, 'utf8');

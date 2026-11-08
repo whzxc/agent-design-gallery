@@ -2,11 +2,9 @@ import { Frame } from 'sdg';
 import { Screen, Scrim } from '../components/canvas';
 import { Sidebar } from '../modules/navigation';
 import { Inspector } from '../modules/inspector';
-import { Menu } from '../modules/menus';
 import { OpenDialog } from '../modules/open-directory';
 import { Shortcuts } from '../modules/shortcuts';
 import { Tools, AppBar, ZoomBar } from '../modules/view-controls';
-import { Tooltip } from '../components/tooltip';
 import { Minimap } from '../components/minimap';
 import { scenes } from '../scenes/canvas';
 import navigationFixtures from '../fixtures/navigation.json';
@@ -14,13 +12,11 @@ import navigationFixtures from '../fixtures/navigation.json';
 const chromeComponents: Record<string, (props: any) => unknown> = {
   sidebar: Sidebar,
   inspector: Inspector,
-  menu: Menu,
   dialog: OpenDialog,
   shortcuts: Shortcuts,
   tools: Tools,
   app: AppBar,
   zoom: ZoomBar,
-  tooltip: Tooltip,
   minimap: Minimap,
 };
 export function ViewerChrome({ chrome }: any) {

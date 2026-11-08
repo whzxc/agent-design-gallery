@@ -1,0 +1,99 @@
+{
+  "default": {
+    "rows": [
+      {
+        "form": "label",
+        "label": "Theme"
+      },
+      {
+        "form": "check",
+        "label": "System"
+      },
+      {
+        "form": "option",
+        "label": "Light"
+      }
+    ]
+  },
+  "display": {
+    "width": 220,
+    "rows": [
+      {
+        "form": "label",
+        "label": "Theme"
+      },
+      {
+        "form": "check",
+        "label": "System",
+        "icon": "check"
+      },
+      {
+        "form": "option",
+        "label": "Light"
+      },
+      {
+        "form": "option",
+        "label": "Dark"
+      },
+      {
+        "form": "label",
+        "label": "Canvas"
+      },
+      {
+        "form": "check",
+        "label": "Match theme",
+        "icon": "check"
+      },
+      {
+        "form": "option",
+        "label": "Light"
+      },
+      {
+        "form": "option",
+        "label": "Dark"
+      },
+      {
+        "form": "option",
+        "label": "Neutral"
+      }
+    ]
+  },
+  "zoom": {
+    "width": 200,
+    "rows": [
+      {
+        "form": "item",
+        "label": "Fit all",
+        "meta": "0"
+      },
+      {
+        "form": "item-active",
+        "label": "Fit group"
+      },
+      {
+        "form": "item",
+        "label": "Fit selection"
+      },
+      {
+        "form": "item",
+        "label": "Zoom to 100%",
+        "divider": true,
+        "meta": "1"
+      }
+    ]
+  },
+  "more": {
+    "width": 240,
+    "rows": [
+      {
+        "form": "item",
+        "label": "Arrange current group"
+      },
+      {
+        "form": "item",
+        "label": "Keyboard shortcuts",
+        "meta": "?"
+      }
+    ]
+  }
+}

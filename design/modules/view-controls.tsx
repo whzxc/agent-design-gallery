@@ -1,4 +1,8 @@
 import { Frame } from 'sdg';
+import { Screen } from '../components/canvas';
+import { Tooltip } from '../components/tooltip';
+import viewControlFixtures from '../fixtures/view-controls.json';
+import { scenes } from '../scenes/view-controls';
 import { Toolbar, Separator } from '../components/toolbar';
 import { Field } from '../components/field';
 import { IconButton } from '../components/icon-button';
@@ -13,7 +17,15 @@ export function Tools({ active }: { active?: string }) {
     </Toolbar>
   );
 }
-export function AppBar({ empty = false, specimen = false }: { empty?: boolean; specimen?: boolean }) {
+export function AppBar({
+  empty = false,
+  specimen = false,
+  directory = 'agent-remote-control',
+}: {
+  empty?: boolean;
+  specimen?: boolean;
+  directory?: string;
+}) {
   return (
     <Toolbar wide>
       <IconButton icon="panel-left" />
@@ -21,7 +33,7 @@ export function AppBar({ empty = false, specimen = false }: { empty?: boolean; s
       {!empty && (
         <>
           <Separator />
-          <Field form="picker" label={specimen ? 'arc' : 'agent-remote-control'} width={specimen ? 180 : 220} />
+          <Field form="picker" label={directory} width={specimen ? 180 : 220} />
         </>
       )}
     </Toolbar>
@@ -43,11 +55,53 @@ export function ZoomBar({ label = '48%', active = false }: { label?: string; act
     </Toolbar>
   );
 }
+const frames = [
+  {
+    "name": "tools-tooltip",
+    "width": 420,
+    "height": 120,
+    "fixture": "tooltip-inspector",
+    "capture": {
+      "page": true,
+      "viewport": "1440x900",
+      "origin": "1020 0"
+    },
+    "chrome": [
+      {
+        "left": 256,
+        "top": 12,
+        "kind": "tools",
+        "active": null
+      },
+      {
+        "left": 279,
+        "top": 62,
+        "kind": "tooltip",
+        "label": "Inspector"
+      }
+    ]
+  }
+] as const;
+
 export default () => [
   <Frame name="tools">
     <Tools />
   </Frame>,
   <Frame name="app-bar">
-    <AppBar specimen />
+    <AppBar {...viewControlFixtures.appBar} />
   </Frame>,
+  ...frames.map(({ chrome, ...frame }) => (
+    <Frame {...frame}>
+      <Screen width={frame.width} height={frame.height} scene={scenes[frame.name]}>
+        {chrome.map(({ kind, left, top, ...props }: any) => {
+          const Component = kind === 'tools' ? Tools : Tooltip;
+          return (
+            <div class="absolute" style={{ left, top }}>
+              <Component {...props} />
+            </div>
+          );
+        })}
+      </Screen>
+    </Frame>
+  )),
 ];
