@@ -88,12 +88,18 @@ export function imageURL(asset, crop) {
     return URL.createObjectURL(
       new Blob([asset.source], { type: "image/svg+xml" }),
     );
-  const doc = new DOMParser().parseFromString(asset.source, "image/svg+xml"),
+  // TSX preparation records the exact character range of each top-level frame.
+  // Parse only the requested frame instead of reparsing all its siblings.
+  const range = typeof crop.id === 'string' && /^\d+$/.test(crop.id) && asset.frameRanges?.[crop.id];
+  const source = range
+    ? asset.source.slice(0, asset.frameRanges[0][0]) + asset.source.slice(...range) + '</svg>'
+    : asset.source;
+  const doc = new DOMParser().parseFromString(source, "image/svg+xml"),
     root = doc.documentElement;
   if (crop.id !== "full")
     for (const note of root.querySelectorAll(":scope > text.note"))
       note.remove();
-  if (/^\d+$/.test(crop.id)) {
+  if (!range && /^\d+$/.test(crop.id)) {
     const selector = asset.component
       ? "g[data-component][data-form]"
       : 'g[data-part^="frame-"]';
@@ -203,7 +209,15 @@ async function prepareSource(asset, built, theme) {
     }
     const width=Math.max(1,...parts.map(p=>p.x+p.width)),height=Math.max(1,...parts.map(p=>p.y+p.height));
     const xml = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
-    const source=`<svg xmlns="http://www.w3.org/2000/svg" data-theme="${theme}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.map(p=>`<g ${built.component ? 'data-component="source" data-form="'+xml(p.name)+'"' : 'data-part="frame-'+xml(p.name)+'"'}><foreignObject overflow="visible" x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}">${p.markup}</foreignObject></g>`).join('')}</svg>`;
-    return {...asset,imports:built.imports,format:'tsx',source,full:{x:0,y:0,width,height},parts:parts.map(({markup,...p})=>p),component:built.component,background:frame.contentWindow.getComputedStyle(frame.contentDocument.documentElement).getPropertyValue('--canvas').trim()};
+    const header=`<svg xmlns="http://www.w3.org/2000/svg" data-theme="${theme}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`;
+    let offset=header.length;
+    const frameRanges=[];
+    const markup=parts.map(p=>{
+      const value=`<g ${built.component ? 'data-component="source" data-form="'+xml(p.name)+'"' : 'data-part="frame-'+xml(p.name)+'"'}><foreignObject overflow="visible" x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}">${p.markup}</foreignObject></g>`;
+      frameRanges.push([offset,offset+value.length]);offset+=value.length;
+      return value;
+    });
+    const source=header+markup.join('')+'</svg>';
+    return {...asset,imports:built.imports,format:'tsx',source,frameRanges,full:{x:0,y:0,width,height},parts:parts.map(({markup,...p})=>p),component:built.component,background:frame.contentWindow.getComputedStyle(frame.contentDocument.documentElement).getPropertyValue('--canvas').trim()};
   } finally { frame.remove(); }
 }

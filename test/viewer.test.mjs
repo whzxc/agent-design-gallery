@@ -346,11 +346,33 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
       const {prepare,arrange,imageURL}=await import('/assets.js');const data=await(await fetch('/manifest')).json();const assets=await Promise.all(data.assets.map(a=>prepare(a,'light')));
       const set=assets.find(a=>a.component),flow=assets.find(a=>!a.component),world=arrange({...data,assets});
       const src=imageURL(set,{...set.full,id:'overview'});await new Promise((resolve,reject)=>{const img=new Image();img.onload=resolve;img.onerror=reject;img.src=src});URL.revokeObjectURL(src);
-      return {paths:data.assets.map(a=>a.path),parts:set.parts,blocks:world.groups.flatMap(g=>g.blocks).map(b=>({kind:b.kind,w:b.w,h:b.h,frames:b.frames})),note:set.parts[0].note,version:data.assets.find(a=>a.path===set.path).version};
+      const crops=[];
+      for(const theme of ['light','dark']) {
+        const source=await prepare(data.assets.find(a=>a.path===flow.path),theme);
+        const {frameRanges,...legacy}=source;
+        for(const part of source.parts) {
+          const parse=DOMParser.prototype.parseFromString,inputs=[];
+          DOMParser.prototype.parseFromString=function(text,type) {if(type==='image/svg+xml')inputs.push(text.length);return parse.call(this,text,type)};
+          let optimized,original;
+          try {optimized=imageURL(source,part);original=imageURL(legacy,part)}
+          finally {DOMParser.prototype.parseFromString=parse}
+          try {
+            const xml=await(await fetch(optimized)).text(),previous=await(await fetch(original)).text();
+            crops.push({theme,id:part.id,identical:xml===previous,parsedBytes:inputs,sourceBytes:source.source.length});
+          } finally {URL.revokeObjectURL(optimized);URL.revokeObjectURL(original)}
+        }
+      }
+      return {paths:data.assets.map(a=>a.path),parts:set.parts,blocks:world.groups.flatMap(g=>g.blocks).map(b=>({kind:b.kind,w:b.w,h:b.h,frames:b.frames})),note:set.parts[0].note,version:data.assets.find(a=>a.path===set.path).version,crops};
     });
     assert.deepEqual(result.paths,['components/forms.tsx','surfaces/flow.tsx']);
     assert.deepEqual(result.parts.map(p=>[p.x,p.y]),[[0,0],[0,68],[732,68]]);assert.equal(result.note,'Note 0');
     assert.deepEqual(result.blocks.map(b=>[b.kind,b.w,b.h]),[['set',1280,168],['flow',328,82]]);
+    assert.equal(result.crops.length,4);
+    for(const crop of result.crops) {
+      assert.equal(crop.identical,true,`${crop.theme} frame ${crop.id} XML must remain exact`);
+      assert.equal(crop.parsedBytes[1],crop.sourceBytes);
+      assert.ok(crop.parsedBytes[0]<crop.sourceBytes,'individual previews must not parse sibling frames');
+    }
     await writeFile(path.join(directory,'scenes/sizes.tsx'),'export const widths=[901,700,500];');
     await page.evaluate(async version=>{
       for(let i=0;i<100;i++) {

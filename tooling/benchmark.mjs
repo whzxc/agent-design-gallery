@@ -69,7 +69,7 @@ await page.waitForFunction(
 const firstBrowseMs = performance.now() - begin;
 const loading = await page.evaluate(() => ({
   ...window.__perf.loading,
-  requests: performance.getEntriesByType('resource').filter(e => e.name.includes('/asset/')).map(e => ({path: new URL(e.name).pathname, startMs: e.startTime, durationMs: e.duration})),
+  requests: performance.getEntriesByType('resource').filter(e => e.name.includes('/asset/')).map(e => ({path: new URL(e.name).pathname, startMs: e.startTime, durationMs: e.duration, transferBytes: e.transferSize, bodyBytes: e.decodedBodySize})),
 }));
 const reloadBegin = performance.now();
 await page.reload();
@@ -142,8 +142,8 @@ const cameraAtOverview = await page.evaluate(() => {
   );
   return { x: m.e, y: m.f, scale: m.a };
 });
-const zoomX = viewport.x + cameraAtOverview.x + 272 * cameraAtOverview.scale;
-const zoomY = viewport.y + cameraAtOverview.y + 280 * cameraAtOverview.scale;
+const zoomX = viewport.x + viewport.width * 0.55;
+const zoomY = viewport.y + viewport.height * 0.5;
 const isSDG = await page.evaluate(() => !!window.__sdg);
 await page.mouse.move(zoomX, zoomY);
 let peakZoom;
@@ -188,13 +188,15 @@ await fit();
 await phase("theme", async () => {
   const display = page.locator("#display");
   if (await display.count()) await display.click();
-  const theme = page.locator("#themes button[data-theme=light]")
-    .or(page.getByRole("button", { name: "Light", exact: true }));
+  const themeName = await page.evaluate(() => document.documentElement.dataset.theme === "light" ? "Dark" : "Light");
+  const theme = page.locator(`#themes button[data-theme=${themeName.toLowerCase()}]`)
+    .or(page.getByRole("button", { name: themeName, exact: true }));
   if (await theme.count()) await theme.first().click();
-  else await page.getByRole("radio", { name: "Light", exact: true }).click();
+  else await page.getByRole("radio", { name: themeName, exact: true }).click();
+  if (isSDG) await page.waitForFunction(() => !window.__sdg.ready);
   await page.waitForFunction(
     () =>
-      window.__sdg?.ready ||
+      window.__sdg ? window.__sdg.ready :
       [...document.querySelectorAll(".gallery-drawing img")].every(
         (x) => x.complete && x.naturalWidth,
       ),
