@@ -135,3 +135,17 @@ location / {
 ```
 
 The proxy_pass has no URI suffix; do not strip `/p/<slug>/` or `/i/<id>/`. Disable SSE buffering and caching. Avoid logging query strings or key headers: the initial URL and SSE carry the key. Cookies are not used.
+
+
+### macOS resident service
+
+```sh
+sdg service install [--port 4310] [--state-dir /absolute/state/path]
+sdg service status
+sdg service logs
+sdg service uninstall
+```
+
+The LaunchAgent `org.svg-design-gallery.hub` starts the resident hub at login with RunAtLoad and keeps it running with KeepAlive. It binds loopback and uses the same registry/key and auth contract as `sdg serve`. Installation records absolute Node and CLI paths in `~/Library/LaunchAgents/org.svg-design-gallery.hub.plist`, so launchd needs no shell PATH. Reinstall after moving the CLI or replacing the recorded Node installation.
+
+`status` prints JSON with installed/loaded state, PID, plist and log paths. `logs` prints the last 200 lines of each log. stdout and stderr go to `service.stdout.log` and `service.stderr.log` in the state directory. After an install with a custom state directory, status/logs/uninstall recover that directory from the plist when no override is given. Uninstall unloads the job and removes its plist, retaining registry, key, preferences and logs. Service commands on other platforms return an explicit unsupported error; `sdg serve` remains available there.

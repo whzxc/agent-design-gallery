@@ -4,16 +4,18 @@ import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 
-export const commands = ['open', 'serve', 'root', 'init', 'check', 'render', 'compare'];
+export const commands = ['open', 'serve', 'root', 'service', 'init', 'check', 'render', 'compare'];
 const usage = {
   open: '[directory] [--port=<n>] [--no-open] [--state-dir=<path>]',
   serve: '[--port=4310] [--state-dir=<path>] [--print-key | --rotate-key]',
+  service: 'install|uninstall|status|logs [--state-dir=<path>] [--port=4310]',
   root: 'add <dir> [--depth=2] | remove <dir> | list | scan [dir] [--state-dir=<path>]',
   init: '', check: '[source...] [--read-only]', render: '[source...] [--frame=<name>] [--scale=2]',
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
 };
 const details = {
   serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes. --print-key prints the key and exits; --rotate-key rotates the running hub key and exits. Forwarded data requests require a header or query key; direct-local requests are exempt.',
+  service: 'Manage the macOS resident hub LaunchAgent. install starts it with RunAtLoad and KeepAlive, recording absolute Node/CLI paths. --port applies only to install. status prints JSON; logs prints the last 200 lines per log. Uninstall retains state and logs. Other platforms are unsupported.',
   root: 'Manage registered scan roots. add scans immediately. scan rescans registered roots only; depth is 0 through 3. Hidden directories, node_modules and Git worktrees are skipped.',
   open: 'Browse TSX sources and legacy SVG designs on an independent random-port server.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
   check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render each selected frame in both themes. Scale defaults to 2.',
@@ -26,7 +28,7 @@ export function help(command) {
 export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' } };
-  const strings = { open: ['port', 'state-dir'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], render: ['scale', 'frame'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
+  const strings = { open: ['port', 'state-dir'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], render: ['scale', 'frame'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
@@ -47,6 +49,10 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd()) {
   if (values.help) { console.log(help(explicit ? command : undefined)); return 0; }
   if (values.version) { console.log(VERSION); return 0; }
   if (command === 'open') return (await import('./open.mjs')).open(positionals, values);
+  if (command === 'service') {
+    if (positionals.length !== 1 || !['install', 'uninstall', 'status', 'logs'].includes(positionals[0]) || (values.port !== undefined && positionals[0] !== 'install')) throw new Error('Invalid arguments; run sdg service --help');
+    return (await import('./service.mjs')).service(positionals[0], values);
+  }
   if (command === 'root') {
     const [action, directory, ...extra] = positionals;
     if (extra.length || !['add', 'remove', 'list', 'scan'].includes(action) || (['add', 'remove'].includes(action) && !directory) || (action === 'list' && directory) || (values.depth !== undefined && action !== 'add')) throw new Error('Invalid arguments; run sdg root --help');
