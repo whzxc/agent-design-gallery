@@ -40,32 +40,7 @@ const frames = [
         "left": 1128,
         "top": 64,
         "kind": "inspector",
-        "title": "mcp-hub",
-        "path": "surfaces/mcp-hub.tsx",
-        "rows": [
-          {
-            "form": "item",
-            "label": "ready",
-            "meta": "960 × 662",
-            "icon": "app-window",
-            "note": "The implementation uses full workspace height. Its shell follows the viewport; the older content-fit heights (662, 912 and 432px) are not capture-size requirements."
-          },
-          {
-            "form": "item-selected",
-            "label": "failed",
-            "meta": "960 × 912",
-            "icon": "app-window",
-            "note": "The implementation uses full workspace height. Its shell follows the viewport; the older content-fit heights (662, 912 and 432px) are not capture-size requirements."
-          },
-          {
-            "form": "item",
-            "label": "empty",
-            "meta": "960 × 434",
-            "icon": "app-window",
-            "note": "The implementation uses full workspace height. Its shell follows the viewport; the older content-fit heights (662, 912 and 432px) are not capture-size requirements."
-          }
-        ],
-        "heading": "Frames"
+        "inspector": "frames"
       }
     ]
   },
@@ -105,41 +80,7 @@ const frames = [
         "left": 1128,
         "top": 64,
         "kind": "inspector",
-        "title": "button",
-        "path": "components/button.tsx",
-        "rows": [
-          {
-            "form": "item-selected",
-            "label": "primary",
-            "meta": "119 × 34",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "secondary",
-            "meta": "106 × 34",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "ghost",
-            "meta": "58 × 34",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "danger",
-            "meta": "58 × 34",
-            "icon": "component"
-          },
-          {
-            "form": "item",
-            "label": "pending",
-            "meta": "106 × 34",
-            "icon": "component"
-          }
-        ],
-        "heading": "Forms"
+        "inspector": "capture-component"
       }
     ]
   }

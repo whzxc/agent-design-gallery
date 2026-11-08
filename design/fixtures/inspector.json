@@ -1,0 +1,374 @@
+{
+  "frames": {
+    "title": "mcp-hub",
+    "path": "surfaces/mcp-hub.tsx",
+    "rows": [
+      {
+        "form": "item",
+        "label": "ready",
+        "meta": "960 × 662",
+        "icon": "app-window",
+        "note": "The implementation uses full workspace height. Its shell follows the viewport; the older content-fit heights (662, 912 and 432px) are not capture-size requirements."
+      },
+      {
+        "form": "item-selected",
+        "label": "failed",
+        "meta": "960 × 912",
+        "icon": "app-window",
+        "note": "The implementation uses full workspace height. Its shell follows the viewport; the older content-fit heights (662, 912 and 432px) are not capture-size requirements."
+      },
+      {
+        "form": "item",
+        "label": "empty",
+        "meta": "960 × 434",
+        "icon": "app-window",
+        "note": "The implementation uses full workspace height. Its shell follows the viewport; the older content-fit heights (662, 912 and 432px) are not capture-size requirements."
+      }
+    ],
+    "heading": "Frames"
+  },
+  "frame": {
+    "title": "home",
+    "path": "surfaces/home.tsx",
+    "frameName": "default",
+    "frameSize": "940 × 768",
+    "rows": [
+      {
+        "label": "default",
+        "form": "item-selected",
+        "icon": "app-window",
+        "meta": "940 × 768"
+      },
+      {
+        "label": "cloud-banner",
+        "form": "item",
+        "icon": "app-window",
+        "meta": "940 × 768"
+      },
+      {
+        "label": "project",
+        "form": "item",
+        "icon": "app-window",
+        "meta": "940 × 768"
+      }
+    ],
+    "uses": [
+      {
+        "directory": "modules",
+        "entries": [
+          {
+            "name": "home"
+          },
+          {
+            "name": "scenarios"
+          },
+          {
+            "name": "composer",
+            "via": "home"
+          }
+        ]
+      },
+      {
+        "directory": "components",
+        "entries": [
+          {
+            "name": "alert",
+            "via": "home"
+          }
+        ]
+      }
+    ],
+    "usedBy": []
+  },
+  "element": {
+    "title": "HomeComposer",
+    "path": "modules/composer.tsx",
+    "frameName": "default · 940 × 768",
+    "frameSize": "768 × 152",
+    "heading": "Frames using this export",
+    "rows": [
+      {
+        "label": "composer-home-enhancement-ready",
+        "form": "item",
+        "icon": "app-window",
+        "meta": "768 × 152"
+      },
+      {
+        "label": "composer-home-enhancement-enhancing",
+        "form": "item",
+        "icon": "app-window",
+        "meta": "768 × 152"
+      },
+      {
+        "label": "composer-home",
+        "form": "item",
+        "icon": "app-window",
+        "meta": "768 × 152"
+      }
+    ],
+    "uses": [
+      {
+        "directory": "components",
+        "entries": [
+          {
+            "name": "alert"
+          },
+          {
+            "name": "button"
+          }
+        ]
+      }
+    ],
+    "usedBy": [
+      {
+        "directory": "modules",
+        "entries": [
+          {
+            "name": "home"
+          }
+        ]
+      },
+      {
+        "directory": "surfaces",
+        "entries": [
+          {
+            "name": "home",
+            "via": "modules/home"
+          }
+        ]
+      }
+    ]
+  },
+  "capture-component": {
+    "title": "button",
+    "path": "components/button.tsx",
+    "rows": [
+      {
+        "form": "item-selected",
+        "label": "primary",
+        "meta": "119 × 34",
+        "icon": "component"
+      },
+      {
+        "form": "item",
+        "label": "secondary",
+        "meta": "106 × 34",
+        "icon": "component"
+      },
+      {
+        "form": "item",
+        "label": "ghost",
+        "meta": "58 × 34",
+        "icon": "component"
+      },
+      {
+        "form": "item",
+        "label": "danger",
+        "meta": "58 × 34",
+        "icon": "component"
+      },
+      {
+        "form": "item",
+        "label": "pending",
+        "meta": "106 × 34",
+        "icon": "component"
+      }
+    ],
+    "heading": "Forms"
+  },
+  "source": {
+    "title": "state-pill",
+    "path": "components/state-pill.tsx",
+    "heading": "Forms",
+    "rows": [
+      {
+        "label": "running",
+        "form": "item",
+        "icon": "component",
+        "meta": "66 × 24"
+      },
+      {
+        "label": "waiting",
+        "form": "item",
+        "icon": "component",
+        "meta": "78 × 24"
+      },
+      {
+        "label": "done",
+        "form": "item",
+        "icon": "component",
+        "meta": "66 × 24"
+      },
+      {
+        "label": "failed",
+        "form": "item",
+        "icon": "component",
+        "meta": "54 × 24"
+      },
+      {
+        "label": "stopped",
+        "form": "item",
+        "icon": "component",
+        "meta": "66 × 24"
+      }
+    ],
+    "uses": [],
+    "usedBy": [
+      {
+        "directory": "surfaces",
+        "entries": [
+          {
+            "name": "task-detail"
+          }
+        ]
+      }
+    ]
+  },
+  "export-element": {
+    "title": "StatePill",
+    "path": "components/state-pill.tsx",
+    "heading": "Frames using this export",
+    "rows": [
+      {
+        "label": "running",
+        "form": "item",
+        "icon": "component",
+        "meta": "66 × 24"
+      },
+      {
+        "label": "waiting",
+        "form": "item",
+        "icon": "component",
+        "meta": "78 × 24"
+      },
+      {
+        "label": "done",
+        "form": "item",
+        "icon": "component",
+        "meta": "66 × 24"
+      },
+      {
+        "label": "failed",
+        "form": "item",
+        "icon": "component",
+        "meta": "54 × 24"
+      },
+      {
+        "label": "stopped",
+        "form": "item",
+        "icon": "component",
+        "meta": "66 × 24"
+      }
+    ],
+    "uses": [],
+    "usedBy": [
+      {
+        "directory": "surfaces",
+        "entries": [
+          {
+            "name": "task-detail"
+          }
+        ]
+      }
+    ],
+    "frameName": "running",
+    "frameSize": "66 × 24"
+  },
+  "export-element-nested": {
+    "title": "Input",
+    "path": "components/field.tsx",
+    "heading": "Frames using this export",
+    "rows": [
+      {
+        "label": "default",
+        "form": "item",
+        "icon": "component",
+        "meta": "280 × 64"
+      },
+      {
+        "label": "error",
+        "form": "item",
+        "icon": "component",
+        "meta": "280 × 86"
+      }
+    ],
+    "uses": [],
+    "usedBy": [
+      {
+        "directory": "surfaces",
+        "entries": [
+          {
+            "name": "approval"
+          },
+          {
+            "name": "pets-settings"
+          },
+          {
+            "name": "settings"
+          },
+          {
+            "name": "setup"
+          }
+        ]
+      }
+    ],
+    "frameName": "default",
+    "frameSize": "280 × 40"
+  },
+  "export-element-empty": {
+    "title": "SetupAction",
+    "path": "components/setup-choice.tsx",
+    "frameName": "source-empty",
+    "frameSize": "204 × 56",
+    "heading": "Frames using this export",
+    "rows": [],
+    "uses": [
+      {
+        "directory": "components",
+        "entries": [
+          {
+            "name": "agent-icon"
+          }
+        ]
+      }
+    ],
+    "usedBy": [
+      {
+        "directory": "surfaces",
+        "entries": [
+          {
+            "name": "setup"
+          },
+          {
+            "name": "approval",
+            "via": "single-choice"
+          },
+          {
+            "name": "coordination",
+            "via": "single-choice"
+          },
+          {
+            "name": "mcp-hub",
+            "via": "single-choice"
+          },
+          {
+            "name": "platforms",
+            "via": "single-choice"
+          },
+          {
+            "name": "settings",
+            "via": "single-choice"
+          }
+        ]
+      },
+      {
+        "directory": "components",
+        "entries": [
+          {
+            "name": "single-choice"
+          }
+        ]
+      }
+    ]
+  }
+}

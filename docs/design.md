@@ -17,7 +17,9 @@ implementation mappings and review process. The asset rules take precedence over
   ownership, mappings and renders after the Codex turn ends. Codex does not dispatch other Agents or answer their
   permission requests.
   The controller may release a structure-only batch when every affected frame is pixel-identical in both themes and
-  no choice remains unresolved. Visual differences or unresolved choices go to the user for gallery approval.
+  no choice remains unresolved. When explicitly authorized, Codex may release structural governance changes with exact
+  existing renders and content-cropped new part frames. Missing states and visual corrections remain known gaps.
+  New visual changes or unresolved choices otherwise go to the user for gallery approval.
 - Capture a baseline in a disposable copy outside the checkout before editing. Run `sdg check`, render all affected
   frames in both themes, inspect them and compare decoded pixels per frame and theme. Use a fresh page and browser context for each
   frame/theme; decode all SVG images, await fonts and two animation frames before capture. Commit only the authorized
@@ -33,7 +35,7 @@ implementation mappings and review process. The asset rules take precedence over
 | Generic containers | `components/panel.tsx`, `components/toolbar.tsx`, `components/canvas.tsx`, `fixtures/containers.ts` | Independent source entries and minimal specimens; Reviewed. |
 | Surface layout | `surfaces/canvas.tsx` / `ViewerChrome`; three surface renderers | Select and position feature chrome around the generic Screen. Boundary Reviewed. Review one full-region source at a time after feature dependencies. |
 | Navigation | `modules/navigation.tsx` / `Sidebar` | Reviewed; navigation/search fixtures are separate. |
-| Inspector | `modules/inspector.tsx` / `Inspector`, `DetailInspector` | Boundary Reviewed; consolidate the runtime-facing composition and local states in the inspector scope. |
+| Inspector | `modules/inspector.tsx` / `Inspector`; `fixtures/inspector.json` | Reviewed; one Inspector composition with separate fixtures and approved source, exported-element, nested-element and empty-match states. |
 | Menus | `modules/menus.tsx` / `Menu` | Reviewed; menu captures and their fixtures belong to the menus module. |
 | View controls | `modules/view-controls.tsx` / `Tools`, `AppBar`, `ZoomBar` | Reviewed; tools, AppBar, ZoomBar and tooltip capture are approved, including Fit scan, Back disabled and Minimap pressed. |
 | Directory opening | `modules/open-directory.tsx` / `OpenDialog` | Boundary Reviewed; recent data, errors and dialog copy remain in the directory scope. |
@@ -68,8 +70,7 @@ owning scope resolves them.
 | `components/canvas.tsx` / `Screen` | `public/index.html` gallery layers; `public/app.js` `draw` | Three surfaces and captured feature modules | In use; generic scene layer with child content, independent of feature dispatch. Specimen `screen` Reviewed. |
 | `components/canvas.tsx` / `Scrim` | `public/style.css` `dialog::backdrop` | ViewerChrome and shortcuts module | In use; existing 60% canvas overlay. Specimen `scrim` Reviewed. |
 | `modules/navigation.tsx` / `Sidebar` | `public/index.html` `#sidebar`; `public/app.js` `renderNav` | ViewerChrome → surfaces | Reviewed; in use; frames: `search`, captured `search-results`. Fixtures own rows, directory, query and count. |
-| `modules/inspector.tsx` / `Inspector` | `public/index.html` `#source`; `public/app.js` `selection` | ViewerChrome and DetailInspector | In use; `inspector` Reviewed. Runtime-facing inspector consolidation remains. |
-| `modules/inspector.tsx` / `DetailInspector` | `public/app.js` `selection`, `renderRelationships`; `public/index.html` `#source`, `#relationships` | Mapped runtime usage; module specimens | In use; `detail-inspector-frame`, `detail-inspector-element` Reviewed; the surface uses Inspector. |
+| `modules/inspector.tsx` / `Inspector` | `public/index.html` `#source`, `#relationships`; `public/app.js` `selection`, `renderRelationships`; `public/selection.js` `exportFrames` | ViewerChrome → inspector surface; mapped source and export selection | Reviewed; in use. Approved states: `frames`, `frame`, `element`, `source`, `export-element`, `export-element-nested`, `export-element-empty`. Export rows show owning-frame sizes while the header shows the selected element size; export rows have no selected frame highlight. |
 | `modules/menus.tsx` / `Menu` | `public/index.html` `#display-menu`, `#zoom-menu`, `#more-menu` | Menus module captures; mapped runtime menus | Reviewed; in use; frames: `default`, `display`, `zoom`, `more`, with separate menu fixtures. |
 | `modules/open-directory.tsx` / `OpenDialog` | `public/index.html` `#directories`; `public/app.js` `showOpen`, `open`, `recent` | ViewerChrome → open-directory surface | In use; `error` Reviewed. Recent data and SVG-specific copy need reconciliation. |
 | `modules/shortcuts.tsx` / `Shortcuts` | `public/index.html` `#keys`; `public/style.css` `#keys` | ViewerChrome and module capture | In use; captured `default` Reviewed. Shortcut data and keycap fidelity remain. |
@@ -84,7 +85,7 @@ owning scope resolves them.
 | `components/flow.tsx` / `Flow` | Unknown; runtime drawing overlaps this responsibility | None found | Approval/adoption unknown; resolve in canvas scope before retention or deletion. |
 | `components/section.tsx` / `Section` | Unknown; runtime drawing overlaps this responsibility | None found | Approval/adoption unknown; resolve in canvas scope before retention or deletion. |
 | `surfaces/canvas.tsx` / frame renderer | Gallery layout/camera/chrome | Entry surface | Full-frame approval unrecorded; mapped fixtures below; boundary Reviewed. |
-| `surfaces/inspector.tsx` / frame renderer | Gallery and source inspector | Entry surface | Full-frame approval unrecorded; export-element state remains a gap; boundary Reviewed. |
+| `surfaces/inspector.tsx` / frame renderer | Gallery and source inspector | Entry surface | Full-frame approval unrecorded; boundary Reviewed; captured content lives in inspector fixtures. Approved local source/export states belong to the inspector module. |
 | `surfaces/open-directory.tsx` / frame renderer | Gallery and directories dialog | Entry surface | Full-frame approval unrecorded; mapped fixtures below; boundary Reviewed. |
 
 `fixtures/buttons.ts`, `fixtures/fields.ts` and `fixtures/rows.ts` own frame presentation data for Button, IconButton,
@@ -93,6 +94,11 @@ Field, TreeRow and MenuItem. `fixtures/containers.ts` owns only neutral generic-
 specimen shows one of two results; the captured `search-results` frame shows both, matching the runtime fixture.
 Part defaults belong to their defining components. The fixtures have no independent implementation mapping.
 `fixtures/menus.json` owns menu rows and widths; `fixtures/view-controls.json` owns AppBar presentation data and ZoomBar state specimens.
+`fixtures/inspector.json` owns Inspector specimens and captured surface content. The `frame` and `element` records
+retain illustrative external source names; `source` and exported-element states use the local ARC snapshot.
+Their part mappings are `StatePill` in `components/state-pill.tsx` and nested `Input` in `components/field.tsx`;
+`SetupAction` in `components/setup-choice.tsx` has no owning-frame match when selected in `surfaces/setup.tsx` / `source-empty`.
+These local design specimens have no independent implementation capture. Existing frame/component captures remain unchanged.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
 

@@ -16,6 +16,8 @@ const browser = await launch();
 const art = path.join(root, 'design/art/arc-previews');
 const navigationFile = path.join(root, 'design/fixtures/navigation.json');
 const navigation = JSON.parse(await readFile(navigationFile, 'utf8'));
+const inspectorFile = path.join(root, 'design/fixtures/inspector.json');
+const inspectors = JSON.parse(await readFile(inspectorFile, 'utf8'));
 try {
   const catalog = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await catalog.goto(new URL('/manifest', server.url).href);
@@ -76,8 +78,9 @@ try {
           }
         }
         if (chrome.kind === 'inspector') {
-          chrome.path = selected.path;
-          chrome.rows = selected.parts.map((part, index) => ({ form: (state.form ? part.name === state.form : index === 0) ? 'item-selected' : 'item', label: part.name, meta: `${Math.round(part.width)} × ${Math.round(part.height)}`, icon: selected.component ? 'component' : 'app-window', ...(part.note ? { note: part.note } : {}) }));
+          const inspector = inspectors[chrome.inspector];
+          inspector.path = selected.path;
+          inspector.rows = selected.parts.map((part, index) => ({ form: (state.form ? part.name === state.form : index === 0) ? 'item-selected' : 'item', label: part.name, meta: `${Math.round(part.width)} × ${Math.round(part.height)}`, icon: selected.component ? 'component' : 'app-window', ...(part.note ? { note: part.note } : {}) }));
         }
         if (chrome.kind === 'zoom') {
           const [ox, oy] = frame.capture.origin.split(' ').map(Number);
@@ -121,6 +124,7 @@ try {
     scenesBySource.set(source, scenes);
   }
   await writeFile(navigationFile, JSON.stringify(navigation, null, 2) + '\n');
+  await writeFile(inspectorFile, JSON.stringify(inspectors, null, 2) + '\n');
   await rm(art, { recursive: true, force: true }); await mkdir(art, { recursive: true });
   for (const [name, { item, scale }] of previews) for (const theme of ['light', 'dark']) {
     const png = await catalog.evaluate(async ({ id, scale, theme }) => {
