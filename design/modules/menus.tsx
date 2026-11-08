@@ -1,4 +1,5 @@
 import { Frame } from 'sdg';
+import { Drawing } from './canvas';
 import { Screen } from '../components/canvas';
 import { Tools, ZoomBar } from './view-controls';
 import menuFixtures from '../fixtures/menus.json';
@@ -106,7 +107,7 @@ export default () => [
   </Frame>,
   ...frames.map(({ chrome, ...frame }) => (
     <Frame {...frame}>
-      <Screen width={frame.width} height={frame.height} scene={scenes[frame.name]}>
+      <Screen width={frame.width} height={frame.height} drawing={<Drawing nodes={scenes[frame.name]} />}>
         {chrome.map(({ kind, left, top, menu, ...props }: any) => {
           const Component = kind === 'menu' ? Menu : kind === 'tools' ? Tools : ZoomBar;
           return (

@@ -1,4 +1,5 @@
 import { Frame } from 'sdg';
+import { Drawing } from './canvas';
 import { Screen } from '../components/canvas';
 import navigationFixtures from '../fixtures/navigation.json';
 import { scenes } from '../scenes/navigation';
@@ -72,7 +73,7 @@ export default () => [
   </Frame>,
   ...frames.map(({ chrome, ...frame }) => (
     <Frame {...frame}>
-      <Screen width={frame.width} height={frame.height} scene={scenes[frame.name]}>
+      <Screen width={frame.width} height={frame.height} drawing={<Drawing nodes={scenes[frame.name]} />}>
         {chrome.map(({ left, top, navigation }) => (
           <div class="absolute" style={{ left, top }}>
             <Sidebar {...navigationFixtures[navigation]} />

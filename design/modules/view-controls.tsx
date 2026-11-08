@@ -1,4 +1,5 @@
 import { Frame } from 'sdg';
+import { Drawing } from './canvas';
 import { Screen } from '../components/canvas';
 import { Tooltip } from '../components/tooltip';
 import viewControlFixtures from '../fixtures/view-controls.json';
@@ -107,7 +108,7 @@ export default () => [
   )),
   ...frames.map(({ chrome, ...frame }) => (
     <Frame {...frame}>
-      <Screen width={frame.width} height={frame.height} scene={scenes[frame.name]}>
+      <Screen width={frame.width} height={frame.height} drawing={<Drawing nodes={scenes[frame.name]} />}>
         {chrome.map(({ kind, left, top, ...props }: any) => {
           const Component = kind === 'tools' ? Tools : Tooltip;
           return (

@@ -4,7 +4,7 @@ import { Sidebar } from '../modules/navigation';
 import { Inspector } from '../modules/inspector';
 import { OpenDialog } from '../modules/open-directory';
 import { Tools, AppBar, ZoomBar } from '../modules/view-controls';
-import { Minimap } from '../components/minimap';
+import { Drawing, Minimap } from '../modules/canvas';
 import { scenes } from '../scenes/canvas';
 import navigationFixtures from '../fixtures/navigation.json';
 import inspectorFixtures from '../fixtures/inspector.json';
@@ -230,7 +230,7 @@ const frames = [
 export default () =>
   frames.map(({ chrome, ...frame }) => (
     <Frame {...frame}>
-      <Screen width={frame.width} height={frame.height} scene={scenes[frame.name]}>
+      <Screen width={frame.width} height={frame.height} drawing={<Drawing nodes={scenes[frame.name]} />}>
         <ViewerChrome chrome={chrome} />
       </Screen>
     </Frame>

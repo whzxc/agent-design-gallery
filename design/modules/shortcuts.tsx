@@ -1,4 +1,5 @@
 import { Frame } from 'sdg';
+import { Drawing } from './canvas';
 import { Panel } from '../components/panel';
 import { IconButton } from '../components/icon-button';
 import { Kbd } from '../components/kbd';
@@ -59,7 +60,7 @@ const frames = [
 export default () =>
   frames.map(({ chrome, ...frame }) => (
     <Frame {...frame}>
-      <Screen width={frame.width} height={frame.height} scene={scenes[frame.name]}>
+      <Screen width={frame.width} height={frame.height} drawing={<Drawing nodes={scenes[frame.name]} />}>
         {chrome.map(({ kind, left, top }: any) =>
           kind === 'scrim' ? (
             <Scrim />

@@ -9,7 +9,7 @@ implementation mappings and review process. The asset rules take precedence over
 
 - Minimum toolkit: SDG `>=0.5.0`, declared in `sdg.config.mjs`.
 - Design root: `design/`; discovery order: `components`, `modules`, `surfaces`. No explicit source override or
-  import-direction opt-out is configured. The module sources are navigation, inspector, menus, open-directory, shortcuts and view-controls; there are no studies.
+  import-direction opt-out is configured. The module sources are navigation, inspector, menus, open-directory, shortcuts, view-controls and canvas; there are no studies.
 - Review platform: macOS with system UI fonts. The declared implementation capture viewport is 1440 × 900,
   locale `en-US`, timezone `UTC`; ARC artwork retains its own content language. Other viewport and locale forms
   are not declared.
@@ -40,9 +40,9 @@ implementation mappings and review process. The asset rules take precedence over
 | View controls | `modules/view-controls.tsx` / `Tools`, `AppBar`, `ZoomBar` | Reviewed; tools, AppBar, ZoomBar and tooltip capture are approved, including Fit scan, Back disabled and Minimap pressed. |
 | Directory opening | `modules/open-directory.tsx` / `OpenDialog` | Reviewed; directory states and recent entries have one fixture owner; current visual gaps are listed below. |
 | Shortcuts | `modules/shortcuts.tsx` / `Shortcuts`; `components/kbd.tsx` | Reviewed; keyboard content belongs to shortcuts fixtures; keycap geometry uses dedicated tokens at its current values. |
-| Canvas presentation | `Drawing`, `Artboard`, `Flow`, `Section`, `AssetLabel`, `Minimap`, `Tooltip`, `scenes/`, `art/arc-previews/` | Resolve duplicate ownership, unknown consumers and artwork governance in the canvas scope. |
+| Canvas presentation | `modules/canvas.tsx` / `Drawing`, `Minimap`, `AssetLabel`; `fixtures/canvas.ts`, `scenes/`, `art/arc-previews/` | Reviewed; one canvas feature owner. Drawing owns section/artboard/flow layers; mapped AssetLabel specimens and preview artwork remain in use. |
 
-The six feature modules own their existing parts and specimens. Their remaining content, coverage and fidelity gaps
+The seven feature modules own their existing parts and specimens. Their remaining content, coverage and fidelity gaps
 are assigned above. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
 not frame sources. The separate `fixtures/arc-sample/design/` tree is acceptance content, not the viewer UI library.
 
@@ -66,8 +66,8 @@ owning scope resolves them.
 | `components/toolbar.tsx` / `Toolbar` | `public/style.css` `#tools`, `#app-bar`, `.zoom` | View-controls module | In use; generic specimens `toolbar`, `toolbar-wide` Reviewed. |
 | `components/toolbar.tsx` / `Separator` | `public/index.html` `.separator`; `public/style.css` `.separator` | AppBar and ZoomBar in view-controls | In use; generic specimen `separator` Reviewed. |
 | `components/canvas.tsx` / `Canvas` | `public/index.html` `.gallery-viewport`; `public/app.js` `drawBackground` | Screen, Scrim specimen | In use; `canvas-dots` specimen Reviewed. |
-| `components/canvas.tsx` / `Drawing` | `public/app.js` `draw`, `drawLabels`; `public/labels.js` `Labels` | Screen → surfaces and feature-module captures | In use; generic scene-node renderer. Drawing and label ownership gaps remain in the canvas scope. |
-| `components/canvas.tsx` / `Screen` | `public/index.html` gallery layers; `public/app.js` `draw` | Three surfaces and captured feature modules | In use; generic scene layer with child content, independent of feature dispatch. Specimen `screen` Reviewed. |
+| `modules/canvas.tsx` / `Drawing` | `public/app.js` `draw`, `drawLabels`; `public/labels.js` `Labels` | Screen → surfaces and feature-module captures | Reviewed; in use; owns section fills, artboard/flow outlines, preview images and SVG labels. The cropped `drawing` specimen shows its existing section layer. |
+| `components/canvas.tsx` / `Screen` | `public/index.html` gallery layers; `public/app.js` `draw` | Three surfaces and captured feature modules | In use; generic scene layer with child content, independent of feature dispatch; callers supply the drawing content. Specimen `screen` Reviewed. |
 | `components/canvas.tsx` / `Scrim` | `public/style.css` `dialog::backdrop` | ViewerChrome and shortcuts module | In use; existing 60% canvas overlay. Specimen `scrim` Reviewed. |
 | `modules/navigation.tsx` / `Sidebar` | `public/index.html` `#sidebar`; `public/app.js` `renderNav` | ViewerChrome → surfaces | Reviewed; in use; frames: `search`, captured `search-results`. Fixtures own rows, directory, query and count. |
 | `modules/inspector.tsx` / `Inspector` | `public/index.html` `#source`, `#relationships`; `public/app.js` `selection`, `renderRelationships`; `public/selection.js` `exportFrames` | ViewerChrome → inspector surface; mapped source and export selection | Reviewed; in use. Approved states: `frames`, `frame`, `element`, `source`, `export-element`, `export-element-nested`, `export-element-empty`. Export rows show owning-frame sizes while the header shows the selected element size; export rows have no selected frame highlight. |
@@ -78,12 +78,9 @@ owning scope resolves them.
 | `modules/view-controls.tsx` / `AppBar` | `public/index.html` `#app-bar`; `public/app.js` `updateChrome` | ViewerChrome → canvas/open-directory surfaces | Reviewed; in use; `app-bar` uses a separate presentation fixture. |
 | `modules/view-controls.tsx` / `ZoomBar` | `public/index.html` `.zoom`; zoom/fit handlers | ViewerChrome → surfaces; menus module | Reviewed; in use; Fit uses `scan`, Back exposes `backDisabled`, and Minimap exposes `minimapPressed` through the existing active form. All four state specimens are approved. Frames: `zoom-bar`, `zoom-bar-menu-open`, `zoom-bar-back-disabled`, `zoom-bar-minimap-pressed`. |
 | `surfaces/canvas.tsx` / `ViewerChrome` | `public/index.html` floating chrome; `public/app.js` `updateChrome` | All three surface renderers | In use; boundary Reviewed. Only chooses and positions imported feature parts. |
-| `components/minimap.tsx` / `Minimap` | `public/index.html` `#minimap`; `public/app.js` `drawMap` | ViewerChrome → canvas surface | Approval unrecorded; in use; specimen geometry differs from runtime geometry. |
+| `modules/canvas.tsx` / `Minimap` | `public/index.html` `#minimap`; `public/app.js` `drawMap` | ViewerChrome → canvas surface | Reviewed; in use; `minimap` preserves the existing specimen geometry; its fidelity gap is listed below. |
 | `components/tooltip.tsx` / `Tooltip` | `public/index.html` `#tooltip`; tooltip handlers; `public/style.css` `#tooltip` | View-controls module capture | Approval unrecorded; in use. |
-| `components/asset-label.tsx` / `AssetLabel` | `public/labels.js` `Labels`; `public/app.js` `drawLabels`; `.label-copy` | Mapped runtime usage; no imported design consumer | Reviewed; in use; canvas designs still draw labels through Drawing. |
-| `components/artboard.tsx` / `Artboard` | Unknown; runtime drawing overlaps this responsibility | None found | Approval/adoption unknown; resolve in canvas scope before retention or deletion. |
-| `components/flow.tsx` / `Flow` | Unknown; runtime drawing overlaps this responsibility | None found | Approval/adoption unknown; resolve in canvas scope before retention or deletion. |
-| `components/section.tsx` / `Section` | Unknown; runtime drawing overlaps this responsibility | None found | Approval/adoption unknown; resolve in canvas scope before retention or deletion. |
+| `modules/canvas.tsx` / `AssetLabel` | `public/labels.js` `Labels`; `public/app.js` `drawLabels`; `.label-copy` | Mapped runtime usage; no imported design consumer | Reviewed; in use; frames: `asset-label-modified`, `asset-label-hover`, `asset-label-copied`. Drawing retains SVG labels under this same feature owner. |
 | `surfaces/canvas.tsx` / frame renderer | Gallery layout/camera/chrome | Entry surface | Full-frame approval unrecorded; mapped fixtures below; boundary Reviewed. |
 | `surfaces/inspector.tsx` / frame renderer | Gallery and source inspector | Entry surface | Full-frame approval unrecorded; boundary Reviewed; captured content lives in inspector fixtures. Approved local source/export states belong to the inspector module. |
 | `surfaces/open-directory.tsx` / frame renderer | Gallery and directories dialog | Entry surface | Full-frame approval unrecorded; mapped fixtures below; boundary Reviewed. |
@@ -102,6 +99,7 @@ These local design specimens have no independent implementation capture. Existin
 `fixtures/open-directory.json` owns recent labels/paths and dialog presentation states; `fixtures/viewer.mjs`
 derives runtime recent paths from that same record.
 `fixtures/shortcuts.json` owns shortcut labels/key sequences and the keycap specimen.
+`fixtures/canvas.ts` owns neutral drawing/minimap data and AssetLabel presentation content.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
 
@@ -136,13 +134,15 @@ capture of their own; their composed usage is reachable through the surface fixt
 
 The preview snapshot has 188 PNGs representing 94 ARC artboards in both themes. All are referenced by scene data.
 Source provenance and palette ownership remain with the ARC fixture. Preview artwork is repository-only and excluded
-from the npm package. Per-image downsizing and owner consolidation belong to the canvas scope.
+from the npm package. Every referenced bitmap fits the declared per-image and total budgets; the canvas module owns scene presentation.
 
 ### Known gaps
 
 - Directory opening retains the redundant SVG-only description and empty-directory error copy; submit disabled/pending states lack design coverage.
 
 - Keycaps retain a 6px design radius while runtime `kbd` uses 7px.
+
+- Canvas designs retain SVG labels while runtime uses DOM labels; the minimap specimen retains its current geometry instead of runtime geometry.
 
 ## Direction
 
@@ -218,7 +218,7 @@ Each captured surface or feature-module frame declares its fixture and a page ca
 
 ## Implementation notes
 
-The asset metadata heading and its copy interaction in `design/components/asset-label.tsx` are reviewed and adopted.
+The asset metadata heading and its copy interaction in `design/modules/canvas.tsx` / `AssetLabel` are reviewed and adopted.
 Clicking a component, flow, frame, form or section name, or its adjacent 12px copy icon, copies the displayed name.
 The copy icon appears on title hover or keyboard focus. A successful copy shows a check for 1.2 seconds. Its 16px
 space, including the gap, stays reserved while the icon is transparent so metadata does not shift; the space yields
