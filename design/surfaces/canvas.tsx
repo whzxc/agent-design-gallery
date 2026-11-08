@@ -1,6 +1,38 @@
 import { Frame } from 'sdg';
-import { Screen } from '../components/canvas';
+import { Screen, Scrim } from '../components/canvas';
+import { Sidebar } from '../modules/navigation';
+import { Inspector } from '../modules/inspector';
+import { Menu } from '../modules/menus';
+import { OpenDialog } from '../modules/open-directory';
+import { Shortcuts } from '../modules/shortcuts';
+import { Tools, AppBar, ZoomBar } from '../modules/view-controls';
+import { Tooltip } from '../components/tooltip';
+import { Minimap } from '../components/minimap';
 import { scenes } from '../scenes/canvas';
+
+const chromeComponents: Record<string, (props: any) => unknown> = {
+  sidebar: Sidebar,
+  inspector: Inspector,
+  menu: Menu,
+  dialog: OpenDialog,
+  shortcuts: Shortcuts,
+  tools: Tools,
+  app: AppBar,
+  zoom: ZoomBar,
+  tooltip: Tooltip,
+  minimap: Minimap,
+};
+export function ViewerChrome({ chrome }: any) {
+  return chrome.map(({ kind, left, top, ...props }: any) => {
+    if (kind === 'scrim') return <Scrim />;
+    const Component = chromeComponents[kind];
+    return (
+      <div class="absolute" style={{ left, top }}>
+        <Component {...props} />
+      </div>
+    );
+  });
+}
 
 const frames = [
   {
@@ -427,6 +459,11 @@ const frames = [
   }
 ] as const;
 
-export default () => frames.map(({ chrome, ...frame }) =>
-  <Frame {...frame}><Screen width={frame.width} height={frame.height} scene={scenes[frame.name]} chrome={chrome} /></Frame>
-);
+export default () =>
+  frames.map(({ chrome, ...frame }) => (
+    <Frame {...frame}>
+      <Screen width={frame.width} height={frame.height} scene={scenes[frame.name]}>
+        <ViewerChrome chrome={chrome} />
+      </Screen>
+    </Frame>
+  ));

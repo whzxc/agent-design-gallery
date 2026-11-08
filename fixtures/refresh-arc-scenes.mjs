@@ -34,8 +34,12 @@ try {
   await writeFile(path.join(root, 'fixtures/arc-sample.layout.json'), JSON.stringify({ sections: reference.sections, sources: reference.sources }, null, 2) + '\n');
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, timezoneId:'UTC' });
   const previews = new Map(), scenesBySource = new Map();
-  for (const source of ['canvas', 'inspector', 'open-directory', 'menus']) {
-    const file = path.join(root, `design/surfaces/${source}.tsx`);
+  for (const [entry, source] of [
+    ['surfaces/canvas', 'canvas'], ['surfaces/inspector', 'inspector'],
+    ['surfaces/open-directory', 'open-directory'], ['surfaces/menus', 'menus'],
+    ['modules/shortcuts', 'shortcuts'],
+  ]) {
+    const file = path.join(root, `design/${entry}.tsx`);
     let text = await readFile(file, 'utf8');
     const match = text.match(/const frames = (\[[\s\S]*?\n\]) as const;/);
     const frames = JSON.parse(match[1]), scenes = {};

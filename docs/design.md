@@ -9,7 +9,7 @@ implementation mappings and review process. The asset rules take precedence over
 
 - Minimum toolkit: SDG `>=0.5.0`, declared in `sdg.config.mjs`.
 - Design root: `design/`; discovery order: `components`, `modules`, `surfaces`. No explicit source override or
-  import-direction opt-out is configured. There are currently no modules or studies.
+  import-direction opt-out is configured. The module sources are navigation, inspector, menus, open-directory, shortcuts and view-controls; there are no studies.
 - Review platform: macOS with system UI fonts. The declared implementation capture viewport is 1440 × 900,
   locale `en-US`, timezone `UTC`; ARC artwork retains its own content language. Other viewport and locale forms
   are not declared.
@@ -28,21 +28,20 @@ implementation mappings and review process. The asset rules take precedence over
 
 | Owner | Current assets | Current scope / remaining work |
 | --- | --- | --- |
-| Shared values and button controls | `tokens.css`, `components/button.tsx`, `components/icon-button.tsx`, `fixtures/buttons.ts` | Reviewed; part defaults belong to components and frame specimens belong to fixtures. |
-| Fields | `components/field.tsx`, `fixtures/fields.ts` | Reviewed; part defaults belong to the component and frame specimens belong to fixtures. |
-| Rows | `components/tree-row.tsx`, `components/menu-item.tsx`, `fixtures/rows.ts` | Row/menu specimens, dimension tokens, fixture data and states. Controller review pending. |
-| Viewer shell | `Panel`, `Toolbar`, `Separator`, `Canvas`, `Screen` | Separate generic containers from feature composition before moving their consumers. |
-| Navigation | `Sidebar` | Own the sidebar/search feature and its fixture data. |
-| View controls | `Tools`, `AppBar`, `ZoomBar`, `Menu` | Own tool and menu states; reconcile Fit geometry and disabled/pressed states. |
-| Inspector | `Inspector`, `DetailInspector` | Establish one defining inspector module and its local states. |
-| Directory opening | `OpenDialog` | Own recent directories, errors and dialog states. |
-| Shortcuts | `Shortcuts`, `Kbd` | Own shortcut content and reconcile keycap radius. |
-| Canvas presentation | `Drawing`, `Artboard`, `Flow`, `Section`, `AssetLabel`, `Minimap`, `Tooltip`, `scenes/`, `art/arc-previews/` | Resolve duplicate ownership, unknown consumers and artwork governance. |
-| Full-region composition | The four `surfaces/*.tsx` sources | Review one source at a time after its dependencies; relocate feature-local frames. |
+| Shared values and controls | `tokens.css`, button, icon-button, field, tree-row and menu-item components; their fixtures | Reviewed; defaults belong to parts and frame presentation data belongs to fixtures. |
+| Generic containers | `components/panel.tsx`, `components/toolbar.tsx`, `components/canvas.tsx`, `fixtures/containers.ts` | Independent source entries and minimal specimens; gallery approval pending. |
+| Surface layout | `surfaces/canvas.tsx` / `ViewerChrome`; four surface renderers | Select and position feature chrome around the generic Screen. Structural review pending. Review one full-region source at a time after feature dependencies. |
+| Navigation | `modules/navigation.tsx` / `Sidebar` | Structural review pending; navigation/search fixture-data governance remains. |
+| Inspector | `modules/inspector.tsx` / `Inspector`, `DetailInspector` | Structural review pending; consolidate the runtime-facing composition and local states in the inspector scope. |
+| Menus | `modules/menus.tsx` / `Menu` | Structural review pending; remaining menu states live in `surfaces/menus.tsx`. |
+| View controls | `modules/view-controls.tsx` / `Tools`, `AppBar`, `ZoomBar` | Structural review pending; reconcile Fit geometry and disabled/pressed states in the view-controls scope. |
+| Directory opening | `modules/open-directory.tsx` / `OpenDialog` | Structural review pending; recent data, errors and dialog copy remain in the directory scope. |
+| Shortcuts | `modules/shortcuts.tsx` / `Shortcuts`; `components/kbd.tsx` | Structural review pending; keycap radius and content governance remain in the shortcuts scope. |
+| Canvas presentation | `Drawing`, `Artboard`, `Flow`, `Section`, `AssetLabel`, `Minimap`, `Tooltip`, `scenes/`, `art/arc-previews/` | Resolve duplicate ownership, unknown consumers and artwork governance in the canvas scope. |
 
-The remaining migration scope is tracked above; its legacy placement is an open gap, not an intentional layer exception.
-There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data rather than frame sources.
-The repository's separate `fixtures/arc-sample/design/` tree is acceptance content, not this viewer's UI library.
+The six feature modules own their existing parts and specimens. Their remaining content, coverage and fidelity gaps
+are assigned above. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
+not frame sources. The separate `fixtures/arc-sample/design/` tree is acceptance content, not the viewer UI library.
 
 ### Part mappings and state
 
@@ -53,47 +52,67 @@ owning scope resolves them.
 
 | Source / part | Implementation location | Design consumers | Approval / adoption / remaining gap |
 | --- | --- | --- | --- |
-| `tokens.css` | `public/index.html` `/tokens.css`; `public/style.css`; `public/app.js` `applyTheme` | All sources | In use. Shared button/field values Reviewed; row/menu sizing pending controller review. |
-| `components/button.tsx` / `Button` | `public/index.html` `#directory-form .primary`, `#zoom-options`; `public/style.css` `.primary`, `#zoom-options` | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Reviewed; in use. Frames: `primary`, `secondary`, `zoom`, `zoom-open`. `secondary` is a specimen variant with unknown current runtime usage, assigned to the view-controls scope. Submit-disabled state remains a later gap. |
-| `components/icon-button.tsx` / `IconButton` | `public/index.html` `.icon-button`; `public/style.css` `.icon-button`, pressed/current states | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Reviewed; in use. Frames: `default`, `active`. Disabled Back and Minimap pressed coverage belong to the view-controls scope. |
-| `components/field.tsx` / `Field` | `public/index.html` `.picker`, `.search-field`, `#path`; `public/style.css` `.picker`, `.search-field`, `.searching .search-field`, `#path`, `#path[aria-invalid="true"]` | `panel`, `toolbar` → `canvas` → all surfaces; `panel` → `source-relationships` | Reviewed; in use. Frames: `search`, `search-active`, `picker`, `input`, `input-error`, `input-empty`. Default height uses `--field-height`; numeric height overrides are supported. |
-| `components/tree-row.tsx` / `TreeRow` | `public/app.js` `makeRow`, `renderNav`, `selection`, `recent`; `public/style.css` `.tree-row`, `.frame-row`, `#recent button` | `panel` → `canvas` → all surfaces; `panel` → `source-relationships` | Controller review pending; in use. Frames: `root`, `root-selected`, `group`, `group-selected`, `item`, `item-selected`, `two-line`, `two-line-selected`. Single-line/multiline minimum height uses `--row-height`; two-line height uses `--row-height-two-line`. Numeric height overrides are supported; multiline rows follow content. |
-| `components/menu-item.tsx` / `MenuItem` | `public/index.html` menu buttons/headings; `public/style.css` `.menu button`, `.menu h3` | `panel` → `canvas` → all surfaces | Controller review pending; in use. Frames: `item`, `item-active`, `check`, `option`, `label`. Heights use `--menu-item-height` and `--menu-label-height`. |
-| `components/kbd.tsx` / `Kbd` | `public/index.html` `#keys kbd`; `public/style.css` `kbd` | `panel` / `Shortcuts` → `surfaces/menus.tsx` | Approval unrecorded; in use; 6px design versus 7px implementation radius. |
-| `components/panel.tsx` / `Panel` | `public/style.css` `.floating`, `.menu`, `dialog` | Other parts in `panel`; `source-relationships`; via `canvas` to surfaces | Approval unrecorded; in use; separate the generic shell. |
-| `components/panel.tsx` / `Sidebar` | `public/index.html` `#sidebar`; `public/app.js` `renderNav`; `public/style.css` `#sidebar` | `canvas` / `Screen` → canvas, inspector and menus surfaces | Approval unrecorded; in use; navigation module pending. |
-| `components/panel.tsx` / `Inspector` | `public/index.html` `#source`; `public/app.js` `selection`; `public/style.css` `#source` | `canvas` / `Screen`; `source-relationships` / `DetailInspector` | Approval unrecorded; in use; two inspector compositions need consolidation. |
-| `components/panel.tsx` / `Menu` | `public/index.html` `#display-menu`, `#zoom-menu`, `#more-menu`; `public/style.css` `.menu` | `canvas` / `Screen` → menus surface | Approval unrecorded; in use; feature states remain in a surface. |
-| `components/panel.tsx` / `OpenDialog` | `public/index.html` `#directories`; `public/app.js` `showOpen`, `open`, `recent` | `canvas` / `Screen` → open-directory surface | Approval unrecorded; in use; recent data and SVG-specific copy need reconciliation. |
-| `components/panel.tsx` / `Shortcuts` | `public/index.html` `#keys`; `public/style.css` `#keys` | `canvas` / `Screen` → menus surface | Approval unrecorded; in use; no owning feature module. |
-| `components/toolbar.tsx` / `Toolbar` | `public/style.css` `#tools`, `#app-bar`, `.zoom` | `Tools`, `AppBar`, `ZoomBar` → `canvas` → surfaces | Approval unrecorded; in use; keep generic container separate from feature controls. |
-| `components/toolbar.tsx` / `Separator` | `public/index.html` `.separator`; `public/style.css` `.separator` | `AppBar`, `ZoomBar` → `canvas` → surfaces | Approval unrecorded; in use. |
-| `components/toolbar.tsx` / `Tools` | `public/index.html` `#tools`; `public/app.js` display/inspector/fullscreen handlers | `canvas` / `Screen` → surfaces | Approval unrecorded; in use; view-controls module pending. |
-| `components/toolbar.tsx` / `AppBar` | `public/index.html` `#app-bar`; `public/app.js` `updateChrome` | `canvas` / `Screen` → canvas and open-directory surfaces | Approval unrecorded; in use; view-controls module pending. |
-| `components/toolbar.tsx` / `ZoomBar` | `public/index.html` `.zoom`; `public/app.js` zoom/fit handlers | `canvas` / `Screen` → canvas, inspector, menus and open-directory surfaces | Approval unrecorded; in use; Fit icon and control-state gaps. |
-| `components/canvas.tsx` / `Canvas` | `public/index.html` `.gallery-viewport`; `public/app.js` `drawBackground` | `Screen` → all surfaces | Approval unrecorded; in use. |
-| `components/canvas.tsx` / `Drawing` | `public/app.js` `draw`, `drawLabels`; `public/labels.js` `Labels` | `Screen` → all surfaces | Approval unrecorded; in use; drawing and label ownership need reconciliation. |
-| `components/canvas.tsx` / `Screen` | `public/index.html` `.gallery`; `public/app.js` `updateChrome`, `draw` | All four surfaces | Approval unrecorded; in use; feature dispatch currently lives in components. |
-| `components/minimap.tsx` / `Minimap` | `public/index.html` `#minimap`; `public/app.js` `drawMap` | `canvas` / `Screen` → canvas surface | Approval unrecorded; in use; specimen geometry differs from runtime geometry. |
-| `components/tooltip.tsx` / `Tooltip` | `public/index.html` `#tooltip`; `public/app.js` `[data-tooltip]` handlers, `hideTooltip`; `public/style.css` `#tooltip` | `canvas` / `Screen` → menus surface | Approval unrecorded; in use. |
-| `components/asset-label.tsx` / `AssetLabel` | `public/labels.js` `Labels`; `public/app.js` `drawLabels`; `public/style.css` `.label-copy` | No imported design consumer; mapped runtime usage | Reviewed; in use; canvas designs still draw labels through `Drawing`. |
-| `components/source-relationships.tsx` / `DetailInspector` | `public/app.js` `selection`, `renderRelationships`; `public/index.html` `#source`, `#relationships` | No imported design consumer; mapped runtime usage | Approval unrecorded; in use; inspector surface uses the older composition. |
-| `components/artboard.tsx` / `Artboard` | Unknown; runtime drawing overlaps this responsibility | None found | Approval and adoption unknown; resolve in canvas scope before retention or deletion. |
-| `components/flow.tsx` / `Flow` | Unknown; runtime drawing overlaps this responsibility | None found | Approval and adoption unknown; resolve in canvas scope before retention or deletion. |
-| `components/section.tsx` / `Section` | Unknown; runtime drawing overlaps this responsibility | None found | Approval and adoption unknown; resolve in canvas scope before retention or deletion. |
-| `surfaces/canvas.tsx` / frame renderer | `public/index.html` gallery; `public/app.js` layout/camera/chrome | Entry surface | Approval unrecorded; mapped fixtures below; full-frame scope pending. |
-| `surfaces/inspector.tsx` / frame renderer | `public/index.html` gallery and `#source`; `public/app.js` `selection` | Entry surface | Approval unrecorded; mapped fixtures below; export-element state remains a gap. |
-| `surfaces/menus.tsx` / frame renderer | `public/index.html` menus, sidebar, tooltip and `#keys` | Entry source | Approval unrecorded; mapped fixtures below; feature-local frames need relocation. |
-| `surfaces/open-directory.tsx` / frame renderer | `public/index.html` gallery and `#directories` | Entry surface | Approval unrecorded; mapped fixtures below; full-frame scope pending. |
+| `tokens.css` | `public/index.html` `/tokens.css`; `public/style.css`; `public/app.js` `applyTheme` | All sources | Reviewed; in use. Shared theme, typography and geometry values. |
+| `components/button.tsx` / `Button` | `public/index.html` `#directory-form .primary`, `#zoom-options`; `public/style.css` `.primary`, `#zoom-options` | `modules/open-directory`, `modules/view-controls` → surface chrome | Reviewed; in use. Frames: `primary`, `secondary`, `zoom`, `zoom-open`. Secondary runtime usage is unknown; submit-disabled coverage belongs to the view-controls scope. |
+| `components/icon-button.tsx` / `IconButton` | `public/index.html` `.icon-button`; `public/style.css` `.icon-button`, pressed/current states | Inspector, navigation, directory, shortcuts and view-controls modules; Toolbar specimens | Reviewed; in use. Frames: `default`, `active`. Disabled Back and Minimap pressed coverage remain in the view-controls scope. |
+| `components/field.tsx` / `Field` | `public/index.html` `.picker`, `.search-field`, `#path`; `public/style.css` corresponding selectors | Navigation, directory and view-controls modules | Reviewed; in use. Frames: `search`, `search-active`, `picker`, `input`, `input-error`, `input-empty`. Default height uses `--field-height`; numeric overrides are supported. |
+| `components/tree-row.tsx` / `TreeRow` | `public/app.js` `makeRow`, `renderNav`, `selection`, `recent`; `public/style.css` `.tree-row`, `.frame-row`, `#recent button` | Navigation, inspector and directory modules | Reviewed; in use. Frames: `root`, `root-selected`, `group`, `group-selected`, `item`, `item-selected`, `two-line`, `two-line-selected`. Heights use row tokens; numeric overrides are supported; multiline follows content. |
+| `components/menu-item.tsx` / `MenuItem` | `public/index.html` menu buttons/headings; `public/style.css` `.menu button`, `.menu h3` | Menus module | Reviewed; in use. Frames: `item`, `item-active`, `check`, `option`, `label`. Heights use `--menu-item-height` and `--menu-label-height`. |
+| `components/kbd.tsx` / `Kbd` | `public/index.html` `#keys kbd`; `public/style.css` `kbd` | Shortcuts module | Approval unrecorded; in use; 6px design versus 7px implementation radius. |
+| `components/panel.tsx` / `Panel` | `public/style.css` `.floating`, `.menu`, `dialog` | Navigation, inspector, menus, directory and shortcuts modules | In use; generic specimens `floating`, `menu`, `dialog` pending gallery approval. Default form remains `sidebar`. |
+| `components/toolbar.tsx` / `Toolbar` | `public/style.css` `#tools`, `#app-bar`, `.zoom` | View-controls module | In use; generic specimens `toolbar`, `toolbar-wide` pending gallery approval. |
+| `components/toolbar.tsx` / `Separator` | `public/index.html` `.separator`; `public/style.css` `.separator` | AppBar and ZoomBar in view-controls | In use; generic specimen `separator` pending gallery approval. |
+| `components/canvas.tsx` / `Canvas` | `public/index.html` `.gallery-viewport`; `public/app.js` `drawBackground` | Screen, Scrim specimen | In use; `canvas-dots` specimen pending structural review. |
+| `components/canvas.tsx` / `Drawing` | `public/app.js` `draw`, `drawLabels`; `public/labels.js` `Labels` | Screen → surfaces and shortcuts capture | In use; generic scene-node renderer. Drawing and label ownership gaps remain in the canvas scope. |
+| `components/canvas.tsx` / `Screen` | `public/index.html` gallery layers; `public/app.js` `draw` | Four surfaces and the shortcuts module | In use; generic scene layer with child content, independent of feature dispatch. Specimen `screen` pending gallery approval. |
+| `components/canvas.tsx` / `Scrim` | `public/style.css` `dialog::backdrop` | ViewerChrome and shortcuts module | In use; existing 60% canvas overlay. Specimen `scrim` pending gallery approval. |
+| `modules/navigation.tsx` / `Sidebar` | `public/index.html` `#sidebar`; `public/app.js` `renderNav` | ViewerChrome → surfaces | In use; `search` pending structural review. Feature-data governance remains. |
+| `modules/inspector.tsx` / `Inspector` | `public/index.html` `#source`; `public/app.js` `selection` | ViewerChrome and DetailInspector | In use; `inspector` pending structural review. Runtime-facing inspector consolidation remains. |
+| `modules/inspector.tsx` / `DetailInspector` | `public/app.js` `selection`, `renderRelationships`; `public/index.html` `#source`, `#relationships` | Mapped runtime usage; module specimens | In use; `detail-inspector-frame`, `detail-inspector-element` pending structural review; the surface uses Inspector. |
+| `modules/menus.tsx` / `Menu` | `public/index.html` `#display-menu`, `#zoom-menu`, `#more-menu` | ViewerChrome → menus surface | In use; `default` pending structural review. Local menu states remain in a surface. |
+| `modules/open-directory.tsx` / `OpenDialog` | `public/index.html` `#directories`; `public/app.js` `showOpen`, `open`, `recent` | ViewerChrome → open-directory surface | In use; `error` pending structural review. Recent data and SVG-specific copy need reconciliation. |
+| `modules/shortcuts.tsx` / `Shortcuts` | `public/index.html` `#keys`; `public/style.css` `#keys` | ViewerChrome and module capture | In use; captured `default` pending structural review. Shortcut data and keycap fidelity remain. |
+| `modules/view-controls.tsx` / `Tools` | `public/index.html` `#tools`; display/inspector/fullscreen handlers | ViewerChrome → surfaces | In use; `tools` pending structural review; feature-state coverage remains. |
+| `modules/view-controls.tsx` / `AppBar` | `public/index.html` `#app-bar`; `public/app.js` `updateChrome` | ViewerChrome → canvas/open-directory surfaces | In use; `app-bar` pending structural review; feature-state coverage remains. |
+| `modules/view-controls.tsx` / `ZoomBar` | `public/index.html` `.zoom`; zoom/fit handlers | ViewerChrome → surfaces | In use; structural review pending; Fit icon and disabled/pressed gaps remain. |
+| `surfaces/canvas.tsx` / `ViewerChrome` | `public/index.html` floating chrome; `public/app.js` `updateChrome` | All four surface renderers | In use; structural review pending. Only chooses and positions imported feature parts. |
+| `components/minimap.tsx` / `Minimap` | `public/index.html` `#minimap`; `public/app.js` `drawMap` | ViewerChrome → canvas surface | Approval unrecorded; in use; specimen geometry differs from runtime geometry. |
+| `components/tooltip.tsx` / `Tooltip` | `public/index.html` `#tooltip`; tooltip handlers; `public/style.css` `#tooltip` | ViewerChrome → menus surface | Approval unrecorded; in use. |
+| `components/asset-label.tsx` / `AssetLabel` | `public/labels.js` `Labels`; `public/app.js` `drawLabels`; `.label-copy` | Mapped runtime usage; no imported design consumer | Reviewed; in use; canvas designs still draw labels through Drawing. |
+| `components/artboard.tsx` / `Artboard` | Unknown; runtime drawing overlaps this responsibility | None found | Approval/adoption unknown; resolve in canvas scope before retention or deletion. |
+| `components/flow.tsx` / `Flow` | Unknown; runtime drawing overlaps this responsibility | None found | Approval/adoption unknown; resolve in canvas scope before retention or deletion. |
+| `components/section.tsx` / `Section` | Unknown; runtime drawing overlaps this responsibility | None found | Approval/adoption unknown; resolve in canvas scope before retention or deletion. |
+| `surfaces/canvas.tsx` / frame renderer | Gallery layout/camera/chrome | Entry surface | Full-frame approval unrecorded; mapped fixtures below; structural review pending. |
+| `surfaces/inspector.tsx` / frame renderer | Gallery and source inspector | Entry surface | Full-frame approval unrecorded; export-element state remains a gap; structural review pending. |
+| `surfaces/menus.tsx` / frame renderer | Menus, sidebar and tooltip | Entry source | Full-frame approval unrecorded; remaining feature-local frames need relocation; structural review pending. |
+| `surfaces/open-directory.tsx` / frame renderer | Gallery and directories dialog | Entry surface | Full-frame approval unrecorded; mapped fixtures below; structural review pending. |
 
 `fixtures/buttons.ts`, `fixtures/fields.ts` and `fixtures/rows.ts` own frame presentation data for Button, IconButton,
-Field, TreeRow and MenuItem.
+Field, TreeRow and MenuItem. `fixtures/containers.ts` owns only neutral generic-container specimen dimensions and icon content.
 Part defaults belong to their defining components. The fixtures have no independent implementation mapping.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
+
+### Generic container specimens
+
+These sources remain direct gallery entries. The outer `bg-canvas p-6` specimen wrapper provides shadow space;
+it is review framing, not product chrome. Panel owns no internal padding or border. Neutral Panel height and Toolbar
+icons are fixture content. Container fills, radii, shadows, padding and gaps use their existing part definitions.
+
+| Specimen | Corresponding functional frame / existing layer |
+| --- | --- |
+| `components/panel` / `floating` | `modules/navigation` / `search`: outer Panel, 260px wide, panel radius and floating shadow |
+| `components/panel` / `menu` | `modules/menus` / `default`: outer Panel, 220px wide, menu radius and shadow |
+| `components/panel` / `dialog` | `modules/open-directory` / `error`: outer Panel, 360px wide, dialog radius and menu shadow |
+| `components/toolbar` / `toolbar` | `modules/view-controls` / `tools`: outer Toolbar, 44px high, 6px padding and 4px gap |
+| `components/toolbar` / `toolbar-wide` | `modules/view-controls` / `app-bar`: outer Toolbar, 44px high, 6px padding and 8px gap |
+| `components/toolbar` / `separator` | `modules/view-controls` / `app-bar`: 1 × 20px border-colored divider |
+| `components/canvas` / `screen` | `surfaces/canvas` / `components`: Canvas background and scene-layer layout with empty content |
+| `components/canvas` / `scrim` | `surfaces/open-directory` / `dialog`: 60% canvas-colored overlay above the Canvas |
+
 ### Captures and artwork budget
 
-Surface fixture identities and states are listed under Frames and fixtures. Their exact page crops, origins and
+Surface and shortcuts-module fixture identities and states are listed under Frames and fixtures. Their exact page crops, origins and
 viewports live in each `Frame.capture`; the adapter is `sdg.config.mjs`, with runtime states in `fixtures/viewer.mjs`.
 Fresh frame renders use `output/design/<source>/<frame>-<theme>.png`. Existing files at that location may be stale;
 each review uses its own baseline and newly rendered affected frames. The button specimens have no implementation
@@ -101,7 +120,7 @@ capture of their own; their composed usage is reachable through the surface fixt
 
 | Artwork | Display dimensions | Resolution and file-size budget | Owner |
 | --- | --- | --- | --- |
-| `art/arc-previews/*.png` | Each preview's `size` in `scenes/{canvas,inspector,menus,open-directory}.ts`; declared placements are at most 1200px wide and 668px high | Twice the largest specimen scale, capped at 4096px per bitmap dimension; at most 256 KiB per PNG and 3 MiB for the complete light/dark snapshot | Canvas presentation; generated by `fixtures/refresh-arc-scenes.mjs` |
+| `art/arc-previews/*.png` | Each preview's `size` in `scenes/{canvas,inspector,menus,open-directory,shortcuts}.ts`; declared placements are at most 1200px wide and 668px high | Twice the largest specimen scale, capped at 4096px per bitmap dimension; at most 256 KiB per PNG and 3 MiB for the complete light/dark snapshot | Canvas presentation; generated by `fixtures/refresh-arc-scenes.mjs` |
 
 The preview snapshot has 188 PNGs representing 94 ARC artboards in both themes. All are referenced by scene data.
 Source provenance and palette ownership remain with the ARC fixture. Preview artwork is repository-only and excluded
@@ -120,7 +139,7 @@ SDG uses the Float direction. A dotted canvas fills the window. Chrome floats ab
 - The zoom bar is back, then zoom out, the zoom menu and zoom in, then Fit and the minimap toggle. The zoom menu holds Fit all (0), Fit group, Fit selection and Zoom to 100% (1).
 - More holds Arrange current group and Keyboard shortcuts (?).
 - Collapsing the sidebar leaves the app bar: the sidebar toggle, SDG and the directory picker.
-- The right inspector follows source, frame and exported-element selection. It opens by default and remembers its collapsed state. Source path and frame name have inline copy controls, followed by frame sizes, a scrollable frame list and Relationships. Uses and Used by group direct and indirect sources by directory; indirect entries are muted and name their shortest route. The TSX review states are in `design/components/source-relationships.tsx`; the shared inspector shell is in `design/components/panel.tsx`.
+- The right inspector follows source, frame and exported-element selection. It opens by default and remembers its collapsed state. Source path and frame name have inline copy controls, followed by frame sizes, a scrollable frame list and Relationships. Uses and Used by group direct and indirect sources by directory; indirect entries are muted and name their shortest route. The TSX review states and shared inspector composition are in `design/modules/inspector.tsx`; the generic shell is in `design/components/panel.tsx`.
 - Frame clicks select the variant. Hovering an exported component outlines its root; clicking it shows the owning source/export and matching frames. Selecting a relationship focuses its source, and selecting a matching frame focuses that variant. Source-title clicks select the source and retain copying; the copy icon alone copies. Escape clears selection and Back restores selection and camera.
 - With no directory open, the screen shows only the app bar and the open-directory dialog without a close button.
 
@@ -161,7 +180,7 @@ Labels draw at constant screen size. Each label is drawn only when it fits its s
 
 ## Frames and fixtures
 
-Every surface frame declares its fixture and a page capture at a 1440 × 900 viewport. Canvas and inspector frames, plus the empty/open dialog frames, cover the viewport. Menu, tooltip, shortcuts and error frames retain their local crop sizes and origins in `Frame.capture`. Fixtures open `fixtures/arc-sample/design/` with isolated preferences.
+Each captured surface frame and the shortcuts module frame declares its fixture and a page capture at a 1440 × 900 viewport. Canvas and inspector frames, plus the empty/open dialog frames, cover the viewport. Menu, tooltip, shortcuts and error frames retain their local crop sizes and origins in `Frame.capture`. Fixtures open `fixtures/arc-sample/design/` with isolated preferences.
 
 | Asset | Frame | Fixture theme | State |
 | --- | --- | --- | --- |
@@ -174,7 +193,7 @@ Every surface frame declares its fixture and a page capture at a 1440 × 900 vie
 | menus | display, zoom, more | light | The menu open over the components state |
 | menus | search | light | Query `pill` with the first result selected |
 | menus | tooltip | light | Pointer resting on the Inspector button |
-| menus | shortcuts | light | Keyboard shortcuts open |
+| shortcuts module | default | light | Keyboard shortcuts open |
 | open-directory | empty | light | No directory open |
 | open-directory | dialog | dark | The picker activated over the overview |
 | open-directory | error | light | `~/projects/empty` submitted |
@@ -196,7 +215,7 @@ timestamps use November 7, 2026 at 13:24:08 UTC so comparisons remain determinis
 
 ## Scene data
 
-Ordinary controls use flex/grid layout and shared component functions. Only the free-form drawing canvas and floating chrome positions use coordinates, under `data-free`. Panels and lists follow content through padding and gaps; buttons size from their label and icon. The scene modules hold section, asset, crop and label data for loop-based drawing. The ARC preview pictures in `design/art/arc-previews/` are light/dark PNG renders of the TSX fixture artboards, imported as data URLs only by scenes that display them; their palettes are independent of SDG chrome. `node fixtures/refresh-arc-scenes.mjs` regenerates these images and the scene data from the local fixture and its layout reference. Preview resolution is twice the largest specimen scale, capped at 4096 pixels. They are not package contents.
+Ordinary controls use flex/grid layout and shared component functions. Only the free-form drawing canvas and floating chrome positions use coordinates, under `data-free`. Panels and lists follow content through padding and gaps; buttons size from their label and icon. The five scene data files hold section, asset, crop and label data for loop-based drawing. The ARC preview pictures in `design/art/arc-previews/` are light/dark PNG renders of the TSX fixture artboards, imported as data URLs only by scenes that display them; their palettes are independent of SDG chrome. `node fixtures/refresh-arc-scenes.mjs` regenerates these images and the scene data from the local fixture and its layout reference. Preview resolution is twice the largest specimen scale, capped at 4096 pixels. They are not package contents.
 
 The ARC snapshot at `b9e18beb` contains 51 sources (31 components and 20 surfaces), 94 artboards and six sections: Essentials (8), Agents & quota (6), Tasks & interactions (5), Connections & MCP (6), components (14) and surfaces (12). The four curated groups retain their source order; the final two contain unlisted sources. Fit all is about 7% at the declared viewport. The MCP inspector includes the source frame notes and its empty frame is 960 × 434.
 

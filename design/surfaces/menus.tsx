@@ -1,5 +1,6 @@
 import { Frame } from 'sdg';
 import { Screen } from '../components/canvas';
+import { ViewerChrome } from './canvas';
 import { scenes } from '../scenes/menus';
 
 const frames = [
@@ -209,30 +210,14 @@ const frames = [
         "label": "Inspector"
       }
     ]
-  },
-  {
-    "name": "shortcuts",
-    "width": 480,
-    "height": 374,
-    "fixture": "dialog-shortcuts",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "480 263"
-    },
-    "chrome": [
-      {
-        "kind": "scrim"
-      },
-      {
-        "left": 50,
-        "top": 30,
-        "kind": "shortcuts"
-      }
-    ]
   }
 ] as const;
 
-export default () => frames.map(({ chrome, ...frame }) =>
-  <Frame {...frame}><Screen width={frame.width} height={frame.height} scene={scenes[frame.name]} chrome={chrome} /></Frame>
-);
+export default () =>
+  frames.map(({ chrome, ...frame }) => (
+    <Frame {...frame}>
+      <Screen width={frame.width} height={frame.height} scene={scenes[frame.name]}>
+        <ViewerChrome chrome={chrome} />
+      </Screen>
+    </Frame>
+  ));

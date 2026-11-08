@@ -13,6 +13,7 @@ import { overlaps } from '../public/labels.js';
 import { launch } from '../src/toolkit/browser.mjs';
 import { buildSource } from '../src/toolkit/build.mjs';
 import { loadConfig } from '../src/toolkit/config.mjs';
+import { listSources } from '../src/toolkit/project.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 async function temporary(t) {
@@ -23,8 +24,9 @@ async function temporary(t) {
 
 test('every approved frame maps to an isolated fixture environment', async () => {
   const project = await loadConfig(root);
-  const sources = await Promise.all(['canvas','inspector','menus','open-directory'].map(name => buildSource(project,path.join(root,'design/surfaces',name+'.tsx'),{write:false})));
-  const declared = sources.flatMap(source => source.frames.map(frame => frame.fixture));
+  const sources = await Promise.all(listSources(project.design, project.sources)
+    .map(file => buildSource(project, file, {write:false})));
+  const declared = sources.flatMap(source => source.frames.filter(frame => frame.fixture).map(frame => frame.fixture));
   assert.deepEqual(Object.keys(states).sort(), [...new Set(declared)].sort());
   for (const name of declared) {
     const fixture=config.compare.fixture(name);

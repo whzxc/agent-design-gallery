@@ -1,5 +1,6 @@
 import { Frame } from 'sdg';
 import { Screen } from '../components/canvas';
+import { ViewerChrome } from './canvas';
 import { scenes } from '../scenes/open-directory';
 
 const frames = [
@@ -96,6 +97,11 @@ const frames = [
   }
 ] as const;
 
-export default () => frames.map(({ chrome, ...frame }) =>
-  <Frame {...frame}><Screen width={frame.width} height={frame.height} scene={scenes[frame.name]} chrome={chrome} /></Frame>
-);
+export default () =>
+  frames.map(({ chrome, ...frame }) => (
+    <Frame {...frame}>
+      <Screen width={frame.width} height={frame.height} scene={scenes[frame.name]}>
+        <ViewerChrome chrome={chrome} />
+      </Screen>
+    </Frame>
+  ));
