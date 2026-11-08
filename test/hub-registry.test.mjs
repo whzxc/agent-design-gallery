@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm, readdir, realpath, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, readdir, realpath, symlink } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
 import { addRoot, removeRoot, listRoots, scanRoots, listProjects, projectSlug } from '../src/hub/registry.mjs';
@@ -57,8 +58,63 @@ test('registry changes only on explicit scans, deduplicates overlapping roots an
   assert.equal((await listProjects(state)).length, 2);
   assert.equal((await listProjects(state)).find(item => item.path === first).slug, original[0].slug);
   assert.equal(original[0].slug, projectSlug(first));
-  assert.notEqual(projectSlug(first), projectSlug(path.join(root, 'other/first')));
+  assert.equal(projectSlug(first), projectSlug(path.join(root, 'other/first')));
   await assert.rejects(scanRoots(path.dirname(root), state), /not registered/);
+});
+
+test('Regression: readable slugs resolve collisions deterministically and persist across rescans', async t => {
+  const { root, state, project } = await fixture(t);
+  const read = async stateDirectory => JSON.parse(await readFile(path.join(stateDirectory, 'registry.json'), 'utf8'));
+  const slugs = data => Object.fromEntries(data.roots.flatMap(root => root.projects).map(item => [item.path, item.slug]));
+  const existing = await project('z/Team/Agent Remote Control!');
+  await addRoot(root, 3, state);
+  assert.equal(slugs(await read(state))[existing], 'agent-remote-control');
+
+  // Earlier-sorting newcomers cannot take an existing project's route.
+  const first = await project('a/Team/agent-remote-control');
+  const second = await project('b/Team/agent-remote-control');
+  const natural = await project('agent-remote-control-team');
+  const fallback = await project('!!!');
+  await scanRoots(undefined, state);
+  const assigned = slugs(await read(state));
+  assert.equal(assigned[existing], 'agent-remote-control');
+  assert.equal(assigned[natural], 'agent-remote-control-team');
+  assert.equal(assigned[fallback], 'project');
+  for (const directory of [first, second]) {
+    const hash = createHash('sha256').update(directory).digest('hex').slice(0, 6);
+    assert.equal(assigned[directory], `agent-remote-control-team-${hash}`);
+  }
+  await addRoot(first, 0, state);
+  await scanRoots(root, state);
+  await scanRoots(undefined, state);
+  assert.deepEqual(slugs(await read(state)), assigned);
+
+  // A fresh scan of the same snapshot is independent of root/scan order.
+  const forward = path.join(root, '..', 'forward'), reverse = path.join(root, '..', 'reverse');
+  await mkdir(forward);
+  await mkdir(reverse);
+  const roots = ['a', 'b'].map(name => ({ path: path.join(root, name), depth: 2, projects: [] }));
+  await writeFile(path.join(forward, 'registry.json'), JSON.stringify({ roots }));
+  await writeFile(path.join(reverse, 'registry.json'), JSON.stringify({ roots: [...roots].reverse() }));
+  await scanRoots(undefined, forward);
+  await scanRoots(undefined, reverse);
+  assert.deepEqual(slugs(await read(forward)), slugs(await read(reverse)));
+  assert.equal(slugs(await read(forward))[first], 'agent-remote-control');
+  assert.equal(slugs(await read(forward))[second], 'agent-remote-control-team');
+
+  // Registries written by the previous implementation gain readable routes.
+  const legacy = await read(state);
+  delete legacy.slugVersion;
+  for (const entry of legacy.roots) {
+    for (const item of entry.projects) item.slug = `${projectSlug(item.path)}-${createHash('sha256').update(item.path).digest('hex').slice(0, 12)}`;
+  }
+  await writeFile(path.join(state, 'registry.json'), JSON.stringify(legacy));
+  await scanRoots(undefined, state);
+  const migrated = await read(state);
+  assert.equal(migrated.slugVersion, 1);
+  assert.equal(slugs(migrated)[first], 'agent-remote-control');
+  await scanRoots(undefined, state);
+  assert.deepEqual(slugs(await read(state)), slugs(migrated));
 });
 
 test('TypeScript config loads via esbuild without generated files and metadata reports incompatible requirements', async t => {

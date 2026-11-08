@@ -11,8 +11,37 @@ const exec = promisify(execFile);
 export const defaultStateDirectory = path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local/state'), 'svg-design-gallery');
 const canonical = async directory => realpath(path.resolve(directory.replace(/^~(?=$|[\\/])/, os.homedir())));
 export function projectSlug(directory) {
-  const label = path.basename(directory).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project';
-  return `${label}-${createHash('sha256').update(directory).digest('hex').slice(0, 12)}`;
+  return path.basename(directory).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project';
+}
+const pathHash = directory => createHash('sha256').update(directory).digest('hex');
+function assignSlugs(data, previousRoots) {
+  const directories = [...new Set(data.roots.flatMap(root => root.projects.map(project => project.path)))].sort();
+  const current = new Set(directories);
+  const assigned = new Map(previousRoots.flatMap(root => root.projects)
+    .filter(project => current.has(project.path))
+    // Upgrade the old always-hashed format on the next explicit scan.
+    .filter(project => data.slugVersion === 1 || project.slug !== `${projectSlug(project.path)}-${pathHash(project.path).slice(0, 12)}`)
+    .map(project => [project.path, project.slug]));
+  const used = new Set(assigned.values());
+  const pending = [];
+  for (const directory of directories) {
+    if (assigned.has(directory)) continue;
+    const slug = projectSlug(directory);
+    if (used.has(slug)) { pending.push(directory); continue; }
+    assigned.set(directory, slug);
+    used.add(slug);
+  }
+  for (const directory of pending) {
+    const base = `${projectSlug(directory)}-${projectSlug(path.dirname(directory))}`;
+    let slug = base, length = 6;
+    while (used.has(slug)) slug = `${base}-${pathHash(directory).slice(0, length++)}`;
+    assigned.set(directory, slug);
+    used.add(slug);
+  }
+  for (const root of data.roots) {
+    for (const project of root.projects) project.slug = assigned.get(project.path);
+  }
+  data.slugVersion = 1;
 }
 async function registry(stateDirectory) {
   try { return JSON.parse(await readFile(path.join(stateDirectory, 'registry.json'), 'utf8')); }
@@ -36,7 +65,7 @@ async function scan(root) {
       if (['ENOENT', 'ENOTDIR', 'EACCES'].includes(error.code)) return;
       throw error;
     }
-    if (configFile(directory)) projects.push({ path: directory, slug: projectSlug(directory) });
+    if (configFile(directory)) projects.push({ path: directory });
     if (depth >= root.depth) return;
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
@@ -51,7 +80,9 @@ export async function addRoot(directory, depth = 2, stateDirectory = defaultStat
   const root = await canonical(directory);
   if (!(await stat(root)).isDirectory()) throw new Error(`Not a directory: ${directory}`);
   const data = await registry(stateDirectory), entry = await scan({ path: root, depth });
+  const previousRoots = data.roots;
   data.roots = [...data.roots.filter(item => item.path !== root), entry].sort((a, b) => a.path.localeCompare(b.path));
+  assignSlugs(data, previousRoots);
   await save(data, stateDirectory);
   return listRoots(stateDirectory);
 }
@@ -72,9 +103,11 @@ export async function listRoots(stateDirectory = defaultStateDirectory) {
 export async function scanRoots(directory, stateDirectory = defaultStateDirectory) {
   const data = await registry(stateDirectory), selected = directory === undefined ? null : await canonical(directory);
   if (selected && !data.roots.some(root => root.path === selected)) throw new Error(`Root is not registered: ${directory}`);
+  const previousRoots = [...data.roots];
   for (let index = 0; index < data.roots.length; index++) {
     if (!selected || data.roots[index].path === selected) data.roots[index] = await scan(data.roots[index]);
   }
+  assignSlugs(data, previousRoots);
   await save(data, stateDirectory);
   return listRoots(stateDirectory);
 }
