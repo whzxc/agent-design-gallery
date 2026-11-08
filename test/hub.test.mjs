@@ -37,7 +37,7 @@ test('hub routes existing viewers by stable slug and keeps browser paths read-on
   assert.equal((await fetch(new URL('asset/' + encodeURIComponent(manifest.assets[0].path), base))).status, 200);
   for (const endpoint of ['open', 'reveal']) {
     const response = await fetch(new URL(endpoint, base), { method: 'POST', body: JSON.stringify({directory:root,path:root}) });
-    assert.equal(response.status, 404);
+    assert.equal(response.status, 405);
   }
   assert.equal((await fetch(new URL('preferences', base), {method:'POST',body:JSON.stringify({theme:'dark',view:{x:0,y:0,scale:1}})})).status,200);
   assert.equal((await fetch(new URL('/api/root/add', hub.url), {method:'POST',body:JSON.stringify({directory:root})})).status,405);

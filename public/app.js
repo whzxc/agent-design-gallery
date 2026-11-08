@@ -1,3 +1,4 @@
+import { dataFetch, keyURL, isUnauthorized } from './auth.js';
 import { Labels } from "./labels.js";
 import { fitArea, fitView } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
@@ -137,13 +138,14 @@ window.__sdg = {
 };
 const clamp = (s) => Math.max(0.025, Math.min(32, s));
 function error(message) {
+  if (isUnauthorized()) return;
   if(fixtureState && message) document.documentElement.dataset.fixtureError=message;
   $("#error").textContent = message;
   $("#error").hidden = !message;
 }
 async function api(url, data, keepalive = false) {
   if(fixtureName && url === "manifest") url += `?fixture=${encodeURIComponent(fixtureName)}`;
-  const response = await fetch(
+  const response = await dataFetch(
     url,
     data
       ? {
@@ -1187,13 +1189,22 @@ async function refresh(force = false) {
 }
 await refresh();
 if(fixtureState) { try { await applyFixture(); } catch(e) { error(e.message); } }
-const events = new EventSource("events");
-events.onmessage = (e) => {
-  const data = JSON.parse(e.data);
-  if (data.error) error(data.error);
-  else void refresh();
-};
-events.onerror = () => error("Local server disconnected. Reconnecting…");
+if (manifest && !isUnauthorized()) {
+  const events = new EventSource(keyURL('events'));
+  window.addEventListener('sdg-unauthorized', () => events.close(), { once: true });
+  events.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.error) error(data.error);
+    else void refresh();
+  };
+  events.onerror = async () => {
+    try {
+      const response = await dataFetch('manifest');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      error('Local server disconnected. Reconnecting…');
+    } catch (e) { error(e.message); }
+  };
+}
 
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {

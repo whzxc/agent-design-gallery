@@ -1,4 +1,6 @@
 // Adapted from ARC's MIT-licensed tooling/design-server.mjs.
+import { randomUUID } from 'node:crypto';
+import { directLocal, viewerFiles, shell, json } from './http.mjs';
 import { createServer } from "node:http";
 import {
   readFile,
@@ -11,13 +13,11 @@ import {
 import { watch } from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { fileURLToPath } from "node:url";
 
 import { buildSource } from './toolkit/build.mjs';
 import { refreshTypes, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
 import { loadConfig } from './toolkit/config.mjs';
 import { sourceRelationships } from '../public/relationships.js';
-const publicRoot = fileURLToPath(new URL("../public/", import.meta.url));
 const defaultState = path.join(
   process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
   "svg-design-gallery",
@@ -27,6 +27,7 @@ export async function startServer({
   port = 0,
   stateDirectory = defaultState,
   fixtures = null,
+  instanceId = randomUUID(),
 } = {}) {
   let state = { recent: [], views: {}, selections: {}, theme: "system" };
   const statePath = path.join(stateDirectory, "state.json");
@@ -295,17 +296,15 @@ export async function startServer({
   }
   const server = createServer(async (request, response) => {
     try {
-      const host = `127.0.0.1:${server.address().port}`;
-      if (request.headers.host !== host) {
-        response.writeHead(403);
-        response.end("Use the local server URL.");
-        return;
-      }
-      const url = new URL(request.url, `http://${host}`);
+      const host = request.headers.host;
+      const url = new URL(request.url, 'http://localhost');
+      if (['GET', 'HEAD'].includes(request.method) && viewerFiles[url.pathname]) return await shell(request, response, viewerFiles[url.pathname]);
+      if (!directLocal(request)) return json(response, 401, { error: 'Unauthorized' });
+      if (url.pathname === '/api/health' && request.method === 'GET') return json(response, 200, { id: instanceId, capabilities: { keyAuth: 1 } });
       if (request.method === "POST") {
         if (
           request.headers.origin &&
-          request.headers.origin !== `http://${host}`
+          request.headers.origin !== `http://${host}` && request.headers.origin !== `https://${host}`
         ) {
           response.writeHead(403);
           response.end("Cross-origin request refused.");
@@ -359,11 +358,7 @@ export async function startServer({
         return;
       }
       let content, type, etag;
-      if (url.pathname === "/tokens.css") {
-        try { content = await readFile(new URL("../design/tokens.css", import.meta.url)); }
-        catch { content = await readFile(new URL("../public/tokens.css", import.meta.url)); }
-        type = "text/css";
-      } else if (url.pathname === "/manifest") {
+      if (url.pathname === "/manifest") {
         content = JSON.stringify(fixtureManifest(url.searchParams.get("fixture")));
         type = "application/json";
       } else if (url.pathname === "/relationships") {
@@ -388,34 +383,7 @@ export async function startServer({
         content = (await svg(name, theme)).body;
         type = name.endsWith(".tsx") ? "application/json" : "image/svg+xml";
       } else {
-        const file = {
-          "/": "index.html",
-          "/app.js": "app.js",
-          "/assets.js": "assets.js",
-          "/icons.js": "icons.js",
-          "/layout.js": "layout.js",
-          "/labels.js": "labels.js",
-          "/relationships.js": "relationships.js",
-          "/selection.js": "selection.js",
-          "/style.css": "style.css",
-        }[url.pathname];
-        if (!file) {
-          response.writeHead(404);
-          response.end("Not found.");
-          return;
-        }
-        content = await readFile(path.join(publicRoot, file));
-        type = {
-          "index.html": "text/html",
-          "app.js": "text/javascript",
-          "assets.js": "text/javascript",
-          "icons.js": "text/javascript",
-          "layout.js": "text/javascript",
-          "labels.js": "text/javascript",
-          "relationships.js": "text/javascript",
-          "selection.js": "text/javascript",
-          "style.css": "text/css",
-        }[file];
+        response.writeHead(404); response.end('Not found.'); return;
       }
       response.writeHead(200, {
         "Content-Type": `${type}; charset=utf-8`,
@@ -455,7 +423,7 @@ export async function startServer({
     await writes;
     await new Promise((resolve) => server.close(resolve));
   };
-  return { url: `http://127.0.0.1:${server.address().port}/`, port: server.address().port, close,
+  return { id: instanceId, directory: root, url: `http://127.0.0.1:${server.address().port}/`, port: server.address().port, close,
     stats: () => {
       const entries = [...files.keys()].filter(name => name.endsWith('.tsx'));
       return { sourceCount: entries.length, frameCount: entries.every(name => frameCounts.has(name)) ? entries.reduce((n, name) => n + frameCounts.get(name), 0) : null };

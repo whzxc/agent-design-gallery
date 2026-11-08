@@ -1,52 +1,76 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { startServer } from './server.mjs';
 import { listProjects, listRoots, scanRoots, defaultStateDirectory } from './hub/registry.mjs';
 import { proxy } from './hub/proxy.mjs';
-
-export const json = (response, code, data) => {
-  response.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-  response.end(JSON.stringify(data));
-};
-const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+import { listInstances } from './hub/instances.mjs';
+import { hubKey, authorized } from './hub/auth.mjs';
+import { json, shell, viewerFiles } from './http.mjs';
 
 export async function startHub({ port = 4310, stateDirectory = defaultStateDirectory, idleTimeout = 300_000 } = {}) {
-  const viewers = new Map();
+  await hubKey(stateDirectory);
+  let closing = false;
+  const id = randomUUID(), viewers = new Map(), streams = new Set();
   const projects = async () => (await listProjects(stateDirectory)).map(project => ({ ...project, ...viewers.get(project.slug)?.viewer?.stats(), url: `/p/${project.slug}/` }));
   const server = createServer(async (request, response) => {
     try {
+      if (closing) return json(response, 503, { error: 'Hub is stopping.' });
       const url = new URL(request.url, 'http://localhost');
-      if (request.method === 'POST') {
-        if (request.headers.origin && request.headers.origin !== `http://${request.headers.host}` && request.headers.origin !== `https://${request.headers.host}`) return json(response, 403, { error: 'Cross-origin request refused.' });
-        if (url.pathname === '/api/rescan') return json(response, 200, await scanRoots(undefined, stateDirectory));
+      const read = ['GET', 'HEAD'].includes(request.method);
+      const projectRoute = url.pathname.match(/^\/p\/([A-Za-z0-9_-]+)(\/.*)?$/);
+      const instanceRoute = url.pathname.match(/^\/i\/([A-Za-z0-9_-]+)(\/.*)?$/);
+      const route = projectRoute ?? instanceRoute;
+      const publicFile = read && (route ? viewerFiles[route[2] ?? '/'] : { '/': 'hub.html', '/hub.js': 'hub.js', '/auth.js': 'auth.js' }[url.pathname]);
+      // Project shells do not discover, build, watch, or embed any project data.
+      if (publicFile && !instanceRoute) {
+        if (route && !route[2]) { response.writeHead(302, { Location: `${url.pathname}/${url.search}` }); response.end(); return; }
+        return await shell(request, response, publicFile);
       }
+      if (!publicFile && !await authorized(request, url, stateDirectory)) return json(response, 401, { error: 'Unauthorized' });
+      if (request.method === 'POST' && request.headers.origin && ![`http://${request.headers.host}`, `https://${request.headers.host}`].includes(request.headers.origin))
+        return json(response, 403, { error: 'Cross-origin request refused.' });
+      if (url.pathname === '/api/health' && request.method === 'GET') return json(response, 200, { id });
       if (url.pathname === '/api/projects' && request.method === 'GET') return json(response, 200, await projects());
+      if (url.pathname === '/api/instances' && request.method === 'GET') return json(response, 200, await listInstances(stateDirectory));
       if (url.pathname === '/api/roots' && request.method === 'GET') return json(response, 200, await listRoots(stateDirectory));
-      const match = url.pathname.match(/^\/p\/([^/]+)(\/.*)?$/);
-      if (match) {
-        const project = (await listProjects(stateDirectory)).find(item => item.slug === match[1]);
-        if (!project) return json(response, 404, { error: 'Unknown project; run sdg root scan.' });
-        if (!match[2]) { response.writeHead(302, { Location: `${url.pathname}/${url.search}` }); response.end(); return; }
-        let entry = viewers.get(project.slug);
-        if (!entry) {
-          entry = { pending: startServer({ directory: project.design, stateDirectory: path.join(stateDirectory, 'projects', project.slug) }), active: 0, last: Date.now() };
-          viewers.set(project.slug, entry);
-          try { entry.viewer = await entry.pending; } catch (error) { viewers.delete(project.slug); throw error; }
+      if (url.pathname === '/api/rescan' && request.method === 'POST') return json(response, 200, await scanRoots(undefined, stateDirectory));
+      if (route) {
+        if (!read && !(request.method === 'POST' && route[2] === '/preferences')) return json(response, 405, { error: 'Only viewer preferences may be changed.' });
+        if (instanceRoute) {
+          const instance = (await listInstances(stateDirectory)).find(item => item.id === instanceRoute[1]);
+          if (!instance) return json(response, 404, { error: 'Instance is no longer live.' });
+          if (!instance.proxyable) return json(response, 409, { error: 'Instance viewer does not support authenticated proxying.' });
+          if (!route[2]) { response.writeHead(302, { Location: `${url.pathname}/${url.search}` }); response.end(); return; }
+          streams.add(response);
+          try { await proxy(request, response, instance.port, route[2] + url.search); }
+          finally { streams.delete(response); }
+          return;
         }
-        await entry.pending;
+        const slug = projectRoute[1];
+        let entry = viewers.get(slug);
+        if (!entry) {
+          entry = { active: 0, last: Date.now() };
+          entry.pending = (async () => {
+            const project = (await listProjects(stateDirectory)).find(item => item.slug === slug);
+            if (!project) throw new Error('Unknown project; run sdg root scan.');
+            entry.viewer = await startServer({ directory: project.design, stateDirectory: path.join(stateDirectory, 'projects', slug) });
+            return entry.viewer;
+          })();
+          viewers.set(slug, entry);
+        }
+        try { await entry.pending; }
+        catch (error) { if (viewers.get(slug) === entry) viewers.delete(slug); throw error; }
         entry.active++;
-        try { await proxy(request, response, entry.viewer.port, match[2] + url.search, `/p/${project.slug}`); }
+        try { await proxy(request, response, entry.viewer.port, route[2] + url.search); }
         finally { entry.active--; entry.last = Date.now(); }
         return;
       }
-      if (url.pathname === '/' && request.method === 'GET') {
-        const items = await projects();
-        response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-        response.end(`<!doctype html><html lang="en"><meta charset="utf-8"><title>SDG</title><h1>SDG</h1><ul>${items.map(p => `<li><a href="${p.url}">${escape(p.name)}</a></li>`).join('')}</ul><form method="post" action="/api/rescan"><button>Rescan registered roots</button></form></html>`);
-        return;
-      }
-      json(response, request.method === 'GET' ? 404 : 405, { error: 'Not found.' });
-    } catch (error) { json(response, 400, { error: error.message }); }
+      json(response, read ? 404 : 405, { error: 'Not found.' });
+    } catch (error) {
+      if (response.headersSent) response.destroy();
+      else json(response, 400, { error: error.message });
+    }
   });
   const reap = setInterval(() => {
     for (const [slug, entry] of viewers) {
@@ -60,10 +84,15 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
   try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); }); }
   catch (error) { clearInterval(reap); throw error; }
   return {
-    url: `http://127.0.0.1:${server.address().port}/`,
+    id, url: `http://127.0.0.1:${server.address().port}/`,
     async close() {
+      closing = true;
       clearInterval(reap);
-      await Promise.all([...viewers.values()].map(async entry => (await entry.pending).close()));
+      for (const response of streams) response.destroy();
+      await Promise.all([...viewers.values()].map(async entry => {
+        let viewer; try { viewer = await entry.pending; } catch { return; }
+        await viewer.close();
+      }));
       server.closeAllConnections();
       await new Promise(resolve => server.close(resolve));
     },

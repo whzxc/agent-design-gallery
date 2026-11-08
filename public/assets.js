@@ -1,7 +1,8 @@
+import { dataFetch } from './auth.js';
 import { blockForAsset, layoutWorld } from "./layout.js";
 // Measure declared SVG content in an isolated, script-disabled document.
 export async function prepare(asset, theme) {
-  const response = await fetch(
+  const response = await dataFetch(
     `asset/${encodeURIComponent(asset.path)}?theme=${theme}&v=${encodeURIComponent(asset.version)}`,
   );
   if (!response.ok) throw new Error(`Cannot load ${asset.path}`);

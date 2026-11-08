@@ -7,13 +7,13 @@ import { VERSION, loadConfig } from './toolkit/config.mjs';
 export const commands = ['open', 'serve', 'root', 'init', 'check', 'render', 'compare'];
 const usage = {
   open: '[directory] [--port=<n>] [--no-open] [--state-dir=<path>]',
-  serve: '[--port=4310] [--state-dir=<path>]',
+  serve: '[--port=4310] [--state-dir=<path>] [--print-key | --rotate-key]',
   root: 'add <dir> [--depth=2] | remove <dir> | list | scan [dir] [--state-dir=<path>]',
   init: '', check: '[source...] [--read-only]', render: '[source...] [--frame=<name>] [--scale=2]',
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
 };
 const details = {
-  serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes.',
+  serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes. --print-key prints the key and exits; --rotate-key rotates the running hub key and exits. Forwarded data requests require a header or query key; direct-local requests are exempt.',
   root: 'Manage registered scan roots. add scans immediately. scan rescans registered roots only; depth is 0 through 3. Hidden directories, node_modules and Git worktrees are skipped.',
   open: 'Browse TSX sources and legacy SVG designs on an independent random-port server.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
   check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render each selected frame in both themes. Scale defaults to 2.',
@@ -28,6 +28,7 @@ export function parseCli(args) {
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' } };
   const strings = { open: ['port', 'state-dir'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], render: ['scale', 'frame'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
+  if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
   if (command === 'check') options['read-only'] = { type: 'boolean' };
   if (command === 'compare') { options.all = { type: 'boolean' }; options.page = { type: 'boolean' }; }
@@ -58,6 +59,10 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd()) {
   }
   if (command === 'serve') {
     if (positionals.length) throw new Error('Invalid arguments; run sdg serve --help');
+    if (values['print-key'] || values['rotate-key']) {
+      const key = await (await import('./hub/auth.mjs')).hubKey(values['state-dir'], { rotate: !!values['rotate-key'] });
+      console.log(values['print-key'] ? key : 'Hub key rotated.'); return 0;
+    }
     const port = values.port === undefined ? 4310 : Number(values.port);
     if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('--port must be an integer from 0 to 65535.');
     const hub = await (await import('./hub.mjs')).startHub({ port, stateDirectory: values['state-dir'] });

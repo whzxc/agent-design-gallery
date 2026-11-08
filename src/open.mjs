@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { loadConfig } from "./toolkit/config.mjs";
-import { existsSync } from "node:fs";
+import { registerInstance } from "./hub/instances.mjs";
+import { existsSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { startServer } from "./server.mjs";
 
@@ -18,6 +19,11 @@ export async function open(positionals, values) {
       port,
       stateDirectory: values["state-dir"],
     });
+    let instance;
+    try { instance = await registerInstance({ directory: server.directory, port: server.port, id: server.id, stateDirectory: values['state-dir'] }); }
+    catch (error) { await server.close(); throw error; }
+    const cleanup = () => { try { unlinkSync(instance.file); } catch {} };
+    process.once('exit', cleanup);
     console.log(`SDG: ${server.url}`);
     if (!values["no-open"]) {
       const command =
@@ -38,7 +44,7 @@ export async function open(positionals, values) {
     }
     for (const signal of ["SIGINT", "SIGTERM"])
       process.once(signal, () =>
-        server.close().catch((e) => {
+        server.close().then(() => instance.remove()).catch((e) => {
           console.error(e.message);
           process.exitCode = 2;
         }),

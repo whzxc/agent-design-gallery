@@ -1,14 +1,15 @@
 import { request as httpRequest } from 'node:http';
 
 // Pipe through the owning server, preserving streaming and backpressure.
-export function proxy(request, response, port, pathname, prefix) {
+export function proxy(request, response, port, pathname) {
   return new Promise(resolve => {
     const headers = { ...request.headers, host: `127.0.0.1:${port}` };
     for (const name of Object.keys(headers)) {
       if (['authorization', 'x-sdg-key', 'cookie', 'forwarded', 'origin', 'connection'].includes(name) || name.startsWith('x-forwarded-')) delete headers[name];
     }
-    headers['x-forwarded-prefix'] = prefix;
-    const upstream = httpRequest({ hostname: '127.0.0.1', port, method: request.method, path: pathname, headers }, incoming => {
+    const target = new URL(pathname, 'http://localhost');
+    target.searchParams.delete('key');
+    const upstream = httpRequest({ hostname: '127.0.0.1', port, method: request.method, path: target.pathname + target.search, headers }, incoming => {
       const outgoing = { ...incoming.headers };
       delete outgoing['set-cookie'];
       response.writeHead(incoming.statusCode, outgoing);

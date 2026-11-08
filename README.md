@@ -81,7 +81,7 @@ See [SDG design](docs/design.md), [architecture](docs/architecture.md), and [per
 
 ## Resident hub
 
-`sdg open <dir>` stays independent: no registry or hub is required, and the port is random by default. It accepts a design directory or a configured project root. The browser is read-only apart from viewer preferences. Open and reveal filesystem actions are CLI-only.
+`sdg open <dir>` stays independent: no registry or hub is required, and the port is random by default. It accepts a design directory or a configured project root. The browser is read-only apart from viewer preferences. Select directories from the CLI; the browser has no reveal action.
 
 ```sh
 sdg root add ~/Developer --depth 2
@@ -96,22 +96,42 @@ Root commands output JSON. `--state-dir <path>` isolates registry and preference
 
 The hub binds 127.0.0.1. `GET /api/projects` returns name, path, design directory, stable slug and `/p/<slug>/` route, branch, short HEAD, last design commit time and dirty flag, source count and version compatibility. `frameCount` is null until an active viewer has built every source, then reports the exact count. Config errors are returned per project. `GET /api/roots` lists roots; `POST /api/rescan` rescans registered roots with no path input. Project viewers start on demand and stop after five idle minutes; an open SSE stream keeps a viewer active. The initial hub page is intentionally unstyled pending design approval.
 
-### Reverse proxy transport
+### Access keys and instances
 
-Phase 1 has no remote authentication; keep the listener local until the key boundary lands. nginx must preserve the original Host and URI prefix, supply forwarded headers on every request, and disable SSE buffering. Use these settings inside the location forwarding to the hub:
+The hub creates `hub.key` in its state directory on first start with mode 0600. Direct-local data requests are exempt: Host must be localhost, 127.0.0.1 or ::1, with no Forwarded or X-Forwarded-* header present. The peer IP is never used for this decision.
 
-```nginx
-proxy_pass http://127.0.0.1:4310;
-proxy_http_version 1.1;
-proxy_set_header Host $http_host;
-proxy_set_header X-Forwarded-Host $http_host;
-proxy_set_header X-Forwarded-Proto $scheme;
-proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-proxy_set_header Forwarded "";
-proxy_set_header Connection "";
-proxy_buffering off;
-proxy_cache off;
-proxy_read_timeout 1h;
+```sh
+sdg serve --print-key                 # Print the current key and exit
+sdg serve --rotate-key                # Replace the key and exit
+sdg serve --rotate-key --print-key    # Replace and print it
 ```
 
-Do not rewrite `/p/<slug>/` prefixes. Forward Authorization and X-SDG-Key headers and retain query parameters for the upcoming header/query key contract. The corrected Phase 2 design uses a public data-free shell, localStorage, header-authenticated data requests and query keys for SSE; no cookies or redirects.
+Rotation applies to new requests in a running hub immediately. Existing streams end when disconnected. Open the hub or a canonical viewer URL with `?key=sdg_...` once: the public HTML/JS shell stores the key in localStorage (`sdg-key`) and removes the parameter using history.replaceState. There is no cookie or authentication redirect. Shells contain no project data. Data requests use `Authorization: Bearer <key>`; the server also accepts `X-SDG-Key` and `?key=`. SSE uses a query key. Frames, SVGs and artwork are fetched with headers and become self-contained blob/data previews. Missing or invalid credentials return JSON 401 and the shell shows a minimal 401 state.
+
+`sdg open` registers itself in `<state>/instances/<id>.json` and removes its record on exit, independently of whether a hub is running. `GET /api/health` returns `{ id, capabilities: { keyAuth: 1 } }`. `GET /api/instances` checks PID liveness and the health ID, pruning dead or mismatched records. An alive PID with missing health or a viewer without the key-auth capability remains listed as not proxyable. Records include pid, port, directory, project name, branch, worktree flag, start time and SDG version.
+
+`/i/<id>/` streams from that instance's own server, including its own HTML/JS and SSE. Modified SDG worktree instances keep their own code. Public shell requests pass through without data; every proxied data request is authenticated before forwarding, then Authorization, X-SDG-Key, query key, cookies and forwarded headers are removed upstream. Relative viewer URLs preserve `/p/<slug>/` and `/i/<id>/`. Browser writes through either prefix are limited to viewer preferences; the hub also allows registered-root rescan.
+
+### nginx
+
+Keep the listener on loopback and terminate remote HTTPS at nginx. Preserve the original Host, the full URI prefixes and all query parameters. nginx must set forwarded headers on **every** request, including requests whose original Host is localhost: this prevents the direct-local exemption through a local proxy. Supply the following in a root location:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:4310;
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Forwarded "";
+    proxy_set_header Authorization $http_authorization;
+    proxy_set_header X-SDG-Key $http_x_sdg_key;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 1h;
+}
+```
+
+The proxy_pass has no URI suffix; do not strip `/p/<slug>/` or `/i/<id>/`. Disable SSE buffering and caching. Avoid logging query strings or key headers: the initial URL and SSE carry the key. Cookies are not used.
