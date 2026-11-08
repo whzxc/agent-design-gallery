@@ -75,7 +75,11 @@ npm start -- /path/to/design --no-open
 npm test
 ```
 
-The server serves the checked-in frontend and `design/tokens.css` directly. Reload after frontend edits; restart after server edits. `npm pack` copies the shared viewer tokens into the packaged browser files. No frontend framework is required. Maintainers publish to the public npm registry; a scope registry in the local npm config takes precedence over `publishConfig`, so override it with `npm publish --@whzxc:registry=https://registry.npmjs.org/`.
+The development server serves the checked-in frontend and `design/tokens.css` directly. A globally installed server serves its installed package; repository edits and Git commits do not update that installation. Reload after static frontend edits. Restart after server/toolkit edits or changes to `public/assets.js`, `public/layout.js` or `public/selection.js`, whose combined hash identifies the viewer cache context. `npm pack` copies the shared viewer tokens into the packaged browser files. No frontend framework is required.
+
+After a completed runtime or dependency milestone passes its relevant checks and required design approvals, maintainers update the global installation and verify the deployed viewer as part of delivery. Follow [local updates](docs/local-updates.md) for packing, installation, restart conditions and endpoint verification. Documentation-only, test-only and fixture-only commits skip this update.
+
+Maintainers publish releases to the public npm registry; a scope registry in the local npm config takes precedence over `publishConfig`, so override it with `npm publish --@whzxc:registry=https://registry.npmjs.org/`. Local milestone updates can install a tarball without publishing or changing the package version.
 
 See [SDG design](docs/design.md), [architecture](docs/architecture.md), and [performance](docs/performance.md). ARC's MIT-licensed gallery is the starting point; the MIT license and Lucide/Feather icon notices are retained in `LICENSE`.
 
