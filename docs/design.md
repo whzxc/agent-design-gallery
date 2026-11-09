@@ -28,6 +28,9 @@ implementation mappings and review process. The asset rules take precedence over
 - This document keeps current mappings, approval/adoption state, exceptions and scope. Render, pixel-comparison and
   controller-review evidence stays in local `output/` or the external baseline copy. This document has no batch log.
 
+The approved browser mark lives in `design/art/sdg-mark.svg`. Its 32 × 32 viewBox is designed for display at 16 and 32 px,
+with a 1 KiB source budget. Both the hub and viewer link to `/favicon.svg`; packaging copies the artwork to `public/favicon.svg`.
+
 ### Ownership and current scope
 
 | Owner | Current assets | Current scope / remaining work |

@@ -52,9 +52,15 @@ test('data endpoints require header or query keys, shells contain no project dat
   for (const route of ['', 'hub.js','auth.js',project.url, project.url+'app.js',project.url+'tokens.css']) {
     const response = await fetch(new URL(route,hub.url),{headers:forwarded});
     assert.equal(response.status,200,route);
-    assert.doesNotMatch(await response.text(),/Private project/);
+    const body = await response.text();
+    assert.doesNotMatch(body,/Private project/);
+    if (route === '' || route === project.url) assert.match(body, /<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg">/);
     assert.equal(response.headers.get('set-cookie'),null);
   }
+  const icon = await fetch(new URL('favicon.svg',hub.url),{headers:forwarded});
+  assert.equal(icon.status,200);
+  assert.match(icon.headers.get('content-type'),/^image\/svg\+xml\b/);
+  assert.equal(await icon.text(),await readFile(new URL('../design/art/sdg-mark.svg',import.meta.url),'utf8'));
   for (const route of ['api/projects','api/instances','api/roots',project.url+'manifest',project.url+'relationships',project.url+'asset/components%2Fbutton.tsx',project.url+'events']) {
     for (const headers of [forwarded,{...forwarded,Authorization:'Bearer invalid'},{Host:'external.invalid'}])
       assert.equal(await rawStatus(new URL(route,hub.url),headers),401,route);
@@ -149,6 +155,9 @@ test('sdg open records actual health identity and cleans records on exit without
   const [record]=await listInstances(state);
   assert.equal(record.pid,child.pid);assert.equal(record.proxyable,true);assert.equal(record.worktree,(await stat(new URL("../.git",import.meta.url))).isFile());
   assert.equal((await(await fetch(new URL('api/health',url))).json()).id,record.id);
+  const icon = await fetch(new URL('favicon.svg',url));
+  assert.equal(icon.status,200);
+  assert.match(icon.headers.get('content-type'),/^image\/svg\+xml\b/);
   const hub=await startHub({port:0,stateDirectory:state});
   const browser=await launch();
   try {
