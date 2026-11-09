@@ -16,6 +16,7 @@
   <aside id="sidebar" class="floating" aria-label="Design sidebar">
     <div class="sidebar-heading"><button id="sidebar-toggle" class="icon-button" aria-label="Collapse sidebar" aria-expanded="true" data-tooltip="Collapse sidebar"><span data-icon="panel-left"></span></button><h1>SDG</h1></div>
     <button type="button" id="directory" class="picker" aria-label="Current project"><span data-icon="folder"></span><span class="directory-name"></span></button>
+    <button type="button" id="render-scope" class="picker" aria-label="Render scope" popovertarget="scope-menu" hidden><span data-icon="layers" data-size="14"></span><span id="scope-label"></span><span data-icon="chevron-down" data-size="12"></span></button>
     <div class="search-field"><span data-icon="search" data-size="14"></span><input id="search" type="search" placeholder="Find assets…" aria-label="Find assets" autocomplete="off"><span id="search-key">⌘F</span><button id="search-clear" aria-label="Clear search" hidden><span data-icon="x" data-size="14"></span></button></div>
     <nav id="modules" aria-label="Design modules"></nav>
   </aside>
@@ -45,6 +46,7 @@
     <div class="rule"></div><h3>Canvas</h3><div id="backgrounds"><button data-background="theme">Match theme</button><button data-background="light">Light</button><button data-background="dark">Dark</button><button data-background="neutral">Neutral</button></div>
   </div>
   <div id="zoom-menu" class="menu" popover aria-label="Zoom"><button id="zoom-fit-all">Fit all<span class="key">0</span></button><button id="zoom-fit-group">Fit group</button><button id="zoom-fit-selection">Fit selection</button><div class="rule"></div><button id="zoom-actual">Zoom to 100%<span class="key">1</span></button></div>
+  <div id="scope-menu" class="menu" popover aria-label="Render scope"></div>
   <div id="more-menu" class="menu" popover aria-label="More"><button id="arrange">Arrange current group</button><button id="shortcuts">Keyboard shortcuts<span class="key">?</span></button></div>
   <div id="tooltip" role="tooltip" hidden></div>
   <dialog id="keys" aria-labelledby="keys-title"><h2 id="keys-title">Keyboard shortcuts</h2><button id="keys-close" class="icon-button dialog-close" aria-label="Close keyboard shortcuts"><span data-icon="x" data-size="14"></span></button><dl>

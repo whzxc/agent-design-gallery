@@ -35,6 +35,23 @@ h3 { font-size:var(--text-meta); color:var(--text-tertiary); font-weight:550; li
 .picker>[data-icon]:first-child { color:var(--text-secondary); }
 .picker>[data-icon]:last-child { color:var(--text-tertiary); }
 #directory { position:absolute; top:48px; left:12px; width:236px; }
+#render-scope { position:absolute; top:92px; left:12px; width:236px; gap:10px; }
+#scope-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+#render-scope[aria-expanded="true"] { outline:1px solid var(--accent); outline-offset:-1px; }
+#sidebar.scoped { padding-top:180px; }
+#sidebar.scoped .search-field { top:136px; }
+#scope-menu { width:236px; }
+#scope-menu { overflow:auto; }
+#scope-menu .scope-check { display:flex; width:22px; flex:none; }
+#scope-menu button[aria-current="true"]:not(:hover):not(:focus-visible) { background:none; }
+.scope-row { display:flex; align-items:center; position:relative; }
+.scope-row>.tree-row { min-width:0; width:auto; flex:1; }
+#sidebar.scoped .file { padding-left:8px; }
+#sidebar.scoped .scope-row-indent .file { padding-left:28px; }
+#modules .scope-only { align-self:center; height:28px; }
+@media (hover:hover) {
+  .scope-row:not(:hover):not(:focus-within) .scope-only { position:absolute; right:0; opacity:0; }
+}
 .search-field { position:absolute; top:92px; left:12px; width:236px; height:32px; display:flex; align-items:center; background:var(--surface-sunken); border-radius:var(--radius-field); color:var(--text-tertiary); }
 .search-field>[data-icon] { margin-left:10px; }
 .search-field:focus-within,.searching .search-field { background:var(--surface); outline:1px solid var(--accent); outline-offset:-1px; }

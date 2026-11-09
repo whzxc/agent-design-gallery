@@ -4,7 +4,7 @@ import { Labels } from "./labels.js";
 import { fitArea, fitView, packingSnapshot, restorePacking } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
-import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext, measuredMetadata, previewAddress, compactPreparedSource } from "./assets.js";
+import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext, measuredMetadata, previewAddress, compactPreparedSource, scopeKind, scopeTarget } from "./assets.js";
 import { sourceRelationships, relatedSources } from './relationships.js';
 import { hitSelection, frameBox, exportFrames } from './selection.js';
 // ARC's gallery layout and camera model, decoupled from its React runtime.
@@ -125,10 +125,15 @@ async function sourceFor(asset,theme) {
 
 const fixtureName = new URL(location.href).searchParams.get("fixture");
 let fixtureState = null, fixtureApplied = false;
+let initialLink = linkedSelection();
+let scopeRequest = new URLSearchParams(location.search).get('scope') ?? (initialLink || fixtureName ? 'all' : 'default');
+let initializedScope, scopeEntry;
 const currentItem = () => inspection || assets.find((a) => a.id === selectedId);
 function remember() {
   history.push({
     view: { ...view },
+    scope: initializedScope,
+    target: selectionTarget(),
     active,
     selected,
     selectedId,
@@ -140,12 +145,33 @@ function remember() {
   if (history.length > 40) history.shift();
 }
 function back() {
+  if (catalog) return;
   const old = history.pop();
   if (old) {
+    if (old.scope && old.scope !== initializedScope) {
+      changeScope(old.scope, { target: old.target, view: old.view }, false);
+      return;
+    }
     ({ active, selected, selectedId, selectedForm, selectedElement = null, inspection } = old);
     selection();
     commit(old.view);
   }
+}
+function changeScope(next, entry = null, record = true) {
+  if (next === scopeRequest) return;
+  if (initializedScope && !catalog) {
+    if (record) remember();
+    void persistPreferences();
+  }
+  scopeRequest = next;
+  scopeEntry = entry;
+  initialLink = null;
+  pendingNavigation = null;
+  searchReturn = null;
+  $("#search").value = '';
+  $("#scope-menu").hidePopover();
+  $("#render-scope").focus({preventScroll:true});
+  void refresh(true);
 }
 function toggleSidebar(value = !sidebar) {
   sidebar = value;
@@ -181,6 +207,7 @@ const modifiedDate = new Intl.DateTimeFormat('en-US', {month:'short',day:'numeri
 window.__sdg = {
   ready: false,
   get metadataComplete() {return !!manifest&&!manifest.loading;},
+  get scope() {return initializedScope;},
   get cachePending() {return cacheWrites+loading+queued.length;},
   get cacheFlush() {return flushCache();},
   get cacheFailures() {return cacheFailures;},
@@ -214,7 +241,7 @@ function error(message) {
   $("#error").textContent = message;
   $("#error").hidden = !message;
 }
-async function api(url, data, keepalive = false) {
+async function api(url, data, keepalive = false, signal) {
   if(fixtureName && url.startsWith("manifest")) url += `${url.includes("?")?"&":"?"}fixture=${encodeURIComponent(fixtureName)}`;
   const response = await dataFetch(
     url,
@@ -225,17 +252,19 @@ async function api(url, data, keepalive = false) {
           body: JSON.stringify(data),
           keepalive,
         }
-      : {},
+      : { signal },
   );
   const result = await response.json();
+  if (signal && response.status === 409) throw new DOMException(result.error,'AbortError');
   if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
   return result;
 }
 function preferences() {
   return {
     view,
+    scope: initializedScope,
     selection: selectionTarget(),
-    theme, sidebar, inspector,
+    theme, sidebar,
   };
 }
 function selectionTarget() {
@@ -257,7 +286,9 @@ function linkedSelection() {
 function syncSelectionURL() {
   if (fixtureState || catalog || !manifest?.directory) return;
   const {path, form, element, group} = selectionTarget(), url = new URL(location.href);
-  for (const [key, value] of Object.entries({group:path ? null : group, asset:path, frame:form, element:element?.id})) {
+  const groupFocus = !path && ['layer','all'].includes(scopeKind(initializedScope)) ? group : null;
+  const target = { ...(manifest.layers ? {scope:initializedScope} : {}), group:groupFocus, asset:path, frame:form, element:element?.id };
+  for (const [key, value] of Object.entries(target)) {
     if (value == null) {
       if (url.searchParams.has(key)) url.searchParams.delete(key);
     } else if (url.searchParams.get(key) !== value) url.searchParams.set(key, value);
@@ -379,6 +410,7 @@ function layout(data, preserve = false) {
     }),
   );
   $("#empty").hidden = !!assets.length || !data.directory;
+  if (!assets.length) $("#empty").textContent = scopedUI(data) ? 'No assets in this scope.' : 'No SVG files in this directory.';
 }
 function makeRow(name, label, count, className = 'tree-row') {
   const button = document.createElement('button'); button.className = className;
@@ -397,9 +429,86 @@ function navigate(action) {
   if (catalog) pendingNavigation = action;
   else action();
 }
+function scopedUI(data) { return !!data.layers && (!data.fixture || !!data.fixture.scope); }
+function scopeLabel(scope) {
+  const target = scopeTarget(scope);
+  if (scope === 'all') return 'All designs';
+  if (scopeKind(scope) === 'layer') return target[0].toUpperCase() + target.slice(1);
+  if (scopeKind(scope) === 'asset') return target.split('/').at(-1).replace(/\.(tsx|svg)$/i,'');
+  return target;
+}
+function renderScopePicker(data) {
+  const button = $("#render-scope"), enabled = scopedUI(data) && data.directory;
+  $("#sidebar").classList.toggle('scoped', !!enabled);
+  button.hidden = !enabled;
+  if (!enabled) return;
+  const label = scopeLabel(data.scope);
+  $("#scope-label").textContent = label;
+  button.setAttribute('aria-label', `Render scope: ${label}`);
+}
+function positionScopeMenu() {
+  const rect = $("#render-scope").getBoundingClientRect(), menu = $("#scope-menu");
+  menu.style.left = `${rect.left}px`;
+  menu.style.top = `${rect.bottom+4}px`;
+  menu.style.maxHeight = `${Math.max(40, innerHeight-rect.bottom-16)}px`;
+}
+$("#scope-menu").addEventListener('beforetoggle',event=>{
+  const button = $("#render-scope");
+  button.setAttribute('aria-expanded',String(event.newState === 'open'));
+  if (event.newState !== 'open') return;
+  const data = catalog ?? manifest;
+  if (!data) return;
+  const menu = $("#scope-menu"), current = data.scope, kind = scopeKind(current);
+  const choices = [...data.layers.map(layer=>`layer:${layer}`),'all'];
+  if (kind === 'group' || kind === 'asset') choices.unshift(current);
+  const rows = [];
+  for (const choice of choices) {
+    if ((choice === 'all' && rows.length) || (choices[0]===current && (kind==='group'||kind==='asset') && rows.length===1)) {
+      const rule = document.createElement('div');rule.className='rule';rows.push(rule);
+    }
+    const row = document.createElement('button'), check = document.createElement('span');
+    row.type = 'button';
+    row.setAttribute('aria-current',String(choice===current));
+    check.className = 'scope-check';
+    if (choice===current) check.innerHTML = icon('check',14);
+    row.append(check, scopeLabel(choice));
+    row.onclick = () => { menu.hidePopover(); changeScope(choice); };
+    rows.push(row);
+  }
+  menu.replaceChildren(...rows);
+  positionScopeMenu();
+  hideTooltip();
+});
+$("#scope-menu").addEventListener('toggle',()=>requestDraw());
+window.addEventListener('resize',positionScopeMenu);
+function scopeAction(kind, key, label) {
+  const action = document.createElement('button');
+  action.type = 'button';action.className='icon-button scope-only';action.innerHTML=icon('square-dashed');
+  action.dataset.navkey=`only:${kind}:${key}`;
+  const text = `Render only this ${kind}`;
+  action.setAttribute('aria-label',`${text}: ${label}`);
+  action.dataset.tooltip = text;
+  bindTooltip(action,true);
+  action.onclick = () => changeScope(`${kind}:${key}`);
+  return action;
+}
+function navFile(a, options = {}) {
+  const { indent=false, isolate=false } = options;
+  const item=makeRow((a.component ?? a.path.startsWith('components/'))?'component':'app-window',a.name,undefined,'tree-row file');
+  item.dataset.navkey=`file:${a.path}`;
+  item.setAttribute('aria-current',String(selected===a.path));
+  item.onclick=()=>navigate(()=>focusAsset(assets.find(x=>x.path===a.path)));
+  if (!isolate) return item;
+  const row=document.createElement('div');row.className='scope-row';
+  if (indent) row.classList.add('scope-row-indent');
+  row.append(item,scopeAction('asset',a.path,a.name));
+  return row;
+}
 function renderNav() {
   const data = catalog ?? manifest;
   if (!data) return;
+  renderScopePicker(data);
+  const scoped = scopedUI(data), kind = scoped ? scopeKind(data.scope) : null;
   const focusKey = document.activeElement?.dataset.navkey;
   const query = $("#search").value.trim().toLowerCase(), nodes = [];
   $(".gallery").classList.toggle('searching', !!query);
@@ -412,22 +521,40 @@ function renderNav() {
       const button=makeRow(component?'component':'app-window',p ? `${a.name} · ${p.name}` : a.name,p ? 'form' : a.parts ? `${a.parts.length} ${component?'forms':'frames'}` : undefined,'tree-row search-result');
       button.dataset.navkey=`search:${a.path}:${p?.id ?? ''}`;
       button.setAttribute('aria-current',String(selected===a.path && (!p || selectedForm===p.id)));
-      button.onclick=()=>navigate(()=>p ? inspectForm(a,p) : focusAsset(assets.find(item=>item.path===a.path))); nodes.push(button);
+      button.onclick=()=>navigate(()=>p ? inspectForm(a,p) : focusAsset(assets.find(item=>item.path===a.path)));
+      if (scoped && kind!=='asset' && !p) {
+        const row=document.createElement('div');row.className='scope-row';
+        row.append(button,scopeAction('asset',a.path,a.name));nodes.push(row);
+      } else nodes.push(button);
     }
+  } else if (kind === 'asset') {
+    const a=manifest?.scope===data.scope ? manifest.assets[0] : null;
+    for (const p of a?.parts ?? []) {
+      const button=makeRow('app-window',p.name);
+      button.dataset.navkey=`form:${p.name}`;
+      button.setAttribute('aria-current',String(selectedForm===p.id));
+      button.onclick=()=>navigate(()=>inspectForm(a,p));
+      nodes.push(button);
+    }
+  } else if (kind === 'group') {
+    for (const a of data.assets) nodes.push(navFile(a,{isolate:true}));
   } else {
-    const all=makeRow('layout-grid','All designs',data.assets.length); all.id='all'; all.onclick=()=>navigate(fit); nodes.push(all);
-    const rule=document.createElement('div');rule.className='rule';nodes.push(rule);
+    if (!scoped) {
+      const all=makeRow('layout-grid','All designs',data.assets.length); all.id='all'; all.onclick=()=>navigate(fit); nodes.push(all);
+      const rule=document.createElement('div');rule.className='rule';nodes.push(rule);
+    }
     (catalog ? groupAssets(catalog) : groups).forEach((g,i)=>{
       const section=document.createElement('section'), row=document.createElement('div'), toggle=document.createElement('button'), button=document.createElement('button');
-      row.className='group-row'; toggle.innerHTML=icon(expanded.has(i)?'chevron-down':'chevron-right',12);
+      row.className=scoped?'group-row scope-row':'group-row'; toggle.innerHTML=icon(expanded.has(i)?'chevron-down':'chevron-right',12);
       toggle.setAttribute('aria-label',`Toggle ${g.title}`);toggle.setAttribute('aria-expanded',String(expanded.has(i)));toggle.dataset.navkey=`toggle:${g.title}`;
       toggle.onclick=()=>{expanded.has(i)?expanded.delete(i):expanded.add(i);renderNav()};
       button.className='group-name';button.dataset.navkey=`group:${g.title}`;
       const title=document.createElement('span'), count=document.createElement('span'); title.textContent=g.title;count.textContent=g.assets.length;count.className='count';button.append(title,count);
       button.onclick=()=>navigate(()=>{remember();inspection=null;active=i;selected=null;selectedId=null;selectedForm=null;selectedElement=null;expanded.add(i);selection();frame(groups[i])});
       row.append(toggle,button);section.append(row);
+      if (scoped) row.append(scopeAction('group',g.title,g.title));
       if(expanded.has(i)) { const files=document.createElement('div');files.className='group-files';
-        for(const a of g.assets) {const item=makeRow((a.component ?? a.path.startsWith('components/'))?'component':'app-window',a.name,undefined,'tree-row file');item.dataset.navkey=`file:${a.path}`;item.setAttribute('aria-current',String(selected===a.path));item.onclick=()=>navigate(()=>focusAsset(assets.find(x=>x.path===a.path)));files.append(item)}
+        for(const a of g.assets) files.append(navFile(a,{indent:true,isolate:scoped}));
         section.append(files);
       }
       nodes.push(section);
@@ -456,7 +583,11 @@ function renderRelationships(source) {
         button.dataset.relatedPath=entry.path;button.dataset.direct=String(entry.direct);
         button.title=entry.path+(entry.via.length?` via ${entry.via.join(' → ')}`:'');
         button.setAttribute('aria-label',`Open ${entry.path}`+(via?` via ${via}`:''));
-        button.onclick=()=>navigate(()=>focusAsset(assets.find(a=>a.path===entry.path)));
+        button.onclick=()=>navigate(()=>{
+          const item=assets.find(a=>a.path===entry.path);
+          if (item) focusAsset(item);
+          else changeScope(`asset:${entry.path}`,{target:{path:entry.path}});
+        });
         group.append(button);
       }
       nodes.push(group);
@@ -473,7 +604,7 @@ function selection() {
   $('#inspect').setAttribute('aria-pressed',String(inspector));
   const host=currentItem(), part=host?.parts.find(p=>p.id===selectedForm);
   const owner=selectedElement?.owner;
-  const a=owner ? manifest?.assets.find(a=>a.path===owner.source) : host;
+  const a=owner ? manifest?.assets.find(a=>a.path===owner.source) ?? {path:owner.source,parts:[]} : host;
   if(a) {
     $('#source-name').textContent=owner?.export ?? a.name;$('#source-path').textContent=a.path;
     $('#source-path').title=a.path;
@@ -523,10 +654,17 @@ function updateOutlines() {
 }
 
 function cameraArea() { return fitArea(width, height, sidebar, inspector && !!selected); }
+function fitWorld(area, data) {
+  if (scopeKind(data?.scope) !== 'asset' || !assets.length) return fitView(world,area);
+  const x=Math.min(...assets.map(a=>a.x)), y=Math.min(...assets.map(a=>a.y));
+  const box={x,y,width:Math.max(...assets.map(a=>a.x+a.width))-x,height:Math.max(...assets.map(a=>a.y+a.height))-y};
+  const fit=fitView(box,area,24);
+  return fit.scale <= 1 ? fit : {scale:1,x:area.x+(area.width-box.width)/2-x,y:area.y+(area.height-box.height)/2-y};
+}
 function frame(box, padding = 0) {
   const target=box===world?'all':groups.includes(box)?'group':'selection';
   for(const name of ['all','group','selection']) $("#zoom-fit-"+name).setAttribute('aria-current',String(name===target));
-  commit(fitView(box, cameraArea(), padding));
+  commit(box===world ? fitWorld(cameraArea(),manifest) : fitView(box, cameraArea(), padding));
 }
 function fit() {
   remember();
@@ -623,6 +761,7 @@ async function loadPreview(e) {
   let url,local=false;
   const theme=e.theme??effectiveTheme;
   const generated=async restore=>{
+    if(cache.get(e.key)!==e)throw new DOMException('Preview superseded','AbortError');
     const asset=await sourceFor(e.asset,theme);
     if(e.asset.hash&&asset.hash!==e.asset.hash)throw Object.assign(Error('Preview superseded'),{name:'AbortError',waitForRevision:true});
     if(restore)persistSource(asset,theme);
@@ -641,7 +780,7 @@ async function loadPreview(e) {
     });
   };
   const decode=async source=>{
-    if(!cache.has(e.key))return;
+    if(cache.get(e.key)!==e)return;
     while(moving)await new Promise(resolve=>setTimeout(resolve,16));
     const img=new Image();e.image=img;img.decoding='async';img.src=source;
     await img.decode();e.state='ready';
@@ -729,7 +868,7 @@ function draw() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width + drawingMargin * 2, height + drawingMargin * 2);
     ctx.save(); ctx.translate(view.x + drawingMargin, view.y + drawingMargin); ctx.scale(view.scale, view.scale);
-    if (!inspection) for (const g of groups) {
+    if (!inspection && scopeKind(manifest?.scope)!=='asset') for (const g of groups) {
       if (!visible(g, drawingMargin)) continue;
       rounded(g.x, g.y, g.width, g.height, 16 / view.scale, palette['surface-section']);
       ctx.strokeStyle = palette.border; ctx.lineWidth = 1 / view.scale; ctx.stroke();
@@ -822,7 +961,7 @@ function drawLabels(displayed) {
     }
     return {x:left,y:center,slot:Math.max(0,edge-left),pinned:left !== x || center !== y};
   };
-  if (!inspection) for (const g of groups) {
+  if (!inspection && scopeKind(manifest?.scope)!=='asset') for (const g of groups) {
     if (!visible(g)) continue;
     const p = screen(g);
     candidates.push({ id: `section:${g.title}`, x: p.x, y: p.y - 16, slot: g.width * view.scale, parts: [title(g.title, section, 650, palette.text), {...part(`${g.assets.length} assets`, meta, 400, palette['text-tertiary'], 8),optional:true}] });
@@ -1133,21 +1272,31 @@ function resizeViewport() {
   requestDraw();
 }
 new ResizeObserver(resizeViewport).observe(viewport);
+function relationshipGraph(data, measured) {
+  const entries=new Map(Object.entries(data.sourceImports ?? {}));
+  for (const asset of measured) entries.set(asset.path,asset.imports ?? []);
+  for (const imports of entries.values()) for (const path of imports) if (!entries.has(path)) entries.set(path,[]);
+  return sourceRelationships([...entries].map(([path,imports])=>({path,imports})));
+}
 async function applyManifest(data, force = false) {
-  const changedRoot = manifest?.directory !== data.directory,
-    first = initializedDirectory!==data.directory;
-  if (!force && !changedRoot && !first && manifest.revision === data.revision)
+  const changedRoot = initializedDirectory !== data.directory, changedScope = initializedScope !== data.scope;
+  const first = changedRoot || changedScope;
+  if (!force && !first && manifest.revision === data.revision)
     return;
-  if (changedRoot && catalog?.directory !== data.directory) expanded.clear();
-  if (first || changedRoot) catalog = data;
-  if (first) {
+  if (changedRoot) {
     fixtureState=data.fixture ?? null;
     theme = data.theme;
     applyTheme();
     toggleSidebar(/^\/(p|i)\//.test(location.pathname) && innerWidth <= 600 ? false : data.sidebar);
-    inspector = data.inspector;
+    inspector = !!fixtureState && data.inspector;
+    history = [];
   }
-  if (first || changedRoot) {
+  if (first) {
+    if (catalog?.directory !== data.directory || catalog?.scope !== data.scope) {
+      expanded.clear();
+      if (scopedUI(data) && scopeKind(data.scope)==='layer') expanded.add(0);
+    }
+    catalog = data;
     for(const element of document.querySelectorAll('.directory-name')) element.textContent=data.label;
     $("#directory").title=data.directory||'';$("#app-directory").title=data.directory||'';
     document.title = `${data.label} — SVG Design Gallery`;
@@ -1155,7 +1304,7 @@ async function applyManifest(data, force = false) {
     renderNav();
   }
   window.__sdg.ready = false;
-  if (changedRoot) {
+  if (first) {
     cache.clear();
     labelLayer.clear();
     queued = [];
@@ -1164,10 +1313,13 @@ async function applyManifest(data, force = false) {
     selectedForm = null;selectedElement=null;
     inspection = null;
     active = null;
-    history = [];
+    assets = [];
+    groups = [];
   }
   const versionTheme = effectiveTheme;
-  const link = initializedDirectory === undefined && !fixtureState ? linkedSelection() : null;
+  const link = initializedDirectory === undefined && !fixtureState ? initialLink : null;
+  const entry = !changedRoot && scopeRequest===data.scope ? scopeEntry : null;
+  const groupTitle = groups[active]?.title;
   restorePacking(data.packing);
   const previous=manifest, results=new Array(data.assets.length), signal=refreshController?.signal;
   let next=0,publishFrame=0,streamView=null,streamMoved=false,publishedCount=0,nextPublish=1;
@@ -1179,9 +1331,9 @@ async function applyManifest(data, force = false) {
     if(!available.length)return;
     publishedCount=available.length;nextPublish=Math.max(publishedCount+1,publishedCount*2);
     if(streamView&&view!==streamView)streamMoved=true;
-    manifest={...data,assets:available,relationships:sourceRelationships(available),renderTheme:versionTheme,loading:true};
+    manifest={...data,assets:available,renderTheme:versionTheme,loading:true};
     layout(manifest,false);
-    if(streaming&&!streamMoved){view=data.view??fitView(world,cameraArea());streamView=view;}
+    if(streaming&&!streamMoved){view=entry?.view??data.view??fitWorld(cameraArea(),data);streamView=view;}
     requestDraw();
   };
   for(let i=0;i<data.assets.length;i++) {
@@ -1220,7 +1372,7 @@ async function applyManifest(data, force = false) {
   for(const [key,entry] of prepared)if(!data.assets.some(a=>key===sourceKey(a,versionTheme,data.directory)||key===sourceKey(a,versionTheme==='dark'?'light':'dark',data.directory)))prepared.delete(key);
   const live=new Set(data.assets.flatMap(a=>['light','dark'].map(t=>sourceKey(a,t,data.directory))));
   for(const key of metadataCache.keys())if(!live.has(key))metadataCache.delete(key);
-  manifest = { ...data, assets: results, relationships:sourceRelationships(results), renderTheme: versionTheme };
+  manifest = { ...data, assets: results, relationships:relationshipGraph(data,results), renderTheme: versionTheme };
   // Early streamed worlds can use a much larger camera scale. Discard those
   // raster intermediates so the completed world starts at its exact final scale.
   if(streaming&&publishedCount<data.assets.length)for(const entry of cache.values()){delete entry.bitmap;delete entry.bitmapScale;}
@@ -1234,18 +1386,23 @@ async function applyManifest(data, force = false) {
   for(const element of document.querySelectorAll('.directory-name')) element.textContent=data.label;
   $("#directory").title=data.directory||'';$("#app-directory").title=data.directory||'';
   document.title = `${data.label} — SVG Design Gallery`;
-  if (changedRoot || first) {
-    if (!fixtureState) restoreSelection(link ?? data.selection);
+  if (first) {
+    const target = entry ? entry.target : link ?? data.selection;
+    if (!fixtureState) restoreSelection(target);
     const saved = data.selection;
     const sameSelection = link && saved && (link.path
       ? link.path === saved.path && link.form === saved.form && link.element?.id === saved.element?.id
       : !saved.path && link.group === saved.group);
     const reload = performance.getEntriesByType('navigation')[0]?.type === 'reload';
-    if (link && !(reload && sameSelection && data.view)) {
+    if (entry?.view) view=entry.view;
+    else if (entry?.target || (link && !(reload && sameSelection && data.view))) {
       const target = selectedBox() || currentItem() || groups[active] || world;
       frame(target, selected ? 24 : 0);
     } else if (data.view) view = data.view;
     else if (!streamMoved) frame(world);
+  } else if (groupTitle) {
+    const index = groups.findIndex(group=>group.title===groupTitle);
+    active = index < 0 ? null : index;
   }
   if (selected && !assets.some((a) => a.path === selected)) {
     selected = null;
@@ -1266,6 +1423,8 @@ async function applyManifest(data, force = false) {
     inspection={...a,id:a.id+'@full',x:0,y:0,width:p.width,height:p.height,shown:[p],kind:'sheet'};
   }
   initializedDirectory=data.directory;
+  initializedScope=scopeRequest=data.scope;
+  scopeEntry=null;
   if(data.features?.persistedMetadata)cacheWrite(`catalog?context=${encodeURIComponent(metadataContext())}`,{packing:packingSnapshot()});
   selection();
   if (pendingNavigation) {
@@ -1295,16 +1454,20 @@ for(const [id,trigger] of [['display-menu','display'],['zoom-menu','zoom-options
 }
 let tooltipTimer;
 function hideTooltip() { clearTimeout(tooltipTimer);if (!$("#tooltip").hidden) { $("#tooltip").hidden=true;requestDraw(); } }
-for(const button of document.querySelectorAll('[data-tooltip]')) {
+function bindTooltip(button, trailing = false) {
   const show=()=>{clearTimeout(tooltipTimer);tooltipTimer=setTimeout(()=>{
-    if(document.querySelector(':popover-open, dialog[open]'))return;
+    if(!button.isConnected||document.querySelector(':popover-open, dialog[open]'))return;
     const tip=$("#tooltip"),r=button.getBoundingClientRect();tip.textContent=button.dataset.tooltip;tip.hidden=false;
-    tip.style.left=`${Math.max(4,Math.min(width-tip.offsetWidth-4,r.x+r.width/2-tip.offsetWidth/2))}px`;
-    tip.style.top=`${r.y>height/2?r.top-tip.offsetHeight-12:r.bottom+12}px`;requestDraw();
+    const beside=trailing && r.right+16+tip.offsetWidth<=width-4;
+    const x=beside?r.right+16:r.x+r.width/2-tip.offsetWidth/2;
+    const y=beside?r.y+(r.height-tip.offsetHeight)/2:r.y>height/2?r.top-tip.offsetHeight-12:r.bottom+12;
+    tip.style.left=`${Math.max(4,Math.min(width-tip.offsetWidth-4,x))}px`;
+    tip.style.top=`${y}px`;requestDraw();
   },400)};
   button.addEventListener('pointerenter',show);button.addEventListener('focus',show);
   button.addEventListener('pointerleave',()=>{hideTooltip();requestDraw()});button.addEventListener('blur',hideTooltip);button.addEventListener('click',hideTooltip);
 }
+for(const button of document.querySelectorAll('[data-tooltip]')) bindTooltip(button);
 $("#keys-close").onclick=()=>$("#keys").close();
 for(const dialog of document.querySelectorAll('dialog')) {
   dialog.addEventListener('toggle', () => requestDraw());
@@ -1348,18 +1511,22 @@ async function refresh(force = false) {
   }
   fetching = true;refreshController=new AbortController();
   try {
-    const query=new URLSearchParams({context:metadataContext(),theme:effectiveTheme});
+    const query=new URLSearchParams({context:metadataContext(),theme:effectiveTheme,scope:scopeRequest});
     if(!manifest){query.set('initial','1');query.set('metadata','1');}
-    else if(manifest.renderTheme!==effectiveTheme)query.set('metadata','1');
-    await applyManifest(await api(`manifest?${query}`), force);
+    else if(manifest.renderTheme!==effectiveTheme || scopeRequest!==initializedScope)query.set('metadata','1');
+    const signal=refreshController.signal, data=await api(`manifest?${query}`,null,false,signal);
+    signal.throwIfAborted();
+    data.scope ??= 'all';
+    await applyManifest(data, force);
     error("");
   } catch (e) {
     if(e.name!=='AbortError')error(e.message);
+    else if(!refreshController.signal.aborted)pending=true;
   } finally {
     fetching = false;
     if (pending) {
       pending = false;
-      void refresh(true);
+      await refresh(true);
     }
   }
 }

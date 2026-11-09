@@ -7,6 +7,8 @@ import { OpenDialog } from '../modules/open-directory';
 import { Tools, AppBar, ZoomBar } from '../modules/view-controls';
 import { Drawing, Minimap } from '../modules/canvas';
 import { scenes } from '../scenes/canvas';
+import { renderScopeScenes } from '../scenes/render-scope';
+import { scopeFrames } from '../fixtures/render-scope';
 import navigationFixtures from '../fixtures/navigation.json';
 import inspectorFixtures from '../fixtures/inspector.json';
 import directoryFixtures from '../fixtures/open-directory.json';
@@ -26,7 +28,7 @@ export function ViewerChrome({ chrome }: any) {
     const Component = chromeComponents[kind];
     const content =
       kind === 'sidebar'
-        ? navigationFixtures[navigation]
+        ? (typeof navigation === 'string' ? navigationFixtures[navigation] : navigation)
         : kind === 'inspector'
           ? inspectorFixtures[inspector]
           : kind === 'dialog'
@@ -40,11 +42,26 @@ export function ViewerChrome({ chrome }: any) {
   });
 }
 
-export default () =>
-  frames.map(({ chrome, ...frame }) => (
+export default () => [
+  ...frames.map(({ chrome, ...frame }) => (
     <Frame {...frame}>
       <Screen width={frame.width} height={frame.height} drawing={<Drawing nodes={scenes[frame.name]} />}>
         <ViewerChrome chrome={chrome} />
       </Screen>
     </Frame>
-  ));
+  )),
+  ...scopeFrames.map(({ name, key, navigation }) => {
+    const scene = renderScopeScenes[key];
+    return (
+      <Frame name={name} width={1440} height={900} fixture={name} capture={{ page:true, viewport:'1440x900' }}>
+        <Screen width={1440} height={900} drawing={<Drawing nodes={scene.nodes} />}>
+          <ViewerChrome chrome={[
+            { kind: 'sidebar', left: 12, top: 12, navigation },
+            { kind: 'tools', left: 1276, top: 12 },
+            { kind: 'zoom', left: scene.zoomLeft, top: 840, label: scene.zoom, backDisabled: true },
+          ]} />
+        </Screen>
+      </Frame>
+    );
+  }),
+];

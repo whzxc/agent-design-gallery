@@ -26,8 +26,8 @@ export default {
       await page.waitForFunction(name => document.documentElement.dataset.fixtureError || document.documentElement.dataset.fixtureReady === name, name, { timeout: 15000 });
       const error = await page.evaluate(() => document.documentElement.dataset.fixtureError);
       if (error) throw new Error(`SDG fixture ${name}: ${error}`);
-      if (states[name].tooltip) {
-        await page.getByRole('button', { name: 'Inspector', exact: true }).hover();
+      if (states[name].tooltip || states[name].hoverScope) {
+        await page.getByRole('button', { name: states[name].hoverScope ?? 'Inspector', exact: true }).hover();
         await page.getByRole('tooltip').waitFor({ state: 'visible' });
         await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       }

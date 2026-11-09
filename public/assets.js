@@ -179,11 +179,12 @@ export function evictPreviews(cache, activeKeys) {
 }
 
 export function groupAssets(data) {
+  const byPath = new Map(data.assets.map(asset => [asset.path, asset]));
   const used = new Set(),
     grouped = [];
   for (const g of data.groups) {
     const list = g.assets.flatMap((p) => {
-      const a = data.assets.find((a) => a.path === p);
+      const a = byPath.get(p);
       if (!a || used.has(p)) return [];
       used.add(p);
       return [a];
@@ -200,6 +201,47 @@ export function groupAssets(data) {
   for (const [title, assets] of rest) grouped.push({ title, assets });
   return grouped;
 }
+
+export function scopeKind(scope) {
+  return scope?.split(':', 1)[0];
+}
+
+export function scopeTarget(scope) {
+  const separator = scope?.indexOf(':') ?? -1;
+  return separator < 0 ? undefined : scope.slice(separator + 1);
+}
+
+export function resolveScope(data, layers, requested) {
+  const layerOf = asset => asset.path.includes('/') ? asset.path.split('/')[0] : 'Design';
+  const layerAssets = new Map(layers.map(layer => [layer, []]));
+  for (const asset of data.assets) {
+    const layer = layerOf(asset);
+    if (!layerAssets.has(layer)) layerAssets.set(layer, []);
+    layerAssets.get(layer).push(asset);
+  }
+  const available = [...layerAssets.keys()];
+  const result = (scope, assets) => ({ scope, assets, layers: available });
+  if (requested === 'all') return result('all', data.assets);
+  const key = scopeTarget(requested);
+  switch (scopeKind(requested)) {
+    case 'layer':
+      if (layerAssets.has(key)) return result(requested, layerAssets.get(key));
+      break;
+    case 'group': {
+      const group = groupAssets(data).find(item => item.title === key);
+      if (group) return result(requested, group.assets);
+      break;
+    }
+    case 'asset': {
+      const asset = data.assets.find(item => item.path === key);
+      if (asset) return result(requested, [asset]);
+      break;
+    }
+  }
+  const first = available.find(layer => layerAssets.get(layer).length) ?? available[0];
+  return first ? result(`layer:${first}`, layerAssets.get(first)) : result('all', data.assets);
+}
+
 
 export function arrange(data) {
   const grouped = groupAssets(data);

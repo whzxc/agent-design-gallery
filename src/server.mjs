@@ -19,6 +19,7 @@ import { createViewerCache } from './viewer-cache.mjs';
 import { refreshTypes, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
 import { loadConfig } from './toolkit/config.mjs';
 import { sourceRelationships } from '../public/relationships.js';
+import { resolveScope } from '../public/assets.js';
 const digest = value => createHash('sha256').update(value).digest('hex');
 const viewerVersion = Promise.all(['assets.js','layout.js','selection.js'].map(file => readFile(new URL('../public/'+file,import.meta.url)))).then(parts => digest(Buffer.concat(parts)));
 const defaultState = path.join(
@@ -49,7 +50,7 @@ export async function startServer({
     revision = 0,
     closing = false,
     buildStore, viewerCache, codePaths=new Set();
-  const knownBuilds = new Map(), legacyDependencies = new Map(), failedSources=new Set();
+  const knownBuilds = new Map(), legacyDependencies = new Map(), failedSources=new Set(), dirtyBuilds=new Set();
   const describe=built=>({...built,css:undefined,frames:built.frames.map(({html,...frame})=>frame)});
   const clients = new Set(),
     svgCache = new Map(),
@@ -120,7 +121,7 @@ export async function startServer({
     const nextStore=await createBuildStore({config:{...project,design:next,sources:nextSources,sourceFiles:[...nextCode].sort()},cacheDirectory:path.join(cacheBase,'build')});
     const nextViewerCache=await createViewerCache(path.join(cacheBase,'viewer'));
     await buildStore?.close();await viewerCache?.close();
-    buildStore=nextStore;viewerCache=nextViewerCache;knownBuilds.clear();
+    buildStore=nextStore;viewerCache=nextViewerCache;knownBuilds.clear();dirtyBuilds.clear();failedSources.clear();frameCounts.clear();
     for(const built of await buildStore.metadata()) {
       if(nextFiles.has(built.path)) {knownBuilds.set(built.path,built);Object.assign(nextFiles.get(built.path),{hash:built.hash,version:built.hash});frameCounts.set(built.path,built.frames.length);}
     }
@@ -187,22 +188,20 @@ export async function startServer({
       for(const name of failedSources)affected.add(name);
       for(const name of stamps)if(name.endsWith('.tsx')&&next.has(name))affected.add(name);
       const legacyDirty=[...legacyDependencies.values()].some(dependencies=>dependencies.some(name=>observedPaths.includes(name)));
-      if(!stamps.length&&!affected.size&&!grouping&&!legacyDirty)return;
-      const changed=[];
-      let cursor=0;
-      const names=[...affected].filter(name=>next.has(name)&&name.endsWith('.tsx'));
-      try {
-        await Promise.all(Array.from({length:2},async()=>{
-          while(cursor<names.length) {
-            const name=names[cursor++],built=await buildStore.get(name);
-            if(knownBuilds.get(name)?.hash!==built.hash)changed.push(name);
-            knownBuilds.set(name,describe(built));failedSources.delete(name);frameCounts.set(name,built.frames.length);
-            Object.assign(next.get(name),{hash:built.hash,version:built.hash});
-          }
-        }));
-      } catch(error) {if(error.name==='AbortError'){if(!closing){for(const name of observedPaths)touched.add(name);refreshAgain=true;}return;}throw error;}
-      for(const [name,entry] of next)if(name.endsWith('.tsx')&&knownBuilds.has(name)&&!affected.has(name))Object.assign(entry,{hash:knownBuilds.get(name).hash,version:knownBuilds.get(name).hash});
-      for(const name of [...knownBuilds.keys()])if(!next.has(name)){knownBuilds.delete(name);frameCounts.delete(name);changed.push(name);}
+      if(!stamps.length&&!affected.size&&!grouping&&!legacyDirty&&!configChanged)return;
+      const changed=[...new Set([...stamps,...affected])];
+      for (const name of affected) {
+        if (knownBuilds.delete(name)) dirtyBuilds.add(name);
+        frameCounts.delete(name);
+        if (!next.has(name)) { dirtyBuilds.delete(name); failedSources.delete(name); continue; }
+        if (!name.endsWith('.tsx')) continue;
+        const entry = next.get(name);
+        next.set(name, {...entry, hash:undefined, version:`${entry.stamp}-${revision+1}`});
+      }
+      for (const [name,entry] of next) {
+        const built = knownBuilds.get(name);
+        if (built) Object.assign(entry,{hash:built.hash,version:built.hash});
+      }
       const dirty=new Set(observedPaths);
       for(const [name,dependencies] of legacyDependencies) {
         if(!next.has(name)){legacyDependencies.delete(name);continue;}
@@ -211,7 +210,6 @@ export async function startServer({
           next.set(name,{...next.get(name),version:`${next.get(name).stamp}-${revision+1}`});changed.push(name);
         }
       }
-      for(const name of stamps)if(!name.endsWith('.tsx')&&!changed.includes(name))changed.push(name);
       files = next;
       codePaths=nextCode;
       sources = nextSources;
@@ -235,12 +233,11 @@ export async function startServer({
     groups,
     revision,
     recent: state.recent,
-    view: state.views[root] ?? null,
-    selection: state.selections[root] ?? null,
     theme: state.theme,
     sidebar: state.sidebar ?? true,
-    inspector: state.inspector ?? true,
+    inspector: false,
   });
+  const preferenceKey = scope => !scope || scope === 'all' ? root : JSON.stringify([root, scope]);
   function applyFixtureManifest(data,name) {
     if (!fixtures || !name) return data;
     if (Number.isFinite(fixtures.assetModifiedAt)) data.assets = data.assets.map(a => ({...a,modifiedAt:fixtures.assetModifiedAt}));
@@ -252,7 +249,27 @@ export async function startServer({
   }
   const contextFor=async url=>(await viewerVersion)+'|'+(url.searchParams.get('context')??'');
   async function manifest(url) {
-    const data=baseManifest(),context=await contextFor(url);
+    const data=baseManifest(),context=await contextFor(url), requested=url.searchParams.get('scope');
+    const fixtureScope=fixtures?.states[url.searchParams.get('fixture')]?.scope;
+    const scoped=resolveScope(data,sources,fixtureScope ?? requested ?? 'all');
+    Object.assign(data,scoped);
+    const key=preferenceKey(data.scope);
+    data.view=state.views[key] ?? null;
+    data.selection=state.selections[key] ?? null;
+    // Rehash previously built sources only when a viewer requests their scope.
+    // An unchanged result retains its measured metadata and cropped previews.
+    if (requested) {
+      const rebuild = data.assets.filter(asset=>dirtyBuilds.has(asset.path));
+      let index=0;
+      await Promise.all(Array.from({length:Math.min(2,rebuild.length)},async()=>{
+        while(index<rebuild.length) {
+          const asset=rebuild[index++];
+          try {const built=await sourceBuild(asset.path);Object.assign(asset,{hash:built.hash,version:built.hash});}
+          catch(error) {if(error.name==='AbortError')throw error;dirtyBuilds.delete(asset.path);}
+        }
+      }));
+    }
+    data.sourceImports=Object.fromEntries([...knownBuilds].map(([name,built])=>[name,built.imports]));
     if(viewerCache) {
       const includeMetadata=url.searchParams.get('metadata')==='1';
       const requestedTheme=url.searchParams.get('initial')==='1'&&['light','dark'].includes(state.theme)?state.theme:(url.searchParams.get('theme')==='light'?'light':'dark');
@@ -275,7 +292,7 @@ export async function startServer({
   async function sourceBuild(name) {
     let built;
     try{built=await buildStore.get(name);}catch(error){if(error.name!=='AbortError')failedSources.add(name);throw error;}
-    knownBuilds.set(name,describe(built));failedSources.delete(name);frameCounts.set(name,built.frames.length);
+    knownBuilds.set(name,describe(built));dirtyBuilds.delete(name);failedSources.delete(name);frameCounts.set(name,built.frames.length);
     if(files.has(name))Object.assign(files.get(name),{hash:built.hash,version:built.hash});
     return built;
   }
@@ -393,8 +410,8 @@ export async function startServer({
         }
         const data = await body(request);
         if (url.pathname === "/preferences") {
-          for (const key of ["sidebar", "inspector"])
-            if (typeof data[key] === "boolean") state[key] = data[key];
+          if (typeof data.sidebar === "boolean") state.sidebar = data.sidebar;
+          const key = preferenceKey(data.scope);
           if (["system", "light", "dark"].includes(data.theme))
             state.theme = data.theme;
           if (
@@ -403,10 +420,10 @@ export async function startServer({
             ["x", "y", "scale"].every((k) => Number.isFinite(data.view[k])) &&
             data.view.scale > 0
           )
-            state.views[root] = data.view;
+            state.views[key] = data.view;
           if (root && data.selection &&
               (data.selection.path === null || files.has(data.selection.path))) {
-            state.selections[root] = {
+            state.selections[key] = {
               path: data.selection.path,
               form: typeof data.selection.form === 'string' ? data.selection.form : null,
               group: typeof data.selection.group === 'string' ? data.selection.group : null,
@@ -419,9 +436,7 @@ export async function startServer({
           response.end();
           return;
         }
-        response.writeHead(200, { "Content-Type": "application/json" });
-        response.end(JSON.stringify(await manifest(url)));
-        return;
+        return json(response, 200, { ok: true });
       }
       if (!["GET", "HEAD"].includes(request.method)) {
         response.writeHead(405);

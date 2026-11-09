@@ -50,6 +50,39 @@ with a 1 KiB source budget. Both the hub and viewer link to `/favicon.svg`; pack
 The ten feature modules own their parts and specimens. Remaining coverage and fidelity gaps are listed below. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
 not frame sources. The separate `fixtures/arc-sample/design/` tree is acceptance content, not the viewer UI library.
 
+### Render scopes
+
+`modules/navigation.tsx` owns the scope picker and the separate **Render only this group** and
+**Render only this asset** row actions. The picker sits between the project picker and asset search.
+It lists each configured source layer and **All designs**. A clean project URL opens its first
+nonempty layer, normally Components. All designs is a choice for the current URL.
+
+Click a row to focus it within the current scope. Use the trailing action to switch scope.
+A layer shows only its own assets, with curated groups projected onto that layer. An isolated group
+shows all assets assigned to it, including assets from other layers. An isolated asset shows that
+source's frames or forms in the canvas and navigation. Search and Fit all operate within the current scope.
+Back restores the previous scope, camera and selection. The inspector starts closed on entry and opens
+only through its toolbar button; changing selection, including from a link, does not open it.
+
+The URL stores render scope separately from the existing `group`, `asset`, `frame` and `element` focus parameters:
+
+| Example query | Result |
+| --- | --- |
+| `?scope=layer:components` | Render only the Components layer. |
+| `?scope=all&group=Essentials` | Render all designs and focus Essentials. |
+| `?scope=group:Essentials` | Render only the complete Essentials group. |
+| `?scope=asset:components%2Ffield.tsx` | Render only field and all its forms. |
+| `?scope=layer:components&asset=components%2Ffield.tsx&frame=error` | Render Components and focus field's error form. |
+
+Existing focus links without `scope` retain their full canvas. A missing scope target falls back to the
+default layer. Discovery may read the source catalog to resolve the scope. Artboard builds, measurement,
+layout and preview requests are limited to assets in scope; dependencies needed by those assets still load.
+
+The approved navigation specimens and `surfaces/canvas.tsx` frames `scope-layer`, `scope-group` and
+`scope-asset` have isolated implementation captures. The picker and row actions map to
+`public/app.js`, `public/index.html` and `public/style.css`. Scope resolution lives in
+`public/assets.js` and is applied by `src/server.mjs` before asset metadata is read.
+
 ### Part mappings and state
 
 Paths in the source column are relative to `design/`. An implementation mapping names the corresponding runtime
@@ -204,7 +237,7 @@ SDG uses the Float direction. A dotted canvas fills the window. Chrome floats ab
 - The zoom bar is back, then zoom out, the zoom menu and zoom in, then Fit and the minimap toggle. The zoom menu holds Fit all (0), Fit group, Fit selection and Zoom to 100% (1).
 - More holds Arrange current group and Keyboard shortcuts (?).
 - Collapsing the sidebar leaves the app bar: the sidebar toggle, SDG and the directory picker.
-- The right inspector follows source, frame and exported-element selection. It opens by default and remembers its collapsed state. Source path and frame name have inline copy controls, followed by frame sizes, a scrollable frame list and Relationships. Uses and Used by group direct and indirect sources by directory; indirect entries are muted and name their shortest route. The TSX review states and shared inspector composition are in `design/modules/inspector.tsx`; the generic shell is in `design/components/panel.tsx`.
+- The right inspector follows source, frame and exported-element selection after it is opened manually. Source path and frame name have inline copy controls, followed by frame sizes, a scrollable frame list and Relationships. Uses and Used by group discovered direct and indirect sources by directory; indirect entries are muted and name their shortest route. The TSX review states and shared inspector composition are in `design/modules/inspector.tsx`; the generic shell is in `design/components/panel.tsx`.
 - Frame clicks select the variant. Hovering an exported component outlines its root; clicking it shows the owning source/export and matching frames. Selecting a relationship focuses its source, and selecting a matching frame focuses that variant. Source-title clicks select the source and retain copying; the copy icon alone copies. Escape clears selection and Back restores selection and camera.
 - With no directory open, the screen shows only the app bar and the open-directory dialog without a close button.
 
@@ -212,7 +245,7 @@ Geometry, in CSS pixels at a 1440 × 900 viewport:
 
 | Element | Position and size |
 | --- | --- |
-| Sidebar | 12 from the top, left and bottom; 260 wide. Toggle at (6, 6); title at x 48; picker at y 48 and search at y 92, both 236 × 32 at x 12; tree from y 136 |
+| Sidebar | 12 from the top, left and bottom; 260 wide. Toggle at (6, 6); title at x 48; project picker at y 48, scope picker at y 92, search at y 136, all 236 × 32 at x 12; tree from y 180 |
 | Tree rows | 28 high, radius 8. Groups advance 30, items 28 and indent 20; an open group adds 6 after its items. A divider follows All designs |
 | Tool pill | 12 from the top and right; 44 high; four 32px buttons on a 36px pitch with 6 padding |
 | App bar | 12 from the top and left; 44 high; toggle, title at x 46, a separator, then a 220-wide picker |

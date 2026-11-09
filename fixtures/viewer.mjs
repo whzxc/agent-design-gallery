@@ -2,6 +2,8 @@
 export const assetModifiedAt = Date.UTC(2026, 10, 7, 13, 24, 8);
 const components = { theme: 'light', sidebar: true, group: 'Essentials', asset: 'components/field.tsx', camera: 'group' };
 const overview = { theme: 'dark', sidebar: false, camera: 'all' };
+const layerScope = { theme: 'light', sidebar: true, scope: 'layer:components', group: 'Essentials', camera: 'all' };
+const groupScope = { theme: 'light', sidebar: true, scope: 'group:Essentials', camera: 'all' };
 export const states = {
   'sample-components': { ...components },
   'sample-zoomed': { ...components, theme: 'dark', camera: 'selection', scale: 1, minimap: true },
@@ -18,5 +20,12 @@ export const states = {
   'open-empty': { theme: 'light', sidebar: false, empty: true, camera: 'all' },
   'open-dialog': { ...overview },
   'open-error': { ...overview, theme: 'light' },
+  'scope-layer': layerScope,
+  'scope-group': groupScope,
+  'scope-asset': { ...groupScope, scope: 'asset:components/field.tsx' },
+  'scope-picker-open': { ...layerScope, menu: 'scope-menu' },
+  'scope-group-action': { ...layerScope, camera:'origin', scale:.24, origin:[650,140], hoverScope: 'Render only this group: Essentials' },
+  'scope-asset-action': { ...groupScope, group:'Essentials', camera:'origin', scale:.53, origin:[650,140],
+    hoverScope: 'Render only this asset: field' },
 };
 export const recent = [];

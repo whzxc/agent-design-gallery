@@ -73,11 +73,10 @@ test('catalog is usable before asset preparation and retains a queued selection'
     const page = await browser.newPage();
     await page.route('**/asset/**', async route => {await gate;await route.continue()});
     await page.goto(server.url, {waitUntil:'domcontentloaded'});
-    await page.locator('#all').waitFor();
+    await page.getByRole('button',{name:'Render scope: Components',exact:true}).waitFor();
     assert.equal(await page.locator('#sidebar').isVisible(),true);
     assert.equal(await page.evaluate(()=>window.__sdg.assets),0);
     assert.equal(await page.evaluate(()=>window.__sdg.ready),false);
-    await page.getByRole('button',{name:'Toggle Essentials',exact:true}).click();
     await page.locator('[data-navkey="file:components/button.tsx"]').click();
     release();
     await page.waitForFunction(()=>window.__sdg.ready);
@@ -93,7 +92,6 @@ test('camera and selected form survive immediate reload and a server restart', {
   try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});
     await page.goto(server.url);await page.waitForFunction(()=>window.__sdg?.ready);
-    await page.getByRole('button',{name:'Toggle Essentials',exact:true}).click();
     await page.locator('[data-navkey="file:components/button.tsx"]').click();
     if (await page.locator('#inspect').getAttribute('aria-pressed') === 'false') await page.locator('#inspect').click();
     await page.locator('#forms button').filter({hasText:/^secondary/}).click();
@@ -104,7 +102,8 @@ test('camera and selected form survive immediate reload and a server restart', {
     assert.deepEqual(await page.evaluate(()=>window.__sdg.view),camera);
     assert.equal(await page.locator('[data-navkey="file:components/button.tsx"]').getAttribute('aria-current'),'true');
     assert.match(await page.locator('#forms [aria-current=true]').textContent(),/^secondary/);
-    const data=await(await fetch(new URL('/manifest',server.url))).json();
+    assert.equal(await page.locator('#source').isVisible(),false);
+    const data=await(await fetch(new URL('/manifest?scope=layer:components',server.url))).json();
     assert.deepEqual(data.selection,{path:'components/button.tsx',form:'secondary',group:'Essentials',element:null});
     assert.equal(data.assets.find(a=>a.path==='components/button.tsx').modifiedAt,(await stat(path.join(directory,'components/button.tsx'))).mtimeMs);
     const time=page.locator('.canvas-label:not([hidden]) time').first();
@@ -350,7 +349,7 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
     const page=await browser.newPage();
     let releaseSource;const sourceGate=new Promise(resolve=>{releaseSource=resolve});
     await page.route('**/asset/components%2Fforms.tsx?*',async route=>{await sourceGate;await route.continue()});
-    await page.goto(server.url);
+    await page.goto(server.url+'?scope=all');
     await page.waitForFunction(()=>window.__sdg?.assets>0&&!window.__sdg.metadataComplete);
     releaseSource();await page.waitForFunction(()=>window.__sdg?.ready);
     const result=await page.evaluate(async()=>{
@@ -522,7 +521,7 @@ test('frame and element selection expose transitive relationships, matching expo
   try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:new URL(server.url).origin});
-    await page.goto(server.url+'?keep=yes#notes');await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.goto(server.url+'?scope=all&keep=yes#notes');await page.waitForFunction(()=>window.__sdg?.ready);
     await page.locator('[data-navkey="group:surfaces"]').click();
     assert.equal(new URL(page.url()).searchParams.get('group'),'surfaces');
     const groupLink=page.url();
@@ -530,10 +529,11 @@ test('frame and element selection expose transitive relationships, matching expo
     assert.equal(new URL(page.url()).searchParams.has('group'),false);
     await page.locator('[data-navkey="file:surfaces/home.tsx"]').click();
     await page.waitForFunction(()=>window.__sdg.ready);
-    assert.deepEqual(Object.fromEntries(new URL(page.url()).searchParams),{keep:'yes',asset:'surfaces/home.tsx'});
+    assert.deepEqual(Object.fromEntries(new URL(page.url()).searchParams),{scope:'all',keep:'yes',asset:'surfaces/home.tsx'});
     assert.equal(new URL(page.url()).hash,'#notes');
     assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
-    assert.equal(await page.locator('#source').isVisible(),true);
+    assert.equal(await page.locator('#source').isVisible(),false);
+    await page.locator('#inspect').click();
     assert.equal(await page.locator('#uses [data-related-path="modules/home.tsx"]').getAttribute('data-direct'),'true');
     assert.match(await page.locator('#uses [data-related-path="modules/composer.tsx"]').textContent(),/composer · via home/);
     assert.match(await page.locator('#uses [data-related-path="components/alert.tsx"]').textContent(),/via home → composer/);
@@ -567,6 +567,7 @@ test('frame and element selection expose transitive relationships, matching expo
     // Reload flushes the pending selection save, retaining the host variant and owner.
     await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
     assert.equal((await page.evaluate(()=>window.__sdg.selection)).element.export,'Composer');
+    await page.locator('#inspect').click();
     await page.locator('#forms [data-frame="compact"]').focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>window.__sdg.ready);
     assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'modules/composer.tsx',frame:'compact',element:null});
     await page.locator('#back').click();await page.waitForFunction(()=>window.__sdg.ready);
@@ -585,7 +586,7 @@ test('frame and element selection expose transitive relationships, matching expo
     assert.equal((await page.evaluate(()=>window.__sdg.selection)).element,null);
     await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:null,frame:null,element:null});
     assert.equal(await page.locator('#source').isVisible(),false);
-    assert.deepEqual(Object.fromEntries(new URL(page.url()).searchParams),{keep:'yes',group:'surfaces'});
+    assert.deepEqual(Object.fromEntries(new URL(page.url()).searchParams),{scope:'all',keep:'yes',group:'surfaces'});
     const shared=await browser.newPage({viewport:{width:1440,height:900}});
     await shared.goto(groupLink);await shared.waitForFunction(()=>window.__sdg?.ready);
     assert.equal(await shared.locator('[data-navkey="toggle:surfaces"]').getAttribute('aria-expanded'),'true');
@@ -598,7 +599,7 @@ test('frame and element selection expose transitive relationships, matching expo
     const stale=new URL(elementLink);stale.searchParams.set('frame','removed');
     await shared.goto(stale.href);await shared.waitForFunction(()=>window.__sdg?.ready);
     assert.deepEqual(await shared.evaluate(()=>window.__sdg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
-    assert.deepEqual(Object.fromEntries(new URL(shared.url()).searchParams),{keep:'yes',asset:'surfaces/home.tsx'});
+    assert.deepEqual(Object.fromEntries(new URL(shared.url()).searchParams),{scope:'all',keep:'yes',asset:'surfaces/home.tsx'});
     assert.deepEqual(errors,[]);
   } finally {await browser.close();await server.close()}
 });

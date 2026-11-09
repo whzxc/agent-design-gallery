@@ -168,11 +168,18 @@ test('graph endpoint refreshes both directions after import edits, source additi
     const helper=put(c,'fixtures/value.ts',"export const value='before';");
     put(c,'modules/slow.tsx',source("import {value} from '../fixtures/value';", "(()=>{Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,250);return value})()"));
     await reader.read();
-    const readManifest=async()=> (await fetch(new URL('/manifest',server.url))).json();
+    await readGraph(); // Explicitly build the new source before testing scoped revalidation.
+    const manifestURL=new URL('/manifest?scope=layer:modules',server.url);
+    const readManifest=async()=> {
+      const response=await fetch(manifestURL);
+      return response.ok ? response.json() : null;
+    };
     const stats=async()=> (await fetch(new URL('/api/cache-stats',server.url))).json();
     const before=await readManifest(),hash=(manifest,name)=>manifest.assets.find(asset=>asset.path===name)?.hash;
     const previousCancelled=(await stats()).builds.cancelled;
     writeFileSync(helper,"export const value='after';");
+    await reader.read();
+    const inFlight=fetch(manifestURL);
     const waitFor=async predicate=>{
       const deadline=Date.now()+4000;
       while(Date.now()<deadline){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,5));}
@@ -181,10 +188,11 @@ test('graph endpoint refreshes both directions after import edits, source additi
     await waitFor(async()=> (await stats()).builds.active>0);
     writeFileSync(path.join(c.design,'modules/home.tsx'),source('', '"Unrelated save"'));
     await waitFor(async()=> (await stats()).builds.cancelled>previousCancelled);
+    assert.equal((await inFlight).status,409);
+    await reader.read();
     await waitFor(async()=>{
       const manifest=await readManifest();
-      return hash(manifest,'modules/slow.tsx')!==hash(before,'modules/slow.tsx')&&
-        hash(manifest,'modules/home.tsx')!==hash(before,'modules/home.tsx');
+      return manifest && ['modules/slow.tsx','modules/home.tsx'].every(name=>hash(manifest,name)&&hash(manifest,name)!==hash(before,name));
     });
     await reader.cancel();
   } finally { controller.abort(); await server.close(); }
