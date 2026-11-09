@@ -18,6 +18,10 @@
 .switcher-targets, .switcher-targets>[role="group"] { display:flex; flex-direction:column; gap:4px; }
 .switcher-row { display:flex; align-items:center; gap:12px; padding:12px 10px; margin:0; border-radius:var(--radius-row); }
 .switcher-row[aria-current="page"] { background:var(--surface-sunken); }
+.switcher-instance { display:flex; align-items:center; gap:4px; padding-right:6px; border-radius:var(--radius-row); }
+.switcher-instance-current { background:var(--surface-sunken); }
+.switcher-instance .switcher-row { flex:1; min-width:0; }
+.switcher-close:hover:not(:disabled) { color:var(--text); }
 .switcher-labels { display:flex; flex-direction:column; flex:1; min-width:0; gap:4px; }
 .switcher-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:550; }
 .switcher-detail { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--text-meta); color:var(--text-secondary); }

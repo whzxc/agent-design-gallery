@@ -156,6 +156,8 @@ from the npm package. Every referenced bitmap fits the declared per-image and to
 
 The resident hub extends Float with a quiet project list on the canvas background. It has no path entry.
 Project names navigate to `/p/<slug>/`; live instances navigate to `/i/<id>/`; All projects returns to `/`.
+The approved live instance rows in the switcher and hub home use the shared IconButton for Close instance.
+The switcher prefixes the path with the instance port. Closing the current instance returns to the hub home.
 Rescan is the only registry mutation. A running rescan replaces its control in place with a disabled Rescanning… state.
 The project switcher replaces the directory picker in the resident viewer app bar; the standalone viewer keeps its existing picker.
 

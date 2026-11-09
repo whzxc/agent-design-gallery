@@ -1,5 +1,6 @@
 import { dataFetch, isUnauthorized } from './auth.js';
 import { icon, hydrateIcons } from './icons.js';
+import { instanceCloseButton } from './instance-actions.js';
 
 const projects = document.querySelector('#projects');
 const instances = document.querySelector('#instances');
@@ -109,6 +110,14 @@ function instanceRow(instance) {
     const warning = element('span', 'instance-warning', 'Proxy unavailable');
     warning.prepend(glyph('circle-alert', 14));
     row.append(warning);
+  }
+  if (instance.stoppable) {
+    row.classList.add('instance-row-closeable');
+    row.append(instanceCloseButton(instance, 'instance-close', () => {
+      row.remove();
+      document.querySelector('.live-section').hidden = !instances.childElementCount;
+      (instances.querySelector('a, button') ?? rescan).focus({ preventScroll: true });
+    }, report));
   }
   return row;
 }

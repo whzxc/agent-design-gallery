@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { copyFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { fileURLToPath } from 'node:url';
+import { request } from 'node:http';
 import { startHub } from '../src/hub.mjs';
 import { startServer } from '../src/server.mjs';
 import { addRoot, listProjects } from '../src/hub/registry.mjs';
-import { registerInstance } from '../src/hub/instances.mjs';
+import { listInstances, registerInstance } from '../src/hub/instances.mjs';
 import { launch } from '../src/toolkit/browser.mjs';
 
 async function setup(t) {
@@ -22,6 +25,7 @@ async function setup(t) {
 async function project(root, name, requires) {
   const directory = path.join(root, name.toLowerCase());
   await mkdir(path.join(directory, 'design/components'), { recursive: true });
+  await copyFile(new URL('../design/tokens.css', import.meta.url), path.join(directory, 'design/tokens.css'));
   await writeFile(path.join(directory, 'sdg.config.mjs'), `export default ${JSON.stringify({ name, ...(requires ? { requires } : {}) })};`);
   await writeFile(path.join(directory, 'design/components/sample.tsx'), `import { Frame } from 'sdg'; export default () => <Frame name="sample" width={40} height={40}><div>Sample</div></Frame>;`);
   return directory;
@@ -65,7 +69,9 @@ test('prefixed viewer switcher searches branches, restores keyboard focus and na
   await registerInstance({ directory: atlas, port: new URL(instance.url).port * 1, stateDirectory, id: 'review' });
   const [atlasRecord] = (await listProjects(stateDirectory)).filter(item => item.name === 'Atlas');
   const page = await browser.newPage();
-  await page.goto(new URL(`/p/${atlasRecord.slug}/`, hub.url).href);
+  await page.goto(new URL(`/p/${atlasRecord.slug}/?asset=components%2Fsample.tsx&frame=sample`, hub.url).href);
+  await page.waitForFunction(() => window.__sdg?.ready);
+  assert.equal(await page.locator('#frame-name').textContent(), 'sample');
   const trigger = page.getByRole('button', { name: 'Switch project: Atlas', exact: true }).filter({ visible: true });
   await trigger.waitFor();
   await trigger.focus();
@@ -95,4 +101,59 @@ test('prefixed viewer switcher searches branches, restores keyboard focus and na
   await page.getByRole('button', { name: 'Switch project: Atlas', exact: true }).filter({ visible: true }).click();
   await page.getByRole('navigation', { name: 'Project switcher' }).getByRole('link', { name: 'All projects', exact: true }).click();
   await page.getByRole('heading', { name: 'Projects', exact: true }).waitFor();
+});
+
+test('live instance buttons stop only the selected process from the hub home and proxied switcher', { timeout: 30000 }, async t => {
+  const { root, stateDirectory, hub, browser } = await setup(t);
+  const atlas = await project(root, 'Atlas');
+  const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url));
+  const children = await Promise.all([0, 1, 2].map(async () => {
+    const child = spawn(process.execPath, [cli, 'open', atlas, '--no-open', '--state-dir', stateDirectory]);
+    const exited = once(child, 'exit');
+    t.after(async () => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM'); await exited; });
+    await Promise.race([once(child.stdout, 'data'), exited.then(([code]) => { throw new Error(`Viewer exited: ${code}`); })]);
+    return { pid: child.pid, exited };
+  }));
+  const instances = await listInstances(stateDirectory);
+  assert.equal(instances.length, 3);
+  assert.ok(instances.every(instance => instance.stoppable));
+  const [home, current, other] = instances;
+  const stopURL = id => new URL(`api/instances/${id}/stop`, hub.url);
+  const closed = instance => children.find(child => child.pid === instance.pid).exited;
+  const label = instance => `Close instance: Atlas (:${instance.port})`;
+  const post = (id, headers) => fetch(stopURL(id), { method: 'POST', headers });
+  assert.equal((await post(home.id, { 'X-Forwarded-Proto': 'https' })).status, 401);
+  assert.equal((await post(home.id, { Origin: 'https://other.example' })).status, 403);
+  await writeFile(path.join(stateDirectory, 'instances/mismatched.json'), JSON.stringify({...home, id:'mismatched'}));
+  assert.equal((await post('mismatched')).status, 404);
+  assert.equal((await listInstances(stateDirectory)).length, 3);
+
+  const page = await browser.newPage();
+  await page.goto(hub.url);
+  const upload = request(`http://127.0.0.1:${home.port}/preferences`, {
+    method: 'POST', headers: {'Content-Type': 'application/json', 'Content-Length': '100'},
+  });
+  upload.on('error', () => {});
+  t.after(() => upload.destroy());
+  upload.write('{');
+  const [socket] = await once(upload, 'socket');
+  await once(socket, 'connect');
+  await page.getByRole('button', { name: label(home), exact: true }).click();
+  await page.getByRole('button', { name: label(home), exact: true }).waitFor({ state: 'hidden' });
+  await closed(home);
+  assert.deepEqual((await listInstances(stateDirectory)).map(instance => instance.id), [current.id, other.id]);
+  await page.getByRole('link', { name: 'Atlas', exact: true }).first().click();
+  await page.waitForURL(new URL(current.url, hub.url).href);
+  await page.getByRole('button', { name: 'Switch project: Atlas', exact: true }).filter({ visible: true }).click();
+  const menu = page.getByRole('navigation', { name: 'Project switcher' });
+  await menu.getByRole('button', { name: label(other), exact: true }).click();
+  await menu.getByRole('button', { name: label(other), exact: true }).waitFor({ state: 'hidden' });
+  await closed(other);
+  assert.equal(new URL(page.url()).pathname, current.url);
+  assert.deepEqual((await listInstances(stateDirectory)).map(instance => instance.id), [current.id]);
+  await menu.getByRole('button', { name: label(current), exact: true }).click();
+  await page.waitForURL(hub.url);
+  await closed(current);
+  assert.deepEqual(await listInstances(stateDirectory), []);
+  assert.equal((await fetch(new URL('api/health', hub.url))).status, 200);
 });

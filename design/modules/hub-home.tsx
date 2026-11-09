@@ -1,5 +1,6 @@
 import { Frame, Icon } from 'sdg';
 import { Button } from '../components/button';
+import { IconButton } from '../components/icon-button';
 import { Toolbar } from '../components/toolbar';
 import { projects, instances, hubCopy as copy, emptyStates, hubNotes } from '../fixtures/hub';
 
@@ -72,7 +73,7 @@ export function LiveInstances({ narrow = false }: { narrow?: boolean }) {
       {instances.map((instance, index) => <div
         class={`${index ? 'border-t border-border' : ''} ${narrow ? 'p-4' : 'px-5 py-4'}`}
       >
-        <div class={`flex ${narrow ? 'flex-col gap-2' : 'items-center justify-between gap-6'}`}>
+        <div class={`flex ${narrow && !instance.stoppable ? 'flex-col gap-2' : 'items-center justify-between gap-4'}`}>
           <div class="flex min-w-0 flex-col gap-1">
             <div class="flex items-center gap-2">
               <Icon name="radio" size={16} class="shrink-0 text-text-secondary" />
@@ -89,6 +90,10 @@ export function LiveInstances({ narrow = false }: { narrow?: boolean }) {
           {instance.unavailable && <span class="flex shrink-0 items-center gap-2 text-meta text-danger">
             <Icon name="circle-alert" size={14} />{instance.unavailable}
           </span>}
+          {instance.stoppable && <div role="button" aria-label={`${copy.closeInstance}: ${instance.name} (:${instance.port})`}
+            title={`${copy.closeInstance}: ${instance.name} (:${instance.port})`}>
+            <IconButton icon="x" />
+          </div>}
         </div>
       </div>)}
     </div>

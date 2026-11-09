@@ -6,7 +6,7 @@ export function directLocal(request) {
 }
 
 export const viewerFiles = {
-  '/access.css': 'access.css', '/switcher.js': 'switcher.js', '/switcher.css': 'switcher.css',
+  '/access.css': 'access.css', '/switcher.js': 'switcher.js', '/switcher.css': 'switcher.css', '/instance-actions.js': 'instance-actions.js',
   '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/auth.js': 'auth.js', '/favicon.svg': 'favicon.svg',
   '/assets.js': 'assets.js', '/icons.js': 'icons.js', '/layout.js': 'layout.js', '/labels.js': 'labels.js',
   '/relationships.js': 'relationships.js', '/selection.js': 'selection.js', '/style.css': 'style.css', '/tokens.css': 'tokens.css',

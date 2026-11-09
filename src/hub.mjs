@@ -4,7 +4,7 @@ import path from 'node:path';
 import { startServer } from './server.mjs';
 import { listProjects, listRoots, scanRoots, defaultStateDirectory } from './hub/registry.mjs';
 import { proxy } from './hub/proxy.mjs';
-import { listInstances } from './hub/instances.mjs';
+import { listInstances, stopInstance } from './hub/instances.mjs';
 import { hubKey, authorized } from './hub/auth.mjs';
 import { json, shell, viewerFiles } from './http.mjs';
 
@@ -12,6 +12,7 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
   await hubKey(stateDirectory);
   let closing = false;
   const id = randomUUID(), viewers = new Map(), streams = new Set();
+  const stopping = new Map();
   const projects = async () => (await listProjects(stateDirectory)).map(project => ({ ...project, ...viewers.get(project.slug)?.viewer?.stats(), url: `/p/${project.slug}/` }));
   const server = createServer(async (request, response) => {
     try {
@@ -20,10 +21,12 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
       const read = ['GET', 'HEAD'].includes(request.method);
       const projectRoute = url.pathname.match(/^\/p\/([A-Za-z0-9_-]+)(\/.*)?$/);
       const instanceRoute = url.pathname.match(/^\/i\/([A-Za-z0-9_-]+)(\/.*)?$/);
+      const stopRoute = url.pathname.match(/^\/api\/instances\/([A-Za-z0-9_-]+)\/stop$/);
       const route = projectRoute ?? instanceRoute;
-      const publicFile = read && (route ? viewerFiles[route[2] ?? '/'] : { '/': 'hub.html', '/hub.js': 'hub.js', '/auth.js': 'auth.js', '/icons.js': 'icons.js', '/tokens.css': 'tokens.css', '/hub.css': 'hub.css', '/access.css': 'access.css', '/favicon.svg': 'favicon.svg' }[url.pathname]);
+      const publicFile = read && (route ? viewerFiles[route[2] ?? '/'] : { '/': 'hub.html', '/hub.js': 'hub.js', '/auth.js': 'auth.js', '/icons.js': 'icons.js', '/tokens.css': 'tokens.css', '/hub.css': 'hub.css', '/access.css': 'access.css', '/favicon.svg': 'favicon.svg', '/instance-actions.js': 'instance-actions.js' }[url.pathname]);
       // Project shells do not discover, build, watch, or embed any project data.
-      if (publicFile && !instanceRoute) {
+      // The switcher manages hub destinations, including in viewers started before this hub version.
+      if (publicFile && (!instanceRoute || ['switcher.js', 'switcher.css', 'instance-actions.js'].includes(publicFile))) {
         if (route && !route[2]) { response.writeHead(302, { Location: `${url.pathname}/${url.search}` }); response.end(); return; }
         return await shell(request, response, publicFile);
       }
@@ -33,6 +36,16 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
       if (url.pathname === '/api/health' && request.method === 'GET') return json(response, 200, { id });
       if (url.pathname === '/api/projects' && request.method === 'GET') return json(response, 200, await projects());
       if (url.pathname === '/api/instances' && request.method === 'GET') return json(response, 200, await listInstances(stateDirectory));
+      if (stopRoute && request.method === 'POST') {
+        const instanceId = stopRoute[1];
+        if (!stopping.has(instanceId))
+          stopping.set(instanceId, stopInstance(instanceId, stateDirectory).finally(() => stopping.delete(instanceId)));
+        const status = await stopping.get(instanceId);
+        if (status === 200) return json(response, 200, { ok: true });
+        const error = { 404: 'Instance is no longer live.', 409: 'Cannot verify that this viewer can be stopped.',
+          503: 'The viewer is still shutting down.' }[status];
+        return json(response, status, { error });
+      }
       if (url.pathname === '/api/roots' && request.method === 'GET') return json(response, 200, await listRoots(stateDirectory));
       if (url.pathname === '/api/rescan' && request.method === 'POST') return json(response, 200, await scanRoots(undefined, stateDirectory));
       if (route) {

@@ -511,9 +511,11 @@ export async function startServer({
     clearTimeout(refreshTimer);
     watcher?.close();
     for (const c of clients) c.end();
+    const disconnected = new Promise(resolve => server.close(resolve));
+    server.closeAllConnections();
+    await disconnected;
     await writes;
     await buildStore?.close();await viewerCache?.close();
-    await new Promise((resolve) => server.close(resolve));
   };
   return { id: instanceId, directory: root, url: `http://127.0.0.1:${server.address().port}/`, port: server.address().port, close,
     cacheStats:()=>({builds:buildStore?.stats(),viewer:viewerCache?.stats()}),

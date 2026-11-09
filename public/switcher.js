@@ -1,5 +1,6 @@
 import { dataFetch, isUnauthorized } from './auth.js';
 import { icon } from './icons.js';
+import { instanceCloseButton } from './instance-actions.js';
 
 const route = location.pathname.match(/^\/(p|i)\/([^/]+)\//);
 if (route) document.documentElement.dataset.hubViewer = 'true';
@@ -94,13 +95,28 @@ function renderTargets(query) {
       labels.append(element('span', 'switcher-name', item.name));
       const detail = item.compatibility?.compatible === false
         ? `Requires SDG ${item.compatibility.requires?.replace(/>=/g, '≥')} · hub ${item.compatibility.version}`
-        : item.proxyable === false ? 'Proxy unavailable' : item.error ?? item.design ?? item.path ?? item.directory;
+        : item.proxyable === false ? 'Proxy unavailable' : type === 'i' ? `:${item.port} · ${item.directory}`
+        : item.error ?? item.design ?? item.path ?? item.directory;
       const meta = element('span', `switcher-detail${disabled ? ' switcher-danger' : ''}`, detail);
       meta.title = detail ?? '';
       labels.append(meta); row.append(labels);
       if (selected) row.append(glyph('check', 14));
       if (disabled) { const alert = glyph('circle-alert', 14); alert.classList.add('switcher-danger'); row.append(alert); }
-      section.append(row);
+      if (type !== 'i' || !item.stoppable) { section.append(row); continue; }
+      const instance = element('div', 'switcher-instance');
+      if (selected) instance.classList.add('switcher-instance-current');
+      const stop = instanceCloseButton(item, 'icon-button switcher-close', () => {
+        if (selected) { location.replace('/'); return; }
+        targets = targets.filter(target => target !== item);
+        renderTargets(menu.querySelector('input')?.value ?? '');
+        (menu.querySelector('a[aria-current="page"]') ?? menu.querySelector('a')).focus({ preventScroll: true });
+      }, failure => {
+        const alert = document.querySelector('#error');
+        alert.textContent = failure.message;
+        alert.hidden = false;
+      });
+      instance.append(row, stop);
+      section.append(instance);
     }
     container.append(section);
   }
@@ -143,11 +159,11 @@ export async function initSwitcher() {
       }
       if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
       if (event.target.matches('input') && ['Home', 'End'].includes(event.key)) return;
-      const links = [...menu.querySelectorAll('a')];
-      const index = links.indexOf(document.activeElement);
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? links.length - 1
-        : (index + (event.key === 'ArrowDown' ? 1 : -1) + links.length) % links.length;
-      event.preventDefault(); event.stopImmediatePropagation(); links[next]?.focus();
+      const actions = [...menu.querySelectorAll('a, .switcher-close:not(:disabled)')];
+      const index = actions.indexOf(document.activeElement);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? actions.length - 1
+        : (index + (event.key === 'ArrowDown' ? 1 : -1) + actions.length) % actions.length;
+      event.preventDefault(); event.stopImmediatePropagation(); actions[next]?.focus();
     }, true);
   } catch (failure) {
     if (isUnauthorized()) return;

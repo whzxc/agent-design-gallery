@@ -18,11 +18,11 @@ export const projects = [
 export const instances = [
   {
     id: 'hub-review', name: 'atlas.wt/hub-review', path: '~/Studio/atlas.wt/hub-review/design',
-    branch: 'design/hub-review', started: 'Started 24 min ago',
+    branch: 'design/hub-review', started: 'Started 24 min ago', port: 54734, stoppable: true,
   },
   {
     id: 'folio-review', name: 'folio.wt/review', path: '~/Studio/folio.wt/review/design',
-    branch: 'fix/inspector', started: 'Started 2 hours ago', unavailable: 'Proxy unavailable',
+    branch: 'fix/inspector', started: 'Started 2 hours ago', port: 4369, unavailable: 'Proxy unavailable', stoppable: false,
   },
 ];
 
@@ -30,7 +30,7 @@ export const hubCopy = {
   brand: 'SDG', projects: 'Projects', live: 'Live instances', rescan: 'Rescan', pending: 'Rescanning…',
   changed: 'Design changed', git: 'Git', designs: 'Designs', dirty: 'Uncommitted design changes',
   incompatible: 'Version incompatible', liveState: 'Live', search: 'Find project or instance…',
-  home: 'All projects', emptyMatch: 'No matches', query: 'hub',
+  home: 'All projects', emptyMatch: 'No matches', query: 'hub', closeInstance: 'Close instance',
 };
 
 export const emptyStates = [

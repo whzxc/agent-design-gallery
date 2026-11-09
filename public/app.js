@@ -234,14 +234,55 @@ async function api(url, data, keepalive = false) {
 function preferences() {
   return {
     view,
-    selection: {
-      path: selected,
-      form: currentItem()?.parts.find(p => p.id === selectedForm)?.name ?? null,
-      element: selectedElement ? {id:selectedElement.id, owner:selectedElement.owner} : null,
-      group: groups[active]?.title ?? null,
-    },
+    selection: selectionTarget(),
     theme, sidebar, inspector,
   };
+}
+function selectionTarget() {
+  return {
+    path: selected,
+    form: currentItem()?.parts.find(p => p.id === selectedForm)?.name ?? null,
+    element: selectedElement ? {id:selectedElement.id, owner:selectedElement.owner} : null,
+    group: groups[active]?.title ?? null,
+  };
+}
+function linkedSelection() {
+  const query = new URLSearchParams(location.search);
+  if (!['group', 'asset', 'frame', 'element'].some(key => query.has(key))) return null;
+  return {
+    group: query.get('group'), path: query.get('asset'), form: query.get('frame'),
+    element: query.has('element') ? {id:query.get('element')} : null,
+  };
+}
+function syncSelectionURL() {
+  if (fixtureState || catalog || !manifest?.directory) return;
+  const {path, form, element, group} = selectionTarget(), url = new URL(location.href);
+  for (const [key, value] of Object.entries({group:path ? null : group, asset:path, frame:form, element:element?.id})) {
+    if (value == null) {
+      if (url.searchParams.has(key)) url.searchParams.delete(key);
+    } else if (url.searchParams.get(key) !== value) url.searchParams.set(key, value);
+  }
+  if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
+}
+function restoreSelection(target) {
+  if (!target) return;
+  const source = manifest.assets.find(a => a.path === target.path);
+  const form = source?.parts.find(p => p.name === target.form);
+  const item = assets.find(a => a.path === target.path && (a.component || !form || a.shown[0].id === form.id));
+  if (item) {
+    selected = item.path;
+    selectedId = item.id;
+    selectedForm = form?.id ?? null;
+    const element = target.element && form?.elements?.find(e => e.id === target.element.id);
+    const owner = target.element?.owner;
+    if (element && (!owner || element.owners.some(o => o.source === owner.source && o.export === owner.export)))
+      selectedElement = {...element, owner:owner ?? element.owners.at(-1)};
+    active = item.group;
+  } else {
+    const group = groups.findIndex(g => g.title === target.group);
+    active = group >= 0 ? group : null;
+  }
+  if (active !== null) expanded.add(active);
 }
 function persistPreferences(keepalive = false) {
   clearTimeout(saveTimer);
@@ -426,6 +467,7 @@ function renderRelationships(source) {
 }
 function selection() {
   hoveredElement=null;
+  syncSelectionURL();
   renderNav(); updateChrome();
   $('#back').disabled=!history.length;
   $('#inspect').setAttribute('aria-pressed',String(inspector));
@@ -1125,6 +1167,7 @@ async function applyManifest(data, force = false) {
     history = [];
   }
   const versionTheme = effectiveTheme;
+  const link = initializedDirectory === undefined && !fixtureState ? linkedSelection() : null;
   restorePacking(data.packing);
   const previous=manifest, results=new Array(data.assets.length), signal=refreshController?.signal;
   let next=0,publishFrame=0,streamView=null,streamMoved=false,publishedCount=0,nextPublish=1;
@@ -1192,27 +1235,17 @@ async function applyManifest(data, force = false) {
   $("#directory").title=data.directory||'';$("#app-directory").title=data.directory||'';
   document.title = `${data.label} — SVG Design Gallery`;
   if (changedRoot || first) {
-    if (data.view) view = data.view;
-    else if(!streamMoved)frame(world);
-    const restored = data.selection;
-    if (!fixtureState && restored) {
-      const source = manifest.assets.find(a => a.path === restored.path);
-      const form = source?.parts.find(p => p.name === restored.form);
-      const item = assets.find(a => a.path === restored.path && (a.component || !form || a.shown[0].id === form.id));
-      if (item) {
-        selected = item.path;
-        selectedId = item.id;
-        selectedForm = form?.id ?? null;
-        const element=restored.element && form?.elements?.find(e=>e.id===restored.element.id);
-        selectedElement=element?.owners.some(o=>o.source===restored.element.owner?.source && o.export===restored.element.owner?.export)?{...element,owner:restored.element.owner}:null;
-        active = item.group;
-        expanded.add(active);
-      } else {
-        active = groups.findIndex(g => g.title === restored.group);
-        if (active < 0) active = null;
-        else expanded.add(active);
-      }
-    }
+    if (!fixtureState) restoreSelection(link ?? data.selection);
+    const saved = data.selection;
+    const sameSelection = link && saved && (link.path
+      ? link.path === saved.path && link.form === saved.form && link.element?.id === saved.element?.id
+      : !saved.path && link.group === saved.group);
+    const reload = performance.getEntriesByType('navigation')[0]?.type === 'reload';
+    if (link && !(reload && sameSelection && data.view)) {
+      const target = selectedBox() || currentItem() || groups[active] || world;
+      frame(target, selected ? 24 : 0);
+    } else if (data.view) view = data.view;
+    else if (!streamMoved) frame(world);
   }
   if (selected && !assets.some((a) => a.path === selected)) {
     selected = null;

@@ -15,6 +15,8 @@ Drag or scroll to pan. Pinch, or hold Control/Command while scrolling, to zoom a
 
 The floating sidebar holds the project name, search, and project groups. Control/Command+F opens search; results replace the tree. Clear the query to return to the tree, or Escape to restore the previous selection, camera, and sidebar state. Group names fit their collection, and asset names focus their set or first frame. Collapse the sidebar to keep only the app bar. Collapsing panels does not move the world.
 
+Copy the viewer URL to share a selection. It records a group by name (`?group=Controls`) or a source by relative path (`?asset=components%2Fbutton.tsx`). Frame names and elements within the frame are added as `frame` and `element`. Opening the link focuses the selection on the same viewer route.
+
 The right inspector follows the selection and remembers its open state. It shows source path, frame name, dimensions, frames, and **Uses** / **Used by**, grouped by source directory. Indirect relationships are muted with their shortest `via` path. Click a relationship to select and focus that source. An element selection shows its owning export and the frames in that source that render it; click one to jump there. `GET /relationships` returns the underlying direct graph as JSON, keyed by source path with `uses` and `usedBy` arrays.
 
 Click a canvas source or frame title to select it and copy its name. The copy icon copies without changing the selection and appears on hover or keyboard focus. Section titles also copy their names. Enter and Space activate a focused title. A check confirms a successful copy for 1.2 seconds. The inspector has separate source-path and frame-name copy controls.
@@ -114,7 +116,9 @@ Rotation applies to new requests in a running hub immediately. Existing streams 
 
 `sdg open` registers itself in `<state>/instances/<id>.json` and removes its record on exit, independently of whether a hub is running. `GET /api/health` returns `{ id, capabilities: { keyAuth: 1 } }`. `GET /api/instances` checks PID liveness and the health ID, pruning dead or mismatched records. An alive PID with missing health or a viewer without the key-auth capability remains listed as not proxyable. Records include pid, port, directory, project name, branch, worktree flag, start time and SDG version.
 
-`/i/<id>/` streams from that instance's own server, including its own HTML/JS and SSE. Modified SDG worktree instances keep their own code. Public shell requests pass through without data; every proxied data request is authenticated before forwarding, then Authorization, X-SDG-Key, query key, cookies and forwarded headers are removed upstream. Relative viewer URLs preserve `/p/<slug>/` and `/i/<id>/`. Browser writes through either prefix are limited to viewer preferences; the hub also allows registered-root rescan.
+Close a verified live instance from its row on the hub home or in the project switcher. Closing the current viewer returns to the hub home. The switcher shows the instance's port to distinguish viewers with the same name. `POST /api/instances/<id>/stop` rechecks the registered instance before asking its process to shut down.
+
+`/i/<id>/` streams from that instance's own server, including its viewer runtime and SSE. The hub serves the project switcher and its instance controls for both prefixed routes. Public shell requests pass through without data; every proxied data request is authenticated before forwarding, then Authorization, X-SDG-Key, query key, cookies and forwarded headers are removed upstream. Relative viewer URLs preserve `/p/<slug>/` and `/i/<id>/`. Browser writes through either prefix are limited to viewer preferences and derived cache data.
 
 ### nginx
 

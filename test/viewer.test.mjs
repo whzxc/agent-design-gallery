@@ -522,16 +522,23 @@ test('frame and element selection expose transitive relationships, matching expo
   try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:new URL(server.url).origin});
-    await page.goto(server.url);await page.waitForFunction(()=>window.__sdg?.ready);
-    await page.getByRole('button',{name:'Toggle surfaces',exact:true}).click();
+    await page.goto(server.url+'?keep=yes#notes');await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.locator('[data-navkey="group:surfaces"]').click();
+    assert.equal(new URL(page.url()).searchParams.get('group'),'surfaces');
+    const groupLink=page.url();
+    await page.locator('#back').click();
+    assert.equal(new URL(page.url()).searchParams.has('group'),false);
     await page.locator('[data-navkey="file:surfaces/home.tsx"]').click();
     await page.waitForFunction(()=>window.__sdg.ready);
+    assert.deepEqual(Object.fromEntries(new URL(page.url()).searchParams),{keep:'yes',asset:'surfaces/home.tsx'});
+    assert.equal(new URL(page.url()).hash,'#notes');
     assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
     assert.equal(await page.locator('#source').isVisible(),true);
     assert.equal(await page.locator('#uses [data-related-path="modules/home.tsx"]').getAttribute('data-direct'),'true');
     assert.match(await page.locator('#uses [data-related-path="modules/composer.tsx"]').textContent(),/composer · via home/);
     assert.match(await page.locator('#uses [data-related-path="components/alert.tsx"]').textContent(),/via home → composer/);
     await page.locator('#forms [data-frame="two"]').click();await page.waitForFunction(()=>window.__sdg.ready);
+    assert.equal(new URL(page.url()).searchParams.get('frame'),'two');
     assert.equal(await page.locator('#frame-name').textContent(),'two');
     assert.equal(await page.locator('#frame-size').textContent(),'400 × 200');
     assert.equal(await page.locator('#selection-outline').isVisible(),true);
@@ -548,6 +555,8 @@ test('frame and element selection expose transitive relationships, matching expo
     });
     await page.mouse.move(point.x,point.y);assert.equal(await page.locator('#hover-outline').isVisible(),true);
     await page.mouse.click(point.x,point.y);await page.waitForFunction(()=>window.__sdg.ready);
+    const elementLink=page.url();
+    assert.ok(new URL(elementLink).searchParams.get('element'));
     assert.deepEqual((await page.evaluate(()=>window.__sdg.selection)).element,{source:'modules/composer.tsx',export:'Composer'});
     assert.equal(await page.locator('#source-path').textContent(),'modules/composer.tsx');
     assert.equal(await page.locator('#source-name').textContent(),'Composer');
@@ -562,6 +571,7 @@ test('frame and element selection expose transitive relationships, matching expo
     assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'modules/composer.tsx',frame:'compact',element:null});
     await page.locator('#back').click();await page.waitForFunction(()=>window.__sdg.ready);
     assert.equal((await page.evaluate(()=>window.__sdg.selection)).element.export,'Composer');
+    assert.equal(page.url(),elementLink);
     await page.locator('#used-by [data-related-path="surfaces/home.tsx"]').click();await page.waitForFunction(()=>window.__sdg.ready);
     assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
     await page.locator('#close-inspector').click();
@@ -575,6 +585,20 @@ test('frame and element selection expose transitive relationships, matching expo
     assert.equal((await page.evaluate(()=>window.__sdg.selection)).element,null);
     await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:null,frame:null,element:null});
     assert.equal(await page.locator('#source').isVisible(),false);
+    assert.deepEqual(Object.fromEntries(new URL(page.url()).searchParams),{keep:'yes',group:'surfaces'});
+    const shared=await browser.newPage({viewport:{width:1440,height:900}});
+    await shared.goto(groupLink);await shared.waitForFunction(()=>window.__sdg?.ready);
+    assert.equal(await shared.locator('[data-navkey="toggle:surfaces"]').getAttribute('aria-expanded'),'true');
+    await shared.goto(elementLink);await shared.waitForFunction(()=>window.__sdg?.ready);
+    assert.deepEqual(await shared.evaluate(()=>window.__sdg.selection),{
+      path:'surfaces/home.tsx',frame:'two',element:{source:'modules/composer.tsx',export:'Composer'},
+    });
+    const bounds=await shared.locator('#selection-outline').boundingBox();
+    assert.ok(bounds && bounds.x>=0 && bounds.y>=0 && bounds.x+bounds.width<=1440 && bounds.y+bounds.height<=900);
+    const stale=new URL(elementLink);stale.searchParams.set('frame','removed');
+    await shared.goto(stale.href);await shared.waitForFunction(()=>window.__sdg?.ready);
+    assert.deepEqual(await shared.evaluate(()=>window.__sdg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
+    assert.deepEqual(Object.fromEntries(new URL(shared.url()).searchParams),{keep:'yes',asset:'surfaces/home.tsx'});
     assert.deepEqual(errors,[]);
   } finally {await browser.close();await server.close()}
 });

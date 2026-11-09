@@ -46,6 +46,10 @@ h2 { font-size:var(--text-section); font-weight:600; }
 .instance-row .hub-name a,.instance-row .hub-name>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .instance-start { flex:none; color:var(--text-tertiary); }
 .instance-warning { display:flex; align-items:center; flex:none; gap:8px; font-size:var(--text-meta); color:var(--danger); }
+.instance-close { display:grid; place-items:center; flex:none; width:var(--control-size); height:var(--control-size); padding:0;
+  border-radius:var(--radius-row); background:none; color:var(--text-secondary); }
+.instance-close:hover:not(:disabled) { background:var(--surface-sunken); }
+.instance-close:disabled { opacity:.45; cursor:default; }
 .hub-empty { display:flex; flex-direction:column; align-items:center; gap:12px; padding:48px 24px; text-align:center; }
 .hub-empty>.icon { color:var(--text-tertiary); }
 .hub-empty p { margin-top:4px; color:var(--text-secondary); }
@@ -59,4 +63,5 @@ h2 { font-size:var(--text-section); font-weight:600; }
   .project-identity .hub-name>a,.project-identity .hub-name>.hub-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .project-identity .hub-name>.hub-external { display:none; }
   .instance-row { padding:16px; flex-direction:column; align-items:stretch; gap:8px; }
+  .instance-row-closeable { flex-direction:row; align-items:center; gap:16px; }
 }

@@ -2,6 +2,7 @@ import { Frame, Icon } from 'sdg';
 import { Field } from '../components/field';
 import { Panel } from '../components/panel';
 import { MenuItem } from '../components/menu-item';
+import { IconButton } from '../components/icon-button';
 import { AppBar } from './view-controls';
 import { projects, instances, hubCopy as copy, switcherFrames, hubNotes } from '../fixtures/hub';
 
@@ -15,20 +16,25 @@ export function ProjectPicker({ current, kind, open = false, width = 220 }: any)
 export function SwitcherRow({ item, current, kind }: any) {
   const disabled = item.incompatible || item.unavailable;
   const selected = item.id === current.id;
+  const closeable = kind === 'instance' && item.stoppable;
+  const detail = item.incompatible || item.unavailable || (kind === 'instance' ? `:${item.port} · ${item.path}` : item.path);
   const content = <>
     <Icon name={kind === 'instance' ? 'radio' : 'folder'} size={16} class="shrink-0 text-text-secondary" />
     <span class="flex min-w-0 flex-1 flex-col gap-1">
       <span class="truncate text-body font-[550]">{item.name}</span>
-      <span class={`truncate text-meta ${disabled ? 'text-danger' : 'text-text-secondary'}`}>
-        {item.incompatible ? item.incompatible : item.unavailable ? item.unavailable : item.path}
-      </span>
+      <span class={`truncate text-meta ${disabled ? 'text-danger' : 'text-text-secondary'}`} title={detail}>{detail}</span>
     </span>
     {selected && <Icon name="check" size={14} class="shrink-0" />}
     {disabled && <Icon name="circle-alert" size={14} class="shrink-0 text-danger" />}
   </>;
-  const classes = `flex items-center gap-3 rounded-row px-[10px] py-3 ${selected ? 'bg-surface-sunken' : ''}`;
-  return disabled ? <div class={classes} aria-disabled="true">{content}</div>
+  const classes = `flex min-w-0 flex-1 items-center gap-3 rounded-row px-[10px] py-3
+    ${selected && !closeable ? 'bg-surface-sunken' : ''}`;
+  const row = disabled ? <div class={classes} aria-disabled="true">{content}</div>
     : <a class={classes} href={`/${kind === 'instance' ? 'i' : 'p'}/${item.id}/`}>{content}</a>;
+  const actionLabel = `${copy.closeInstance}: ${item.name} (:${item.port})`;
+  return closeable ? <div class={`flex items-center gap-1 rounded-row pr-[6px] ${selected ? 'bg-surface-sunken' : ''}`}>
+    {row}<div role="button" aria-label={actionLabel} title={actionLabel}><IconButton icon="x" /></div>
+  </div> : row;
 }
 
 export function SwitcherMenu({ current, search = false, width = 360 }: any) {
