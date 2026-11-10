@@ -41,6 +41,43 @@ export function ScopeRow({ row, indent, showAction }: any) {
   );
 }
 
+export function ScopeTabs({ options, selected }: { options: { label: string }[]; selected: string }) {
+  return <div role="tablist" aria-label="Design scope" class="flex items-center gap-[2px]">
+    {options.map(({ label }) => {
+      const active = selected === label;
+      return <button type="button" role="tab" aria-selected={active ? 'true' : 'false'}
+        class={`h-(--control-size) rounded-row px-3 text-body leading-4 font-[550] whitespace-nowrap
+          ${active ? 'bg-surface-sunken text-text' : 'text-text-secondary'}`}>
+        {label}
+      </button>;
+    })}
+  </div>;
+}
+
+function NavigationRows({ rows, scoped, scopedIndent = 0, scopeAction, search = false }: any) {
+  return rows.map((row: any, i: number) => (
+    <>
+      <div class={row.form.startsWith('group') ? 'h-[30px]' : ''}>
+        {scoped ? <ScopeRow row={row} showAction={row.label === scopeAction}
+          indent={row.form.startsWith('item') ? scopedIndent : 0} />
+          : <TreeRow {...row} indent={!search && row.form.startsWith('item') ? 20 : 0} />}
+      </div>
+      {row.form.startsWith('root') && <div class="h-px bg-border mt-1 mb-[7px]" />}
+      {!search && row.form.startsWith('item') && !rows[i + 1]?.form.startsWith('item') && <div class="h-[6px]" />}
+    </>
+  ));
+}
+
+export function Contents({ rows, scopedIndent }: any) {
+  return <nav aria-label="Contents">
+    <Panel>
+      <div class="max-h-[760px] overflow-auto p-3">
+        <NavigationRows rows={rows} scoped scopedIndent={scopedIndent} />
+      </div>
+    </Panel>
+  </nav>;
+}
+
 export function Sidebar({
   rows = [],
   search = false,
@@ -72,17 +109,7 @@ export function Sidebar({
             {resultCount} results
           </div>
         )}
-        {rows.map((row: any, i: number) => (
-          <>
-            <div class={row.form.startsWith('group') ? 'h-[30px]' : ''}>
-              {scope ? <ScopeRow row={row} showAction={row.label === scopeAction}
-                indent={row.form.startsWith('item') ? scopedIndent : 0} />
-                : <TreeRow {...row} indent={!search && row.form.startsWith('item') ? 20 : 0} />}
-            </div>
-            {row.form.startsWith('root') && <div class="h-px bg-border mt-1 mb-[7px]" />}
-            {!search && row.form.startsWith('item') && !rows[i + 1]?.form.startsWith('item') && <div class="h-[6px]" />}
-          </>
-        ))}
+        <NavigationRows rows={rows} scoped={!!scope} scopeAction={scopeAction} scopedIndent={scopedIndent} search={search} />
       </div>
     </Panel>
   );
@@ -92,12 +119,7 @@ const frames = [
     "name": "search-results",
     "width": 284,
     "height": 272,
-    "fixture": "sidebar-search",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "0 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -114,7 +136,7 @@ export default () => [
     <Sidebar {...navigationFixtures.search} />
   </Frame>,
   ...scopeSpecimens.map(({ name, navigation }) => (
-    <Frame name={name} fixture={name} capture={{ page:true, viewport:'1440x900' }}>
+    <Frame name={name} note="Historical viewer navigation before the top bars.">
       <div class={`bg-canvas p-3 ${navigation.scopeAction ? 'pr-[168px]' : ''}`}>
         <Sidebar {...navigation} height={undefined} />
       </div>

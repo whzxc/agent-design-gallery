@@ -3,12 +3,7 @@ export const frames = [
     "name": "frame",
     "width": 1440,
     "height": 900,
-    "fixture": "sample-inspect-frame",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "0 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -43,12 +38,7 @@ export const frames = [
     "name": "component",
     "width": 1440,
     "height": 900,
-    "fixture": "sample-inspect-component",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "0 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,

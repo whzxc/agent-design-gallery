@@ -3,12 +3,7 @@ export const frames = [
     "name": "empty",
     "width": 1440,
     "height": 900,
-    "fixture": "open-empty",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "0 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -28,12 +23,7 @@ export const frames = [
     "name": "dialog",
     "width": 1440,
     "height": 900,
-    "fixture": "open-dialog",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "0 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -71,12 +61,7 @@ export const frames = [
     "name": "error",
     "width": 560,
     "height": 464,
-    "fixture": "open-error",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "440 218"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "kind": "scrim"

@@ -23,22 +23,23 @@
       <p id="token-status" role="status" hidden></p>
     </div>
   </main>
-  <aside id="sidebar" class="floating" aria-label="Design sidebar">
-    <div class="sidebar-heading"><button id="sidebar-toggle" class="icon-button" aria-label="Collapse sidebar" aria-expanded="true" data-tooltip="Collapse sidebar"><span data-icon="panel-left"></span></button><h1>SDG</h1></div>
-    <button type="button" id="directory" class="picker" aria-label="Current project"><span data-icon="folder"></span><span class="directory-name"></span></button>
-    <button type="button" id="render-scope" class="picker" aria-label="Render scope" popovertarget="scope-menu" hidden><span data-icon="layers" data-size="14"></span><span id="scope-label"></span><span data-icon="chevron-down" data-size="12"></span></button>
+  <div id="app-bar" class="floating" role="toolbar" aria-label="Gallery navigation" hidden>
+    <button id="sidebar-toggle" class="icon-button" aria-label="Contents" aria-controls="sidebar" aria-expanded="false" data-tooltip="Contents"><span data-icon="panel-left"></span></button>
+    <button type="button" id="app-directory" class="picker" aria-label="Current project"><span data-icon="folder" data-size="14"></span><span class="directory-name"></span><span class="switcher-chevron" data-icon="chevron-down" data-size="12" hidden></span></button>
+    <span class="separator project-divider"></span>
+    <div id="scope-tabs" role="tablist" aria-label="Design scope"></div>
+    <span class="separator search-divider"></span>
     <div class="search-field"><span data-icon="search" data-size="14"></span><input id="search" type="search" placeholder="Find assets…" aria-label="Find assets" autocomplete="off"><span id="search-key">⌘F</span><button id="search-clear" aria-label="Clear search" hidden><span data-icon="x" data-size="14"></span></button></div>
+  </div>
+  <aside id="sidebar" class="floating" aria-label="Contents" hidden>
     <nav id="modules" aria-label="Design modules"></nav>
   </aside>
-  <div id="app-bar" class="floating" hidden><button id="expand-sidebar" class="icon-button" aria-label="Expand sidebar" data-tooltip="Expand sidebar"><span data-icon="panel-left"></span></button><h1>SDG</h1><span class="separator"></span><button type="button" id="app-directory" class="picker" aria-label="Current project"><span data-icon="folder"></span><span class="directory-name"></span></button></div>
-  <div id="tools" class="floating" role="toolbar" aria-label="View controls">
-    <button id="display" class="icon-button" popovertarget="display-menu" aria-label="Display" data-tooltip="Display"><span data-icon="sun-moon"></span></button>
-    <button id="inspect" class="icon-button" aria-label="Inspector" aria-pressed="false" data-tooltip="Inspector"><span data-icon="panel-right"></span></button>
-    <button id="fullscreen" class="icon-button" aria-label="Fullscreen" data-tooltip="Fullscreen"><span data-icon="maximize"></span></button>
-    <button id="more" class="icon-button" popovertarget="more-menu" aria-label="More" data-tooltip="More"><span data-icon="ellipsis"></span></button>
+  <div id="tools" class="floating" role="toolbar" aria-label="View controls" hidden>
+    <button id="more" class="icon-button" popovertarget="more-menu" aria-label="More" aria-expanded="false" data-tooltip="More"><span data-icon="ellipsis"></span></button>
+    <button id="inspect" class="icon-button" aria-label="Inspector" aria-controls="source" aria-expanded="false" data-tooltip="Inspector" disabled><span data-icon="panel-right"></span></button>
   </div>
   <aside id="source" class="floating" hidden aria-label="Inspector">
-    <div class="inspector-heading"><h2 id="source-name"></h2><button id="close-inspector" class="icon-button" aria-label="Close inspector"><span data-icon="panel-right" data-size="14"></span></button><button id="copy-path" class="detail-copy" aria-label="Copy source path"><span id="source-path"></span><span data-icon="copy" data-size="12"></span></button><div id="frame-detail"><button id="copy-frame" class="detail-copy" aria-label="Copy frame name"><span id="frame-name"></span><span data-icon="copy" data-size="12"></span></button><span id="frame-size"></span></div></div>
+    <div class="inspector-heading"><h2 id="source-name"></h2><button id="copy-path" class="detail-copy" aria-label="Copy source path"><span id="source-path"></span><span data-icon="copy" data-size="12"></span></button><div id="frame-detail"><button id="copy-frame" class="detail-copy" aria-label="Copy frame name"><span id="frame-name"></span><span data-icon="copy" data-size="12"></span></button><span id="frame-size"></span></div></div>
     <div class="rule"></div><h3 id="forms-heading">Frames</h3><div id="forms"></div>
     <div class="rule"></div><section id="relationships"><h3>Relationships</h3><section aria-labelledby="uses-heading"><h4 id="uses-heading">Uses</h4><div id="uses"></div></section><section aria-labelledby="used-by-heading"><h4 id="used-by-heading">Used by</h4><div id="used-by"></div></section></section>
   </aside>
@@ -51,13 +52,13 @@
     <button id="map-toggle" class="icon-button" aria-label="Minimap" aria-pressed="false" data-tooltip="Minimap"><span data-icon="map"></span></button>
   </div>
   <canvas id="minimap" class="floating" hidden aria-label="Minimap"></canvas>
-  <div id="display-menu" class="menu" popover aria-label="Display">
+  <div id="more-menu" class="menu" popover aria-label="More">
+    <button id="fullscreen">Fullscreen</button><div class="rule"></div>
     <h3>Theme</h3><div id="themes"><button data-theme="system">System</button><button data-theme="light">Light</button><button data-theme="dark">Dark</button></div>
     <div class="rule"></div><h3>Canvas</h3><div id="backgrounds"><button data-background="theme">Match theme</button><button data-background="light">Light</button><button data-background="dark">Dark</button><button data-background="neutral">Neutral</button></div>
+    <div id="canvas-actions"><div class="rule"></div><button id="arrange">Arrange current group</button><button id="shortcuts">Keyboard shortcuts<span class="key">?</span></button></div>
   </div>
   <div id="zoom-menu" class="menu" popover aria-label="Zoom"><button id="zoom-fit-all">Fit all<span class="key">0</span></button><button id="zoom-fit-group">Fit group</button><button id="zoom-fit-selection">Fit selection</button><div class="rule"></div><button id="zoom-actual">Zoom to 100%<span class="key">1</span></button></div>
-  <div id="scope-menu" class="menu" popover aria-label="Render scope"></div>
-  <div id="more-menu" class="menu" popover aria-label="More"><button id="arrange">Arrange current group</button><button id="shortcuts">Keyboard shortcuts<span class="key">?</span></button></div>
   <div id="tooltip" role="tooltip" hidden></div>
   <dialog id="keys" aria-labelledby="keys-title"><h2 id="keys-title">Keyboard shortcuts</h2><button id="keys-close" class="icon-button dialog-close" aria-label="Close keyboard shortcuts"><span data-icon="x" data-size="14"></span></button><dl>
     <div><dt>Search</dt><dd><kbd>⌘F</kbd></dd></div><div><dt>Fit all</dt><dd><kbd>0</kbd></dd></div><div><dt>Zoom to 100%</dt><dd><kbd>1</kbd></dd></div><div><dt>Zoom in or out</dt><dd><kbd>+</kbd><kbd>−</kbd></dd></div><div><dt>Pan</dt><dd><kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd></dd></div><div><dt>Focus selection</dt><dd><kbd>Enter</kbd></dd></div><div><dt>Back or close</dt><dd><kbd>Esc</kbd></dd></div>

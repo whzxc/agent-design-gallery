@@ -2,8 +2,9 @@ import { Frame } from 'sdg';
 import { frames } from '../fixtures/menu-captures';
 import { Drawing } from './canvas';
 import { Screen } from '../components/canvas';
-import { Tools, ZoomBar } from './view-controls';
+import { Tools, ViewerTools, ZoomBar } from './view-controls';
 import menuFixtures from '../fixtures/menus.json';
+import { viewerBarMore } from '../fixtures/viewer-bars';
 import { scenes } from '../scenes/menus';
 import { Panel } from '../components/panel';
 import { MenuItem } from '../components/menu-item';
@@ -25,6 +26,12 @@ export function Menu({ rows, width = 220 }: any) {
 export default () => [
   <Frame name="default">
     <Menu {...menuFixtures.default} />
+  </Frame>,
+  <Frame name="viewer-more" fixture="viewer-top-bars-more"
+    capture={{ page: true, origin: '1132 0', viewport: '1440x900' }}>
+    <div class="flex min-h-[464px] w-[308px] items-start justify-end bg-canvas p-3">
+      <ViewerTools inspectorDisabled menu={<Menu {...viewerBarMore} />} />
+    </div>
   </Frame>,
   ...frames.map(({ chrome, ...frame }) => (
     <Frame {...frame}>

@@ -54,7 +54,7 @@ const zoomValue = $("#zoom-value"), zoomOutput = $("output");
 const cache = new Map(),
   pointers = new Map();
 let gesture = {};
-let sidebar = true,
+let sidebar = false,
   inspector = false,
   selectedId = null,
   selectedForm = null,
@@ -156,6 +156,10 @@ function remember() {
 function back() {
   if (catalog) return;
   const old = history.pop();
+  if (!old && onlyFrame) {
+    changeScope(initializedScope, null, false);
+    return;
+  }
   if (old) {
     if (old.scope && (old.scope !== initializedScope || (old.onlyFrame ?? null) !== onlyFrame)) {
       changeScope(old.scope, old, false);
@@ -180,38 +184,35 @@ function changeScope(next, entry = null, record = true) {
   scopeEntry = entry;
   initialLink = null;
   pendingNavigation = null;
+  if (searchReturn) sidebar = searchReturn.sidebar;
   searchReturn = null;
   $("#search").value = '';
-  $("#scope-menu").hidePopover();
-  $("#render-scope").focus({preventScroll:true});
   void refresh(true);
 }
 function toggleSidebar(value = !sidebar) {
   sidebar = value;
   updateChrome();
-  requestDraw();
-  save();
+  requestDraw(true, false);
 }
 function updateChrome() {
   updateSwitcherLabels();
   const opened = !!(tokenManifest ?? catalog ?? manifest)?.directory;
   const showTokens = !!tokenManifest;
+  const canInspect = opened && !showTokens && !!selected;
   $('.gallery').classList.toggle('tokens-mode', showTokens);
-  $('.gallery').classList.toggle('tokens-sidebar', showTokens && sidebar);
   $('#token-catalog').hidden = !showTokens;
   viewport.inert = showTokens;
-  $("#sidebar").hidden = !opened || !sidebar;
-  $("#app-bar").hidden = opened && sidebar;
-  $("#app-directory").hidden = !opened;
-  $("#app-bar .separator").hidden = !opened;
-  $("#tools").hidden = !opened || showTokens;
-  $(".zoom").hidden = !opened || showTokens;
-  $("#source").hidden = !opened || showTokens || !inspector || !selected;
-  if (!opened) $("#minimap").hidden = true;
-  $("#sidebar-toggle").setAttribute('aria-expanded', String(sidebar));
-  $("#expand-sidebar").setAttribute('aria-expanded', String(sidebar));
-  const right = width - (inspector && selected ? 312 : 0);
-  $(".zoom").style.left = `${((sidebar && opened ? 272 : 0) + right) / 2}px`;
+  $('#sidebar').hidden = !opened || !sidebar;
+  $('#app-bar').hidden = !opened;
+  if (fixtureState) $('#app-directory .switcher-chevron').hidden = false;
+  $('#tools').hidden = !opened;
+  $('.zoom').hidden = !opened || showTokens;
+  $('#source').hidden = !canInspect || !inspector;
+  $('#inspect').disabled = !canInspect;
+  $('#inspect').setAttribute('aria-expanded', String(canInspect && inspector));
+  $('#arrange').hidden = showTokens;
+  if (!opened) $('#minimap').hidden = true;
+  $('#sidebar-toggle').setAttribute('aria-expanded', String(opened && sidebar));
   positionZoomMenu();
 }
 function positionZoomMenu() {
@@ -278,12 +279,12 @@ async function api(url, data, keepalive = false, signal) {
   return result;
 }
 function preferences() {
-  if (tokenManifest || onlyFrame) return { theme, sidebar };
+  if (tokenManifest || onlyFrame) return { theme };
   return {
     view,
     scope: initializedScope,
     selection: selectionTarget(),
-    theme, sidebar,
+    theme,
   };
 }
 function selectionTarget() {
@@ -445,51 +446,41 @@ function scopeLabel(scope) {
   if (scopeKind(scope) === 'asset') return target.split('/').at(-1).replace(/\.(tsx|svg)$/i,'');
   return target;
 }
-function renderScopePicker(data) {
-  const button = $("#render-scope"), enabled = scopedUI(data) && data.directory;
-  $("#sidebar").classList.toggle('scoped', !!enabled);
-  button.hidden = !enabled;
-  if (!enabled) return;
-  const label = scopeLabel(data.scope);
-  $("#scope-label").textContent = label;
-  button.setAttribute('aria-label', `Render scope: ${label}`);
+function renderScopeTabs(data) {
+  const tabs = $('#scope-tabs');
+  const choices = [...(data.tokenSource ? ['tokens'] : []), ...(data.layers ?? []).map(layer => 'layer:' + layer), 'all'];
+  const signature = JSON.stringify([data.scope, choices]);
+  $('#sidebar').classList.toggle('scoped', scopedUI(data));
+  if (tabs.dataset.signature === signature) return;
+  tabs.dataset.signature = signature;
+  const focused = tabs.contains(document.activeElement) ? document.activeElement.dataset.scope : null;
+  const selected = choices.includes(data.scope) ? data.scope : null;
+  tabs.replaceChildren(...choices.map((choice, index) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', String(choice === selected));
+    tab.tabIndex = (selected ? choice === selected : index === 0) ? 0 : -1;
+    tab.dataset.scope = choice;
+    tab.textContent = scopeLabel(choice);
+    tab.onclick = () => changeScope(choice);
+    return tab;
+  }));
+  if (focused) [...tabs.children].find(tab => tab.dataset.scope === focused)?.focus({ preventScroll: true });
+  const active = tabs.querySelector('[aria-selected="true"]');
+  active?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
-function positionScopeMenu() {
-  const rect = $("#render-scope").getBoundingClientRect(), menu = $("#scope-menu");
-  menu.style.left = `${rect.left}px`;
-  menu.style.top = `${rect.bottom+4}px`;
-  menu.style.maxHeight = `${Math.max(40, innerHeight-rect.bottom-16)}px`;
-}
-$("#scope-menu").addEventListener('beforetoggle',event=>{
-  const button = $("#render-scope");
-  button.setAttribute('aria-expanded',String(event.newState === 'open'));
-  if (event.newState !== 'open') return;
-  const data = tokenManifest ?? catalog ?? manifest;
-  if (!data) return;
-  const menu = $("#scope-menu"), current = data.scope, kind = scopeKind(current);
-  const choices = [...data.layers.map(layer=>`layer:${layer}`),'all'];
-  if (data.tokenSource) choices.push('tokens');
-  if (kind === 'group' || kind === 'asset') choices.unshift(current);
-  const rows = [];
-  for (const choice of choices) {
-    if (((choice === 'all' || choice === 'tokens') && rows.length) || (choices[0]===current && (kind==='group'||kind==='asset') && rows.length===1)) {
-      const rule = document.createElement('div');rule.className='rule';rows.push(rule);
-    }
-    const row = document.createElement('button'), check = document.createElement('span');
-    row.type = 'button';
-    row.setAttribute('aria-current',String(choice===current));
-    check.className = 'scope-check';
-    if (choice===current) check.innerHTML = icon('check',14);
-    row.append(check, scopeLabel(choice));
-    row.onclick = () => { menu.hidePopover(); changeScope(choice); };
-    rows.push(row);
-  }
-  menu.replaceChildren(...rows);
-  positionScopeMenu();
-  hideTooltip();
+$('#scope-tabs').addEventListener('keydown', event => {
+  const tabs = [...event.currentTarget.children], index = tabs.indexOf(event.target);
+  if (index < 0) return;
+  const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+  const target = event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs.at(-1)
+    : step ? tabs[(index + step + tabs.length) % tabs.length] : null;
+  if (!target) return;
+  event.preventDefault();
+  target.focus();
+  target.click();
 });
-$("#scope-menu").addEventListener('toggle',()=>requestDraw());
-window.addEventListener('resize',positionScopeMenu);
 function scopeAction(kind, key, label) {
   const action = document.createElement('button');
   action.type = 'button';action.className='icon-button scope-only';action.innerHTML=icon('square-dashed');
@@ -516,7 +507,7 @@ function navFile(a, options = {}) {
 function renderNav() {
   const data = tokenManifest ?? catalog ?? manifest;
   if (!data) return;
-  renderScopePicker(data);
+  renderScopeTabs(data);
   const scoped = scopedUI(data), kind = scoped ? scopeKind(data.scope) : null;
   const focusKey = document.activeElement?.dataset.navkey;
   const query = $("#search").value.trim().toLowerCase(), nodes = [];
@@ -630,10 +621,10 @@ function renderRelationships(source) {
 }
 function selection() {
   hoveredElement=null;
+  if (!selected) inspector = false;
   syncSelectionURL();
   renderNav(); updateChrome();
-  $('#back').disabled=!history.length;
-  $('#inspect').setAttribute('aria-pressed',String(inspector));
+  $('#back').disabled = !history.length && !onlyFrame;
   const host=currentItem(), part=host?.parts.find(p=>p.id===selectedForm);
   const owner=selectedElement?.owner;
   const a=owner ? manifest?.assets.find(a=>a.path===owner.source) ?? {path:owner.source,parts:[]} : host;
@@ -685,7 +676,7 @@ function updateOutlines() {
   }
 }
 
-function cameraArea() { return fitArea(width, height, sidebar, inspector && !!selected); }
+function cameraArea() { return fitArea(width, height, false, false); }
 function fitWorld(area, data) {
   if (scopeKind(data?.scope) !== 'asset' || !assets.length) return fitView(world,area);
   const x=Math.min(...assets.map(a=>a.x)), y=Math.min(...assets.map(a=>a.y));
@@ -1201,26 +1192,24 @@ for (const [id, action] of Object.entries({
     action();
   };
 $("#back").onclick = back;
-$("#sidebar-toggle").onclick = () => toggleSidebar(false);
-$("#expand-sidebar").onclick = () => toggleSidebar(true);
-$("#inspect").onclick = () => {
+$('#sidebar-toggle').onclick = () => toggleSidebar();
+$('#inspect').onclick = () => {
   inspector = !inspector;
-  selection();
-  save();
-};
-$("#close-inspector").onclick = () => {
-  inspector = false;
-  selection();
-  save();
+  updateChrome();
+  requestDraw(true, false);
 };
 $('#copy-path').onclick=()=>navigator.clipboard.writeText($('#source-path').textContent).catch(e=>error(e.message));
 $('#copy-frame').onclick=()=>navigator.clipboard.writeText($('#frame-name').textContent).catch(e=>error(e.message));
 $("#fullscreen").onclick = () => {
+  $("#more-menu").hidePopover();
   const p = document.fullscreenElement
     ? document.exitFullscreen()
     : document.documentElement.requestFullscreen();
   p.catch((e) => error(e.message));
 };
+document.addEventListener("fullscreenchange", () => {
+  $("#fullscreen").textContent = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
+});
 $("#fit-current").onclick = () =>
   frame(selectedBox() || currentItem() || (active !== null ? groups[active] : world), currentItem() ? 24 : 0);
 $("#map-toggle").onclick = () => {
@@ -1270,22 +1259,16 @@ $("#arrange").onclick = () => {
   $("#more-menu").hidePopover();
   selection();
 };
-$("#search").onfocus = () => {
-  if (!tokenManifest && !searchReturn)
-    searchReturn = {
-      view: { ...view },
-      sidebar,
-      active,
-      selected,
-      selectedId,
-      selectedForm,selectedElement,
-      inspection,
-      inspector,
-    };
-};
 $("#search").oninput = () => {
-  if (!$("#search").value) searchReturn = null;
-  if (tokenManifest) $('.token-scroll').scrollTop = 0;
+  if (tokenManifest) {
+    $('.token-scroll').scrollTop = 0;
+  } else if ($("#search").value.trim()) {
+    searchReturn ??= { view: { ...view }, sidebar, active, selected, selectedId, selectedForm, selectedElement, inspection };
+    toggleSidebar(true);
+  } else if (searchReturn) {
+    toggleSidebar(searchReturn.sidebar);
+    searchReturn = null;
+  }
   renderNav();
 };
 $("#search-clear").onclick=()=>{$("#search").value="";$("#search").oninput();$("#search").focus()};
@@ -1333,11 +1316,11 @@ function applyTokenManifest(data) {
   fixtureState = data.fixture ?? null;
   if (previous?.directory !== data.directory) {
     theme = data.theme;
-    sidebar = /^\/(p|i)\//.test(location.pathname) && innerWidth <= 600 ? false : data.sidebar;
+    sidebar = !!fixtureState?.sidebar;
     applyTheme();
   }
   for (const element of document.querySelectorAll('.directory-name')) element.textContent = data.label;
-  $('#directory').title = $('#app-directory').title = data.directory;
+  $('#app-directory').title = data.directory;
   document.title = `${data.label} — SVG Design Gallery`;
   if (!fixtureState) {
     const url = viewURL(location.href, 'tokens');
@@ -1364,7 +1347,7 @@ async function applyManifest(data, force = false) {
     fixtureState=data.fixture ?? null;
     theme = data.theme;
     applyTheme();
-    if (!leavingTokens) toggleSidebar(/^\/(p|i)\//.test(location.pathname) && innerWidth <= 600 ? false : data.sidebar);
+    if (!leavingTokens) sidebar = !!fixtureState?.sidebar;
     inspector = !!fixtureState && data.inspector;
     history = [];
   }
@@ -1375,7 +1358,7 @@ async function applyManifest(data, force = false) {
     }
     catalog = data;
     for(const element of document.querySelectorAll('.directory-name')) element.textContent=data.label;
-    $("#directory").title=data.directory||'';$("#app-directory").title=data.directory||'';
+    $("#app-directory").title=data.directory||'';
     document.title = `${data.label} — SVG Design Gallery`;
     updateChrome();
     renderNav();
@@ -1462,7 +1445,7 @@ async function applyManifest(data, force = false) {
       JSON.stringify(previous.groups) === JSON.stringify(data.groups),
   );
   for(const element of document.querySelectorAll('.directory-name')) element.textContent=data.label;
-  $("#directory").title=data.directory||'';$("#app-directory").title=data.directory||'';
+  $("#app-directory").title=data.directory||'';
   document.title = `${data.label} — SVG Design Gallery`;
   if (first) {
     const target = entry ? entry.target : link ?? data.selection;
@@ -1522,9 +1505,9 @@ function updateChoices() {
   }
 }
 for(const button of $("#backgrounds").children) button.onclick=()=>{backgroundChoice=button.dataset.background;updateChoices();requestDraw()};
-for(const [id,trigger] of [['display-menu','display'],['zoom-menu','zoom-options'],['more-menu','more']]) {
+for(const [id,trigger] of [['zoom-menu','zoom-options'],['more-menu','more']]) {
   $("#"+id).addEventListener('toggle',event=>{
-    $("#"+trigger).setAttribute('aria-pressed',String(event.newState==='open'));
+    $("#"+trigger).setAttribute(id === "more-menu" ? "aria-expanded" : "aria-pressed", String(event.newState === "open"));
     if(event.newState==='open') {
       for(const other of document.querySelectorAll(':popover-open')) if(other.id!==id) other.hidePopover();
       hideTooltip();positionZoomMenu();
@@ -1568,7 +1551,7 @@ async function applyFixture() {
     const source=manifest.assets.find(a=>a.path===state.asset),form=state.form?source?.parts.find(p=>p.name===state.form):null;
     const item=assets.find(a=>a.path===state.asset && (!form || a.component || a.shown[0].id===form.id));
     if(!item)throw new Error(`Fixture asset/form not found: ${state.asset} ${state.form??''}`);
-    selected=item.path;selectedId=item.id;selectedForm=form?.id??item.parts[0]?.id;
+    selected=item.path;selectedId=item.id;selectedForm=form?.id ?? (state.sourceOnly ? null : item.parts[0]?.id);
   }
   $("#search").value=state.query??'';$("#minimap").hidden=!state.minimap;$("#map-toggle").setAttribute('aria-pressed',String(!!state.minimap));
   selection();
@@ -1639,18 +1622,6 @@ if ((tokenManifest || manifest) && !isUnauthorized()) {
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
     e.preventDefault();
-    if (!tokenManifest && !searchReturn)
-      searchReturn = {
-        view: { ...view },
-        sidebar,
-        active,
-        selected,
-        selectedId,
-        selectedForm,selectedElement,
-        inspection,
-        inspector,
-      };
-    toggleSidebar(true);
     $("#search").focus();
     return;
   }

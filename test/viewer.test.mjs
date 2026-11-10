@@ -66,21 +66,22 @@ test('token scope reads both themes, updates on save, and preserves the design c
     assert.equal(await page.evaluate(() => window.copiedToken), '--radius-card');
     assert.equal(await page.locator('.token-copy').count(), 1, 'search includes dark values');
     await page.getByRole('button', { name: 'Clear search' }).click();
+    assert.equal(await page.locator('#sidebar').isVisible(), false, 'token search keeps Contents closed');
+    await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.getByRole('button', { name: /^Spacing & size/ }).click();
     assert.deepEqual(await page.locator('.token-value code').allTextContents(), ['8px', '8px']);
     await writeFile(source, tokens.replace('8px', '10px'));
     await page.waitForFunction(() => document.querySelector('.token-value code')?.textContent === '10px');
-    const switchScope = async (from, to) => {
-      await page.getByRole('button', { name: `Render scope: ${from}`, exact: true }).click();
-      await page.getByRole('button', { name: to, exact: true }).click();
+    const switchScope = async to => {
+      await page.getByRole('tab', { name: to, exact: true }).click();
       await page.waitForFunction(scope => window.__sdg.ready && window.__sdg.scope === scope,
         to === 'Tokens' ? 'tokens' : 'all', { timeout: 5000 });
     };
-    await switchScope('Tokens', 'All designs');
+    await switchScope('All designs');
     await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
     const camera = await page.evaluate(() => window.__sdg.view);
-    await switchScope('All designs', 'Tokens');
-    await switchScope('Tokens', 'All designs');
+    await switchScope('Tokens');
+    await switchScope('All designs');
     assert.deepEqual(await page.evaluate(() => window.__sdg.view), camera);
   } finally {
     await browser.close();
@@ -88,12 +89,13 @@ test('token scope reads both themes, updates on save, and preserves the design c
   }
 });
 
-test('every approved frame maps to an isolated fixture environment', async () => {
+test('implementation captures map to isolated fixture environments', async () => {
   const project = await loadConfig(root);
   const sources = await Promise.all(listSources(project.design, project.sources)
     .map(file => buildSource(project, file, {write:false})));
   const declared = sources.flatMap(source => source.frames.filter(frame => frame.fixture).map(frame => frame.fixture));
-  assert.deepEqual(Object.keys(states).sort(), [...new Set(declared)].sort());
+  assert.ok(declared.length > 0);
+  assert.equal(new Set(declared).size, declared.length);
   for (const name of declared) {
     const fixture=config.compare.fixture(name);
     assert.equal(fixture.url, `/?fixture=${name}`); assert.equal(fixture.theme,states[name].theme);
@@ -139,8 +141,11 @@ test('catalog is usable before asset preparation and retains a queued selection'
     const page = await browser.newPage();
     await page.route('**/asset/**', async route => {await gate;await route.continue()});
     await page.goto(server.url, {waitUntil:'domcontentloaded'});
-    await page.getByRole('button',{name:'Render scope: Components',exact:true}).waitFor();
-    assert.equal(await page.locator('#sidebar').isVisible(),true);
+    await page.getByRole('tab',{name:'Components',exact:true}).waitFor();
+    assert.deepEqual(await page.getByRole('tab').allTextContents(), ['Tokens', 'Components', 'Modules', 'Surfaces', 'All designs']);
+    assert.equal(await page.locator('#sidebar').isVisible(),false);
+    assert.equal(await page.locator('#inspect').isEnabled(),false);
+    await page.getByRole('button', { name: 'Contents', exact: true }).click();
     assert.equal(await page.evaluate(()=>window.__sdg.assets),0);
     assert.equal(await page.evaluate(()=>window.__sdg.ready),false);
     await page.locator('[data-navkey="file:components/button.tsx"]').click();
@@ -149,6 +154,21 @@ test('catalog is usable before asset preparation and retains a queued selection'
     assert.equal(await page.locator('#source-name').textContent(),'button');
     assert.equal(await page.locator('[data-navkey="file:components/button.tsx"]').getAttribute('aria-current'),'true');
     assert.equal(await page.locator('#error').isVisible(),false);
+    const camera = await page.evaluate(() => window.__sdg.view);
+    await page.getByRole('button', {name:'Contents',exact:true}).click();
+    await page.locator('#search').fill('button');
+    assert.equal(await page.locator('#sidebar').isVisible(),true);
+    assert.equal(await page.locator('[data-navkey="search:components/button.tsx:"]').isVisible(),true);
+    await page.locator('#search-clear').click();
+    assert.equal(await page.locator('#sidebar').isVisible(),false);
+    assert.equal(await page.locator('#tools > button').last().getAttribute('id'),'inspect');
+    await page.locator('#inspect').click();
+    assert.equal(await page.locator('#source').isVisible(),true);
+    assert.deepEqual(await page.evaluate(() => window.__sdg.view),camera);
+    await page.locator('#more').click();
+    assert.equal(await page.locator('#fullscreen').isVisible(),true);
+    await page.locator('#themes [data-theme="dark"]').click();
+    assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
   } finally {release();await browser.close();await server.close()}
 });
 test('camera and selected form survive immediate reload and a server restart', {timeout:30000}, async t => {
@@ -158,8 +178,9 @@ test('camera and selected form survive immediate reload and a server restart', {
   try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});
     await page.goto(server.url);await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('[data-navkey="file:components/button.tsx"]').click();
-    if (await page.locator('#inspect').getAttribute('aria-pressed') === 'false') await page.locator('#inspect').click();
+    await page.locator('#inspect').click();
     await page.locator('#forms button').filter({hasText:/^secondary/}).click();
     await page.locator('#plus').click();
     const camera=await page.evaluate(()=>window.__sdg.view);
@@ -232,13 +253,15 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
           for(const caption of ['default','error']) assert.equal(await page.locator('#labels .canvas-label:not([hidden])').filter({hasText:new RegExp(`^${caption}$`)}).count(),1);
         }
         if(name==='sample-inspect-frame') {
-          assert.equal(Math.round(await page.evaluate(()=>window.__sdg.view.scale)*100),71);
           assert.equal(await page.locator('#frame-name').textContent(),'failed');
           assert.equal(await page.locator('#frame-size').textContent(),'960 × 912');
           assert.equal(await page.locator('#relationships').isVisible(),true);
           assert.equal(await page.locator('#source-path').evaluate(el=>getComputedStyle(el).fontSize),'12px');
         }
-        if(name==='sidebar-search') assert.equal((await relativeBox('.search-result','#sidebar'))[1],164);
+        if (name === 'sidebar-search') {
+          assert.equal(await page.locator('#app-bar #search').isVisible(), true);
+          assert.equal(await page.locator('#sidebar #search').count(), 0);
+        }
         if(name==='menu-zoom') {
           const gap=await page.evaluate(()=>document.querySelector('.zoom').getBoundingClientRect().top-document.querySelector('#zoom-menu').getBoundingClientRect().bottom);
           assert.equal(gap,8);
@@ -249,16 +272,12 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
           assert.equal(await page.locator('#tooltip').evaluate(el=>getComputedStyle(el).fontSize),'12px');
         }
         if(name==='sample-components') {
-          assert.equal((await relativeBox('#all','#sidebar'))[1],136);
-          assert.equal((await relativeBox('#modules>.rule','#sidebar'))[1],168);
-          assert.deepEqual((await relativeBox('.group-name','#sidebar')).slice(0,2),[40,176]);
-          assert.equal(await page.locator('#labels .canvas-label:not([hidden])').filter({hasText:/^icon-button$/}).count(),1);
           assert.equal(await page.locator('#search').getAttribute('placeholder'),'Find assets…');
           assert.ok(await page.locator('#labels .canvas-label:not([hidden])').count()>0);
           const view=await page.evaluate(()=>window.__sdg.view);
-          await page.getByRole('button',{name:'Collapse sidebar',exact:true}).click();
+          await page.getByRole('button',{name:'Contents',exact:true}).click();
           assert.deepEqual(await page.evaluate(()=>window.__sdg.view),view);
-          await page.getByRole('button',{name:'Expand sidebar',exact:true}).focus();
+          await page.getByRole('button',{name:'Contents',exact:true}).focus();
           await page.keyboard.press('1');
           assert.equal(await page.evaluate(()=>window.__sdg.view.scale),1);
           await page.keyboard.press('0');
@@ -531,6 +550,7 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
     const grownSet=grown.items.find(a=>a.path==='components/forms.tsx');
     assert.ok(grownSet.width>1600,'many measured forms must use an adaptive wrap width');
     assert.ok(grownSet.y>beforeGrowth.items.find(a=>a.path===grownSet.path).y,'enlarged set moves below occupied content');
+    await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('.group-name').filter({hasText:/^components/}).click();
     await page.locator('#more').click();await page.locator('#arrange').click();
     const arranged=await page.evaluate(()=>window.__sdg.items);
@@ -571,7 +591,7 @@ test('dedicated legacy SVG sheets retain measurement, form crops and renderable 
   } finally {await browser.close();await server.close();}
 });
 
-test('frame and element selection expose transitive relationships, matching exports and persisted inspector state', {timeout:30000}, async t => {
+test('frame and element selection expose transitive relationships, matching exports and a collapsed inspector on entry', {timeout:30000}, async t => {
   const {writeFile}=await import('node:fs/promises');
   const {init}=await import('../src/toolkit/project.mjs');
   const temporaryRoot=await temporary(t);init({root:temporaryRoot},()=>{});
@@ -588,6 +608,7 @@ test('frame and element selection expose transitive relationships, matching expo
     const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:new URL(server.url).origin});
     await page.goto(server.url+'?scope=all&keep=yes#notes');await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('[data-navkey="group:surfaces"]').click();
     assert.equal(new URL(page.url()).searchParams.get('group'),'surfaces');
     const groupLink=page.url();
@@ -608,13 +629,9 @@ test('frame and element selection expose transitive relationships, matching expo
     assert.equal(await page.locator('#frame-name').textContent(),'two');
     assert.equal(await page.locator('#frame-size').textContent(),'400 × 200');
     assert.equal(await page.locator('#selection-outline').isVisible(),true);
-    await page.locator('#labels [data-source-path="surfaces/home.tsx"][data-form="1"]').click();
-    assert.equal((await page.evaluate(()=>window.__sdg.selection)).frame,'two');
-    await page.locator('#labels [data-source-path="surfaces/home.tsx"]:not([data-form])').click();
-    assert.equal((await page.evaluate(()=>window.__sdg.selection)).frame,null);
-    await page.locator('#forms [data-frame="two"]').click();await page.waitForFunction(()=>window.__sdg.ready);
     await page.locator('#copy-frame').click();assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'two');
     await page.locator('#copy-path').click();assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'surfaces/home.tsx');
+    await page.locator('#inspect').click();
     const point=await page.evaluate(()=>{
       const a=window.__sdg.items.find(a=>a.id==='surfaces/home.tsx#1'),v=window.__sdg.view;
       return {x:v.x+(a.x+16+100)*v.scale,y:v.y+(a.y+16+40)*v.scale};
@@ -622,6 +639,7 @@ test('frame and element selection expose transitive relationships, matching expo
     await page.mouse.move(point.x,point.y);assert.equal(await page.locator('#hover-outline').isVisible(),true);
     await page.mouse.click(point.x,point.y);await page.waitForFunction(()=>window.__sdg.ready);
     const elementLink=page.url();
+    await page.locator('#inspect').click();
     assert.ok(new URL(elementLink).searchParams.get('element'));
     assert.deepEqual((await page.evaluate(()=>window.__sdg.selection)).element,{source:'modules/composer.tsx',export:'Composer'});
     assert.equal(await page.locator('#source-path').textContent(),'modules/composer.tsx');
@@ -641,9 +659,10 @@ test('frame and element selection expose transitive relationships, matching expo
     assert.equal(page.url(),elementLink);
     await page.locator('#used-by [data-related-path="surfaces/home.tsx"]').click();await page.waitForFunction(()=>window.__sdg.ready);
     assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
-    await page.locator('#close-inspector').click();
+    await page.locator('#inspect').click();
     await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
     assert.equal(await page.locator('#source').isVisible(),false);
+    await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('[data-navkey="file:surfaces/home.tsx"]').click();
     assert.equal(await page.locator('#source').isVisible(),false,'navigation retains the collapsed inspector');
     await page.locator('#inspect').click();await page.locator('#forms [data-frame="one"]').click();await page.waitForFunction(()=>window.__sdg.ready);

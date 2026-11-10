@@ -36,8 +36,7 @@ test('render scopes bound cold loads and live edits, with independent focus link
     const query = key => new URL(page.url()).searchParams.get(key);
     const builds = () => server.cacheStats().builds.builds;
     const switchTo = async (label, scope) => {
-      await page.locator('#render-scope').click();
-      await page.locator('#scope-menu').getByRole('button',{name:label,exact:true}).click();
+      await page.getByRole('tab', { name: label, exact: true }).click();
       await ready(scope);
     };
 
@@ -48,6 +47,7 @@ test('render scopes bound cold loads and live edits, with independent focus link
     assert.equal(builds(),2);
     assert.equal(await page.locator('#source').isVisible(),false);
 
+    await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('[data-navkey="group:Essentials"]').click();
     const camera = await page.evaluate(()=>window.__sdg.view);
     assert.equal(new URL(page.url()).pathname,'/view/layer/components/group/Essentials');
@@ -117,7 +117,9 @@ test('render scopes bound cold loads and live edits, with independent focus link
     const frameHeight = await page.evaluate(() => window.__sdg.items[0].height);
     await writeFile(path.join(directory, fields[0]), source('default', 'error').replace('height={100}', 'height={140}'));
     await page.waitForFunction(height => window.__sdg.ready && window.__sdg.items[0].height === height + 40, frameHeight);
-    await switchTo('field', `asset:${fields[0]}`);
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await ready(`asset:${fields[0]}`);
+    await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('[data-navkey="form:default"]').waitFor();
     assert.equal(query('frame'),null);
 

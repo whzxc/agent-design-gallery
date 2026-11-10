@@ -13,6 +13,7 @@ export function Inspector({
   frameSize,
   uses = [],
   usedBy = [],
+  closeControl = true,
   children,
 }: any) {
   const chosen = rows.find((row: any) => row.form?.endsWith('selected'));
@@ -23,7 +24,7 @@ export function Inspector({
       <div class="p-4 pb-3">
         <div class="flex items-center justify-between">
           <h2 class="text-title leading-5 font-[650]">{title}</h2>
-          <IconButton icon="panel-right" />
+          {closeControl && <IconButton icon="panel-right" />}
         </div>
         <button class="mt-1 flex items-center gap-2 font-mono text-meta leading-4 text-text-secondary">
           <span>{path}</span>

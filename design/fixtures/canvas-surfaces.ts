@@ -3,12 +3,7 @@ export const frames = [
     "name": "components",
     "width": 1440,
     "height": 900,
-    "fixture": "sample-components",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "0 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -37,12 +32,7 @@ export const frames = [
     "name": "zoomed",
     "width": 1440,
     "height": 900,
-    "fixture": "sample-zoomed",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "0 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -120,12 +110,7 @@ export const frames = [
     "name": "surfaces",
     "width": 1440,
     "height": 900,
-    "fixture": "sample-surfaces",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "0 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -154,12 +139,7 @@ export const frames = [
     "name": "overview",
     "width": 1440,
     "height": 900,
-    "fixture": "sample-overview",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "0 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,

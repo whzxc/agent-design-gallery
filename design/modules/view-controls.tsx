@@ -18,6 +18,47 @@ export function Tools({ active }: { active?: string }) {
     </Toolbar>
   );
 }
+
+export function ViewerTools({ detailsOpen = false, inspectorDisabled = false, menu }: {
+  detailsOpen?: boolean;
+  inspectorDisabled?: boolean;
+  menu?: unknown;
+}) {
+  return <Toolbar>
+    <div class="relative">
+      <div role="button" aria-label="More" aria-haspopup="menu" aria-expanded={menu ? 'true' : 'false'}>
+        <IconButton icon="ellipsis" form={menu ? 'active' : 'default'} />
+      </div>
+      {menu && <div class="absolute right-0 top-full mt-[14px]">{menu}</div>}
+    </div>
+    <div role="button" aria-label="Inspector" aria-expanded={detailsOpen ? 'true' : 'false'} aria-disabled={inspectorDisabled}>
+      <IconButton icon="panel-right" form={detailsOpen ? 'active' : 'default'} disabled={inspectorDisabled} />
+    </div>
+  </Toolbar>;
+}
+
+export function ViewerBars({ project, scopes, search, contentsOpen, detailsOpen, inspectorDisabled }: {
+  project: unknown;
+  scopes: unknown;
+  search: unknown;
+  contentsOpen?: boolean;
+  detailsOpen?: boolean;
+  inspectorDisabled?: boolean;
+}) {
+  return <header class="flex items-start justify-between gap-3">
+    <Toolbar wide>
+      <div role="button" aria-label="Contents" aria-expanded={contentsOpen ? 'true' : 'false'}>
+        <IconButton icon="panel-left" form={contentsOpen ? 'active' : 'default'} />
+      </div>
+      {project}
+      <Separator />
+      {scopes}
+      <Separator />
+      {search}
+    </Toolbar>
+    <ViewerTools detailsOpen={detailsOpen} inspectorDisabled={inspectorDisabled} />
+  </header>;
+}
 export function AppBar({
   empty = false,
   specimen = false,
@@ -73,12 +114,7 @@ const frames = [
     "name": "tools-tooltip",
     "width": 420,
     "height": 120,
-    "fixture": "tooltip-inspector",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "1020 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 256,

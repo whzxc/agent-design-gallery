@@ -4,6 +4,7 @@ const components = { theme: 'light', sidebar: true, group: 'Essentials', asset: 
 const overview = { theme: 'dark', sidebar: false, camera: 'all' };
 const layerScope = { theme: 'light', sidebar: true, scope: 'layer:components', group: 'Essentials', camera: 'all' };
 const groupScope = { theme: 'light', sidebar: true, scope: 'group:Essentials', camera: 'all' };
+const topBars = { ...layerScope, themeChoice: 'system', sidebar: false, camera: 'origin', scale: 0.2392248580020047, origin: [276.76, 556.07] };
 export const states = {
   'sample-components': { ...components },
   'sample-zoomed': { ...components, theme: 'dark', camera: 'selection', scale: 1, minimap: true },
@@ -11,9 +12,7 @@ export const states = {
   'sample-overview': { ...overview },
   'sample-inspect-frame': { theme: 'light', sidebar: true, group: 'Connections & MCP', asset: 'surfaces/mcp-hub.tsx', form: 'failed', inspector: true, camera: 'selection' },
   'sample-inspect-component': { theme: 'dark', sidebar: true, group: 'Essentials', asset: 'components/button.tsx', form: 'primary', inspector: true, camera: 'selection', scale: 1.25 },
-  'menu-display': { ...components, themeChoice: 'system', menu: 'display-menu' },
   'menu-zoom': { ...components, scale: .48, menu: 'zoom-menu' },
-  'menu-more': { ...components, menu: 'more-menu' },
   'sidebar-search': { theme: 'light', sidebar: true, group: 'Agents & quota', asset: 'components/state-pill.tsx', query: 'pill', camera: 'selection' },
   'tooltip-inspector': { ...components, tooltip: true },
   'dialog-shortcuts': { ...components, dialog: 'keys' },
@@ -23,8 +22,11 @@ export const states = {
   'scope-layer': layerScope,
   'scope-group': groupScope,
   'scope-asset': { ...groupScope, scope: 'asset:components/field.tsx' },
-  'scope-picker-open': { ...layerScope, menu: 'scope-menu' },
   'tokens-light': { theme: 'light', themeChoice: 'system', sidebar: true, scope: 'tokens' },
+  'viewer-top-bars': topBars,
+  'viewer-top-bars-panels': { ...topBars, sidebar: true, inspector: true, asset: 'components/button.tsx', sourceOnly: true },
+  'viewer-top-bars-tokens': { theme: 'light', themeChoice: 'system', sidebar: false, scope: 'tokens' },
+  'viewer-top-bars-more': { ...topBars, themeChoice: 'system', origin: [-400, 556.07], menu: 'more-menu' },
   'scope-group-action': { ...layerScope, camera:'origin', scale:.24, origin:[650,140], hoverScope: 'Render only this group: Essentials' },
   'scope-asset-action': { ...groupScope, group:'Essentials', camera:'origin', scale:.53, origin:[650,140],
     hoverScope: 'Render only this asset: field' },

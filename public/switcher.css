@@ -29,9 +29,9 @@
 .switcher-empty { margin:0; padding:12px 10px; color:var(--text-secondary); }
 .picker[aria-expanded="true"] { outline:1px solid var(--accent); outline-offset:-1px; }
 .switcher-chevron { display:flex; color:var(--text-tertiary); }
-#app-bar .picker[aria-controls="project-switcher"] { width:240px; }
+#app-bar:not(:has(#scope-tabs)) .picker[aria-controls="project-switcher"] { width:240px; }
 @media (max-width:600px) {
-  :root[data-hub-viewer] #tools { display:none; }
+  :root[data-hub-viewer]:not(:has(#scope-tabs)) #tools { display:none; }
   #project-switcher { width:calc(100vw - 24px); }
-  #app-bar .picker[aria-controls="project-switcher"] { width:220px; }
+  #app-bar:not(:has(#scope-tabs)) .picker[aria-controls="project-switcher"] { width:220px; }
 }

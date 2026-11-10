@@ -19,7 +19,9 @@ await context.addInitScript(() => {
   let last;
   function frame(now) {
     const loading = window.__perf.loading;
-    if (!loading.catalogMs && document.querySelector('#modules')?.children.length && !document.querySelector('#sidebar').hidden) loading.catalogMs = now;
+    const catalogReady = document.querySelector('#scope-tabs button') ||
+      (document.querySelector('#modules')?.children.length && !document.querySelector('#sidebar').hidden);
+    if (!loading.catalogMs && catalogReady) loading.catalogMs = now;
     if (!loading.layoutMs && window.__sdg?.assets) loading.layoutMs = now;
     if (!loading.drawnMs && window.__sdg?.ready) loading.drawnMs = now;
     if (last) window.__perf.frames.push(now - last);
@@ -218,7 +220,7 @@ await phase("trackpad-pan", async () => {
 });
 await fit();
 await phase("theme", async () => {
-  const display = page.locator("#display");
+  const display = page.locator("#display, #more").first();
   if (await display.count()) await display.click();
   const themeName = await page.evaluate(() => document.documentElement.dataset.theme === "light" ? "Dark" : "Light");
   const theme = page.locator(`#themes button[data-theme=${themeName.toLowerCase()}]`)

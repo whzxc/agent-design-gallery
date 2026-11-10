@@ -69,7 +69,7 @@ export const renderScopeScenes = {
     {"kind":"section","at":[981.8,100],"size":[345.44,264.1]},
     {"kind":"section","at":[948.09,639.69],"size":[261.23,123.44]},
     {"kind":"section","at":[380.76,100],"size":[543.63,390.65]},
-    { kind: 'asset', at: [722.26,634.67], size: [149.04,22.49],
+    { kind: 'asset', name: 'button', at: [722.26,634.67], size: [149.04,22.49],
       preview: {"crop":"0 0 623 94","size":[623,94],"light":light0,"dark":dark0} },
     { kind: 'asset', at: [806.47,683.95], size: [34.45,22.49],
       preview: {"crop":"0 0 144 94","size":[144,94],"light":light1,"dark":dark1} },

@@ -138,7 +138,10 @@ export async function initSwitcher() {
       trigger.setAttribute('aria-expanded', 'false');
       trigger.setAttribute('aria-controls', menu.id);
       trigger.querySelector('[data-icon]').innerHTML = icon(kind === 'i' ? 'radio' : 'folder', 14);
-      const chevron = element('span', 'switcher-chevron'); chevron.innerHTML = icon('chevron-down', 12); trigger.append(chevron);
+      const chevron = trigger.querySelector('.switcher-chevron') ?? element('span', 'switcher-chevron');
+      chevron.innerHTML = icon('chevron-down', 12);
+      chevron.hidden = false;
+      trigger.append(chevron);
       trigger.onclick = () => menu.matches(':popover-open') ? close() : open(trigger);
       trigger.onkeydown = event => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); open(trigger); }

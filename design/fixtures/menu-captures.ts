@@ -3,12 +3,7 @@ export const frames = [
     "name": "display",
     "width": 420,
     "height": 400,
-    "fixture": "menu-display",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "1020 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 256,
@@ -28,12 +23,7 @@ export const frames = [
     "name": "zoom",
     "width": 420,
     "height": 310,
-    "fixture": "menu-zoom",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "646 590"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 72,
@@ -56,12 +46,7 @@ export const frames = [
     "name": "more",
     "width": 420,
     "height": 180,
-    "fixture": "menu-more",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "1020 0"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 256,

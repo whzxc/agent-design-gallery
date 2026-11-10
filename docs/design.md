@@ -51,11 +51,29 @@ with a 1 KiB source budget. Both the hub and viewer link to `/favicon.svg`; pack
 Feature modules own their parts and specimens. Remaining coverage and fidelity gaps are listed below. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
 not frame sources. The separate `fixtures/arc-sample/design/` tree is acceptance content, not the viewer UI library.
 
+### Viewer top bars
+
+Two toolbars stay above the viewer. The left toolbar starts with the Contents toggle, then the project picker,
+the scope tabs in order (Tokens, Components, Modules, Surfaces, All designs), and the search field. The right
+toolbar has More followed by the Inspector toggle at its right edge. More contains Fullscreen, Theme, Canvas,
+and the existing view actions. Inspector becomes available when a canvas node is selected.
+
+Contents and Inspector start closed. Each opens beneath its toolbar, overlays the canvas, and uses its
+toolbar toggle to close. Contents shows the tree for the selected scope and opens for asset search results.
+Tokens uses the full width below the bars and keeps categories in Contents. Search filters the token table
+in place. The project menu and More menu anchor to their respective triggers.
+
+The approved frames and active implementation captures are `surfaces/canvas.tsx` / `top-bars` and
+`top-bars-panels`, `surfaces/tokens.tsx` / `top-bars`, and `modules/menus.tsx` / `viewer-more`.
+They use the 1440 × 900 desktop viewport or a crop of it. Earlier viewer chrome specimens remain as
+historical frames without implementation capture bindings. At narrow widths the tabs scroll in their
+own row. Contents and Inspector still overlay the canvas.
+
 ### Render scopes
 
-`modules/navigation.tsx` owns the scope picker and the separate **Render only this group** and
-**Render only this asset** row actions. The picker sits between the project picker and asset search.
-It lists each configured source layer and **All designs**. A clean project URL opens its first
+`modules/view-controls.tsx` owns the scope tabs between the project picker and search.
+The tabs list each configured source layer and **All designs**. `modules/navigation.tsx` owns
+Contents and its **Render only this group** and **Render only this asset** row actions. A clean project URL opens its first
 nonempty layer, normally Components. All designs is a choice for the current URL.
 
 Click a row to focus it within the current scope. Use the trailing action to switch scope.
@@ -84,24 +102,22 @@ Builds and preview requests stay within that scope, including dependencies neede
 An independent TSX frame compiles its owning source and sends only the named frame to the browser.
 See the [review handoff workflow](design-toolkit.md#review-handoff) for link and screenshot commands.
 
-The approved navigation specimens and `surfaces/canvas.tsx` frames `scope-layer`, `scope-group` and
-`scope-asset` have isolated implementation captures. The picker and row actions map to
-`public/app.js`, `public/index.html` and `public/style.css`. Scope resolution lives in
+The scope tabs and row actions map to `public/app.js`, `public/index.html` and `public/style.css`.
+The runtime fixtures exercise independent layer, group and asset scopes. Scope resolution lives in
 `public/assets.js` and is applied by `src/server.mjs` before asset metadata is read.
 
 ### Token catalog
 
-The scope picker lists **Tokens** after **All designs** for projects with `design/tokens.css`.
+The top bar lists **Tokens** first for projects with `design/tokens.css`.
 The catalog replaces the canvas with a read-only table. Returning to a design scope restores its view.
-The sidebar searches token names and values and filters by category. The table shows CSS names and
+The top search filters token names and values in the table. Contents filters by category. The table shows CSS names and
 authored light and dark values side by side. Color values show swatches. Spacing, size, and radius
 values in pixels show a length or corner sample next to the exact value. A missing dark declaration
 uses the light value. The token name copies on click, with the copy icon shown on hover or focus.
 The `?scope=tokens` URL opens the catalog directly. The server reads the project's token file on demand and
 refreshes the catalog when it changes. The viewer keeps using its own tokens for chrome.
 
-The review uses `modules/navigation` / `scope-picker-open` for entry, `surfaces/tokens` / `desktop`
-for the catalog, and `modules/tokens` / `typography` and `spacing-and-radii` for value previews.
+The review uses `surfaces/tokens` / `top-bars` for the catalog and `modules/tokens` / `typography` and `spacing-and-radii` for value previews.
 
 ### Part mappings and state
 
@@ -125,12 +141,12 @@ usage. Reviewed structural compositions preserve their existing visuals; remaini
 | `modules/canvas.tsx` / `Drawing` | `public/app.js` `draw`, `drawLabels`; `public/labels.js` `Labels` | Screen → surfaces and feature-module captures | Reviewed; in use; owns section fills, artboard/flow outlines, preview images and SVG labels. The cropped `drawing` specimen shows its existing section layer. |
 | `components/canvas.tsx` / `Screen` | `public/index.html` gallery layers; `public/app.js` `draw` | Three surfaces and captured feature modules | In use; generic scene layer with child content, independent of feature dispatch; callers supply the drawing content. Specimen `screen` Reviewed. |
 | `components/canvas.tsx` / `Scrim` | `public/style.css` `dialog::backdrop` | ViewerChrome and shortcuts module | In use; existing 60% canvas overlay. Specimen `scrim` Reviewed. |
-| `modules/navigation.tsx` / `Sidebar` | `public/index.html` `#sidebar`; `public/app.js` `renderNav` | ViewerChrome → surfaces | Reviewed; in use; frames: `search`, captured `search-results`. Fixtures own rows, directory, query and count. |
+| `modules/navigation.tsx` / `Contents` | `public/index.html` `#sidebar`; `public/app.js` `renderNav` | `surfaces/canvas` / `top-bars-panels` | Approved; overlay for the current scope. |
 | `modules/inspector.tsx` / `Inspector` | `public/index.html` `#source`, `#relationships`; `public/app.js` `selection`, `renderRelationships`; `public/selection.js` `exportFrames` | ViewerChrome → inspector surface; mapped source and export selection | Reviewed; in use. Approved states: `frames`, `frame`, `element`, `source`, `export-element`, `export-element-nested`, `export-element-empty`. Export rows show owning-frame sizes while the header shows the selected element size; export rows have no selected frame highlight. |
-| `modules/menus.tsx` / `Menu` | `public/index.html` `#display-menu`, `#zoom-menu`, `#more-menu` | Menus module captures; mapped runtime menus | Reviewed; in use; frames: `default`, `display`, `zoom`, `more`, with separate menu fixtures. |
+| `modules/menus.tsx` / `Menu` | `public/index.html` `#zoom-menu`, `#more-menu` | Zoom and viewer More menus | Approved; `viewer-more` captures the combined menu. |
 | `modules/open-directory.tsx` / `OpenDialog` | `public/index.html` `#directories`; `public/app.js` `showOpen`, `open`, `recent` | ViewerChrome → open-directory surface | Reviewed; in use; `error` specimen and captured states preserve existing visuals. Recent labels/paths are shared with runtime fixtures. Two-line rows use their existing height token. |
 | `modules/shortcuts.tsx` / `Shortcuts` | `public/index.html` `#keys`; `public/style.css` `#keys` | Mapped runtime usage; module capture | Reviewed; in use; captured `default` consumes shared keyboard fixtures; its module owns the local dialog capture. |
-| `modules/view-controls.tsx` / `Tools` | `public/index.html` `#tools`; display/inspector/fullscreen handlers | ViewerChrome → surfaces; menus and view-controls module captures | Reviewed; in use; frames: `tools`, `tools-tooltip`. |
+| `modules/view-controls.tsx` / viewer toolbars | `public/index.html` `#app-bar`, `#tools`; `public/app.js` `renderScopeTabs`, `updateChrome` | `surfaces/canvas` and `surfaces/tokens` | Approved; Contents, project picker, tabs and search on the left; More and Inspector on the right. |
 | `modules/view-controls.tsx` / `AppBar` | `public/index.html` `#app-bar`; `public/app.js` `updateChrome` | ViewerChrome → canvas/open-directory surfaces | Reviewed; in use; `app-bar` uses a separate presentation fixture. |
 | `modules/view-controls.tsx` / `ZoomBar` | `public/index.html` `.zoom`; zoom/fit handlers | ViewerChrome → surfaces; menus module | Reviewed; in use; Fit uses `scan`, Back exposes `backDisabled`, and Minimap exposes `minimapPressed` through the existing active form. All four state specimens are approved. Frames: `zoom-bar`, `zoom-bar-menu-open`, `zoom-bar-back-disabled`, `zoom-bar-minimap-pressed`. |
 | `surfaces/canvas.tsx` / `ViewerChrome` | `public/index.html` floating chrome; `public/app.js` `updateChrome` | All three surface renderers | In use; boundary Reviewed. Only chooses and positions imported feature parts. |
@@ -151,15 +167,13 @@ Part defaults belong to their defining components. The fixtures have no independ
 retain illustrative external source names; `source` and exported-element states use the local ARC snapshot.
 Their part mappings are `StatePill` in `components/state-pill.tsx` and nested `Input` in `components/field.tsx`;
 `SetupAction` in `components/setup-choice.tsx` has no owning-frame match when selected in `surfaces/setup.tsx` / `source-empty`.
-Only frame/component states have dedicated runtime captures; extra local source/export specimens use ARC owner/geometry data.
+The top-bars panel capture shows a component selection. Other local source and export specimens use ARC owner and geometry data.
 `fixtures/open-directory.json` owns recent labels/paths and dialog presentation states; `fixtures/viewer.mjs`
 derives runtime recent paths from that same record.
 `fixtures/shortcuts.json` owns shortcut labels/key sequences and the keycap specimen.
 `fixtures/canvas.ts` owns neutral drawing/minimap data and AssetLabel presentation content.
-`fixtures/canvas-surfaces.ts` owns the canvas surface's four frame/capture records and chrome placement.
-`fixtures/inspector-surfaces.ts` owns inspector surface capture/layout records; content remains in `fixtures/inspector.json`.
-`fixtures/menu-captures.ts` owns the three local menu capture/layout records; no menus surface source remains.
-`fixtures/open-directory-surfaces.ts` owns the empty/dialog/error surface capture and placement records.
+`fixtures/viewer-bars.ts` owns the approved top-bar, Contents, Inspector and More presentation data.
+`fixtures/{canvas-surfaces,inspector-surfaces,menu-captures,open-directory-surfaces}.ts` retain the earlier viewer chrome and capture placement.
 Frame names are listed above, and composition is owned by the consumers in the mapping table.
 
 

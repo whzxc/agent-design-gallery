@@ -38,12 +38,7 @@ const frames = [
     "name": "default",
     "width": 480,
     "height": 374,
-    "fixture": "dialog-shortcuts",
-    "capture": {
-      "page": true,
-      "viewport": "1440x900",
-      "origin": "480 263"
-    },
+    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "kind": "scrim"
