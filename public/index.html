@@ -13,6 +13,15 @@
     <canvas id="canvas-background" aria-hidden="true"></canvas><canvas id="drawings" aria-hidden="true"></canvas><div id="hover-outline" hidden></div><div id="selection-outline" hidden></div><div id="labels"></div><div id="asset-access" class="sr"></div>
     <div id="empty" hidden>No SVG files in this directory.</div>
   </main>
+  <main id="token-catalog" class="floating" aria-labelledby="token-title" hidden>
+    <header><h2 id="token-title">Tokens</h2><code id="token-source"></code></header>
+    <div class="token-scroll">
+      <table id="token-table">
+        <thead><tr><th scope="col">Token</th><th scope="col">Light</th><th scope="col">Dark</th></tr></thead>
+      </table>
+      <p id="token-status" role="status" hidden></p>
+    </div>
+  </main>
   <aside id="sidebar" class="floating" aria-label="Design sidebar">
     <div class="sidebar-heading"><button id="sidebar-toggle" class="icon-button" aria-label="Collapse sidebar" aria-expanded="true" data-tooltip="Collapse sidebar"><span data-icon="panel-left"></span></button><h1>SDG</h1></div>
     <button type="button" id="directory" class="picker" aria-label="Current project"><span data-icon="folder"></span><span class="directory-name"></span></button>

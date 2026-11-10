@@ -7,6 +7,7 @@ hydrateIcons();
 import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext, measuredMetadata, previewAddress, compactPreparedSource, scopeKind, scopeTarget } from "./assets.js";
 import { sourceRelationships, relatedSources } from './relationships.js';
 import { hitSelection, frameBox, exportFrames } from './selection.js';
+import { groupTokens, renderTokenTable } from './token-catalog.js';
 // ARC's gallery layout and camera model, decoupled from its React runtime.
 const $ = (selector) => document.querySelector(selector);
 const viewport = $(".gallery-viewport"),
@@ -16,6 +17,8 @@ const viewport = $(".gallery-viewport"),
   backgroundContext = background.getContext("2d", { alpha: false });
 let manifest,
   catalog = null,
+  tokenManifest = null,
+  tokenCategory = null,
   pendingNavigation = null,
   groups = [],
   assets = [],
@@ -159,8 +162,8 @@ function back() {
 }
 function changeScope(next, entry = null, record = true) {
   if (next === scopeRequest) return;
-  if (initializedScope && !catalog) {
-    if (record) remember();
+  if ((initializedScope || tokenManifest) && !catalog) {
+    if (record && !tokenManifest && next !== 'tokens') remember();
     void persistPreferences();
   }
   scopeRequest = next;
@@ -181,14 +184,19 @@ function toggleSidebar(value = !sidebar) {
 }
 function updateChrome() {
   updateSwitcherLabels();
-  const opened = !!(catalog ?? manifest)?.directory;
+  const opened = !!(tokenManifest ?? catalog ?? manifest)?.directory;
+  const showTokens = !!tokenManifest;
+  $('.gallery').classList.toggle('tokens-mode', showTokens);
+  $('.gallery').classList.toggle('tokens-sidebar', showTokens && sidebar);
+  $('#token-catalog').hidden = !showTokens;
+  viewport.inert = showTokens;
   $("#sidebar").hidden = !opened || !sidebar;
   $("#app-bar").hidden = opened && sidebar;
   $("#app-directory").hidden = !opened;
   $("#app-bar .separator").hidden = !opened;
-  $("#tools").hidden = !opened;
-  $(".zoom").hidden = !opened;
-  $("#source").hidden = !opened || !inspector || !selected;
+  $("#tools").hidden = !opened || showTokens;
+  $(".zoom").hidden = !opened || showTokens;
+  $("#source").hidden = !opened || showTokens || !inspector || !selected;
   if (!opened) $("#minimap").hidden = true;
   $("#sidebar-toggle").setAttribute('aria-expanded', String(sidebar));
   $("#expand-sidebar").setAttribute('aria-expanded', String(sidebar));
@@ -206,8 +214,8 @@ const media = matchMedia("(prefers-color-scheme: dark)");
 const modifiedDate = new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 window.__sdg = {
   ready: false,
-  get metadataComplete() {return !!manifest&&!manifest.loading;},
-  get scope() {return initializedScope;},
+  get metadataComplete() {return !!tokenManifest || (!!manifest && !manifest.loading);},
+  get scope() {return tokenManifest?.scope ?? initializedScope;},
   get cachePending() {return cacheWrites+loading+queued.length;},
   get cacheFlush() {return flushCache();},
   get cacheFailures() {return cacheFailures;},
@@ -215,7 +223,7 @@ window.__sdg = {
     return { ...view };
   },
   get assets() {
-    return assets.length;
+    return tokenManifest ? 0 : assets.length;
   },
   get previews() {
     return {entries: cache.size, decoded: [...cache.values()].filter(e => e.image).length,
@@ -260,6 +268,7 @@ async function api(url, data, keepalive = false, signal) {
   return result;
 }
 function preferences() {
+  if (tokenManifest) return { theme, sidebar };
   return {
     view,
     scope: initializedScope,
@@ -317,11 +326,11 @@ function restoreSelection(target) {
 }
 function persistPreferences(keepalive = false) {
   clearTimeout(saveTimer);
-  if (fixtureState || catalog || !manifest?.directory) return;
+  if (fixtureState || catalog || !(tokenManifest ?? manifest)?.directory) return;
   return api('preferences', preferences(), keepalive).catch(e => error(e.message));
 }
 function save() {
-  if(fixtureState || catalog || !manifest?.directory) return;
+  if(fixtureState || catalog || !(tokenManifest ?? manifest)?.directory) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(persistPreferences, 220);
 }
@@ -433,6 +442,7 @@ function scopedUI(data) { return !!data.layers && (!data.fixture || !!data.fixtu
 function scopeLabel(scope) {
   const target = scopeTarget(scope);
   if (scope === 'all') return 'All designs';
+  if (scope === 'tokens') return 'Tokens';
   if (scopeKind(scope) === 'layer') return target[0].toUpperCase() + target.slice(1);
   if (scopeKind(scope) === 'asset') return target.split('/').at(-1).replace(/\.(tsx|svg)$/i,'');
   return target;
@@ -456,14 +466,15 @@ $("#scope-menu").addEventListener('beforetoggle',event=>{
   const button = $("#render-scope");
   button.setAttribute('aria-expanded',String(event.newState === 'open'));
   if (event.newState !== 'open') return;
-  const data = catalog ?? manifest;
+  const data = tokenManifest ?? catalog ?? manifest;
   if (!data) return;
   const menu = $("#scope-menu"), current = data.scope, kind = scopeKind(current);
   const choices = [...data.layers.map(layer=>`layer:${layer}`),'all'];
+  if (data.tokenSource) choices.push('tokens');
   if (kind === 'group' || kind === 'asset') choices.unshift(current);
   const rows = [];
   for (const choice of choices) {
-    if ((choice === 'all' && rows.length) || (choices[0]===current && (kind==='group'||kind==='asset') && rows.length===1)) {
+    if (((choice === 'all' || choice === 'tokens') && rows.length) || (choices[0]===current && (kind==='group'||kind==='asset') && rows.length===1)) {
       const rule = document.createElement('div');rule.className='rule';rows.push(rule);
     }
     const row = document.createElement('button'), check = document.createElement('span');
@@ -505,15 +516,38 @@ function navFile(a, options = {}) {
   return row;
 }
 function renderNav() {
-  const data = catalog ?? manifest;
+  const data = tokenManifest ?? catalog ?? manifest;
   if (!data) return;
   renderScopePicker(data);
   const scoped = scopedUI(data), kind = scoped ? scopeKind(data.scope) : null;
   const focusKey = document.activeElement?.dataset.navkey;
   const query = $("#search").value.trim().toLowerCase(), nodes = [];
-  $(".gallery").classList.toggle('searching', !!query);
+  const searchLabel = tokenManifest ? 'Find tokens' : 'Find assets';
+  $('#search').placeholder = `${searchLabel}…`;
+  $('#search').setAttribute('aria-label', searchLabel);
+  $('#modules').setAttribute('aria-label', tokenManifest ? 'Token categories' : 'Design modules');
+  $(".gallery").classList.toggle('searching', !tokenManifest && !!query);
   $("#search-clear").hidden = !query; $("#search-key").hidden = !!query;
-  if (query) {
+  if (tokenManifest) {
+    const addCategory = (label, glyph, count, category) => {
+      const button = makeRow(glyph, label, count, `tree-row ${category ? 'token-category' : 'token-all'}`);
+      button.dataset.navkey = `token:${label}`;
+      button.setAttribute('aria-current', String(tokenCategory === category));
+      button.onclick = () => {
+        tokenCategory = category;
+        $('.token-scroll').scrollTop = 0;
+        renderNav();
+      };
+      nodes.push(button);
+    };
+    addCategory('All tokens', 'layout-grid', data.tokenGroups.reduce((total, group) => total + group.rows.length, 0), null);
+    const rule = document.createElement('div'); rule.className = 'rule'; nodes.push(rule);
+    for (const {label, glyph, rows} of data.tokenGroups) addCategory(label, glyph, rows.length, label);
+    renderTokenTable($('#token-catalog'), data, tokenCategory, query, copyError => {
+      if (copyError) error(`Cannot copy token name: ${copyError.message}`);
+      else if ($('#error').textContent.startsWith('Cannot copy token name:')) error('');
+    });
+  } else if (query) {
     const results = searchResults(query), heading = document.createElement('h3');
     heading.className='search-count'; heading.textContent=`${results.length} ${results.length === 1 ? 'result' : 'results'}`; nodes.push(heading);
     for (const { a, p } of results) {
@@ -850,6 +884,11 @@ function drawBackground() {
 function draw() {
   raf = 0;
   drawBackground();
+  if (tokenManifest) {
+    window.__sdg.ready = true;
+    if (fixtureState) document.documentElement.dataset.fixtureReady = fixtureState.name;
+    return;
+  }
   if (!labelObstacles) readChromeBounds();
   const displayed = manifest?.renderTheme === effectiveTheme ? inspection ? [inspection] : assets : [];
   // Keep a margin around a settled drawing. Pans can move that
@@ -1234,7 +1273,7 @@ $("#arrange").onclick = () => {
   selection();
 };
 $("#search").onfocus = () => {
-  if (!searchReturn)
+  if (!tokenManifest && !searchReturn)
     searchReturn = {
       view: { ...view },
       sidebar,
@@ -1246,8 +1285,12 @@ $("#search").onfocus = () => {
       inspector,
     };
 };
-$("#search").oninput = () => { if(!$("#search").value) searchReturn=null; renderNav(); };
-$("#search-clear").onclick=()=>{$("#search").value="";searchReturn=null;renderNav();$("#search").focus()};
+$("#search").oninput = () => {
+  if (!$("#search").value) searchReturn = null;
+  if (tokenManifest) $('.token-scroll').scrollTop = 0;
+  renderNav();
+};
+$("#search-clear").onclick=()=>{$("#search").value="";$("#search").oninput();$("#search").focus()};
 $("#search").onkeydown = (e) => {
   if (e.key === "Enter")
     $("#modules .search-result")?.click();
@@ -1278,16 +1321,54 @@ function relationshipGraph(data, measured) {
   for (const imports of entries.values()) for (const path of imports) if (!entries.has(path)) entries.set(path,[]);
   return sourceRelationships([...entries].map(([path,imports])=>({path,imports})));
 }
+function applyTokenManifest(data) {
+  const previous = tokenManifest ?? catalog ?? manifest;
+  const entering = !tokenManifest || tokenManifest.directory !== data.directory;
+  tokenManifest = { ...data, tokenGroups: groupTokens(data.tokens ?? []) };
+  scopeRequest = data.scope;
+  catalog = null;
+  if (entering) {
+    tokenCategory = null;
+    $('.token-scroll').scrollTop = 0;
+  }
+  if (!tokenManifest.tokenGroups.some(group => group.label === tokenCategory)) tokenCategory = null;
+  fixtureState = data.fixture ?? null;
+  if (previous?.directory !== data.directory) {
+    theme = data.theme;
+    sidebar = /^\/(p|i)\//.test(location.pathname) && innerWidth <= 600 ? false : data.sidebar;
+    applyTheme();
+  }
+  for (const element of document.querySelectorAll('.directory-name')) element.textContent = data.label;
+  $('#directory').title = $('#app-directory').title = data.directory;
+  document.title = `${data.label} — SVG Design Gallery`;
+  if (!fixtureState) {
+    const url = new URL(location.href);
+    url.searchParams.set('scope', 'tokens');
+    for (const key of ['group', 'asset', 'frame', 'element']) url.searchParams.delete(key);
+    if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
+  }
+  updateChrome();
+  renderNav();
+}
 async function applyManifest(data, force = false) {
+  if (data.scope === 'tokens') {
+    if (force || tokenManifest?.directory !== data.directory || tokenManifest?.revision !== data.revision) applyTokenManifest(data);
+    return;
+  }
+  const leavingTokens = !!tokenManifest;
   const changedRoot = initializedDirectory !== data.directory, changedScope = initializedScope !== data.scope;
   const first = changedRoot || changedScope;
-  if (!force && !first && manifest.revision === data.revision)
+  if (!force && !first && !leavingTokens && manifest.revision === data.revision)
     return;
+  if (leavingTokens) {
+    initialLink = null;
+    $('#search').value = '';
+  }
   if (changedRoot) {
     fixtureState=data.fixture ?? null;
     theme = data.theme;
     applyTheme();
-    toggleSidebar(/^\/(p|i)\//.test(location.pathname) && innerWidth <= 600 ? false : data.sidebar);
+    if (!leavingTokens) toggleSidebar(/^\/(p|i)\//.test(location.pathname) && innerWidth <= 600 ? false : data.sidebar);
     inspector = !!fixtureState && data.inspector;
     history = [];
   }
@@ -1323,7 +1404,7 @@ async function applyManifest(data, force = false) {
   restorePacking(data.packing);
   const previous=manifest, results=new Array(data.assets.length), signal=refreshController?.signal;
   let next=0,publishFrame=0,streamView=null,streamMoved=false,publishedCount=0,nextPublish=1;
-  const streaming=first||changedRoot;
+  const streaming=first && !leavingTokens;
   const publish=()=>{
     publishFrame=0;
     if(signal?.aborted||versionTheme!==effectiveTheme)return;
@@ -1373,14 +1454,14 @@ async function applyManifest(data, force = false) {
   const live=new Set(data.assets.flatMap(a=>['light','dark'].map(t=>sourceKey(a,t,data.directory))));
   for(const key of metadataCache.keys())if(!live.has(key))metadataCache.delete(key);
   manifest = { ...data, assets: results, relationships:relationshipGraph(data,results), renderTheme: versionTheme };
+  tokenManifest = null;
   // Early streamed worlds can use a much larger camera scale. Discard those
   // raster intermediates so the completed world starts at its exact final scale.
   if(streaming&&publishedCount<data.assets.length)for(const entry of cache.values()){delete entry.bitmap;delete entry.bitmapScale;}
   catalog = null;
   layout(
     manifest,
-    !streaming && !!previous &&
-      !changedRoot &&
+    !first && !!previous &&
       JSON.stringify(previous.groups) === JSON.stringify(data.groups),
   );
   for(const element of document.querySelectorAll('.directory-name')) element.textContent=data.label;
@@ -1478,6 +1559,7 @@ document.addEventListener('keydown',event=>{
 });
 async function applyFixture() {
   const state=fixtureState;if(!state)return;
+  if (tokenManifest) return;
   fixtureApplied=false;delete document.documentElement.dataset.fixtureReady;
   sidebar=state.sidebar;inspector=!!state.inspector;history=[];inspection=null;selected=null;selectedId=null;selectedForm=null;selectedElement=null;expanded.clear();
   active=state.group ? groups.findIndex(g=>g.title===state.group) : null;
@@ -1532,7 +1614,7 @@ async function refresh(force = false) {
 }
 await refresh();
 if(fixtureState) { try { await applyFixture(); } catch(e) { error(e.message); } }
-if (manifest && !isUnauthorized()) {
+if ((tokenManifest || manifest) && !isUnauthorized()) {
   const events = new EventSource(keyURL('events'));
   window.addEventListener('sdg-unauthorized', () => events.close(), { once: true });
   events.onmessage = (e) => {
@@ -1552,7 +1634,7 @@ if (manifest && !isUnauthorized()) {
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
     e.preventDefault();
-    if (!searchReturn)
+    if (!tokenManifest && !searchReturn)
       searchReturn = {
         view: { ...view },
         sidebar,
@@ -1569,6 +1651,10 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.key !== "Escape" || $("#keys").open) return;
   if (document.querySelector(":popover-open")) return;
+  if (tokenManifest) {
+    if ($('#search').value) $('#search-clear').click();
+    return;
+  }
   if (searchReturn) {
     const old = searchReturn;
     searchReturn = null;

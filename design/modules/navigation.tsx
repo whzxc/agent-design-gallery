@@ -48,6 +48,7 @@ export function Sidebar({
   specimen = false,
   directory = 'agent-remote-control',
   query = '',
+  searchPlaceholder = 'Find assets…',
   resultCount = rows.length,
   scope,
   scopeOpen = false,
@@ -63,7 +64,7 @@ export function Sidebar({
       <div class="flex flex-col gap-3 px-3 mt-1">
         <Field form="picker" label={directory} />
         {scope && <ScopePicker scope={scope} open={scopeOpen} />}
-        <Field form={search ? 'search-active' : 'search'} label={search ? query : 'Find assets…'} />
+        <Field form={search ? 'search-active' : 'search'} label={search ? query : searchPlaceholder} />
       </div>
       <div class={`px-3 mt-3 ${search ? (specimen ? 'pb-2' : 'pb-[22px]') : scope ? 'pb-3' : ''}`}>
         {search && (

@@ -10,6 +10,7 @@ export const viewerFiles = {
   '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/auth.js': 'auth.js', '/favicon.svg': 'favicon.svg',
   '/assets.js': 'assets.js', '/icons.js': 'icons.js', '/layout.js': 'layout.js', '/labels.js': 'labels.js',
   '/relationships.js': 'relationships.js', '/selection.js': 'selection.js', '/style.css': 'style.css', '/tokens.css': 'tokens.css',
+  '/token-catalog.js': 'token-catalog.js',
 };
 const designFiles = { 'tokens.css': 'tokens.css', 'favicon.svg': 'art/sdg-mark.svg' };
 const shellTypes = { '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml' };

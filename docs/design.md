@@ -10,7 +10,7 @@ implementation mappings and review process. The asset rules take precedence over
 - Minimum toolkit: SDG `>=0.5.0`, declared in `sdg.config.mjs`.
 - Design root: `design/`; discovery order: `components`, `modules`, `surfaces`. No explicit source override or
   import-direction opt-out is configured. The module sources are navigation, inspector, menus, open-directory, shortcuts,
-  view-controls, canvas, hub-home, project-switcher and hub-access; there are no studies.
+  view-controls, canvas, hub-home, project-switcher, hub-access and tokens; there are no studies.
 - Review platform: macOS with system UI fonts. The declared implementation capture viewport is 1440 × 900,
   locale `en-US`, timezone `UTC`; ARC artwork retains its own content language. The resident hub also declares
   390 × 844 home and switcher forms. Other viewport and locale forms are not declared.
@@ -39,6 +39,7 @@ with a 1 KiB source budget. Both the hub and viewer link to `/favicon.svg`; pack
 | Generic containers | `components/panel.tsx`, `components/toolbar.tsx`, `components/canvas.tsx`, `fixtures/containers.ts` | Independent source entries and minimal specimens; Reviewed. |
 | Surface layout | `surfaces/canvas.tsx` / `ViewerChrome`; three surface renderers | Reviewed; all three surfaces compose approved parts around the generic Screen and own their capture/layout records in fixtures. |
 | Navigation | `modules/navigation.tsx` / `Sidebar` | Reviewed; navigation/search fixtures are separate. |
+| Token catalog | `modules/tokens.tsx` / `TokenCatalog`; `surfaces/tokens.tsx`; `fixtures/tokens.ts` | Approved and implemented in `public/token-catalog.js` and the viewer shell. The desktop frame maps to the `tokens-light` compare fixture. |
 | Inspector | `modules/inspector.tsx` / `Inspector`; `fixtures/inspector.json` | Reviewed; one Inspector composition with separate fixtures and approved source, exported-element, nested-element and empty-match states. |
 | Menus | `modules/menus.tsx` / `Menu` | Reviewed; menu captures and their fixtures belong to the menus module. |
 | View controls | `modules/view-controls.tsx` / `Tools`, `AppBar`, `ZoomBar` | Reviewed; tools, AppBar, ZoomBar and tooltip capture are approved, including Fit scan, Back disabled and Minimap pressed. |
@@ -47,7 +48,7 @@ with a 1 KiB source budget. Both the hub and viewer link to `/favicon.svg`; pack
 | Canvas presentation | `modules/canvas.tsx` / `Drawing`, `Minimap`, `AssetLabel`; `fixtures/canvas.ts`, `scenes/`, `art/arc-previews/` | Reviewed; one canvas feature owner. Drawing owns section/artboard/flow layers; mapped AssetLabel specimens and preview artwork remain in use. |
 | Resident hub | `modules/hub-home.tsx`, `modules/project-switcher.tsx`, `modules/hub-access.tsx`; corresponding hub surfaces; `fixtures/hub.ts` | All 12 frames and presentation choices approved by the user; runtime implemented in `public/hub.js`, `public/switcher.js` and `public/auth.js`; automated design compare fixtures remain pending. |
 
-The ten feature modules own their parts and specimens. Remaining coverage and fidelity gaps are listed below. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
+Feature modules own their parts and specimens. Remaining coverage and fidelity gaps are listed below. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
 not frame sources. The separate `fixtures/arc-sample/design/` tree is acceptance content, not the viewer UI library.
 
 ### Render scopes
@@ -82,6 +83,20 @@ The approved navigation specimens and `surfaces/canvas.tsx` frames `scope-layer`
 `scope-asset` have isolated implementation captures. The picker and row actions map to
 `public/app.js`, `public/index.html` and `public/style.css`. Scope resolution lives in
 `public/assets.js` and is applied by `src/server.mjs` before asset metadata is read.
+
+### Token catalog
+
+The scope picker lists **Tokens** after **All designs** for projects with `design/tokens.css`.
+The catalog replaces the canvas with a read-only table. Returning to a design scope restores its view.
+The sidebar searches token names and values and filters by category. The table shows CSS names and
+authored light and dark values side by side. Color values show swatches. Spacing, size, and radius
+values in pixels show a length or corner sample next to the exact value. A missing dark declaration
+uses the light value. The token name copies on click, with the copy icon shown on hover or focus.
+The `?scope=tokens` URL opens the catalog directly. The server reads the project's token file on demand and
+refreshes the catalog when it changes. The viewer keeps using its own tokens for chrome.
+
+The review uses `modules/navigation` / `scope-picker-open` for entry, `surfaces/tokens` / `desktop`
+for the catalog, and `modules/tokens` / `typography` and `spacing-and-radii` for value previews.
 
 ### Part mappings and state
 

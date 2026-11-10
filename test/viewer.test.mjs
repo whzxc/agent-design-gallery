@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, readFile, access, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, writeFile, access, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -21,6 +21,72 @@ async function temporary(t) {
   t.after(() => rm(directory, { recursive: true, force: true }));
   return directory;
 }
+
+test('token scope reads both themes, updates on save, and preserves the design camera', { timeout: 30000 }, async t => {
+  const folder = await temporary(t), directory = path.join(folder, 'design');
+  await mkdir(directory);
+  await writeFile(path.join(directory, 'button.svg'), await readFile(path.join(root, 'fixtures/legacy-svg/components/button.svg')));
+  const source = path.join(directory, 'tokens.css');
+  const tokens = `:root {
+  --font-ui: system-ui;
+  --font-mono: monospace;
+  --canvas: #fff;
+  --text: #333;
+  --accent: var(--text);
+  --space-2: 8px;
+  --radius-card: 12px;
+}
+:root[data-theme="dark"] {
+  --text: #eee;
+  --radius-card: 16px;
+}`;
+  await writeFile(source, tokens);
+  const server = await startServer({ directory, stateDirectory: path.join(folder, 'state') });
+  const browser = await launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const designRequests = [];
+    page.on('request', request => {
+      if (/^\/(?:asset|metadata|preview)\//.test(new URL(request.url()).pathname)) designRequests.push(request.url());
+    });
+    await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: async text => { window.copiedToken = text; } },
+    }));
+    const events = page.waitForResponse(response => new URL(response.url()).pathname === '/events' && response.ok());
+    await page.goto(server.url + '?scope=tokens');
+    await page.waitForFunction(() => window.__sdg?.ready);
+    await events;
+    assert.deepEqual(designRequests, [], 'opening tokens must not request artboards');
+    const accent = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'Copy --accent', exact: true }) });
+    assert.deepEqual(await accent.locator('.token-swatch').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor)),
+      ['rgb(51, 51, 51)', 'rgb(238, 238, 238)']);
+    const search = page.getByRole('searchbox', { name: 'Find tokens' });
+    await search.fill('16px');
+    await page.getByRole('button', { name: 'Copy --radius-card', exact: true }).click();
+    assert.equal(await page.evaluate(() => window.copiedToken), '--radius-card');
+    assert.equal(await page.locator('.token-copy').count(), 1, 'search includes dark values');
+    await page.getByRole('button', { name: 'Clear search' }).click();
+    await page.getByRole('button', { name: /^Spacing & size/ }).click();
+    assert.deepEqual(await page.locator('.token-value code').allTextContents(), ['8px', '8px']);
+    await writeFile(source, tokens.replace('8px', '10px'));
+    await page.waitForFunction(() => document.querySelector('.token-value code')?.textContent === '10px');
+    const switchScope = async (from, to) => {
+      await page.getByRole('button', { name: `Render scope: ${from}`, exact: true }).click();
+      await page.getByRole('button', { name: to, exact: true }).click();
+      await page.waitForFunction(scope => window.__sdg.ready && window.__sdg.scope === scope,
+        to === 'Tokens' ? 'tokens' : 'all', { timeout: 5000 });
+    };
+    await switchScope('Tokens', 'All designs');
+    await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+    const camera = await page.evaluate(() => window.__sdg.view);
+    await switchScope('All designs', 'Tokens');
+    await switchScope('Tokens', 'All designs');
+    assert.deepEqual(await page.evaluate(() => window.__sdg.view), camera);
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+});
 
 test('every approved frame maps to an isolated fixture environment', async () => {
   const project = await loadConfig(root);

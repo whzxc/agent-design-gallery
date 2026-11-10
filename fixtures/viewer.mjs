@@ -24,6 +24,7 @@ export const states = {
   'scope-group': groupScope,
   'scope-asset': { ...groupScope, scope: 'asset:components/field.tsx' },
   'scope-picker-open': { ...layerScope, menu: 'scope-menu' },
+  'tokens-light': { theme: 'light', themeChoice: 'system', sidebar: true, scope: 'tokens' },
   'scope-group-action': { ...layerScope, camera:'origin', scale:.24, origin:[650,140], hoverScope: 'Render only this group: Essentials' },
   'scope-asset-action': { ...groupScope, group:'Essentials', camera:'origin', scale:.53, origin:[650,140],
     hoverScope: 'Render only this asset: field' },

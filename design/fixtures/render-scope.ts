@@ -3,6 +3,7 @@ import navigation from './navigation.json';
 const options = [
   { label: 'Components' }, { label: 'Modules' }, { label: 'Surfaces' },
   { label: 'All designs', divider: true },
+  { label: 'Tokens', divider: true },
 ];
 const groups = [
   { form: 'group', label: 'Agents & quota', meta: '4', icon: 'chevron-right' },

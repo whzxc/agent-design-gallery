@@ -18,9 +18,15 @@ import { createBuildStore } from './toolkit/build-store.mjs';
 import { createViewerCache } from './viewer-cache.mjs';
 import { refreshTypes, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
 import { loadConfig } from './toolkit/config.mjs';
+import { parseTokens } from './toolkit/tokens.mjs';
 import { sourceRelationships } from '../public/relationships.js';
 import { resolveScope } from '../public/assets.js';
 const digest = value => createHash('sha256').update(value).digest('hex');
+const tokenFile = 'tokens.css';
+function tokenSourcePath(directory, project) {
+  const base = project.design === directory ? project.root : path.dirname(directory);
+  return path.relative(base, path.join(directory, tokenFile)).split(path.sep).join('/');
+}
 const viewerVersion = Promise.all(['assets.js','layout.js','selection.js'].map(file => readFile(new URL('../public/'+file,import.meta.url)))).then(parts => digest(Buffer.concat(parts)));
 const defaultState = path.join(
   process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
@@ -42,6 +48,7 @@ export async function startServer({
       throw new Error(`Cannot read preferences: ${e.message}`);
   }
   let root,
+    tokenSource = null,
     sources = sourceDirectories(),
     files = new Map(),
     groups = [],
@@ -111,7 +118,8 @@ export async function startServer({
     }
     if (!(await stat(next)).isDirectory())
       throw new Error("Choose a directory containing SVG files.");
-    if ((await readdir(next)).includes("tokens.css")) refreshTypes({design:next});
+    const hasTokens = (await readdir(next)).includes(tokenFile);
+    if (hasTokens) refreshTypes({design:next});
     const project = await loadConfig(next);
     const nextSources = project.design === next ? project.sources : sourceDirectories({design:next});
     const nextCode=new Set(), nextFiles = await collect(next, "", new Map(), nextSources, nextCode),
@@ -145,6 +153,7 @@ export async function startServer({
     watcher?.close();
     watcher = nextWatcher;
     root = next;
+    tokenSource = hasTokens ? tokenSourcePath(next, project) : null;
     codePaths=nextCode;
     sources = nextSources;
     touched.clear();
@@ -177,6 +186,9 @@ export async function startServer({
         nextCode=new Set(),
         next = await collect(base,'',new Map(),nextSources,nextCode),
         nextGroups = await readGroups(base, nextSources);
+      const tokensChanged = observed.includes(tokenFile);
+      const hasTokens = tokensChanged ? (await readdir(base)).includes(tokenFile) : !!tokenSource;
+      const nextTokenSource = hasTokens ? tokenSourcePath(base, project) : null;
       if (root !== base) return;
       const stamps=[...new Set([...files.keys(),...next.keys()])].filter(name=>files.get(name)?.stamp!==next.get(name)?.stamp);
       const grouping=JSON.stringify(groups)!==JSON.stringify(nextGroups);
@@ -188,7 +200,7 @@ export async function startServer({
       for(const name of failedSources)affected.add(name);
       for(const name of stamps)if(name.endsWith('.tsx')&&next.has(name))affected.add(name);
       const legacyDirty=[...legacyDependencies.values()].some(dependencies=>dependencies.some(name=>observedPaths.includes(name)));
-      if(!stamps.length&&!affected.size&&!grouping&&!legacyDirty&&!configChanged)return;
+      if(!stamps.length&&!affected.size&&!grouping&&!legacyDirty&&!configChanged&&!tokensChanged&&nextTokenSource===tokenSource)return;
       const changed=[...new Set([...stamps,...affected])];
       for (const name of affected) {
         if (knownBuilds.delete(name)) dirtyBuilds.add(name);
@@ -211,6 +223,7 @@ export async function startServer({
         }
       }
       files = next;
+      tokenSource = nextTokenSource;
       codePaths=nextCode;
       sources = nextSources;
       groups = nextGroups;
@@ -236,6 +249,7 @@ export async function startServer({
     theme: state.theme,
     sidebar: state.sidebar ?? true,
     inspector: false,
+    tokenSource,
   });
   const preferenceKey = scope => !scope || scope === 'all' ? root : JSON.stringify([root, scope]);
   function applyFixtureManifest(data,name) {
@@ -251,7 +265,20 @@ export async function startServer({
   async function manifest(url) {
     const data=baseManifest(),context=await contextFor(url), requested=url.searchParams.get('scope');
     const fixtureScope=fixtures?.states[url.searchParams.get('fixture')]?.scope;
-    const scoped=resolveScope(data,sources,fixtureScope ?? requested ?? 'all');
+    const desired = fixtureScope ?? requested ?? 'all';
+    if (desired === 'tokens' && data.tokenSource) {
+      // Keep the layer choices available without measuring or building any artboards.
+      const { layers } = resolveScope(data, sources, 'all');
+      const result = { ...data, scope: 'tokens', layers, assets: [] };
+      try {
+        const { light, dark } = parseTokens(await readFile(path.join(data.directory, tokenFile), 'utf8'));
+        result.tokens = [...light].map(([name, value]) => [name, value, dark.get(name) ?? null]);
+      } catch (error) {
+        result.tokenError = error.code ? `Cannot read ${data.tokenSource}.` : error.message;
+      }
+      return applyFixtureManifest(result, url.searchParams.get('fixture'));
+    }
+    const scoped=resolveScope(data,sources,desired === 'tokens' ? 'default' : desired);
     Object.assign(data,scoped);
     const key=preferenceKey(data.scope);
     data.view=state.views[key] ?? null;
