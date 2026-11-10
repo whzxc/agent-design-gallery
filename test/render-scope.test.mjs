@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { startServer } from '../src/server.mjs';
 import { launch } from '../src/toolkit/browser.mjs';
+import { previewURL } from '../src/link.mjs';
 
 const fields = ['components/field.tsx', 'components/other.tsx'];
 const home = 'surfaces/home.tsx', summary = 'modules/summary.tsx';
@@ -49,8 +50,8 @@ test('render scopes bound cold loads and live edits, with independent focus link
 
     await page.locator('[data-navkey="group:Essentials"]').click();
     const camera = await page.evaluate(()=>window.__sdg.view);
-    assert.equal(query('group'),'Essentials');
-    assert.equal(query('scope'),'layer:components');
+    assert.equal(new URL(page.url()).pathname,'/view/layer/components/group/Essentials');
+    assert.equal(query('scope'),null);
     assert.deepEqual(await paths(page),fields);
     await page.getByRole('button',{name:'Render only this group: Essentials',exact:true}).click();
     await ready('group:Essentials');
@@ -76,7 +77,7 @@ test('render scopes bound cold loads and live edits, with independent focus link
     await ready('group:Essentials');
     await page.locator('#back').click();
     await ready('layer:components');
-    assert.equal(query('group'),'Essentials');
+    assert.equal(new URL(page.url()).pathname,'/view/layer/components/group/Essentials');
     assert.deepEqual(await page.evaluate(()=>window.__sdg.view),camera);
 
     await switchTo('Modules','layer:modules');
@@ -94,10 +95,36 @@ test('render scopes bound cold loads and live edits, with independent focus link
     assert.deepEqual(await paths(page),[home]);
     assert.equal(builds(),before+1);
 
+    const context = previewURL(server.url, { asset: fields[0], frame: 'error', mode: 'path' });
+    await page.goto(context.href);
+    await ready('layer:components');
+    assert.deepEqual(await paths(page),fields);
+    assert.equal(await page.locator('#frame-name').textContent(),'error');
+    assert.equal(new URL(page.url()).pathname, context.pathname);
+
+    const isolated = previewURL(server.url, { asset: fields[0], frame: 'error', mode: 'query' });
+    const payload = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname.startsWith('/asset/') && url.searchParams.get('frame') === 'error' && response.ok();
+    });
+    requests.length = 0;
+    await page.goto(isolated.href);
+    await ready(`asset:${fields[0]}`);
+    assert.deepEqual(await paths(page),[fields[0]]);
+    assert.deepEqual((await (await payload).json()).frames.map(frame => frame.name), ['error']);
+    assert.deepEqual(await page.locator('#modules button').allTextContents(), ['error']);
+    assert.deepEqual([...new Set(requests)], [fields[0]]);
+    const frameHeight = await page.evaluate(() => window.__sdg.items[0].height);
+    await writeFile(path.join(directory, fields[0]), source('default', 'error').replace('height={100}', 'height={140}'));
+    await page.waitForFunction(height => window.__sdg.ready && window.__sdg.items[0].height === height + 40, frameHeight);
+    await switchTo('field', `asset:${fields[0]}`);
+    await page.locator('[data-navkey="form:default"]').waitFor();
+    assert.equal(query('frame'),null);
+
     await page.goto(server.url+'?group=Essentials');
-    await ready('all');
-    assert.deepEqual(await paths(page),[...fields,summary,home].sort());
-    assert.equal(query('group'),'Essentials');
+    await ready('group:Essentials');
+    assert.deepEqual(await paths(page),[fields[0],home]);
+    assert.equal(query('scope'),'group:Essentials');
     const fallback = await (await fetch(server.url+'manifest?scope=asset:missing')).json();
     assert.equal(fallback.scope,'layer:components');
   } finally {

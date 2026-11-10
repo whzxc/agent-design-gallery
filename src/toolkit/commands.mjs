@@ -209,15 +209,21 @@ export async function check(config, args = [], options = {}, log = console.log, 
 export async function render(config, args = [], options = {}) {
   const scale = Number(options.scale ?? 2);
   if (!(Number.isFinite(scale) && scale > 0)) throw Error('Invalid --scale; use a positive number');
+  const themeOption = options.theme ?? 'both';
+  if (!['both', 'light', 'dark'].includes(themeOption)) throw Error('Choose --theme=both, light, or dark.');
+  if (options['out-dir'] === '') throw Error('Set --out-dir to a directory.');
+  const output = options['out-dir'] ? path.resolve(config.root, options['out-dir']) : config.output;
+  const themes = themeOption === 'both' ? ['light', 'dark'] : [themeOption];
   const files = selectSources(config,args), browser = await launch();
   try {
     const captures = [];
     for (const file of files) {
       const built = await buildSource(config,file,{allowLegacy:false});
       for (const frame of built.frames.filter(f => !options.frame || f.name === options.frame)) {
-        for (const theme of ['light','dark']) {
-          const target = path.join(config.output,path.relative(config.design,file).replace(/\.tsx$/,''),`${encodeURIComponent(frame.name)}-${theme}.png`);
-          captures.push({frame,theme,target});
+        for (const theme of themes) {
+          const source = path.relative(config.design, file);
+          const target = path.join(output, source.replace(/\.tsx$/, ''), `${encodeURIComponent(frame.name)}-${theme}.png`);
+          captures.push({source,frame,theme,target});
         }
       }
     }
@@ -238,7 +244,10 @@ export async function render(config, args = [], options = {}) {
     }));
     const failed = workers.find(worker => worker.status === 'rejected');
     if (failed) throw failed.reason;
-    for (const {target} of captures) console.log(relative(config,target));
+    if (options.json) console.log(JSON.stringify(captures.map(({ source, frame, theme, target }) => ({
+      source: source.split(path.sep).join('/'), frame: frame.name, theme, path: target,
+    }))));
+    else for (const {target} of captures) console.log(relative(config,target));
   } finally { await browser.close(); }
   return 0;
 }

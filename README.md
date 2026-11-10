@@ -15,7 +15,18 @@ Drag or scroll to pan. Pinch, or hold Control/Command while scrolling, to zoom a
 
 The floating sidebar holds the project name, render scope, search, and project groups. A clean project URL opens the first nonempty source layer, normally Components. Switch layers or explicitly choose **All designs** in the scope picker. Click a group or asset name to focus it in the current scope. The trailing **Render only** action opens the full group or single asset; an isolated asset lists its frames in the sidebar. Search and Fit all work within the current scope. Back restores the previous scope, selection and camera.
 
-Copy the viewer URL to share a scope and selection. `?scope=group:Controls` renders only Controls, while `?scope=all&group=Controls` renders everything and focuses that group. Use `scope=asset:components%2Fbutton.tsx` for a single source, and `asset`, `frame` and `element` for focus within the scope. Existing focus links without `scope` continue to open the full canvas.
+Path links locate a selection within its design hierarchy. Query links open an independent layer, group, source, or frame. Copy the viewer URL to share its current view, or use `sdg link` to generate either form for a specific target.
+
+## Share a design update
+
+```sh
+sdg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled
+sdg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled --mode=path
+sdg open ./design --asset=components/button.tsx --frame=disabled --no-open
+sdg render components/button --frame=disabled --theme=dark --out-dir=output/review --json
+```
+
+Use the independent link in a change report. Add the path link when the surrounding assets matter. Use the project URL on a hub the recipient can reach. `sdg open` provides a live loopback preview while its server runs. `render` exports exact frame PNGs for attachments or automation. Without `--theme`, it exports both themes. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
 
 The right inspector starts closed and opens from the toolbar. It follows the selection and shows source path, frame name, dimensions, frames, and discovered **Uses** / **Used by** relationships. Indirect relationships are muted with their shortest `via` path. Click a relationship to focus the source, or to open it by itself when outside the current scope. An element selection shows its owning export and matching frames from the current scope. `GET /relationships` explicitly computes the complete direct graph as JSON, keyed by source path with `uses` and `usedBy` arrays.
 

@@ -1,12 +1,13 @@
 import { request as httpRequest } from 'node:http';
 
 // Pipe through the owning server, preserving streaming and backpressure.
-export function proxy(request, response, port, pathname) {
+export function proxy(request, response, port, pathname, viewerBase) {
   return new Promise(resolve => {
     const headers = { ...request.headers, host: `127.0.0.1:${port}` };
     for (const name of Object.keys(headers)) {
-      if (['authorization', 'x-sdg-key', 'cookie', 'forwarded', 'origin', 'connection'].includes(name) || name.startsWith('x-forwarded-')) delete headers[name];
+      if (['authorization', 'x-sdg-key', 'x-sdg-viewer-base', 'cookie', 'forwarded', 'origin', 'connection'].includes(name) || name.startsWith('x-forwarded-')) delete headers[name];
     }
+    if (viewerBase) headers['x-sdg-viewer-base'] = viewerBase;
     const target = new URL(pathname, 'http://localhost');
     target.searchParams.delete('key');
     const upstream = httpRequest({ hostname: '127.0.0.1', port, method: request.method, path: target.pathname + target.search, headers }, incoming => {

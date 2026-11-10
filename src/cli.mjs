@@ -4,13 +4,15 @@ import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 
-export const commands = ['open', 'serve', 'root', 'service', 'init', 'check', 'render', 'compare'];
+export const commands = ['open', 'link', 'serve', 'root', 'service', 'init', 'check', 'render', 'compare'];
+const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path]';
 const usage = {
-  open: '[directory] [--port=<n>] [--no-open] [--state-dir=<path>]',
+  open: `[directory] [--port=<n>] [--no-open] [--state-dir=<path>] ${targetOptions}`,
+  link: `<viewer-url> ${targetOptions}`,
   serve: '[--port=4310] [--state-dir=<path>] [--print-key | --rotate-key]',
   service: 'install|uninstall|status|logs [--state-dir=<path>] [--port=4310]',
   root: 'add <dir> [--depth=2] | remove <dir> | list | scan [dir] [--state-dir=<path>]',
-  init: '', check: '[source...] [--read-only]', render: '[source...] [--frame=<name>] [--scale=2]',
+  init: '', check: '[source...] [--read-only]', render: '[source...] [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]',
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
 };
 const details = {
@@ -18,7 +20,8 @@ const details = {
   service: 'Manage the macOS resident hub LaunchAgent. install starts it with RunAtLoad and KeepAlive, recording absolute Node/CLI paths. --port applies only to install. status prints JSON; logs prints the last 200 lines per log. Uninstall retains state and logs. Other platforms are unsupported.',
   root: 'Manage registered scan roots. add scans immediately. scan rescans registered roots only; depth is 0 through 3. Hidden directories, node_modules and Git worktrees are skipped.',
   open: 'Browse TSX sources and legacy SVG designs on an independent random-port server.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
-  check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render each selected frame in both themes. Scale defaults to 2.',
+  link: 'Print a clean SDG preview URL. Query mode isolates a target. Path mode locates it in the design hierarchy.',
+  check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render selected frames as PNG. Defaults to both themes at 2×. --json prints a list of captures with absolute paths.',
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
 };
 export function help(command) {
@@ -28,10 +31,13 @@ export function help(command) {
 export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' } };
-  const strings = { open: ['port', 'state-dir'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], render: ['scale', 'frame'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
+  const locators = ['asset', 'frame', 'group', 'layer', 'mode'];
+  const strings = { open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
+  if (command === 'open' || command === 'link') options.tokens = { type: 'boolean' };
+  if (command === 'render') options.json = { type: 'boolean' };
   if (command === 'check') options['read-only'] = { type: 'boolean' };
   if (command === 'compare') { options.all = { type: 'boolean' }; options.page = { type: 'boolean' }; }
   if (command === 'compare') options.click = { type: 'string', multiple: true };
@@ -49,6 +55,12 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd()) {
   if (values.help) { console.log(help(explicit ? command : undefined)); return 0; }
   if (values.version) { console.log(VERSION); return 0; }
   if (command === 'open') return (await import('./open.mjs')).open(positionals, values);
+  if (command === 'link') {
+    if (positionals.length !== 1) throw Error('Expected one viewer URL. Run sdg link --help.');
+    const { previewTarget, previewURL } = await import('./link.mjs');
+    console.log(previewURL(positionals[0], previewTarget(values)).href);
+    return 0;
+  }
   if (command === 'service') {
     if (positionals.length !== 1 || !['install', 'uninstall', 'status', 'logs'].includes(positionals[0]) || (values.port !== undefined && positionals[0] !== 'install')) throw new Error('Invalid arguments; run sdg service --help');
     return (await import('./service.mjs')).service(positionals[0], values);

@@ -244,7 +244,7 @@ if (fixtureRoot) {
   try { await access(file); } catch { file = fixtureRoot + "/components/button.svg"; }
   const original = await readFile(file, "utf8"), sourcePath = file.slice(fixtureRoot.length + 1);
   const incrementalHashes = await page.evaluate(async () =>
-    (await (await fetch(new URL('manifest', location.href))).json()).features?.incrementalHashes);
+    (await (await fetch(new URL('manifest', document.baseURI))).json()).features?.incrementalHashes);
   const camera = () =>
     page.evaluate(
       () =>

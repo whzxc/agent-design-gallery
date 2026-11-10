@@ -96,7 +96,10 @@ test('prefixed viewer switcher searches branches, restores keyboard focus and na
   await search.fill('');
   const live = menu.getByRole('group', { name: 'Live instances', exact: true }).getByRole('link', { name: /Atlas/ });
   await live.click();
-  await page.waitForURL('**/i/review/');
+  await page.waitForURL(url => url.pathname.startsWith('/i/review/'));
+  await page.waitForFunction(() => window.__sdg?.ready);
+  await page.reload();
+  await page.waitForFunction(() => window.__sdg?.ready);
   await page.getByRole('button', { name: 'Switch project: Atlas', exact: true }).filter({ visible: true }).waitFor();
   await page.getByRole('button', { name: 'Switch project: Atlas', exact: true }).filter({ visible: true }).click();
   await page.getByRole('navigation', { name: 'Project switcher' }).getByRole('link', { name: 'All projects', exact: true }).click();
@@ -110,8 +113,10 @@ test('live instance buttons stop only the selected process from the hub home and
   const children = await Promise.all([0, 1, 2].map(async () => {
     const child = spawn(process.execPath, [cli, 'open', atlas, '--no-open', '--state-dir', stateDirectory]);
     const exited = once(child, 'exit');
+    let stderr = '';
+    child.stderr.on('data', chunk => { stderr += chunk; });
     t.after(async () => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM'); await exited; });
-    await Promise.race([once(child.stdout, 'data'), exited.then(([code]) => { throw new Error(`Viewer exited: ${code}`); })]);
+    await Promise.race([once(child.stdout, 'data'), exited.then(([code]) => { throw new Error(`Viewer exited (${code}): ${stderr.trim()}`); })]);
     return { pid: child.pid, exited };
   }));
   const instances = await listInstances(stateDirectory);
@@ -143,13 +148,13 @@ test('live instance buttons stop only the selected process from the hub home and
   await closed(home);
   assert.deepEqual((await listInstances(stateDirectory)).map(instance => instance.id), [current.id, other.id]);
   await page.getByRole('link', { name: 'Atlas', exact: true }).first().click();
-  await page.waitForURL(new URL(current.url, hub.url).href);
+  await page.waitForURL(url => url.pathname.startsWith(current.url));
   await page.getByRole('button', { name: 'Switch project: Atlas', exact: true }).filter({ visible: true }).click();
   const menu = page.getByRole('navigation', { name: 'Project switcher' });
   await menu.getByRole('button', { name: label(other), exact: true }).click();
   await menu.getByRole('button', { name: label(other), exact: true }).waitFor({ state: 'hidden' });
   await closed(other);
-  assert.equal(new URL(page.url()).pathname, current.url);
+  assert.equal(new URL(page.url()).pathname, `${current.url}view/layer/components`);
   assert.deepEqual((await listInstances(stateDirectory)).map(instance => instance.id), [current.id]);
   await menu.getByRole('button', { name: label(current), exact: true }).click();
   await page.waitForURL(hub.url);

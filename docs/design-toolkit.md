@@ -180,7 +180,7 @@ Review the composition of every frame before showing it. A frame that copies the
 sdg [open] [directory] [--port=<n>] [--no-open] [--state-dir=<path>]
 sdg init
 sdg check [source...] [--read-only]
-sdg render [source...] [--frame=<name>] [--scale=2]
+sdg render [source...] [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]
 sdg compare <source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin=<x> <y>] [--click=<name>...] [--viewport=<w>x<h>]
 sdg compare --all
 ```
@@ -196,6 +196,21 @@ A first argument that names a command runs it; any other argument is a directory
 Each design capture in `render` and `compare` uses a fresh page and browser context, including between themes, so PNG bytes are independent of frame order. `render` reuses one Chromium process for the batch, runs up to four captures concurrently within the available CPU parallelism, and closes each page after capture. Console output follows source, frame and theme order.
 
 Source arguments are paths under the design directory, with or without `design/` and `.tsx`. Exit codes are 0 for success, 1 when `check` or `compare` found problems, and 2 for a usage, configuration or environment error, with one line on stderr naming the fix.
+
+## Review handoff
+
+After changing design assets, name the change and include an SDG link for each affected frame, source, or cohesive group. Choose the smallest target that covers the change. For example, report “Button disabled state — adjusted the foreground contrast” with a link to that frame. Add a PNG when the report needs an inline preview or the recipient cannot reach the viewer.
+
+| Need | Command |
+| --- | --- |
+| Live preview of the working directory | `sdg open ./design --asset=components/button.tsx --frame=disabled --no-open` |
+| Share the changed frame on a registered project | `sdg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled` |
+| Include the frame's source layer for context | Add `--mode=path` to the link command. |
+| Export PNGs for a report or another tool | `sdg render components/button --frame=disabled --theme=dark --out-dir=output/review --json` |
+
+`open` and `link` accept one target: `--asset` with an optional `--frame`, `--group`, `--layer`, or `--tokens`. Source paths are relative to the design directory and include the extension. Query mode is the default. To convert a URL copied from the viewer, pass it to `sdg link` without target flags. `link` emits a single URL and strips unrelated query parameters, including access keys. Share a reachable hub project URL for remote review and verify that it serves the changed checkout. A direct preview uses loopback. A proxied instance link lasts until its viewer stops. Viewer links reflect the current source files and refresh after saves. Keep the PNG when the report needs a fixed snapshot.
+
+`render` exports TSX frames at their exact bounds. It defaults to both themes at 2×. `--theme` selects a theme, and a relative `--out-dir` resolves from the project root. `--json` emits an ordered array with `source`, `frame`, `theme`, and absolute PNG `path` fields. Keep the default text output for interactive use.
 
 ## Compare
 

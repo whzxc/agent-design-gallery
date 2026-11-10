@@ -6,7 +6,7 @@ import { listProjects, listRoots, scanRoots, defaultStateDirectory } from './hub
 import { proxy } from './hub/proxy.mjs';
 import { listInstances, stopInstance } from './hub/instances.mjs';
 import { hubKey, authorized } from './hub/auth.mjs';
-import { json, shell, viewerFiles } from './http.mjs';
+import { json, shell, viewerFile } from './http.mjs';
 
 export async function startHub({ port = 4310, stateDirectory = defaultStateDirectory, idleTimeout = 300_000 } = {}) {
   await hubKey(stateDirectory);
@@ -23,12 +23,12 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
       const instanceRoute = url.pathname.match(/^\/i\/([A-Za-z0-9_-]+)(\/.*)?$/);
       const stopRoute = url.pathname.match(/^\/api\/instances\/([A-Za-z0-9_-]+)\/stop$/);
       const route = projectRoute ?? instanceRoute;
-      const publicFile = read && (route ? viewerFiles[route[2] ?? '/'] : { '/': 'hub.html', '/hub.js': 'hub.js', '/auth.js': 'auth.js', '/icons.js': 'icons.js', '/tokens.css': 'tokens.css', '/hub.css': 'hub.css', '/access.css': 'access.css', '/favicon.svg': 'favicon.svg', '/instance-actions.js': 'instance-actions.js' }[url.pathname]);
+      const publicFile = read && (route ? viewerFile(route[2] ?? '/') : { '/': 'hub.html', '/hub.js': 'hub.js', '/auth.js': 'auth.js', '/icons.js': 'icons.js', '/tokens.css': 'tokens.css', '/hub.css': 'hub.css', '/access.css': 'access.css', '/favicon.svg': 'favicon.svg', '/instance-actions.js': 'instance-actions.js' }[url.pathname]);
       // Project shells do not discover, build, watch, or embed any project data.
       // The switcher manages hub destinations, including in viewers started before this hub version.
       if (publicFile && (!instanceRoute || ['switcher.js', 'switcher.css', 'instance-actions.js'].includes(publicFile))) {
         if (route && !route[2]) { response.writeHead(302, { Location: `${url.pathname}/${url.search}` }); response.end(); return; }
-        return await shell(request, response, publicFile);
+        return await shell(request, response, publicFile, projectRoute && `/p/${projectRoute[1]}/`);
       }
       if (!publicFile && !await authorized(request, url, stateDirectory)) return json(response, 401, { error: 'Unauthorized' });
       if (request.method === 'POST' && request.headers.origin && ![`http://${request.headers.host}`, `https://${request.headers.host}`].includes(request.headers.origin))
@@ -56,7 +56,7 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
           if (!instance.proxyable) return json(response, 409, { error: 'Instance viewer does not support authenticated proxying.' });
           if (!route[2]) { response.writeHead(302, { Location: `${url.pathname}/${url.search}` }); response.end(); return; }
           streams.add(response);
-          try { await proxy(request, response, instance.port, route[2] + url.search); }
+          try { await proxy(request, response, instance.port, route[2] + url.search, `/i/${instance.id}/`); }
           finally { streams.delete(response); }
           return;
         }

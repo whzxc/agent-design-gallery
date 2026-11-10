@@ -38,6 +38,6 @@ If the recorded Node or CLI path changed, reinstall the service with its existin
 ## Verify delivery
 
 1. Confirm the installed runtime files match the milestone package. If the hub restarted, verify a new health ID at its direct-local `/api/health` endpoint and a running service state.
-2. Read the existing project list through the direct-local `/api/projects` endpoint. Fetch changed public shell resources through the deployed `/p/<slug>/` routes and compare their bytes with the package. For a shared layout update, check each registered project route. Public data endpoints must still return 401 without a key.
+2. Read the existing project list through the direct-local `/api/projects` endpoint. Fetch changed public shell resources through the deployed `/p/<slug>/` routes and compare their bytes with the package. The viewer HTML sets its base to `/p/<slug>/`. For a shared layout update, check each registered project route. Public data endpoints must still return 401 without a key.
 3. Reload a deployed viewer in IAB and confirm its designs finish loading and the changed behavior works. Use an existing authenticated session or the direct-local viewer served by the same hub; keep the public resource comparison in either case.
 4. Report the installed commit, endpoint result and checks actually run. Keep verification captures local. A documentation-only follow-up needs no reinstall or service restart.

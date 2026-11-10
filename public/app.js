@@ -8,6 +8,7 @@ import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext
 import { sourceRelationships, relatedSources } from './relationships.js';
 import { hitSelection, frameBox, exportFrames } from './selection.js';
 import { groupTokens, renderTokenTable } from './token-catalog.js';
+import { readViewRoute, viewURL } from './view-route.js';
 // ARC's gallery layout and camera model, decoupled from its React runtime.
 const $ = (selector) => document.querySelector(selector);
 const viewport = $(".gallery-viewport"),
@@ -88,7 +89,7 @@ async function flushCache() {
     await new Promise(resolve=>setTimeout(resolve,20));
   }
 }
-const sourceKey=(asset,theme,directory=manifest?.directory??catalog?.directory)=>`${directory}|${asset.path}|${asset.hash??asset.version}|${theme}`;
+const sourceKey=(asset,theme,directory=manifest?.directory??catalog?.directory)=>`${directory}|${asset.path}|${asset.hash??asset.version}|${theme}${asset.onlyFrame ? `|frame:${asset.onlyFrame}` : ''}`;
 function keepSource(key,entry) {
   entry=compactPreparedSource(entry);
   prepared.delete(key);prepared.set(key,entry);
@@ -107,7 +108,7 @@ function decorateMetadata(asset,metadata) {
   return entry;
 }
 function persistSource(entry,theme) {
-  if(!entry.hash)return Promise.resolve(false);
+  if(!entry.hash || entry.onlyFrame)return Promise.resolve(false);
   const query=new URLSearchParams({theme,context:metadataContext()});
   const promise=cacheWrite(`metadata/${entry.hash}?${query}`,{metadata:measuredMetadata(entry)});
   entry.cacheWrite=promise;
@@ -128,14 +129,19 @@ async function sourceFor(asset,theme) {
 
 const fixtureName = new URL(location.href).searchParams.get("fixture");
 let fixtureState = null, fixtureApplied = false;
-let initialLink = linkedSelection();
-let scopeRequest = new URLSearchParams(location.search).get('scope') ?? (initialLink || fixtureName ? 'all' : 'default');
-let initializedScope, scopeEntry;
+let route = {}, routeError;
+try { route = readViewRoute(new URL(location.href)); }
+catch (error) { routeError = error; }
+let initialLink = route.target, strictRoute = route.strict, queryView = !!route.isolated;
+let scopeRequest = fixtureName ? 'all' : route.scope ?? 'default', onlyFrame = route.onlyFrame ?? null;
+let initializedScope, initializedFrame, scopeEntry;
 const currentItem = () => inspection || assets.find((a) => a.id === selectedId);
 function remember() {
   history.push({
     view: { ...view },
     scope: initializedScope,
+    onlyFrame,
+    queryView,
     target: selectionTarget(),
     active,
     selected,
@@ -151,8 +157,8 @@ function back() {
   if (catalog) return;
   const old = history.pop();
   if (old) {
-    if (old.scope && old.scope !== initializedScope) {
-      changeScope(old.scope, { target: old.target, view: old.view }, false);
+    if (old.scope && (old.scope !== initializedScope || (old.onlyFrame ?? null) !== onlyFrame)) {
+      changeScope(old.scope, old, false);
       return;
     }
     ({ active, selected, selectedId, selectedForm, selectedElement = null, inspection } = old);
@@ -161,12 +167,16 @@ function back() {
   }
 }
 function changeScope(next, entry = null, record = true) {
-  if (next === scopeRequest) return;
+  const nextFrame = entry?.onlyFrame ?? null;
+  if (next === scopeRequest && nextFrame === onlyFrame) return;
   if ((initializedScope || tokenManifest) && !catalog) {
     if (record && !tokenManifest && next !== 'tokens') remember();
     void persistPreferences();
   }
   scopeRequest = next;
+  onlyFrame = nextFrame;
+  queryView = entry?.queryView ?? !['all', 'layer'].includes(scopeKind(next));
+  strictRoute = false;
   scopeEntry = entry;
   initialLink = null;
   pendingNavigation = null;
@@ -268,7 +278,7 @@ async function api(url, data, keepalive = false, signal) {
   return result;
 }
 function preferences() {
-  if (tokenManifest) return { theme, sidebar };
+  if (tokenManifest || onlyFrame) return { theme, sidebar };
   return {
     view,
     scope: initializedScope,
@@ -284,24 +294,12 @@ function selectionTarget() {
     group: groups[active]?.title ?? null,
   };
 }
-function linkedSelection() {
-  const query = new URLSearchParams(location.search);
-  if (!['group', 'asset', 'frame', 'element'].some(key => query.has(key))) return null;
-  return {
-    group: query.get('group'), path: query.get('asset'), form: query.get('frame'),
-    element: query.has('element') ? {id:query.get('element')} : null,
-  };
-}
 function syncSelectionURL() {
   if (fixtureState || catalog || !manifest?.directory) return;
-  const {path, form, element, group} = selectionTarget(), url = new URL(location.href);
-  const groupFocus = !path && ['layer','all'].includes(scopeKind(initializedScope)) ? group : null;
-  const target = { ...(manifest.layers ? {scope:initializedScope} : {}), group:groupFocus, asset:path, frame:form, element:element?.id };
-  for (const [key, value] of Object.entries(target)) {
-    if (value == null) {
-      if (url.searchParams.has(key)) url.searchParams.delete(key);
-    } else if (url.searchParams.get(key) !== value) url.searchParams.set(key, value);
-  }
+  const target = selectionTarget();
+  if (!['layer', 'all'].includes(scopeKind(initializedScope))) target.group = null;
+  if (onlyFrame) target.path = scopeTarget(initializedScope);
+  const url = viewURL(location.href, initializedScope, target, { isolated: queryView, onlyFrame });
   if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
 }
 function restoreSelection(target) {
@@ -339,7 +337,7 @@ document.addEventListener('visibilitychange', () => {if (document.hidden) void p
 function layout(data, preserve = false) {
   const previous = assets,
     previousGroups = groups,
-    result = arrange(data);
+    result = arrange(onlyFrame ? { ...data, assets: data.assets.map(asset => ({ ...asset, component: false, parts: asset.parts.filter(part => part.name === onlyFrame) })) } : data);
   groups = result.groups;
   assets = result.items;
   world = result.world;
@@ -762,7 +760,7 @@ function rounded(x, y, w, h, r, fill) {
   ctx.fill();
 }
 function assetURL(a, p) {
-  return `${a.path}|${effectiveTheme}|${a.version}|${p.id}`;
+  return `${a.path}|${effectiveTheme}|${a.version}|${p.id}${a.onlyFrame ? `|frame:${a.onlyFrame}` : ''}`;
 }
 function ensureImage(a, p) {
   const key = assetURL(a, p);
@@ -804,7 +802,7 @@ async function loadPreview(e) {
     await (globalThis.scheduler?.yield?.()??new Promise(resolve=>setTimeout(resolve,0)));
     local=true;
     return imageURL(asset,e.part,source=>{
-      if(!asset.hash)return;
+      if(!asset.hash || asset.onlyFrame)return;
       const saved=asset.cacheWrite??Promise.resolve(true);
       void saved.then(ok=>{
         if(!ok)return;
@@ -1342,9 +1340,7 @@ function applyTokenManifest(data) {
   $('#directory').title = $('#app-directory').title = data.directory;
   document.title = `${data.label} — SVG Design Gallery`;
   if (!fixtureState) {
-    const url = new URL(location.href);
-    url.searchParams.set('scope', 'tokens');
-    for (const key of ['group', 'asset', 'frame', 'element']) url.searchParams.delete(key);
+    const url = viewURL(location.href, 'tokens');
     if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
   }
   updateChrome();
@@ -1356,7 +1352,7 @@ async function applyManifest(data, force = false) {
     return;
   }
   const leavingTokens = !!tokenManifest;
-  const changedRoot = initializedDirectory !== data.directory, changedScope = initializedScope !== data.scope;
+  const changedRoot = initializedDirectory !== data.directory, changedScope = initializedScope !== data.scope || initializedFrame !== onlyFrame;
   const first = changedRoot || changedScope;
   if (!force && !first && !leavingTokens && manifest.revision === data.revision)
     return;
@@ -1437,6 +1433,7 @@ async function applyManifest(data, force = false) {
       }
       if(!entry) {
         entry=await prepare(a,versionTheme,{signal});
+        if (a.onlyFrame && !entry.parts.some(part => part.name === a.onlyFrame)) throw Error(`Frame ${a.onlyFrame} does not exist in ${a.path}.`);
         Object.assign(a,{hash:entry.hash,version:entry.version});
         persistSource(entry,versionTheme);
         keepSource(sourceKey(entry,versionTheme,data.directory),entry);
@@ -1476,7 +1473,7 @@ async function applyManifest(data, force = false) {
       : !saved.path && link.group === saved.group);
     const reload = performance.getEntriesByType('navigation')[0]?.type === 'reload';
     if (entry?.view) view=entry.view;
-    else if (entry?.target || (link && !(reload && sameSelection && data.view))) {
+    else if (entry?.target || (link && (onlyFrame || !(reload && sameSelection && data.view)))) {
       const target = selectedBox() || currentItem() || groups[active] || world;
       frame(target, selected ? 24 : 0);
     } else if (data.view) view = data.view;
@@ -1505,8 +1502,10 @@ async function applyManifest(data, force = false) {
   }
   initializedDirectory=data.directory;
   initializedScope=scopeRequest=data.scope;
+  initializedFrame=onlyFrame;
+  initialLink=null;
   scopeEntry=null;
-  if(data.features?.persistedMetadata)cacheWrite(`catalog?context=${encodeURIComponent(metadataContext())}`,{packing:packingSnapshot()});
+  if(data.features?.persistedMetadata && !onlyFrame)cacheWrite(`catalog?context=${encodeURIComponent(metadataContext())}`,{packing:packingSnapshot()});
   selection();
   if (pendingNavigation) {
     const action = pendingNavigation;
@@ -1593,12 +1592,18 @@ async function refresh(force = false) {
   }
   fetching = true;refreshController=new AbortController();
   try {
+    if (routeError) throw routeError;
     const query=new URLSearchParams({context:metadataContext(),theme:effectiveTheme,scope:scopeRequest});
+    if (strictRoute) query.set('strict', '1');
+    if (onlyFrame) query.set('frame', onlyFrame);
     if(!manifest){query.set('initial','1');query.set('metadata','1');}
     else if(manifest.renderTheme!==effectiveTheme || scopeRequest!==initializedScope)query.set('metadata','1');
     const signal=refreshController.signal, data=await api(`manifest?${query}`,null,false,signal);
     signal.throwIfAborted();
     data.scope ??= 'all';
+    if (strictRoute && initialLink?.path && !data.assets.some(asset => asset.path === initialLink.path))
+      throw Error(`Design link target ${initialLink.path} is outside this scope.`);
+    if (onlyFrame) data.assets = data.assets.map(asset => ({ ...asset, onlyFrame, metadata: null, metadataRefs: null, previewIds: null }));
     await applyManifest(data, force);
     error("");
   } catch (e) {

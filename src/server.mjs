@@ -1,6 +1,6 @@
 // Adapted from ARC's MIT-licensed tooling/design-server.mjs.
 import { randomUUID, createHash } from 'node:crypto';
-import { directLocal, viewerFiles, shell, json } from './http.mjs';
+import { directLocal, viewerFile, shell, json } from './http.mjs';
 import { createServer } from "node:http";
 import {
   readFile,
@@ -279,6 +279,7 @@ export async function startServer({
       return applyFixtureManifest(result, url.searchParams.get('fixture'));
     }
     const scoped=resolveScope(data,sources,desired === 'tokens' ? 'default' : desired);
+    if (url.searchParams.has('strict') && desired !== scoped.scope) throw Error('Design link target does not exist.');
     Object.assign(data,scoped);
     const key=preferenceKey(data.scope);
     data.view=state.views[key] ?? null;
@@ -297,7 +298,8 @@ export async function startServer({
       }));
     }
     data.sourceImports=Object.fromEntries([...knownBuilds].map(([name,built])=>[name,built.imports]));
-    if(viewerCache) {
+    const frameOnly = data.scope.startsWith('asset:') && url.searchParams.has('frame');
+    if(viewerCache && !frameOnly) {
       const includeMetadata=url.searchParams.get('metadata')==='1';
       const requestedTheme=url.searchParams.get('initial')==='1'&&['light','dark'].includes(state.theme)?state.theme:(url.searchParams.get('theme')==='light'?'light':'dark');
       data.metadataTheme=requestedTheme;
@@ -323,7 +325,7 @@ export async function startServer({
     if(files.has(name))Object.assign(files.get(name),{hash:built.hash,version:built.hash});
     return built;
   }
-  async function svg(name, theme, chain = []) {
+  async function svg(name, theme, chain = [], onlyFrame = null) {
     if (chain.includes(name))
       throw new Error(`Circular SVG reference: ${name}`);
     const asset = files.get(name);
@@ -333,8 +335,10 @@ export async function startServer({
     if (cached?.version === asset.version) return cached;
     if (name.endsWith('.tsx')) {
       const built=await sourceBuild(name);
+      const frames = onlyFrame ? built.frames.filter(frame => frame.name === onlyFrame) : built.frames;
+      if (!frames.length && onlyFrame) throw Error(`Frame ${onlyFrame} does not exist in ${name}.`);
       return {version:built.hash,imports:built.imports,dependencies:built.dependencies,
-        body:JSON.stringify({format:'tsx',hash:built.hash,css:built.css,imports:built.imports,component:!name.startsWith('surfaces/'),frames:built.frames})};
+        body:JSON.stringify({format:'tsx',hash:built.hash,css:built.css,imports:built.imports,component:!onlyFrame && !name.startsWith('surfaces/'),frames})};
     }
     let content = await readFile(path.join(root, name), "utf8");
     content = content.replace(
@@ -401,7 +405,8 @@ export async function startServer({
     try {
       const host = request.headers.host;
       const url = new URL(request.url, 'http://localhost');
-      if (['GET', 'HEAD'].includes(request.method) && viewerFiles[url.pathname]) return await shell(request, response, viewerFiles[url.pathname]);
+      const file = ['GET', 'HEAD'].includes(request.method) && viewerFile(url.pathname);
+      if (file) return await shell(request, response, file, request.headers['x-sdg-viewer-base']);
       if (!directLocal(request)) return json(response, 401, { error: 'Unauthorized' });
       if(url.pathname==='/api/cache-stats'&&request.method==='GET')return json(response,200,{process:process.memoryUsage(),builds:buildStore?.stats(),viewer:viewerCache?.stats()});
       if (url.pathname === '/api/health' && request.method === 'GET') return json(response, 200, { id: instanceId, capabilities: { keyAuth: 1 } });
@@ -506,14 +511,16 @@ export async function startServer({
         }
         const theme =
           url.searchParams.get("theme") === "dark" ? "dark" : "light";
-        etag = `"${files.get(name).version}-${theme}"`;
+        const onlyFrame = url.searchParams.get('frame');
+        const variant = onlyFrame ? `-${digest(onlyFrame)}` : '';
+        etag = `"${files.get(name).version}-${theme}${variant}"`;
         if (request.headers["if-none-match"] === etag) {
           response.writeHead(304);
           response.end();
           return;
         }
-        const rendered=await svg(name,theme);
-        content=rendered.body;etag=`"${rendered.version}-${theme}"`;
+        const rendered=await svg(name,theme,[],onlyFrame);
+        content=rendered.body;etag=`"${rendered.version}-${theme}${variant}"`;
         type = name.endsWith(".tsx") ? "application/json" : "image/svg+xml";
       } else {
         response.writeHead(404); response.end('Not found.'); return;

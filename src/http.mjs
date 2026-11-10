@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { isViewPath } from '../public/view-route.js';
 
 export function directLocal(request) {
   return /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$|^::1$/i.test(request.headers.host ?? '') &&
@@ -11,19 +12,24 @@ export const viewerFiles = {
   '/assets.js': 'assets.js', '/icons.js': 'icons.js', '/layout.js': 'layout.js', '/labels.js': 'labels.js',
   '/relationships.js': 'relationships.js', '/selection.js': 'selection.js', '/style.css': 'style.css', '/tokens.css': 'tokens.css',
   '/token-catalog.js': 'token-catalog.js',
+  '/view-route.js': 'view-route.js',
 };
+export const viewerFile = pathname => isViewPath(pathname) ? 'index.html' : viewerFiles[pathname];
 const designFiles = { 'tokens.css': 'tokens.css', 'favicon.svg': 'art/sdg-mark.svg' };
 const shellTypes = { '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml' };
 export function json(response, code, data) {
   response.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(data));
 }
-export async function shell(request, response, file) {
+export async function shell(request, response, file, base = '/') {
   const packaged = new URL(`../public/${file}`, import.meta.url);
   const source = designFiles[file];
-  const content = source
+  let content = source
     ? await readFile(new URL(`../design/${source}`, import.meta.url)).catch(() => readFile(packaged))
     : await readFile(packaged);
+  if (file === 'index.html' && /^\/(?:p|i)\/[A-Za-z0-9_-]+\/$/.test(base)) {
+    content = content.toString('utf8').replace('<base href="/">', `<base href="${base}">`);
+  }
   const type = shellTypes[file.slice(file.lastIndexOf('.'))] ?? 'text/javascript';
   response.writeHead(200, { 'Content-Type': `${type}; charset=utf-8`,
     'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' });

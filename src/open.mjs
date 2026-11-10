@@ -4,10 +4,12 @@ import { registerInstance } from "./hub/instances.mjs";
 import { existsSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { startServer } from "./server.mjs";
+import { previewTarget, previewURL } from './link.mjs';
 
 export async function open(positionals, values) {
     if (positionals.length > 1)
       throw new Error("Expected one directory. Run sdg --help.");
+    const target = previewTarget(values);
     const port = values.port === undefined ? 0 : Number(values.port);
     if (!Number.isInteger(port) || port < 0 || port > 65535)
       throw new Error("--port must be an integer from 0 to 65535.");
@@ -24,7 +26,8 @@ export async function open(positionals, values) {
     catch (error) { await server.close(); throw error; }
     const cleanup = () => { try { unlinkSync(instance.file); } catch {} };
     process.once('exit', cleanup);
-    console.log(`SDG: ${server.url}`);
+    const url = previewURL(server.url, target).href;
+    console.log(`SDG: ${url}`);
     if (!values["no-open"]) {
       const command =
         process.platform === "darwin"
@@ -34,11 +37,11 @@ export async function open(positionals, values) {
             : "xdg-open";
       const args =
         process.platform === "win32"
-          ? ["url.dll,FileProtocolHandler", server.url]
-          : [server.url];
+          ? ["url.dll,FileProtocolHandler", url]
+          : [url];
       const child = spawn(command, args, { stdio: "ignore", detached: true });
       child.on("error", () =>
-        console.error(`Open ${server.url} in your browser.`),
+        console.error(`Open ${url} in your browser.`),
       );
       child.unref();
     }

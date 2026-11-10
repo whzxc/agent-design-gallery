@@ -65,19 +65,24 @@ source's frames or forms in the canvas and navigation. Search and Fit all operat
 Back restores the previous scope, camera and selection. The inspector starts closed on entry and opens
 only through its toolbar button; changing selection, including from a link, does not open it.
 
-The URL stores render scope separately from the existing `group`, `asset`, `frame` and `element` focus parameters:
+Path links locate a target inside a canvas hierarchy. Query links select an independent render scope.
+Append these examples to a standalone viewer URL or to the project's `/p/<slug>/` URL.
 
-| Example query | Result |
+| Locator | Result |
 | --- | --- |
-| `?scope=layer:components` | Render only the Components layer. |
-| `?scope=all&group=Essentials` | Render all designs and focus Essentials. |
-| `?scope=group:Essentials` | Render only the complete Essentials group. |
-| `?scope=asset:components%2Ffield.tsx` | Render only field and all its forms. |
-| `?scope=layer:components&asset=components%2Ffield.tsx&frame=error` | Render Components and focus field's error form. |
+| `view/layer/components` | Open the Components layer. |
+| `view/all/group/Essentials` | Focus Essentials on the full project canvas. |
+| `view/layer/components/asset/components%2Ffield.tsx/frame/error` | Focus field's error form in Components. |
+| `?group=Essentials` | Render the complete Essentials group by itself. |
+| `?asset=components%2Ffield.tsx` | Render field and all its forms by itself. |
+| `?asset=components%2Ffield.tsx&frame=error` | Render just field's error form. |
 
-Existing focus links without `scope` retain their full canvas. A missing scope target falls back to the
-default layer. Discovery may read the source catalog to resolve the scope. Artboard builds, measurement,
-layout and preview requests are limited to assets in scope; dependencies needed by those assets still load.
+An explicit `scope` query sets the render scope and can carry a focus within it. This also keeps existing
+links such as `?scope=all&group=Essentials` and `?scope=asset:components%2Ffield.tsx&frame=error` usable.
+A query locator takes precedence if a URL includes both forms. The source catalog resolves the scope.
+Builds and preview requests stay within that scope, including dependencies needed to render it.
+An independent TSX frame compiles its owning source and sends only the named frame to the browser.
+See the [review handoff workflow](design-toolkit.md#review-handoff) for link and screenshot commands.
 
 The approved navigation specimens and `surfaces/canvas.tsx` frames `scope-layer`, `scope-group` and
 `scope-asset` have isolated implementation captures. The picker and row actions map to

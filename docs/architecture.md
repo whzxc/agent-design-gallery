@@ -24,12 +24,12 @@ Preferences store the camera and selected source, named form and group per direc
 
 The ephemeral server writes viewer preferences, refreshes ignored editor declarations and binds to `127.0.0.1`. The CLI selects its directory once. Browser mutations are limited to preferences and derived cache data; directory opening and reveal APIs are removed. Asset paths come from discovered source entries; symlinks are not scanned.
 
-The viewer data protocol uses relative URLs so direct and hub-prefixed viewers share one implementation:
+The viewer shell sets the base URL to the direct viewer, project, or live instance root. This keeps data requests scoped to that viewer while its address bar navigates through `view/` paths. Query locators choose a render scope and path locators choose a position within a layer or the full canvas. `public/view-route.js` encodes these locators for the browser and CLI.
 
 | Route | Purpose |
 | --- | --- |
 | `GET manifest?scope=...&context=...&theme=...` | Catalog for `default`, `all`, `layer:<name>`, `group:<name>` or `asset:<path>`, with the resolved scope and layer list. An omitted scope returns the full catalog for tooling. `metadata=1` includes measured geometry for the requested theme. `initial=1` honors the persisted theme. |
-| `GET asset/<source>` | Compact TSX `{hash,frames,css,imports,component}` or a legacy SVG. |
+| `GET asset/<source>` | Compact TSX `{hash,frames,css,imports,component}` or a legacy SVG. `frame=<name>` returns only the named TSX frame. This variant has a distinct ETag and uses session-local browser metadata and previews. |
 | `GET metadata/<hash>?theme=...&context=...` | One cached geometry record and available crop IDs. |
 | `POST metadata/<hash>?theme=...&context=...` | Persist browser-measured geometry. |
 | `GET/POST preview/<hash>?theme=...&context=...&crop=...` | Load or persist an exact ready-cropped SVG. |

@@ -38,13 +38,13 @@ function storedKey() {
   return typeof window === 'undefined' ? null : window.localStorage.getItem(storageKey);
 }
 export function keyURL(input) {
-  const url = new URL(input, window.location.href), key = storedKey();
+  const url = new URL(input, document.baseURI), key = storedKey();
   if (url.origin !== window.location.origin) throw new Error('SDG data requests must use the same origin.');
   if (key) url.searchParams.set('key', key);
   return url.href;
 }
 export async function dataFetch(input, init = {}) {
-  if (typeof window !== 'undefined' && new URL(input, window.location.href).origin !== window.location.origin)
+  if (typeof window !== 'undefined' && new URL(input, document.baseURI).origin !== window.location.origin)
     throw new Error('SDG data requests must use the same origin.');
   const headers = new Headers(init.headers), key = storedKey();
   if (key) headers.set('Authorization', `Bearer ${key}`);

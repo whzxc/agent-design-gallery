@@ -2,6 +2,7 @@
 
 - Keep a standalone ephemeral viewer (`sdg open`) and a resident multi-project hub (`sdg serve`) behind one global `sdg` CLI. The ephemeral viewer never depends on the hub. Projects own their TSX design sources, tokens, artwork, optional `gallery.json`, optional `sdg.config.mjs`, `.js` or `.ts`, and Git history; they do not depend on the package.
 - Preserve the ARC MIT attribution. Do not depend on ARC runtime code or a personal checkout at runtime.
+- Report design asset changes with links to the changed sources or frames. Use the [review handoff workflow](docs/design-toolkit.md#review-handoff) to generate live preview links and PNGs.
 - Design assets follow [the asset rules](docs/asset-rules.md), which take precedence over conflicting local guidance.
   Use [the design toolkit](docs/design-toolkit.md) for source format and [SDG design](docs/design.md) for current ownership,
   mappings and approval routing. Codex proposes and implements; the delegating Claude conversation reviews the completed

@@ -12,12 +12,16 @@ export function previewAddress(asset,theme,crop) {
 }
 
 export async function prepare(asset, theme, {signal} = {}) {
+  const frameQuery = asset.onlyFrame && asset.path.endsWith('.tsx') ? `&frame=${encodeURIComponent(asset.onlyFrame)}` : '';
   const response = await dataFetch(
-    `asset/${encodeURIComponent(asset.path)}?theme=${theme}&v=${encodeURIComponent(asset.version)}`,
+    `asset/${encodeURIComponent(asset.path)}?theme=${theme}&v=${encodeURIComponent(asset.version)}${frameQuery}`,
     {signal},
   );
   if(response.status===409)throw Object.assign(Error('Source rebuild superseded'),{name:'AbortError'});
-  if (!response.ok) throw new Error(`Cannot load ${asset.path}`);
+  if (!response.ok) {
+    const problem = frameQuery && (await response.json().catch(() => null))?.error;
+    throw new Error(problem || `Cannot load ${asset.path}`);
+  }
   const source = await response.text();
   if (asset.path.endsWith(".tsx")) {
     const built=JSON.parse(source);
