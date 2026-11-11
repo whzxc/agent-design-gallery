@@ -15,7 +15,7 @@ const category = name => /(?:GC|Scavenge|MarkCompact)/i.test(name)?'gc'
   : /(?:Decode Image|ImageDecodeTask|ImageDecoder::Decode)/.test(name)?'imageDecode'
   : /^(?:Paint|PrePaint|RasterTask|CompositeLayers|Layerize)$/.test(name)?'paint'
   : /^(?:UpdateLayoutTree|Layout|RecalculateStyles)$/.test(name)?'styleLayout'
-  : /^(?:FunctionCall|EvaluateScript|RunMicrotasks|EventDispatch|TimerFire|FireAnimationFrame|v8\.execute)$/.test(name)?'scripting':null;
+  : /^(?:FunctionCall|EvaluateScript|RunMicrotasks|EventDispatch|TimerFire|FireAnimationFrame|v8\.(?:execute|callFunction|runMicrotasks))$/i.test(name)?'scripting':null;
 export function traceSummary(trace, startUs=-Infinity, endUs=Infinity) {
   const names = new Map(trace.traceEvents.filter(e=>e.ph==='M'&&e.name==='thread_name').map(e=>[`${e.pid}:${e.tid}`,e.args.name]));
   const threads=new Map();

@@ -50,7 +50,7 @@ export async function measureNavigation(page, {url, reload=false, traceFile, scr
   let traceEvents=[];
   if(traceFile) {
     cdp.on('Tracing.dataCollected',e=>traceEvents.push(...e.value));
-    await cdp.send('Tracing.start',{categories:'devtools.timeline,v8,blink.user_timing,disabled-by-default-devtools.timeline',transferMode:'ReportEvents'});
+    await cdp.send('Tracing.start',{categories:'devtools.timeline,v8,v8.execute,blink.user_timing,disabled-by-default-devtools.timeline',transferMode:'ReportEvents'});
   }
   await cdp.send('Performance.enable');
   const beforeLoad=os.loadavg(),started=Date.now();

@@ -24,3 +24,15 @@ test('trace categories exclude nested work and retain worker decode separately',
   assert.deepEqual(summary.rendererMainMs,{scripting:4,styleLayout:3,paint:0,imageDecode:0,gc:1});
   assert.equal(summary.threads[1].ms.imageDecode,4);
 });
+
+test('trace scripting includes async V8 execution with nested callback slices counted once',()=>{
+  const summary=traceSummary({traceEvents:[
+    {ph:'M',name:'thread_name',pid:1,tid:1,args:{name:'CrRendererMain'}},
+    {ph:'X',name:'V8.RunMicrotasks',pid:1,tid:1,ts:0,dur:10000},
+    {ph:'X',name:'v8.callFunction',pid:1,tid:1,ts:1000,dur:5000},
+    {ph:'X',name:'FunctionCall',pid:1,tid:1,ts:1000,dur:5000},
+    {ph:'X',name:'Layout',pid:1,tid:1,ts:2000,dur:1000},
+  ]});
+  assert.equal(summary.rendererMainMs.scripting,9);
+  assert.equal(summary.rendererMainMs.styleLayout,1);
+});
