@@ -248,7 +248,18 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
           });
           const reference=JSON.parse(await readFile(path.join(root,'fixtures/arc-sample.layout.json'),'utf8'));
           assert.equal(actual.paths.length,51);assert.ok(actual.paths.every(p=>p.endsWith('.tsx')));
-          assert.deepEqual(actual.sections,reference.sections);
+          // Live sizes depend on system fonts. The layout unit test checks exact coordinates from fixed sizes.
+          const structure=sections=>sections.map(({title,blocks})=>[title,blocks.map(({asset,kind,frames})=>[asset,kind,frames?.map(f=>f.name)])]);
+          assert.deepEqual(structure(actual.sections),structure(reference.sections));
+          for(const section of actual.sections) {
+            const placed=[];
+            for(const {asset,x,y,w,h} of section.blocks) {
+              assert.ok(w>0&&h>0&&x>=section.x&&y>=section.y&&x+w<=section.x+section.w&&y+h<=section.y+section.h,asset);
+              const box={x,y,width:w,height:h};
+              assert.ok(!placed.some(other=>overlaps(other,box)),`${asset} overlaps another block`);
+              placed.push(box);
+            }
+          }
         }
         if(name==='sample-zoomed') {
           for(const caption of ['default','error']) assert.equal(await page.locator('#labels .canvas-label:not([hidden])').filter({hasText:new RegExp(`^${caption}$`)}).count(),1);
