@@ -212,6 +212,123 @@ After changing design assets, name the change and include an SDG link for each a
 
 `render` exports TSX frames at their exact bounds. It defaults to both themes at 2×. `--theme` selects a theme, and a relative `--out-dir` resolves from the project root. `--json` emits an ordered array with `source`, `frame`, `theme`, and absolute PNG `path` fields. Keep the default text output for interactive use.
 
+## Architecture sources
+
+A project may keep one Mermaid diagram per `.mmd` file. The config's `arch` directory
+is relative to the project root, independent of `design` and the TSX `sources` list.
+When omitted, `arch` is enabled if `<root>/arch` contains at least one `.mmd`, recursively.
+`arch: false` disables it. Only regular `.mmd` files and their adjacent `.md` sidecars
+participate; JSON, other files, hidden entries and symlinks are ignored.
+
+```js
+export default {
+  design: 'design',
+  arch: 'arch',
+  check: { archMaxEdges: 30 },
+};
+```
+
+Every diagram becomes one artboard with one frame named `default`. Architecture paths
+are project-root-relative, including the configured directory and extension:
+`arch/mechanisms/work.mmd`. Existing TSX paths remain design-relative. The viewer puts
+architecture sources in its `arch` layer and groups them by subdirectory. Contents,
+search, Fit, Render only, Inspector notes, query/path links and the hub proxy use the
+same frame pipeline. Architecture nodes have empty Uses and Used by lists.
+
+Leading `%%` comments are allowed. Express semantics with Mermaid class statements:
+
+```mermaid
+flowchart LR
+  queued[Queued] --> running[Running]
+  class queued waiting
+  class running progress,experimental
+```
+
+| Class | Meaning and paint |
+| --- | --- |
+| `progress` | In progress; violet fill/stroke. |
+| `waiting` | Waiting; warning fill/stroke. |
+| `done` | Complete; success fill/stroke. |
+| `stopped` | Stopped; danger fill/stroke. |
+| `uncertain` | Uncertain; tertiary fill/stroke. |
+| `experimental` | Experimental border; violet, 2px, 6/4 dashed. |
+| `temporary` | Temporary border; warning, 2px, 2/3 dashed. |
+| `gap` | Gap border; danger, 2.5px solid. |
+
+A phase and a mark combine: the phase supplies the fill, and the mark the border.
+The legend above the diagram lists only used classes; it is omitted for unclassified
+diagrams. Unknown classes fail checks. `added`, `removed` and `changed` are reserved
+for computed Git overlays and rejected in sources. Git overlays are a later segment;
+this release has no `--base` flag or diff query parameter.
+
+Sources do not paint. `classDef`, `style` and `linkStyle` statements are rejected,
+as are init directives or Mermaid frontmatter containing theme, themeVariables or
+color/paint configuration. Paint is supplied by `design/tokens.css`, which retains
+its required light/dark blocks and four required tokens.
+
+The frame maps Pele variables to project roles: background to `--surface` then
+`--canvas`, foreground to `--text`, muted to `--text-secondary`, line to
+`--text-tertiary`, surface/alternate to `--surface-subtle`, border to `--border-strong`
+then `--border`, accent to `--accent`, and fonts to `--font-ui`/`--font-mono`.
+Missing optional neutral roles fall back to canvas/text. Radius is 8px.
+Projects may override `--arch-<class>` in either token block. Defaults use violet
+`#6a5ad0`/`#ab9fff` for progress and experimental; warning, success, danger and
+tertiary roles supply the remaining colors with SDG light/dark fallbacks. Phase
+fill mixes 20% of its color with the diagram background.
+
+### Sidecars
+
+`work.md` beside `work.mmd` supplies an English prose note. Its optional frontmatter
+supports exactly two keys, once each. `owners` is an indented dash list; `status` is a
+non-empty single-line string. Values may be bare or surrounded by matching single
+or double quotes. Inline arrays, nested objects, escapes, multiline scalar syntax,
+comments and additional YAML features are unsupported. No YAML dependency is used.
+
+```md
+---
+owners:
+  - src/queue.ts
+  - src/workers/**/*.ts
+status: Draft
+---
+Review the queue before changing its delivery policy.
+```
+
+Owners are project-root-relative file paths or filesystem globs (including `*`, `?`
+and `**`); each must match at least one file. Absolute and parent-escaping paths are
+invalid. The body appears in the existing Inspector note, followed by plain
+`Owners: ...` and `Status: ...` lines when present. These mappings are for review;
+SDG does not infer architecture layers or freshness from them.
+
+### Architecture check and render
+
+```sh
+sdg check arch/mechanisms/work.mmd --read-only
+sdg render arch/mechanisms/work.mmd --theme=both --scale=2 --out-dir=output/arch --json
+sdg open . --asset=arch/mechanisms/work.mmd --frame=default
+sdg link http://127.0.0.1:4310/p/example/ --asset=arch/mechanisms/work.mmd
+```
+
+`check` includes architecture sources when no sources are named, and accepts named
+architecture sources with or without `--read-only`. Each problem occupies one line
+`<project-relative-path>: <problem>`. It reports Pele's parse message and original
+line, unknown/reserved classes, painting statement lines, an edge/message count over
+`check.archMaxEdges` (default 30), invalid sidecars, unmatched owners, and labels
+outside their node shapes in either theme. The count is a check limit; it does not
+prevent browsing or rendering a larger diagram.
+
+Pele renders synchronously in Node. SDG collects its text-width requests and measures
+them in Chromium using both project font stacks, repeating as wrapping requests new
+widths. Layout reserves the larger width across themes. Rendered shape checks use
+Chromium's actual SVG transforms and text bounds. Final font review uses macOS,
+the review platform defined in [SDG design](design.md).
+
+`render` uses a fresh page/context per frame and theme, defaults to both themes at
+2×, and writes `<out-dir>/arch/mechanisms/work/default-light.png` and
+`default-dark.png`. `--json` returns `source`, `frame`, `theme` and absolute `path`.
+A named architecture render writes no declarations or HTML into the source checkout;
+use an absolute output directory to keep a consumer checkout read-only.
+
 ## Compare
 
 `compare` builds the frame and renders it in Chromium beside the implementation in the fixture's theme, locale, time zone and clock. The capture comes from the frame's `capture`, overridden by flags. A page capture sets the viewport and clips the page at `origin` with the frame's size; `region` captures the element with role `region` or `dialog` and that accessible name; `selector` captures the first element matching a CSS selector. Each click activates the first visible control with that exact accessible name among buttons, radios, tabs, checkboxes, switches, menu items, options and links. After the clicks, `compare` waits until the captured texts and their boxes stay unchanged for 300ms, up to 5s.

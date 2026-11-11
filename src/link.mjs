@@ -6,8 +6,8 @@ export function previewTarget(options) {
   const targets = [asset, group, layer, tokens].filter(value => value !== undefined && value !== false);
   if (targets.length > 1 || (frame !== undefined && !asset) || targets.some(value => value === '') || frame === '')
     throw Error('Choose one of --asset, --group, --layer, or --tokens. --frame needs --asset.');
-  if (asset && (!/\.(tsx|svg)$/i.test(asset) || asset.includes('\\') || asset.split('/').some(part => !part || part === '.' || part === '..')))
-    throw Error('Use a design-relative .tsx or .svg file path for --asset.');
+  if (asset && (!/\.(tsx|svg|mmd)$/i.test(asset) || asset.includes('\\') || asset.split('/').some(part => !part || part === '.' || part === '..')))
+    throw Error('Use a design-relative .tsx/.svg or project-root-relative .mmd file path for --asset.');
   if (tokens && mode === 'path') throw Error('Use --mode=query for --tokens.');
   return { asset, frame, group, layer, tokens, mode };
 }
@@ -45,7 +45,7 @@ export function previewURL(input, target) {
     if (element) base.searchParams.set('element', element.id);
     return base;
   }
-  const parent = layer ?? (asset?.includes('/') ? asset.split('/')[0] : null);
+  const parent = layer ?? (asset?.endsWith('.mmd') ? 'arch' : asset?.includes('/') ? asset.split('/')[0] : null);
   if (!parent && !group && !asset && kind !== 'all') return base;
   return viewURL(base, parent ? `layer:${parent}` : 'all', { path: asset, group, form: frame, element });
 }

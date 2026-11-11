@@ -1,0 +1,10 @@
+%% A generic work queue and its decision.
+flowchart LR
+  queued[Queued work] --> running[Running work]
+  running --> gate{Ready to deliver?}
+  gate --> delivered[Delivered]
+  gate --> queued
+  class queued waiting
+  class running progress,experimental
+  class gate uncertain,temporary
+  class delivered done

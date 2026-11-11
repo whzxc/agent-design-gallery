@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { configFile, loadConfig, VERSION } from '../toolkit/config.mjs';
-import { listSources } from '../toolkit/project.mjs';
+import { listSources, archFiles } from '../toolkit/project.mjs';
 
 const exec = promisify(execFile);
 export const defaultStateDirectory = path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local/state'), 'svg-design-gallery');
@@ -128,7 +128,7 @@ export async function projectMetadata(record) {
       git(record.path, ['log', '-1', '--format=%cI', '--', relative]), git(record.path, ['status', '--porcelain', '--untracked-files=all', '--', relative]),
     ]);
     return { ...base, name: config.name, design: config.design, branch, head,
-      lastDesignChange: { committedAt: committedAt || null, dirty: !!dirty }, sourceCount: listSources(config.design, config.sources).length,
+      lastDesignChange: { committedAt: committedAt || null, dirty: !!dirty }, sourceCount: listSources(config.design, config.sources).length + archFiles(config.arch).length,
       compatibility: { version: VERSION, requires: config.requires, compatible: config.compatible } };
   } catch (error) { return { ...base, error: error.message }; }
 }

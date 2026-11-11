@@ -90,13 +90,13 @@ class BuildPool {
 
 export async function createBuildStore({ config, cacheDirectory }) {
   const design = await realpath(config.design);
-  const workerConfig = { root: config.root, design, output: config.output, sources: config.sources };
+  const workerConfig = { root: await realpath(config.root), design, output: config.output, sources: config.sources, arch:config.arch, check:config.check };
   const require = createRequire(import.meta.url);
   const fingerprint = digest(Buffer.concat(await Promise.all([
-    ...['../../package.json', './build.mjs', './runtime.mjs', './tokens.mjs', './text.mjs', './project.mjs', './build-worker.mjs', './build-store.mjs'].map(file => new URL(file, import.meta.url)),
+    ...['../../package.json', './build.mjs', './runtime.mjs', './tokens.mjs', './text.mjs', './project.mjs', './build-worker.mjs', './build-store.mjs', './arch.mjs', './browser.mjs'].map(file => new URL(file, import.meta.url)),
     require.resolve('esbuild/package.json'), require.resolve('tailwindcss/package.json'),
   ].map(file => readFile(file)))));
-  const namespace = digest(JSON.stringify({ fingerprint, design, sources: config.sources, sourceFiles: config.sourceFiles }));
+  const namespace = digest(JSON.stringify({ fingerprint, design, arch:config.arch, check:config.check, sources: config.sources, sourceFiles: config.sourceFiles }));
   const directory = cacheDirectory, indexPath = path.join(directory, 'index.json');
   await mkdir(directory, { recursive: true });
   const pool = new BuildPool(), entries = new Map(), reverse = new Map(), pending = new Map(), generations = new Map(), memory = new Map();
@@ -126,7 +126,7 @@ export async function createBuildStore({ config, cacheDirectory }) {
   };
   async function hashesFor(dependencies, cache = new Map()) {
     try { return Object.fromEntries(await Promise.all(dependencies.map(async name => {
-      if (!cache.has(name)) cache.set(name, readFile(path.join(config.design, name)).then(digest));
+      if (!cache.has(name)) cache.set(name, readFile(path.join(config.design, name)).then(bytes=>digest(Buffer.concat([Buffer.from('present\0'),bytes]))).catch(error=>{if(error.code==='ENOENT'&&name.endsWith('.md'))return digest('missing\0');throw error;}));
       return [name, await cache.get(name)];
     }))); }
     catch (error) { if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return null; throw error; }
@@ -193,7 +193,7 @@ export async function createBuildStore({ config, cacheDirectory }) {
       pending.get(name)?.controller.abort(); pending.delete(name);
       // Keep dependency edges until the replacement build has completed.
       const entry = entries.get(name);
-      if (entry && !existsSync(path.join(config.design, name))) { unlinkEntry(entry); entries.delete(name); generations.delete(name); }
+      if (entry && !existsSync(path.join(name.endsWith('.mmd')?config.root:config.design, name))) { unlinkEntry(entry); entries.delete(name); generations.delete(name); }
       else if (entry) entry.stale = true;
     }
     return [...affected];

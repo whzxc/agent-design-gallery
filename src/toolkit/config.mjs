@@ -3,7 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { build } from 'esbuild';
-import { sourceDirectories } from './project.mjs';
+import { sourceDirectories, archFiles } from './project.mjs';
 
 export const VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url))).version;
 export const UPDATE = 'npm install -g @whzxc/svg-design-gallery';
@@ -106,7 +106,7 @@ export async function loadConfig(cwd = process.cwd(), { checkVersion = true } = 
   if (config.name !== undefined && (typeof config.name !== 'string' || !config.name.trim())) throw new Error('Set name to a non-empty project name in the SDG config');
   const compatible = config.requires === undefined || satisfies(VERSION, config.requires);
   if (checkVersion && !compatible) throw new Error(`SDG ${VERSION} does not satisfy requires ${config.requires}; run ${UPDATE}`);
-  for (const key of ['design', 'output']) if (config[key] !== undefined && (typeof config[key] !== 'string' || !config[key].trim())) throw new Error(`Set ${key} to a directory path in sdg.config.mjs`);
+  for (const key of ['design', 'output', 'arch']) if (config[key] !== undefined && !(key === 'arch' && config[key] === false) && (typeof config[key] !== 'string' || !config[key].trim())) throw new Error(`Set ${key} to a directory path in sdg.config.mjs`);
   if (config.check !== undefined && (!config.check || typeof config.check!=='object' || Array.isArray(config.check))) throw new Error('Set check to an object in sdg.config.mjs');
   if (config.check?.importDirection !== undefined && typeof config.check.importDirection!=='boolean') throw new Error('Set check.importDirection to true or false in sdg.config.mjs');
   const compare = { port: 5188, viewport: '1280x800', ...config.compare };
@@ -114,6 +114,9 @@ export async function loadConfig(cwd = process.cwd(), { checkVersion = true } = 
   if (!Number.isInteger(compare.port) || compare.port < 1 || compare.port > 65535) throw new Error('Set compare.port to an integer from 1 to 65535 in sdg.config.mjs');
   for (const key of ['start', 'fixture', 'ready', 'texts']) if (compare[key] !== undefined && typeof compare[key] !== 'function') throw new Error(`Set compare.${key} to a function in sdg.config.mjs`);
   if (compare.block !== undefined && (!Array.isArray(compare.block) || compare.block.some(value => typeof value !== 'string'))) throw new Error('Set compare.block to an array of request patterns in sdg.config.mjs');
+  if (config.check?.archMaxEdges !== undefined && (!Number.isInteger(config.check.archMaxEdges) || config.check.archMaxEdges < 0)) throw Error('Set check.archMaxEdges to a non-negative integer in sdg.config.mjs');
+  if (typeof config.arch === 'string' && (path.isAbsolute(config.arch) || path.relative(root,path.resolve(root,config.arch)).startsWith('..'))) throw Error('Set arch to a project-root-relative directory in sdg.config.mjs');
+  const arch = config.arch === false ? false : path.resolve(root,config.arch ?? 'arch');
   const design=path.resolve(root,config.design??'design');
-  return { root, name: config.name ?? path.basename(root), requires: config.requires ?? null, compatible, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{importDirection:true,...config.check}, compare };
+  return { root, name: config.name ?? path.basename(root), requires: config.requires ?? null, compatible, arch: arch && (config.arch !== undefined || archFiles(arch).length) ? arch : false, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{archMaxEdges:30,importDirection:true,...config.check}, compare };
 }

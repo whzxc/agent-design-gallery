@@ -74,3 +74,42 @@ Key rotation is atomic and applies to new requests immediately, including when t
 Install writes the plist under the user's Library/LaunchAgents and bootstraps the GUI domain. A bootstrap failure removes the new plist. Status returns structured installed/loaded state and runtime PID; logs prints a bounded tail. Existing plist arguments supply the custom state path for later status/logs/uninstall calls. Uninstall removes the job/plist while retaining state and logs. Other platforms fail explicitly. Absolute runtime paths must be refreshed by reinstalling after the Node or CLI location changes.
 
 The resident service loads its installed package independently of the development checkout. Static shell files are read on each request with `Cache-Control: no-cache`; open browser tabs load new JavaScript on reload. Server and toolkit modules remain loaded until process restart. `src/server.mjs` also hashes `assets.js`, `layout.js` and `selection.js` once at module load to identify the viewer cache context, so updates to those frontend files require a hub restart and browser reload. Existing independent `sdg open` processes retain their own runtime until reopened. See [local updates](local-updates.md) for milestone delivery.
+
+## Architecture source pipeline
+
+Configuration discovers regular `.mmd` files recursively in the project-root `arch`
+directory, or the configured relative alternative. The server retains existing
+TSX asset identities and adds project-root-relative architecture identities with
+`layer: 'arch'`. Only Mermaid files and their sidecars enter this discovery. The
+architecture watcher feeds both public asset names and design-relative dependency
+names into the existing invalidation path; `.md` creation, edits and deletion all
+refresh notes and cached previews through SSE.
+
+`toolkit/arch.mjs` validates source statements and the small sidecar grammar, parses
+with exactly Pele 1.12.0, measures label requests in Chromium using the project fonts,
+and passes the structural model to Pele's synchronous Node renderer. Its
+`renderArch(model, tokenSource)` boundary can render a model supplied by a later Git
+overlay; `buildArch` also accepts an optional precomputed `model`. Segment A performs
+no Git comparison and adds no overlay command or UI. Pele's actual SVG edge IDs are
+preserved: state diagrams use `edgeN`, flowcharts use model edge IDs such as
+`L_A_B_0`, and sequence messages use `iN`. A future overlay must map these through
+its diagram's parse model and source order, rather than assume one universal ID.
+
+Each diagram produces one `default` frame, empty imports, shared token/architecture
+CSS, and an Inspector note. The existing compact frame transport and HTML sandbox
+measurement path are reused (their internal format tag remains `tsx`). Every new
+visual, including the used-class legend, belongs inside the architecture artboard.
+Viewer chrome, scope controls, navigation and camera handling are unchanged.
+
+The build worker dispatches `.mmd` by kind, with a content snapshot covering source,
+sidecar and tokens. A missing optional sidecar has an explicit hash state, so its
+creation invalidates both live and restart caches. Build-store fingerprints include
+the architecture renderer; payload hashes reuse existing geometry and cropped
+preview caches for unchanged output. Pele loads only for architecture builds;
+TSX-only builds retain their existing bundler and rendering path.
+
+CLI source selection combines architecture and TSX inventories. `check` uses Pele
+model edge/message counts, sidecar ownership checks and Chromium SVG shape/text
+checks in both themes. `render` uses the existing isolated capture path and preserves
+project-relative architecture output directories. The resident registry includes
+architecture source counts and proxies the same viewer endpoints.

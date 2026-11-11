@@ -12,6 +12,11 @@ export const starterTokens = `:root {
   --text: #ffffff;
 }
 `;
+export function archFiles(directory) {
+  if (!directory || !existsSync(directory)) return [];
+  return readdirSync(directory, {withFileTypes:true}).flatMap(entry => entry.name.startsWith('.') ? [] :
+    entry.isDirectory() ? archFiles(path.join(directory,entry.name)) : entry.isFile() && entry.name.endsWith('.mmd') ? [path.join(directory,entry.name)] : []).sort();
+}
 const defaultSources = ['components', 'modules', 'surfaces'];
 export function sourceDirectories(config = {}) {
   const studies = config.sources === undefined && config.design && existsSync(path.join(config.design, 'studies')) &&
@@ -125,18 +130,19 @@ export function rejectLegacy(config, files) {
   }
 }
 export function selectSources(config, args = [], { write = true } = {}) {
-  if (write) refreshTypes(config);
+  if (write && (!args.length || args.some(arg=>!arg.endsWith('.mmd')))) refreshTypes(config);
   if (!args.length) rejectLegacy(config);
   const directories = sourceDirectories(config);
   readGroups(config.design, directories);
-  const sources = listSources(config.design, directories);
+  const sources = [...listSources(config.design, directories), ...archFiles(config.arch)];
   if (!args.length) return sources;
   return args.map(arg => {
     const fromRoot = path.resolve(config.root, arg);
+    if (arg.endsWith('.mmd') && sources.includes(fromRoot)) return fromRoot;
     let file = path.isAbsolute(arg) || fromRoot.startsWith(config.design + path.sep) ? fromRoot : path.resolve(config.design, arg);
     if (existsSync(file)) rejectLegacy(config, [file]);
     if (!file.endsWith('.tsx')) file += '.tsx';
-    if (!sources.includes(file)) throw Error(`Invalid source ${arg}; name a TSX file directly in ${directories.map(name => path.join(config.design, name) + '/').join(', ')}`);
+    if (!sources.includes(file)) throw Error(`Invalid source ${arg}; name a discovered .mmd file or a TSX file directly in ${directories.map(name => path.join(config.design, name) + '/').join(', ')}`);
     return file;
   });
 }

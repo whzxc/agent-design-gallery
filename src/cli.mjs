@@ -19,7 +19,7 @@ const details = {
   serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes. --print-key prints the key and exits; --rotate-key rotates the running hub key and exits. Forwarded data requests require a header or query key; direct-local requests are exempt.',
   service: 'Manage the macOS resident hub LaunchAgent. install starts it with RunAtLoad and KeepAlive, recording absolute Node/CLI paths. --port applies only to install. status prints JSON; logs prints the last 200 lines per log. Uninstall retains state and logs. Other platforms are unsupported.',
   root: 'Manage registered scan roots. add scans immediately. scan rescans registered roots only; depth is 0 through 3. Hidden directories, node_modules and Git worktrees are skipped.',
-  open: 'Browse TSX sources and legacy SVG designs on an independent random-port server.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
+  open: 'Browse TSX, Mermaid architecture sources and legacy SVG designs on an independent random-port server.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
   link: 'Print a clean SDG preview URL. Query mode isolates a target. Path mode locates it in the design hierarchy.',
   check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render selected frames as PNG. Defaults to both themes at 2×. --json prints a list of captures with absolute paths.',
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',

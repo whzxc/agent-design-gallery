@@ -82,6 +82,23 @@ Builds produce standalone HTML and renders produce `<frame>-light.png` and `<fra
 
 See the [toolkit contract](docs/design-toolkit.md) for source format and compare adapters, and the [changelog](CHANGELOG.md) for version changes. Node.js executes design modules at build time; open sources you trust.
 
+## Architecture sources
+
+SDG discovers Mermaid `.mmd` files recursively under the project-root `arch/` directory.
+They appear in the Arch scope alongside UI sources, with one `default` frame per diagram.
+Set `arch: 'architecture'` or `arch: false` in the project config to change discovery.
+Project tokens paint both themes; an optional adjacent `.md` supplies Inspector notes,
+code owners and status. Pele is pinned to 1.12.0.
+
+```sh
+sdg open . --asset=arch/system-map.mmd
+sdg check arch/system-map.mmd --read-only
+sdg render arch/system-map.mmd --theme=both --json
+```
+
+See [architecture source format](docs/design-toolkit.md#architecture-sources) for the
+semantic vocabulary, sidecar grammar and checks.
+
 ## Development
 
 ```sh

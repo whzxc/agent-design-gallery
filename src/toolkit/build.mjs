@@ -66,6 +66,7 @@ export function validateFrame(frame) {
   }
 }
 export async function buildSource(config, file, { write = true, allowLegacy = true, snapshot } = {}) {
+  if (file.endsWith('.mmd')) return (await import('./arch.mjs')).buildArch(config,file,{snapshot});
   if (write) refreshTypes(config);
   const read = (name, encoding) => {
     if (!snapshot) return readFileSync(name, encoding);

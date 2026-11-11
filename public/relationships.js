@@ -1,6 +1,6 @@
 // Assets carry direct source imports resolved by the toolkit's bundler.
 export function sourceRelationships(assets) {
-  const graph = Object.fromEntries(assets.filter(a => a.path.endsWith('.tsx')).map(a => [a.path, { uses: [], usedBy: [] }]));
+  const graph = Object.fromEntries(assets.filter(a => /\.(tsx|mmd)$/.test(a.path)).map(a => [a.path, { uses: [], usedBy: [] }]));
   for (const asset of assets) {
     const node = graph[asset.path];
     if (!node) continue;

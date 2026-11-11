@@ -12,7 +12,7 @@ export function previewAddress(asset,theme,crop) {
 }
 
 export async function prepare(asset, theme, {signal} = {}) {
-  const frameQuery = asset.onlyFrame && asset.path.endsWith('.tsx') ? `&frame=${encodeURIComponent(asset.onlyFrame)}` : '';
+  const frameQuery = asset.onlyFrame && /\.(tsx|mmd)$/.test(asset.path) ? `&frame=${encodeURIComponent(asset.onlyFrame)}` : '';
   const response = await dataFetch(
     `asset/${encodeURIComponent(asset.path)}?theme=${theme}&v=${encodeURIComponent(asset.version)}${frameQuery}`,
     {signal},
@@ -23,7 +23,7 @@ export async function prepare(asset, theme, {signal} = {}) {
     throw new Error(problem || `Cannot load ${asset.path}`);
   }
   const source = await response.text();
-  if (asset.path.endsWith(".tsx")) {
+  if (/\.(tsx|mmd)$/.test(asset.path)) {
     const built=JSON.parse(source);
     return prepareSource({...asset,hash:built.hash??asset.hash,version:built.hash??asset.version},built,theme,signal);
   }
@@ -216,7 +216,7 @@ export function scopeTarget(scope) {
 }
 
 export function resolveScope(data, layers, requested) {
-  const layerOf = asset => asset.path.includes('/') ? asset.path.split('/')[0] : 'Design';
+  const layerOf = asset => asset.layer ?? (asset.path.includes('/') ? asset.path.split('/')[0] : 'Design');
   const layerAssets = new Map(layers.map(layer => [layer, []]));
   for (const asset of data.assets) {
     const layer = layerOf(asset);

@@ -179,22 +179,31 @@ export function inspectFrame(tokenNames) {
 export async function check(config, args = [], options = {}, log = console.log, error = console.error) {
   const write=!options['read-only'];
   const files = selectSources(config,args,{write}), tokens = loadTokens(config), problems = new Set(), graph={};
+  const arch = files.some(file=>file.endsWith('.mmd')) ? await import('./arch.mjs') : null;
   const browser = await launch();
   try {
     const page = await browser.newPage();
     for (const file of files) {
+      const architecture=file.endsWith('.mmd');
+      if(architecture) {
+        const {readFileSync,existsSync}=await import('node:fs');
+        const text=readFileSync(file,'utf8'), side=file.replace(/\.mmd$/,'.md');
+        const metadata=arch.sidecar(existsSync(side)?readFileSync(side,'utf8'):'');
+        for(const problem of [...arch.inspectArch(text,config.check?.archMaxEdges??30).problems,...metadata.problems,...arch.ownerProblems(config,metadata)]) problems.add(`${relative(config,file)}: ${problem}`);
+        if([...problems].some(problem=>problem.startsWith(relative(config,file)+':'))) continue;
+      }
       let built;
       try { built = await buildSource(config,file,{allowLegacy:false,write}); }
       catch(e) {
         const legacy = e.errors?.find(error => error.detail?.code === 'LEGACY_SVG');
         if (legacy) throw legacy.detail;
-        problems.add(`${relative(config,file)}: -: ${e.message.replace(/\s+/g,' ')}`); continue;
+        for(const problem of e.message.split('\n')) problems.add(`${relative(config,file)}: ${architecture?'':'-: '}${problem.replace(/\s+/g,' ')}`); continue;
       }
       graph[path.relative(config.design,file).split(path.sep).join('/')]={uses:built.imports};
       for (const frame of built.frames) for (const theme of ['light','dark']) {
         try {
           await loadFrame(page,frame,theme);
-          for (const problem of await page.evaluate(inspectFrame,[...tokens.light.keys()])) problems.add(`${relative(config,file)}: ${frame.name}: ${theme}: ${problem}`);
+          for (const problem of await page.evaluate(architecture?arch.inspectArchLabels:inspectFrame,architecture?undefined:[...tokens.light.keys()])) problems.add(`${relative(config,file)}: ${frame.name}: ${theme}: ${problem}`);
         } catch(e) { problems.add(`${relative(config,file)}: ${frame.name}: ${theme}: ${e.message.replace(/\s+/g,' ')}`); }
       }
     }
@@ -221,8 +230,8 @@ export async function render(config, args = [], options = {}) {
       const built = await buildSource(config,file,{allowLegacy:false});
       for (const frame of built.frames.filter(f => !options.frame || f.name === options.frame)) {
         for (const theme of themes) {
-          const source = path.relative(config.design, file);
-          const target = path.join(output, source.replace(/\.tsx$/, ''), `${encodeURIComponent(frame.name)}-${theme}.png`);
+          const source = file.endsWith('.mmd') ? relative(config,file) : path.relative(config.design, file);
+          const target = path.join(output, source.replace(/\.(?:tsx|mmd)$/, ''), `${encodeURIComponent(frame.name)}-${theme}.png`);
           captures.push({source,frame,theme,target});
         }
       }

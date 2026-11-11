@@ -142,3 +142,22 @@ The consumer keeps:
 - Review batch scope, proposer/reviewer responsibilities, approval and visual acceptance procedures, and the minimum SDG version.
 
 Choose local filenames and status conventions that fit the project. Link this toolkit standard instead of copying its generic rules into every consumer's governance documents.
+
+## Architecture assets
+
+Keep one Mermaid diagram per `.mmd` file in the configured project-root `arch`
+directory. Each has one `default` frame. An optional same-basename `.md` records an
+English review note, `owners` mapping to existing project files/globs and a status.
+Keep explanation in that note and preserve the diagram as the structural source.
+
+Use the toolkit's phase/mark vocabulary and project tokens; sources do not paint.
+Run `sdg check` and review rendered PNGs in both themes when changing an architecture
+asset. Include the source and both theme renders in the review handoff. Changes to
+owning code paths should prompt review of the mapped diagrams; SDG checks that owners
+match files and leaves semantic freshness to reviewers.
+
+Architecture is a separate `arch` gallery layer with no source imports. Internal
+layer conventions such as a consumer's L0 system map, L1 components and L2 mechanisms
+belong to that consumer's documentation and directory structure. SDG imposes no such
+hierarchy. See [architecture sources](design-toolkit.md#architecture-sources) for the
+format, sidecar grammar and commands.

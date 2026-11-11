@@ -16,7 +16,7 @@ import os from "node:os";
 
 import { createBuildStore } from './toolkit/build-store.mjs';
 import { createViewerCache } from './viewer-cache.mjs';
-import { refreshTypes, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
+import { refreshTypes, archFiles, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
 import { loadConfig } from './toolkit/config.mjs';
 import { parseTokens } from './toolkit/tokens.mjs';
 import { sourceRelationships } from '../public/relationships.js';
@@ -37,6 +37,7 @@ export async function startServer({
   port = 0,
   stateDirectory = defaultState,
   fixtures = null,
+  readOnly = false,
   instanceId = randomUUID(),
 } = {}) {
   let state = { recent: [], views: {}, selections: {}, theme: "system" };
@@ -52,7 +53,7 @@ export async function startServer({
     sources = sourceDirectories(),
     files = new Map(),
     groups = [],
-    watcher,
+    watcher, archWatcher, activeProject,
     refreshTimer,
     revision = 0,
     closing = false,
@@ -109,6 +110,29 @@ export async function startServer({
     }
     return out;
   }
+  async function collectProject(base, project, sourceNames, discoveredCode) {
+    const out=await collect(base,'',new Map(),sourceNames,discoveredCode);
+    if(project.design !== base) return out;
+    for(const file of archFiles(project.arch)) {
+      const name=path.relative(project.root,file).split(path.sep).join('/'),info=await stat(file),stamp=`${info.mtimeMs}-${info.size}`;
+      const old=files.get(name);
+      out.set(name,old?.stamp===stamp?old:{path:name,name:path.basename(name,'.mmd'),layer:'arch',version:stamp,stamp,size:info.size,modifiedAt:info.mtimeMs});
+    }
+    return out;
+  }
+  function watchArch(project,base) {
+    archWatcher?.close();archWatcher=null;
+    if(project.design!==base || !project.arch) return;
+    archWatcher=watch(project.arch,{recursive:true},(_event,filename)=>{
+      if(!filename || !/\.(mmd|md)$/.test(String(filename)))return;
+      const file=path.join(project.arch,String(filename));
+      const dependency=path.relative(base,file).split(path.sep).join('/');
+      const name=path.relative(project.root,file).split(path.sep).join('/');
+      touched.add(dependency);touched.add(name);buildStore?.invalidate([dependency,name]);
+      clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>refresh().catch(e=>emit({error:e.message})),80);
+    });
+    archWatcher.on('error',e=>emit({error:`Architecture watcher: ${e.message}`}));
+  }
   async function openDirectory(input) {
     let next;
     try { next = await realpath(path.resolve(input.replace(/^~(?=$|[\\/])/, os.homedir()))); }
@@ -119,10 +143,10 @@ export async function startServer({
     if (!(await stat(next)).isDirectory())
       throw new Error("Choose a directory containing SVG files.");
     const hasTokens = (await readdir(next)).includes(tokenFile);
-    if (hasTokens) refreshTypes({design:next});
+    if (hasTokens && !readOnly) refreshTypes({design:next});
     const project = await loadConfig(next);
     const nextSources = project.design === next ? project.sources : sourceDirectories({design:next});
-    const nextCode=new Set(), nextFiles = await collect(next, "", new Map(), nextSources, nextCode),
+    const nextCode=new Set(), nextFiles = await collectProject(next, project, nextSources, nextCode),
       nextGroups = await readGroups(next, nextSources);
 
     const cacheBase=path.join(stateDirectory,'cache',digest(next));
@@ -152,6 +176,7 @@ export async function startServer({
     );
     watcher?.close();
     watcher = nextWatcher;
+    activeProject=project;watchArch(project,next);
     root = next;
     tokenSource = hasTokens ? tokenSourcePath(next, project) : null;
     codePaths=nextCode;
@@ -184,7 +209,7 @@ export async function startServer({
         project = await loadConfig(base),
         nextSources = project.design===base ? project.sources : sourceDirectories({design:base}),
         nextCode=new Set(),
-        next = await collect(base,'',new Map(),nextSources,nextCode),
+        next = await collectProject(base,project,nextSources,nextCode),
         nextGroups = await readGroups(base, nextSources);
       const tokensChanged = observed.includes(tokenFile);
       const hasTokens = tokensChanged ? (await readdir(base)).includes(tokenFile) : !!tokenSource;
@@ -192,13 +217,13 @@ export async function startServer({
       if (root !== base) return;
       const stamps=[...new Set([...files.keys(),...next.keys()])].filter(name=>files.get(name)?.stamp!==next.get(name)?.stamp);
       const grouping=JSON.stringify(groups)!==JSON.stringify(nextGroups);
-      const configChanged=JSON.stringify(sources)!==JSON.stringify(nextSources);
+      const configChanged=JSON.stringify(sources)!==JSON.stringify(nextSources)||activeProject.arch!==project.arch;
       const structural=configChanged || [...new Set([...codePaths,...nextCode])].some(name=>codePaths.has(name)!==nextCode.has(name));
       if(structural){await buildStore.close();buildStore=await createBuildStore({config:{...project,design:base,sources:nextSources,sourceFiles:[...nextCode].sort()},cacheDirectory:path.join(stateDirectory,'cache',digest(base),'build')});}
       const observedPaths=[...new Set([...observed,...stamps])];
       const affected=new Set(await buildStore.invalidate(structural?[...knownBuilds.keys(),...observedPaths]:observedPaths));
       for(const name of failedSources)affected.add(name);
-      for(const name of stamps)if(name.endsWith('.tsx')&&next.has(name))affected.add(name);
+      for(const name of stamps)if(/\.(tsx|mmd)$/.test(name)&&next.has(name))affected.add(name);
       const legacyDirty=[...legacyDependencies.values()].some(dependencies=>dependencies.some(name=>observedPaths.includes(name)));
       if(!stamps.length&&!affected.size&&!grouping&&!legacyDirty&&!configChanged&&!tokensChanged&&nextTokenSource===tokenSource)return;
       const changed=[...new Set([...stamps,...affected])];
@@ -206,7 +231,7 @@ export async function startServer({
         if (knownBuilds.delete(name)) dirtyBuilds.add(name);
         frameCounts.delete(name);
         if (!next.has(name)) { dirtyBuilds.delete(name); failedSources.delete(name); continue; }
-        if (!name.endsWith('.tsx')) continue;
+        if (!/\.(tsx|mmd)$/.test(name)) continue;
         const entry = next.get(name);
         next.set(name, {...entry, hash:undefined, version:`${entry.stamp}-${revision+1}`});
       }
@@ -222,6 +247,8 @@ export async function startServer({
           next.set(name,{...next.get(name),version:`${next.get(name).stamp}-${revision+1}`});changed.push(name);
         }
       }
+      if(activeProject.arch!==project.arch)watchArch(project,base);
+      activeProject=project;
       files = next;
       tokenSource = nextTokenSource;
       codePaths=nextCode;
@@ -333,12 +360,12 @@ export async function startServer({
     const key = `${name}\0${theme}`,
       cached = svgCache.get(key);
     if (cached?.version === asset.version) return cached;
-    if (name.endsWith('.tsx')) {
+    if (/\.(tsx|mmd)$/.test(name)) {
       const built=await sourceBuild(name);
       const frames = onlyFrame ? built.frames.filter(frame => frame.name === onlyFrame) : built.frames;
       if (!frames.length && onlyFrame) throw Error(`Frame ${onlyFrame} does not exist in ${name}.`);
       return {version:built.hash,imports:built.imports,dependencies:built.dependencies,
-        body:JSON.stringify({format:'tsx',hash:built.hash,css:built.css,imports:built.imports,component:!onlyFrame && !name.startsWith('surfaces/'),frames})};
+        body:JSON.stringify({format:'tsx',hash:built.hash,css:built.css,imports:built.imports,component:!onlyFrame && name.endsWith('.tsx') && !name.startsWith('surfaces/'),frames})};
     }
     let content = await readFile(path.join(root, name), "utf8");
     content = content.replace(
@@ -499,7 +526,7 @@ export async function startServer({
         content = JSON.stringify(await manifest(url));
         type = "application/json";
       } else if (url.pathname === "/relationships") {
-        const assets = await Promise.all([...files.keys()].filter(name => name.endsWith('.tsx')).map(async name => ({path:name, imports:(await sourceBuild(name)).imports})));
+        const assets = await Promise.all([...files.keys()].filter(name => /\.(tsx|mmd)$/.test(name)).map(async name => ({path:name, imports:(await sourceBuild(name)).imports})));
         content = JSON.stringify(sourceRelationships(assets));
         type = "application/json";
       } else if (url.pathname.startsWith("/asset/")) {
@@ -521,7 +548,7 @@ export async function startServer({
         }
         const rendered=await svg(name,theme,[],onlyFrame);
         content=rendered.body;etag=`"${rendered.version}-${theme}${variant}"`;
-        type = name.endsWith(".tsx") ? "application/json" : "image/svg+xml";
+        type = /\.(tsx|mmd)$/.test(name) ? "application/json" : "image/svg+xml";
       } else {
         response.writeHead(404); response.end('Not found.'); return;
       }
@@ -541,7 +568,7 @@ export async function startServer({
     try {
       await openDirectory(directory);
     } catch (error) {
-      watcher?.close();
+      watcher?.close();archWatcher?.close();
       throw error;
     }
   }
@@ -551,14 +578,14 @@ export async function startServer({
       server.listen(port, "127.0.0.1", resolve);
     });
   } catch (error) {
-    watcher?.close();
+    watcher?.close();archWatcher?.close();
     throw error;
   }
   const close = async () => {
     if (closing) return;
     closing = true;
     clearTimeout(refreshTimer);
-    watcher?.close();
+    watcher?.close();archWatcher?.close();
     for (const c of clients) c.end();
     const disconnected = new Promise(resolve => server.close(resolve));
     server.closeAllConnections();
@@ -569,7 +596,7 @@ export async function startServer({
   return { id: instanceId, directory: root, url: `http://127.0.0.1:${server.address().port}/`, port: server.address().port, close,
     cacheStats:()=>({builds:buildStore?.stats(),viewer:viewerCache?.stats()}),
     stats: () => {
-      const entries = [...files.keys()].filter(name => name.endsWith('.tsx'));
+      const entries = [...files.keys()].filter(name => /\.(tsx|mmd)$/.test(name));
       return { sourceCount: entries.length, frameCount: entries.every(name => frameCounts.has(name)) ? entries.reduce((n, name) => n + frameCounts.get(name), 0) : null };
     } };
 }
