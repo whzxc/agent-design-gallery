@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+
+- Add `adg diff --base=<rev>` for per-frame, both-theme Git/working-tree comparison of TSX and architecture sources, including added/removed frames and explicit rename candidates. Ordinary frames require exact decoded pixels and CSS/device sizes. The schema-version-1 JSON envelope uses exit 0 for identical/structural, exit 1 with `DIFF_FAILED` for a completed changed gate, and exit 2 for incomplete execution.
+- Add Frame `parent: { source, frame, selector }` declarations for extracted parts and consumer `diff.thresholds`. Classifier version 1 combines exact part/parent snapshots with imperceptible, stable-anchor antialiasing, proven boundary bleed and same-image bitmap resampling classes. Near-anchor flips are excluded from strict intermediate blends. Structural batches require unchanged existing frames and parent renders in both themes with full coverage; restricted runs retain local evidence and report partial coverage.
+- Build historical inputs with revision-local config, tokens, artwork, imports and source inventories. Stream Git blobs to a disposable tree, migrate legacy base projects there, and reuse current installed dependencies with explicit environment warnings. Historical import failures and recovery argv refer to the original project rather than temporary paths.
+- Write before/after/difference PNGs, part snapshots, deduplicated parent support and single-capture isolation artifacts with `report.json`, resolved policy, findings, class counts, environment and phase timings. These artifacts support later review-sheet composition without re-rendering. See the [diff agent contract](docs/agent-interface.md#diff) and [part workflow](docs/asset-rules.md#crop-and-part-frames).
+
 ## 0.7.0
 
 - Every CLI command and subcommand accepts global `--json`. Finite commands, help, version and argument errors return one envelope with `schemaVersion:1`, canonical `command`, `ok`, `data`, `warnings` and `error`. See the [agent CLI interface](docs/agent-interface.md) for the complete contract.
