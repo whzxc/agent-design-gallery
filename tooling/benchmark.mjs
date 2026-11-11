@@ -23,11 +23,6 @@ await context.addInitScript(() => {
       (document.querySelector('#modules')?.children.length && !document.querySelector('#sidebar').hidden);
     if (!loading.catalogMs && catalogReady) loading.catalogMs = now;
     if (!loading.layoutMs && window.__sdg?.assets) loading.layoutMs = now;
-    if (!loading.firstPreviewMs && window.__sdg?.visibleReady > 0) loading.firstPreviewMs = now;
-    if (!loading.geometryMs && window.__sdg?.metadataComplete) loading.geometryMs = now;
-    if (!loading.focusedMs && window.__sdg?.selection.path && window.__sdg.visibleCount > 0 &&
-        window.__sdg.visibleReady === window.__sdg.visibleCount &&
-        (window.__sdg.ready || !window.__sdg.metadataComplete)) loading.focusedMs = now;
     if (!loading.drawnMs && window.__sdg?.ready) loading.drawnMs = now;
     if (last) window.__perf.frames.push(now - last);
     last = now;
@@ -106,7 +101,6 @@ await page.waitForFunction(() => !window.__sdg?.cachePending && window.__sdg?.me
 const metadataCompleteMs = performance.now() - begin, coldCacheWrites = [...cacheWrites], coldLoading = await readLoading();
 if (process.argv.includes('--browse-only')) {
   await mkdir(destination.substring(0, destination.lastIndexOf('/')), {recursive:true});
-  await page.screenshot({path:destination.replace('.json','.png')});
   await writeFile(destination, JSON.stringify({time:new Date().toISOString(),url,firstBrowseMs,metadataCompleteMs,loading,coldLoading,firstViewCacheWrites,coldCacheWrites,cacheWrites,errors}, null, 2));
   await browser.close();
   process.exit(0);

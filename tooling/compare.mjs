@@ -6,11 +6,9 @@ import { loadConfig } from '../src/toolkit/config.mjs';
 const [arc, destination = `output/comparison-${Date.now()}`, count = "3"] =
   process.argv.slice(2);
 const baseline = process.argv.find(arg => arg.startsWith('--sdg-baseline='))?.slice('--sdg-baseline='.length);
-const view = process.argv.find(arg => arg.startsWith('--view='))?.slice('--view='.length) ?? '';
-const browseOnly = process.argv.includes('--browse-only');
 if (!arc)
   throw new Error(
-    "Usage: node tooling/compare.mjs <ARC checkout or design directory> [output-directory] [runs] [--reuse-snapshot | --sdg-baseline=<checkout>] [--view=<route>] [--browse-only] [--warm-restart]",
+    "Usage: node tooling/compare.mjs <ARC checkout or design directory> [output-directory] [runs] [--reuse-snapshot | --sdg-baseline=<checkout>] [--warm-restart]",
   );
 const root = process.cwd(),
   out = path.resolve(destination),
@@ -153,10 +151,9 @@ for (let run = 1; run <= Number(count); run++)
           process.execPath,
           [
             "tooling/benchmark.mjs",
-            new URL(view, server.url).href,
+            server.url,
             file,
             path.join(snapshot, "design"),
-            ...(browseOnly ? ['--browse-only'] : []),
           ],
           { stdio: "inherit" },
         );
@@ -185,7 +182,7 @@ for (let run = 1; run <= Number(count); run++)
       const restarted = await launch(), restartFile = path.join(out, `${implementation}-${run}-restart.json`);
       try {
         await new Promise((resolve,reject) => {
-          const child=spawn(process.execPath,['tooling/benchmark.mjs',new URL(view,restarted.url).href,restartFile,'--browse-only'],{stdio:'inherit'});
+          const child=spawn(process.execPath,['tooling/benchmark.mjs',restarted.url,restartFile,'--browse-only'],{stdio:'inherit'});
           child.on('error',reject);child.on('exit',code=>code?reject(new Error(`Restart benchmark exited ${code}`)):resolve());
         });
         const result=JSON.parse(await readFile(restartFile,'utf8'));
