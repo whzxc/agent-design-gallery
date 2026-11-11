@@ -26,18 +26,22 @@ the design sources and needs user gallery approval before implementation.
 - Consumers move in the same milestone, including ARC's AGENTS.md and design configuration.
 - Runs after milestone 1 and before milestone 3, so new commands and JSON contracts start under the new name.
 
-## 3. Performance
+## 3. Performance (tool phase done)
 
-Symptom: an uncached client project with many modules takes about 10 seconds to first content. An earlier fix attempt
-was reverted.
+Symptom: an uncached client project with many modules took about 10 seconds to load. An earlier fix attempt was
+reverted because it optimized first content while visible readiness was the real cost.
 
-- Measure first. Fix one asset snapshot of that project and break cold and warm loads into phases (build, measurement,
-  preview generation, arrangement, drawing) with the existing benchmark tooling.
-- Agree cold and warm first-content budgets with the user before changing code. Later milestones run the benchmark
-  against them.
-- Fix the tool on the ungoverned snapshot first: on-demand rendering by scope and viewport, and arrangement cost and
-  quality.
-- Govern consumer assets and modules afterwards, so governance does not hide tool regressions.
+- Measure first (done): a frozen asset snapshot of that project, cold and warm phases (build, measurement, preview,
+  arrangement, drawing) and four milestones (first layout, first content, visible-ready, complete). See
+  [Performance](performance.md).
+- Budgets (agreed): module layer cold visible-ready 5.0 s and warm 1.0 s; full workload cold 9.0 s and warm 2.5 s;
+  first content 350 ms cold and 250 ms warm.
+- Fix the tool (done for now): the width search runs once in a Web Worker, streaming uses provisional placement and
+  final geometry stays byte-identical. Module layer cold visible-ready dropped from about 8.8 to 5.0 s. The remaining
+  warm cost is per-preview SVG decoding and drawing in the browser; raising decode concurrency missed the gate and
+  changed pixels, so warm budgets stay open.
+- Govern consumer assets and modules afterwards, so governance does not hide tool regressions. This runs with regular
+  consumer design work.
 
 ## 4. Agent experience
 
