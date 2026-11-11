@@ -190,8 +190,32 @@ test('adaptive form wrap grows with area, stays bounded and leaves small sets un
 test('restored width choices reproduce fresh geometry and ignore obsolete algorithm keys', () => {
   const input=[{title:'cache',blocks:[{kind:'set',w:333,h:777},{kind:'flow',w:456,h:123}]}];
   restorePacking([[JSON.stringify([50,1.6,input[0].blocks.map(b=>[b.kind,b.w,b.h])]),99999]]);
+  const before=packingSnapshot();
+  assert.equal(layoutWorld(input,{cachedOnly:true}),null);
+  assert.deepEqual(packingSnapshot(),before);
   const expected=exhaustiveWorld(input);
   assert.deepEqual(layoutWorld(input),expected);
+  assert.deepEqual(layoutWorld(input,{cachedOnly:true}),expected);
   restorePacking(packingSnapshot());
   assert.deepEqual(layoutWorld(input),expected);
+});
+
+test('Property: provisional stream prefixes converge byte-for-byte to single-shot complete geometry', () => {
+  let seed=20261111;
+  const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed;};
+  for(let sample=0;sample<100;sample++) {
+    const input=Array.from({length:1+random()%5},(_,g)=>({title:String(g),blocks:Array.from({length:1+random()%12},(_,i)=>({
+      asset:String(i),kind:i%2?'set':'flow',w:32+(random()%16000)/64,h:32+(random()%32000)/64,
+    }))}));
+    const original=JSON.stringify(input),expected=JSON.stringify(exhaustiveWorld(input)),packing=packingSnapshot();
+    for(let prefix=1;prefix<=12;prefix++) {
+      const partial=input.map(g=>({...g,blocks:g.blocks.slice(0,prefix)}));
+      const provisional=layoutWorld(partial,{provisional:true});
+      assertSeparated(provisional,240,240);
+      for(const group of provisional)assertSeparated(group.blocks,64,112);
+    }
+    assert.deepEqual(packingSnapshot(),packing,'provisional placement must not populate full-search cache');
+    assert.equal(JSON.stringify(layoutWorld(input)),expected);
+    assert.equal(JSON.stringify(input),original,'placement must not mutate source geometry');
+  }
 });

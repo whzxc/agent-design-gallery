@@ -9,6 +9,9 @@ import { sourceRelationships, relatedSources } from './relationships.js';
 import { hitSelection, frameBox, exportFrames } from './selection.js';
 import { groupTokens, renderTokenTable } from './token-catalog.js';
 import { readViewRoute, viewURL } from './view-route.js';
+import { createArranger } from './arrangement.js';
+const arranger = createArranger();
+window.addEventListener('pagehide',()=>arranger.close());
 // ARC's gallery layout and camera model, decoupled from its React runtime.
 const $ = (selector) => document.querySelector(selector);
 const viewport = $(".gallery-viewport"),
@@ -335,11 +338,12 @@ function save() {
 }
 window.addEventListener('pagehide', () => void persistPreferences(true));
 document.addEventListener('visibilitychange', () => {if (document.hidden) void persistPreferences(true)});
-function layout(data, preserve = false) {
-  const endArrangement = globalThis.__adgTiming?.span('arrangement', undefined, {sources:data.assets.length});
+const layoutData = data => onlyFrame ? { ...data, assets: data.assets.map(asset => ({ ...asset, component: false, parts: asset.parts.filter(part => part.name === onlyFrame) })) } : data;
+function layout(data, preserve = false, options = {}) {
+  const endArrangement = globalThis.__adgTiming?.span('arrangement', undefined, {sources:data.assets.length,provisional:!!options.provisional});
   const previous = assets,
     previousGroups = groups,
-    result = arrange(onlyFrame ? { ...data, assets: data.assets.map(asset => ({ ...asset, component: false, parts: asset.parts.filter(part => part.name === onlyFrame) })) } : data);
+    result = arrange(layoutData(data),options);
   groups = result.groups;
   assets = result.items;
   world = result.world;
@@ -951,7 +955,7 @@ function draw() {
   const percentage = `${Math.round(view.scale * 100)}%`;
   if (zoomValue.textContent !== percentage) zoomValue.textContent = percentage;
   if (zoomOutput.value !== percentage) zoomOutput.value = percentage;
-  window.__adg.ready = !!manifest && !manifest.loading && manifest.renderTheme === effectiveTheme && drawingReady === drawingCount && !moving;
+  window.__adg.ready = !!manifest && !manifest.loading && manifest.renderTheme === effectiveTheme && drawingReady === drawingCount && !moving && !arranger.pending;
   if(fixtureState && fixtureApplied && window.__adg.ready) document.documentElement.dataset.fixtureReady=fixtureState.name;
   window.__adg.revision = manifest?.revision;
   window.__adg.visibleReady = drawingReady; window.__adg.visibleCount = drawingCount;
@@ -1236,10 +1240,16 @@ $("#shortcuts").onclick = () => {
   $("#more-menu").hidePopover();
   $("#keys").showModal();
 };
-$("#arrange").onclick = () => {
+$("#arrange").onclick = async () => {
+  const data=manifest,previousCatalog=catalog;
+  window.__adg.ready=false;
+  let placed;
+  try {if(!data.loading)placed=await arranger.arrange(layoutData(data));}
+  catch(failure){if(failure.name!=='AbortError')error(failure.message);requestDraw();return;}
+  if(manifest!==data || catalog!==previousCatalog || tokenManifest){requestDraw();return;}
   const old = assets,
     oldGroups = groups;
-  layout(manifest);
+  layout(manifest,false,{placed,provisional:!!data.loading});
   if (active !== null) {
     const g = groups[active],
       prev = oldGroups[active],
@@ -1402,7 +1412,7 @@ async function applyManifest(data, force = false) {
     publishedCount=available.length;nextPublish=Math.max(publishedCount+1,publishedCount*2);
     if(streamView&&view!==streamView)streamMoved=true;
     manifest={...data,assets:available,renderTheme:versionTheme,loading:true};
-    layout(manifest,false);
+    layout(manifest,false,{provisional:true});
     if(streaming&&!streamMoved){view=entry?.view??data.view??fitWorld(cameraArea(),data);streamView=view;}
     requestDraw();
   };
@@ -1412,7 +1422,7 @@ async function applyManifest(data, force = false) {
     if(metadata){results[i]=decorateMetadata(a,metadata);metadataCache.set(key,metadata);}
   }
   let completed=results.filter(Boolean).length;
-  if(streaming&&completed)publish();
+  if(streaming&&completed&&completed<data.assets.length)publish();
   await Promise.all(Array.from({length:4},async()=>{
     while(next<data.assets.length) {
       signal?.throwIfAborted();
@@ -1440,6 +1450,13 @@ async function applyManifest(data, force = false) {
   if(publishFrame)cancelAnimationFrame(publishFrame);
   if(versionTheme!==effectiveTheme){pending=true;return;}
   signal?.throwIfAborted();
+  const complete={...data,assets:results};
+  const placed=await arranger.arrange(layoutData(complete),{signal,onPending:()=>{
+    if(streaming&&completed>publishedCount)publish();
+  }});
+  if(versionTheme!==effectiveTheme){pending=true;return;}
+  signal?.throwIfAborted();
+  if(streamView&&view!==streamView)streamMoved=true;
   for(const [key,entry] of prepared)if(!data.assets.some(a=>key===sourceKey(a,versionTheme,data.directory)||key===sourceKey(a,versionTheme==='dark'?'light':'dark',data.directory)))prepared.delete(key);
   const live=new Set(data.assets.flatMap(a=>['light','dark'].map(t=>sourceKey(a,t,data.directory))));
   for(const key of metadataCache.keys())if(!live.has(key))metadataCache.delete(key);
@@ -1447,12 +1464,13 @@ async function applyManifest(data, force = false) {
   tokenManifest = null;
   // Early streamed worlds can use a much larger camera scale. Discard those
   // raster intermediates so the completed world starts at its exact final scale.
-  if(streaming&&publishedCount<data.assets.length)for(const entry of cache.values()){delete entry.bitmap;delete entry.bitmapScale;}
+  if(streaming&&publishedCount)for(const entry of cache.values()){delete entry.bitmap;delete entry.bitmapScale;}
   catalog = null;
   layout(
     manifest,
     !first && !!previous &&
       JSON.stringify(previous.groups) === JSON.stringify(data.groups),
+    {placed},
   );
   for(const element of document.querySelectorAll('.directory-name')) element.textContent=data.label;
   $("#app-directory").title=data.directory||'';

@@ -28,7 +28,7 @@ function tokenSourcePath(directory, project) {
   const base = project.design === directory ? project.root : path.dirname(directory);
   return path.relative(base, path.join(directory, tokenFile)).split(path.sep).join('/');
 }
-const viewerVersion = Promise.all(['assets.js','layout.js','selection.js'].map(file => readFile(new URL('../public/'+file,import.meta.url)))).then(parts => digest(Buffer.concat(parts)));
+const viewerVersion = Promise.all(['assets.js','layout.js','selection.js','arrangement.js','arrangement-worker.js'].map(file => readFile(new URL('../public/'+file,import.meta.url)))).then(parts => digest(Buffer.concat(parts)));
 const defaultState = path.join(
   process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
   "agent-design-gallery",

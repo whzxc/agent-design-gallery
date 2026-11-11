@@ -14,17 +14,25 @@ export function rows(blocks, limit, gapX, gapY, nextWidth) {
   });
 }
 export function skyline(blocks, limit, nextWidth, gapX = 64, gapY = 112) {
-  const placed = [], result = [];
+  const lefts = [], rights = [], bottoms = [], result = [];
   // Pack tall blocks first, but keep returned identities in source order for
   // navigation, selection and incremental placement across geometry changes.
+  // Candidate ties prefer lower y, then lower x. Occupied edges keep exact Float arithmetic.
   const ordered = blocks.map((block, index) => ({ block, index }))
     .sort((a, b) => b.block.h - a.block.h || b.block.w - a.block.w || a.index - b.index);
   for (const { block, index } of ordered) {
-    const candidates = [0, ...placed.map(p => p.x + p.w + gapX)].filter(x => { if (x + block.w <= limit) return true; nextWidth?.(x + block.w); return false; });
-    const positions = candidates.map(x => ({ x, y: Math.max(0, ...placed.filter(p => x < p.x + p.w + gapX && x + block.w + gapX > p.x).map(p => p.y + p.h + gapY)) }));
-    positions.sort((a, b) => a.y - b.y || a.x - b.x);
-    result[index] = { ...block, ...positions[0] };
-    placed.push(result[index]);
+    let bestX=Infinity,bestY=Infinity;
+    for(let candidate=0;candidate<=lefts.length;candidate++) {
+      const x=candidate ? rights[candidate-1] : 0,edge=x+block.w;
+      if(edge>limit){nextWidth?.(edge);continue;}
+      const right=edge+gapX;
+      let y=0;
+      for(let i=0;i<lefts.length;i++)
+        if(x<rights[i] && right>lefts[i])y=Math.max(y,bottoms[i]);
+      if(y<bestY || (y===bestY && x<bestX)){bestX=x;bestY=y;}
+    }
+    result[index] = { ...block, x:bestX, y:bestY };
+    lefts.push(bestX);rights.push(bestX+block.w+gapX);bottoms.push(bestY+block.h+gapY);
   }
   return result;
 }
@@ -38,11 +46,12 @@ export function restorePacking(entries=[]) {
   while(widthChoices.size>32)widthChoices.delete(widthChoices.keys().next().value);
 }
 const aspectPenalty = 0.6;
-function chooseWidth(blocks, step, ratio, gapX, gapY) {
+function chooseWidth(blocks, step, ratio, gapX, gapY, cachedOnly = false) {
   if (!blocks.length) return [];
   const pack = (limit, nextWidth) => skyline(blocks, limit, nextWidth, gapX, gapY);
   const key = JSON.stringify(['area-skyline-v1', step, ratio, aspectPenalty, gapX, gapY, blocks.map(b => [b.kind, b.w, b.h])]);
   if (widthChoices.has(key)) return pack(widthChoices.get(key));
+  if (cachedOnly) return null;
   const minimum = Math.max(...blocks.map(b => b.w));
   const maximum = blocks.reduce((n, b) => n + b.w, 0) + blocks.length * gapX;
   // Browser layout widths are exact multiples of 1/64px. Skip only on that
@@ -66,13 +75,20 @@ function chooseWidth(blocks, step, ratio, gapX, gapY) {
   }
   return best;
 }
-export function layoutWorld(input) {
-  const sections = input.map(section => {
-    const blocks = chooseWidth(section.blocks, 50, 1.6, 64, 112);
+export function layoutWorld(input, { provisional = false, cachedOnly = false } = {}) {
+  const place = provisional ? (blocks, step, ratio, gapX, gapY) => {
+    const area = blocks.reduce((sum, block) => sum + (block.w + gapX) * (block.h + gapY), 0);
+    return rows(blocks, Math.max(1, ...blocks.map(block => block.w), Math.sqrt(area * ratio)), gapX, gapY);
+  } : (...args) => chooseWidth(...args, cachedOnly);
+  const sections = [];
+  for (const section of input) {
+    const blocks = place(section.blocks, 50, 1.6, 64, 112);
+    if (!blocks) return null;
     const box = bounds(blocks);
-    return { ...section, blocks, w: box.w + 128, h: box.h + 168 };
-  });
-  const placed = chooseWidth(sections, 100, 1.5, 240, 240);
+    sections.push({ ...section, blocks, w: box.w + 128, h: box.h + 168 });
+  }
+  const placed = place(sections, 100, 1.5, 240, 240);
+  if (!placed) return null;
   return placed.map(section => ({ ...section, blocks: section.blocks.map(block => {
     const x = section.x + 64 + block.x, y = section.y + 104 + block.y;
     return { ...block, x, y, ...(block.frames ? { frames: block.frames.map(frame => ({ ...frame, x: x + frame.x, y: y + frame.y })) } : {}) };

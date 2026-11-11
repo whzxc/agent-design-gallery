@@ -250,9 +250,15 @@ export function resolveScope(data, layers, requested) {
 }
 
 
-export function arrange(data) {
+export function arrangementInput(data) {
+  return groupAssets(data).map(group => ({blocks:group.assets.map(blockForAsset)}));
+}
+
+export function arrange(data, { provisional = false, placed } = {}) {
   const grouped = groupAssets(data);
-  const sections = layoutWorld(grouped.map(g => ({ ...g, blocks: g.assets.map(blockForAsset) })));
+  const sections = placed
+    ? placed.map((section,index) => ({...grouped[index],...section}))
+    : layoutWorld(grouped.map(g => ({ ...g, blocks: g.assets.map(blockForAsset) })), {provisional});
   const groups = sections.map(s => ({ ...s, width: s.w, height: s.h }));
   const items = [];
   for (const [group, section] of groups.entries()) {

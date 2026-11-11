@@ -553,6 +553,7 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
     await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('.group-name').filter({hasText:/^components/}).click();
     await page.locator('#more').click();await page.locator('#arrange').click();
+    await page.waitForFunction(()=>window.__adg.ready);
     const arranged=await page.evaluate(()=>window.__adg.items);
     assert.deepEqual(arranged.filter(a=>a.path==='surfaces/flow.tsx'),grown.items.filter(a=>a.path==='surfaces/flow.tsx'),
       'Arrange current group leaves other groups in place');

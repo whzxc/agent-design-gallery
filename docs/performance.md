@@ -1,10 +1,48 @@
 # Performance
 
-The current large-project workload contains 140 TSX sources, 2,502 frames and 5,004 frame/theme combinations. Persistent geometry and ready-preview caches reduce warm browse and restart latency, and recycled build workers bound server module lifetime. Cold visible-ready latency and Chromium native memory remain the main limitations.
+## Agreed milestone 3 budgets
 
-## Current measurements
+The frozen large-project workload has 143 TSX sources and 2,722 frames. Its module layer has 89 sources and 2,204 frames. Budgets are medians of five per route on the same Apple M4 Pro machine and frozen input, with minimum–maximum retained.
 
-Three sequential samples per route compare baseline `2533ce9` with the persistent-cache implementation. Browser samples use `57aa025`; saturated-cache retention uses `8eceba7`, including cache-reference recency and legacy embedded-artwork refresh corrections. The workload is one retained disposable SACP Client design snapshot; its 244 source/art files remain identical after all save tests. The original project and resident hub were not used.
+| Workload | Cold visible-ready | Warm reload and restart visible-ready | Cold / warm first content |
+| --- | ---: | ---: | ---: |
+| Module layer | ≤5.0 s | ≤1.0 s | ≤350 / ≤250 ms |
+| Full workload | ≤9.0 s | ≤2.5 s | ≤350 / ≤250 ms |
+
+## Arrangement-only measurements
+
+Baseline `e2bca11` versus the arrangement Worker and provisional stream placement. Values are **median [minimum–maximum]**, with five samples for each route/scenario/implementation. Apple M4 Pro, macOS ARM64, Node v24.22.0, Chromium 156.0.8078.4 headless, 1440 × 900 CSS pixels, DPR 2, dark theme; isolated direct and hub processes. The same frozen source path is used throughout; OS file caches are not purged.
+
+| Workload | Route | Scenario | Baseline visible-ready (s) | Current visible-ready (s) | Baseline first content (ms) | Current first content (ms) | Readiness budget |
+| --- | --- | --- | ---: | ---: | ---: | ---: | --- |
+| modules | direct | cold | 8.761 [8.595–9.172] | 5.202 [4.861–5.761] | 268.9 [224.2–307.7] | 263.7 [251.0–306.1] | missed |
+| modules | direct | warm reload | 1.368 [1.366–1.429] | 1.319 [1.285–1.437] | 145.1 [143.9–148.4] | 138.8 [133.8–152.4] | missed |
+| modules | direct | warm restart | 1.457 [1.393–1.623] | 1.459 [1.430–1.612] | 190.1 [185.8–221.7] | 180.7 [178.0–210.8] | missed |
+| modules | hub | cold | 8.887 [8.476–9.515] | 4.925 [4.826–5.545] | 309.6 [260.0–383.3] | 320.8 [255.4–335.6] | met |
+| modules | hub | warm reload | 1.368 [1.316–1.399] | 1.333 [1.269–1.363] | 146.6 [145.9–148.9] | 134.4 [132.6–146.0] | missed |
+| modules | hub | warm restart | 1.529 [1.493–1.563] | 1.546 [1.495–1.562] | 238.7 [229.0–249.7] | 231.5 [226.4–245.4] | missed |
+| full | direct | cold | 12.495 [12.173–15.648] | 9.142 [8.796–10.922] | 247.2 [205.5–251.7] | 243.3 [240.5–369.1] | missed |
+| full | direct | warm reload | 3.776 [3.508–3.825] | 3.697 [3.545–4.364] | 193.8 [182.6–205.2] | 209.0 [190.7–216.4] | missed |
+| full | direct | warm restart | 3.246 [3.107–3.406] | 3.224 [3.037–3.630] | 197.8 [192.6–204.0] | 199.1 [176.1–219.5] | missed |
+| full | hub | cold | 12.964 [12.226–16.309] | 9.178 [8.963–9.478] | 260.7 [233.4–307.6] | 261.4 [234.2–319.4] | missed |
+| full | hub | warm reload | 3.814 [3.676–4.074] | 3.748 [3.677–3.914] | 199.7 [192.0–217.1] | 205.6 [188.7–217.8] | missed |
+| full | hub | warm restart | 3.431 [3.279–3.594] | 3.346 [3.146–3.477] | 249.4 [242.8–287.8] | 249.9 [246.5–270.8] | missed |
+
+Streaming uses linear provisional rows without populating width choices. A complete width-search miss runs once in a Web Worker; complete cached inputs repack directly at their known winning widths without searching. Occupied-edge scans preserve the original width search and exact tie/Float rules while avoiding temporary candidate arrays and sorting. Final group, block, frame/crop, item and world geometry is byte-identical to the baseline for both workloads. All 120 rendered item-position arrays match the stored geometry. A seeded Property test verifies provisional-to-complete convergence and cache/input isolation.
+
+The 6.5-second module cold stop threshold is not hit. First-content guardrails are met; readiness budget status is shown per row. The next proposed step targets SVG preview decode/raster/drawing on warm navigation, with prototype savings targets of 0.4–0.6 s for modules and 0.8–1.3 s for the full workload. It has not been implemented. Renderer arrangement is now milliseconds; remaining asynchronous decode intervals include image loading, native rendering and scheduler waits and are not CPU-only timings.
+
+Raw comparisons, geometry proof and the report remain locally under ignored `output/perf-m3/step2a/`. Reproduce with `node tooling/compare.mjs <frozen-project> <new-output> 5 --phases --scope=all --adg-baseline=<e2bca11-archive>`, and repeat with `--scope=layer:modules`. The runner alternates baseline/current, isolates state per sample, waits for complete before reload and reuses only that sample's persistent state for restart. Runtime tests pass all 147 checks.
+
+## Earlier persistent-cache measurements
+
+The following results use the earlier 140-source, 2,502-frame snapshot and are retained as historical measurements.
+
+The earlier large-project workload contains 140 TSX sources, 2,502 frames and 5,004 frame/theme combinations. Persistent geometry and ready-preview caches reduce warm browse and restart latency, and recycled build workers bound server module lifetime. Cold visible-ready latency and Chromium native memory remain the main limitations.
+
+### Measurements
+
+Three sequential samples per route compare baseline `2533ce9` with the persistent-cache implementation. Browser samples use `57aa025`; saturated-cache retention uses `8eceba7`, including cache-reference recency and legacy embedded-artwork refresh corrections. The workload is one retained disposable large-project design snapshot; its 244 source/art files remain identical after all save tests. The original project and resident hub were not used.
 
 Environment: Apple M4 Pro, macOS ARM64, Node 24.22.0, Chromium 156 headless, 1440 × 900 CSS pixels, DPR 2. Values below are medians. Browser contexts and server processes are fresh per sample; disk/OS caches are not flushed. Startup is recorded separately from browser navigation.
 
@@ -21,7 +59,7 @@ Warm restart closes the viewer, restarts it with the same project/state/cache, t
 
 Cold layout streams partial source results, then produces the same complete arrangement. Cold visible-ready regresses 28.4% direct and 36.6% through the hub. Direct complete cache priming takes 10,629 ms, including metadata writes and offscreen queue drainage. First-run preparation and persistence still cost more than the baseline's eager path.
 
-## Transport and refresh
+### Transport and refresh
 
 | Direct transport metric | Baseline | Current |
 | --- | ---: | ---: |
@@ -47,7 +85,7 @@ A separate isolated refresh sequence takes three samples per case at overview:
 
 The changed-output case temporarily adds a data attribute, changing serialized output while preserving pixels and geometry. Leaf refresh waits for the new revision, preparation, layout, global visible readiness and two animation frames. The settings source can be outside the clamped overview viewport, so a newly visible settings preview decode is not included reliably. Save timing starts after preceding camera/cache work settles. The saturated-cache sequence is separate from the fresh-state shared-save browser row.
 
-## Interaction
+### Interaction
 
 | Phase | Direct P95 baseline → current | Direct maximum baseline → current | Current direct/hub long tasks per run |
 | --- | ---: | ---: | --- |
@@ -59,7 +97,7 @@ Frame maxima are medians of the per-run maxima. Current zoom has no task over 50
 
 Direct main-thread task medians are 442 ms pan, 462 ms zoom, 454 ms trackpad pan and 7,477 ms theme switch. Main-document DOM elements stay at 546. Pan-phase uncollected JS heap changes from 80.51 to 26.34 MB; retained memory uses separate GC samples below.
 
-## Retained memory
+### Retained memory
 
 The server runs in a separate forked Node process from Playwright. Sample IPC collects server main-isolate garbage before reading memory. Renderer garbage is collected through CDP. Worker heaps are samples after their last build, without forced worker GC; server process RSS includes worker threads.
 
@@ -69,7 +107,7 @@ The parent payload LRU holds 33.47 MB, metadata LRU 29.01 MB, and each disk cach
 
 Chromium renderer RSS grows from **1.48 to 4.15 GB**; its final eight samples rise from 3.63 to 4.15 GB despite stable renderer JS heap and application cache counts. The remaining native-memory task is an SVG/canvas allocation trace over this refresh sequence.
 
-## Targets and remaining work
+### Targets and remaining work
 
 | Target | Status | Current result |
 | --- | --- | --- |
@@ -82,7 +120,7 @@ Chromium renderer RSS grows from **1.48 to 4.15 GB**; its final eight samples ri
 
 Further work should profile native SVG/canvas retention, visible vector decode cost, trackpad long tasks and ownership-geometry measurement for changed sources. Cold priming also needs reduction. No new placeholder or level-of-detail representation was introduced; no visual design proposal needs approval.
 
-## Verification and reproduction
+### Verification and reproduction
 
 - All 5,004 theme-frame documents, CSS and imports match the baseline builder byte-for-byte.
 - All 552 cropped preview SVGs match before/after compaction and through actual cache POST/disk/GET.

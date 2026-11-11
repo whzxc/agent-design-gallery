@@ -67,7 +67,7 @@ export async function measureNavigation(page, {url, reload=false, traceFile, scr
       return {timeOrigin:performance.timeOrigin,marks:timing.marks,spans:timing.spans,
         resources:[navigation,...performance.getEntriesByType('resource')].map(e=>({url:e.name,start:e.startTime,end:e.responseEnd,duration:e.duration,
           requestStart:e.requestStart,responseStart:e.responseStart,responseEnd:e.responseEnd,transferBytes:e.transferSize,bodyBytes:e.decodedBodySize,initiatorType:e.initiatorType})),
-        scope:window.__adg.scope,items:window.__adg.items.length,cacheFailures:window.__adg.cacheFailures,
+        scope:window.__adg.scope,items:window.__adg.items.length,geometry:window.__adg.items,cacheFailures:window.__adg.cacheFailures,
         visible:{ready:window.__adg.visibleReady,count:window.__adg.visibleCount},
         view:window.__adg.view};
     });
