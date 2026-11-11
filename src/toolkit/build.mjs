@@ -152,7 +152,9 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
   const tokenSource = read(path.join(base,'tokens.css'),'utf8'), tokens = snapshot ? parseTokens(tokenSource) : loadTokens(config);
   const compiler = await compile(`${readFileSync(path.join(tailwind,'theme.css'),'utf8')}\n${themeCss(tokens)}\n${readFileSync(path.join(tailwind,'preflight.css'),'utf8')}\n@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));\n@tailwind utilities;`);
   const classes = [...new Set(frames.flatMap(f => [...f.html.matchAll(/\bclass="([^"]*)"/g)].flatMap(m => m[1].split(/\s+/))))];
-  const css = `${compiler.build(classes)}\n${tokenSource}\nhtml,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-adg-frame]{display:flex;align-items:flex-start;position:relative;background:var(--canvas)}[data-adg-frame]>*,svg{flex-shrink:0} @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}`;
+  const utilities = compiler.build(classes);
+  const defaults = 'html,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-adg-frame]{display:flex;align-items:flex-start;position:relative;background:var(--canvas)}[data-adg-frame]>*,svg{flex-shrink:0} @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}';
+  const css = `${utilities}\n${tokenSource}\n${defaults}`;
   for (const frame of frames) {
     frame.document = theme => `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="${escape(frame.name)}" style="${frame.width ? `width:${frame.width}px;` : 'width:max-content;'}${frame.height ? `height:${frame.height}px;` : ''}">${frame.html}</div></body></html>`;
     if (write) { const destination = path.join(config.output, path.relative(base,file).replace(/\.tsx$/, ''), `${encodeURIComponent(frame.name)}.html`); mkdirSync(path.dirname(destination),{recursive:true}); writeFileSync(destination,frame.document('light')); }
@@ -162,5 +164,6 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     const owner = typeof mod[name] === 'function' && componentOwner(mod[name]);
     return owner && owner.source === sourceName && owner.export === name;
   }).sort();
-  return { frames, parts, dependencies: [...dependencies], imports: [...imports].sort(), css };
+  return { frames, parts, dependencies: [...dependencies], imports: [...imports].sort(), css,
+    tokenCss: tokenSource, cssWithoutTokens: `${utilities}\n${defaults}` };
 }

@@ -138,10 +138,13 @@ matching environment as well as matching build/collector inputs. The command ver
 needed dependency generations before returning; concurrent input changes fail with
 `OWNER_INDEX_CHANGED` rather than certifying mixed observations.
 
-The index currently supplies facts and query projections, not transitive affected-frame
-verdicts, selective render plans, full computed-style trees or public architecture-owner
-ranking. Those later roadmap items can extend projections without changing the existing
-owner envelope or `/relationships` response.
+The finite `impact` command reuses these source facts, dependency closures, token declarations and
+mapping locators for conservative direct/transitive frame candidates. It reads no observation shards.
+The builder exposes the raw token block and CSS without that block; `token-reachability.mjs` scans
+lexical document names and theme-local alias/fallback closure. New token postings use the same
+bounded index store. Historical queries reuse diff preparation and read-only temporary indexes.
+No unaffected proofs or render/check/diff scheduling are implemented yet. Those later segments
+extend the same index without changing owner output or `/relationships` responses.
 
 ## Git frame diff pipeline
 

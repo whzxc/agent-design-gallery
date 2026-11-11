@@ -150,6 +150,25 @@ export async function sourceRenames(base) {
   }
   return renames;
 }
+
+/** Actual endpoint changes; working-tree mode includes staged, unstaged and untracked paths. */
+export async function revisionChanges(base, head = null) {
+  const fields = (await git(base.root, ['diff', '--name-status', '-z', '--find-renames', base.sha, ...(head ? [head.sha] : []), '--'])).split('\0');
+  const changes = [];
+  for (let i = 0; i < fields.length - 1;) {
+    const code = fields[i++], first = fields[i++];
+    if (code.startsWith('R') || code.startsWith('C')) {
+      const second = fields[i++];
+      changes.push(code.startsWith('R') ? { before: first, after: second, status: 'renamed' } : { before: null, after: second, status: 'added' });
+    } else changes.push({ before: code === 'A' ? null : first, after: code === 'D' ? null : first,
+      status: code === 'A' ? 'added' : code === 'D' ? 'deleted' : code === 'T' ? 'type_changed' : 'modified' });
+  }
+  if (!head) {
+    const names = (await git(base.root, ['ls-files', '--others', '--exclude-standard', '-z'])).split('\0').filter(Boolean);
+    for (const name of names) if (!changes.some(change => change.after === name)) changes.push({ before: null, after: name, status: 'added' });
+  }
+  return changes.sort((a, b) => (a.after ?? a.before) < (b.after ?? b.before) ? -1 : (a.after ?? a.before) > (b.after ?? b.before) ? 1 : 0);
+}
 export async function resolveBase(config, rev) {
   if(typeof rev!=='string'||!rev.trim())throw new CliError('USAGE_INVALID', 'Set --base to a Git revision, for example HEAD.');
   let root;

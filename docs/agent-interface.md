@@ -18,7 +18,7 @@ are not machine interfaces.
 
 | Invocation | Stdout framing |
 | --- | --- |
-| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, `owner`, every `root` and `service` action | One envelope, then exit |
+| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, `owner`, `impact`, every `root` and `service` action | One envelope, then exit |
 | `serve --print-key`, `serve --rotate-key` | One envelope, then exit |
 | `--help`, `--version`, including command-specific forms | One envelope, then exit |
 | Foreground `open`, ordinary `serve` | NDJSON: one envelope per line until termination |
@@ -50,7 +50,7 @@ result or `null` when no result has been assembled. A failure need not undo comp
 file changes. Consumers must examine `ok` and process termination, even when data exists.
 
 Canonical command identities are `open`, `link`, `serve`, `init`, `migrate`, `check`,
-`render`, `compare`, `diff`, `owner`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
+`render`, `compare`, `diff`, `owner`, `impact`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
 `service uninstall`, `service status`, `service logs` and `service migrate`. Help and
 version use `help` and `version`. Parse failures use the recognized command/action when
 available, or the group identity `root`/`service` or global identity `adg`. An implicit
@@ -791,6 +791,116 @@ findings are listed under [Check](#check), not registered as execution-error cod
 Owner exits 0 for completed observations, including empty, stale and ambiguous answers;
 it never exits 1. Invalid/incomplete execution exits 2. A completed `check` with mapping
 findings still exits 1 under `CHECK_FAILED`.
+
+### Impact
+
+`impact` is a finite candidate query over the shared project index. It does not take screenshots,
+collect browser observations, prove frames unaffected or change render/check/diff scheduling.
+
+```sh
+adg impact --source=design/components/button.tsx --part=Button --explain --json
+adg impact --source=design/fixtures/states.ts --json
+adg impact --token=--accent --theme=dark --json
+adg impact --file=ui/controls.tsx --symbol=Button --json
+adg impact --base=HEAD --json
+adg impact --base=main --head=HEAD --json
+```
+
+Exactly one selector family is required: repeatable `--source` with optional `--part` for one
+registered TSX export, repeatable `--token`, one `--file` with owner's line/symbol locators,
+or `--base` with optional `--head`. Source paths use existing source resolution; existing
+non-entry files inside design are also accepted. File paths/directories/globs use owner's
+project-root grammar. Hypothetical token candidates assume unchanged Tailwind classification.
+`--base` compares its exact commit with staged, unstaged and untracked working files;
+`--head` selects a second exact commit instead. No merge-base or triple-dot inference.
+
+Options are `--theme=both|light|dark` (default both), `--state-dir`, `--explain` and `--json`.
+There are no positional operands, `--scale`, `--observe` or consuming-command `--impacted`
+flags in this segment. Empty values, mixed families and repeated single-valued flags fail
+`USAGE_INVALID`. Help/version and sanitation follow the common contract.
+
+```ts
+type ImpactQuery =
+  | {kind:'source', sources:ProjectPath[], part:string|null}
+  | {kind:'token', tokens:string[]}
+  | {kind:'file', input:string, normalized:string,
+     pathKind:'file'|'directory'|'glob', line:number|null, symbol:string|null}
+  | {kind:'git', base:Base, head:Base|null};
+type ImpactFact = {
+  id:string, kind:'source'|'part'|'token'|'implementation'|'mapping'|'architecture'
+    |'config'|'global_css'|'environment'|'unknown',
+  source:ProjectPath|null, part:string|null, token:string|null,
+  themes:Theme[], sides:('before'|'after')[], pathIndexes:number[]
+};
+type ImpactReason = {
+  fact:string, class:'part_occurrence'|'dependency'|'token_dependency'|'mapping'
+    |'global'|'lifecycle'|'unknown',
+  scope:'direct'|'transitive'|'declared'|'global'|'support',
+  sides:('before'|'after')[], count:number,
+  witness?:{origin:'emitted'|'build'|'lexical'|'declaration', source:ProjectPath|null,
+    part:string|null, token:string|null, via:string[], mappingPointer:string|null}
+};
+type ImpactFrame = {
+  ref:FrameRef, status:'matched'|'added'|'removed'|'current',
+  matchKind:'exact'|'unmatched'|'renamed_or_unknown'|null, matchCandidates:FrameRef[],
+  themes:{theme:Theme, candidate:true, disposition:'render', reasons:ImpactReason[],
+    proof:null, unassessedReasons:[]}[]
+};
+type ImpactData = {
+  project:string, complete:boolean, query:ImpactQuery,
+  before:{kind:'revision',sha:string}|null,
+  after:{kind:'revision'|'working_tree',sha:string|null},
+  selection:{themes:Theme[],explain:boolean},
+  changes:{before:RepositoryPath|null,after:RepositoryPath|null,
+    status:'modified'|'added'|'deleted'|'renamed'|'type_changed',
+    role:'design'|'token'|'implementation'|'mapping'|'architecture'|'config'
+      |'global_css'|'environment'|'outside_design_inputs'|'unknown'}[],
+  facts:ImpactFact[], frames:ImpactFrame[], mappingFindings:(MappingFinding & {sides:('before'|'after')[]})[],
+  unresolvedInputs:{path:string|null,reason:string,fallback:'none'}[],
+  coverage:{inventory:'complete'|'incomplete',mapping:'not_requested'|'valid'|'absent'|'stale',
+    expectedRows:number,candidateRows:number,directRows:number,transitiveRows:number,
+    renderRows:number,provenRows:0,unassessedRows:number,proofComplete:false},
+  timings:{prepareMs:number,indexMs:number,materializeMs:0,proofMs:0,
+    queryMs:number,totalMs:number}
+};
+```
+
+`frames` contains only candidate frame/theme rows. Noncandidates are counted as unassessed,
+including in Git mode; an empty unassessedReasons array adds no claim about their safety.
+`renderRows` is a proposed candidate-work count, not completed captures. Its sum with
+unassessedRows equals expectedRows, the complete requested-theme universe. Direct and
+transitive counts can overlap. A working-tree sha is observed HEAD, not uncommitted input identity.
+
+Dependencies are conservative, including helpers and unrendered exports. Part occurrences are
+emitted provenance, not painted visibility. Lexical token dependencies scan every `--ident`
+outside the builder's raw token block, including text and unused CSS, then close over theme-local
+aliases/fallbacks. Escaped identifiers, cycles, unresolved aliases or unsupported sheet syntax
+fall back to the full sheet. Architecture conservatively depends on the full token sheet.
+No token-value equality or absence of occurrences proves a frame unaffected.
+
+Mapping selectors and locators reuse owner. Stale locators retain resolvable design targets;
+missing mappings do not broaden to all frames. Mapping frame subsets scope declaration evidence,
+while source dependencies remain conservative. Renames stay added/removed with candidate hints.
+
+Default reasons coalesce by fact/class/scope and retain side sets/counts. `--explain` adds one
+witness per reason, never all routes or DOM nodes. No text, paint, boxes or observation evidence
+is attached; use `adg owner` for those. Results sort by source, frame declaration order, theme,
+fact and reason class. No candidate list is silently truncated.
+
+| Code | Exit | Recovery |
+| --- | --- | --- |
+| `IMPACT_INPUT_NOT_FOUND` | 2 | `["adg","impact","--help","--json"]`; select a registered part, declared token or design helper. |
+| `IMPACT_INPUT_CHANGED` | 2 | Original impact invocation after concurrent edits finish. |
+| `IMPACT_MAPPING_INCOMPLETE` | Warning / 0 | `["adg","check","--read-only","--json"]`; repair the named mapping findings. |
+| `IMPACT_NO_MATCH` | Warning / 0 | Owner query for the supplied file/token, otherwise read-only check. |
+| `IMPACT_NO_CHANGES` | Warning / 0 | No changed design candidates; `next:[]`. |
+
+Reuse existing source/file/config/token/map/Git/build/I/O/cleanup diagnostics. Every error
+has recovery argv. Retry flags use attached values in source/part/token/file/line/symbol/base/head/
+theme/state-dir order, then explain/json; sanitization falls back to impact JSON help. Exit 0
+means a completed candidate query, including empty/stale mappings. Impact never emits exit 1.
+Exit 2 retains partial data with complete:false, or null before normalization. All workers and
+disposable revision trees close before completion.
 
 ### Check
 

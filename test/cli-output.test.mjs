@@ -40,6 +40,7 @@ const invocations = [
   ['migrate'], ['init'], ['check'], ['render'], ['compare', 'surfaces/demo', '--frame=default'],
   ['diff', '--base=HEAD'],
   ['owner', '--file=ui/controls.tsx'],
+  ['impact', '--source=design/components/control.tsx'],
 ];
 
 test('global JSON parsing and canonical identities cover every command/action without executing it', () => {
@@ -147,7 +148,7 @@ function parseAction(action) {
 }
 
 test('all catalog codes have stable exits, exact recovery argv and parser-valid ADG actions', () => {
-  assert.equal(Object.keys(errorCatalog).length, 46);
+  assert.equal(Object.keys(errorCatalog).length, 48);
   for (const removed of ['CONFIG_LOAD_FAILED', 'GIT_REPOSITORY_REQUIRED', 'GIT_BASE_NOT_FOUND', 'GIT_READ_FAILED']) assert.equal(Object.hasOwn(errorCatalog, removed), false);
   for (const code of Object.keys(errorCatalog)) {
     assert.match(code, /^[A-Z][A-Z_]+$/);

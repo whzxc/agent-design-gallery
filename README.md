@@ -106,6 +106,8 @@ adg check --read-only
 adg diff --base=HEAD --json
 adg owner --file=ui/controls.tsx --symbol=Button --json
 adg owner --text="Save changes" --locale=en --json
+adg impact --source=design/components/button.tsx --part=Button --json
+adg impact --base=HEAD --json
 ```
 
 `init` creates tokens, components/modules/surfaces, fixtures/art, editor configuration and ignore entries. A fresh library gets one `example.tsx` per production layer, composed downward with shared fixture data; existing libraries receive no demo sources. Existing authored files are preserved, declarations are refreshed, and missing ignore entries are appended. Starter configuration requires ADG 0.5.0 or newer. `check --read-only` skips declarations and build files for an audit. Projects do not install ADG as a dependency.
@@ -127,6 +129,12 @@ Text answers include literal-search `authoredIn` copy locations; token reference
 separate from computed paint. Both themes are searched by default. Broad color/token
 answers can be around 100 KB; read `owners` first and narrow with `--theme`. See the
 [owner JSON contract](docs/agent-interface.md#owner) for ranks, evidence and diagnostics.
+
+`adg impact` lists conservative direct/transitive frame candidates from sources, parts, tokens,
+implementation mappings or exact Git endpoints. It uses emitted provenance and lexical token
+reachability, with compact optional `--explain` witnesses. Noncandidates are counted, not listed.
+This segment supplies candidate queries; it does not yet prove unaffected frames or selectively
+render them. See the [impact contract](docs/agent-interface.md#impact).
 
 See the [toolkit contract](docs/design-toolkit.md) for source format and compare adapters, and the [changelog](CHANGELOG.md) for version changes. Node.js executes design modules at build time; open sources you trust.
 

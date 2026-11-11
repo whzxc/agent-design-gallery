@@ -12,9 +12,10 @@ import { loadImplementationMap, validateImplementationMap } from './implementati
 import { createIndexStore, indexDigest } from './index-store.mjs';
 import { defaultStateDirectory } from '../hub/registry.mjs';
 import { sourceRelationships } from '../../public/relationships.js';
+import { tokenReachability } from './token-reachability.mjs';
 export { sourceFacts } from './source-facts.mjs';
 
-const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'owner-colors.mjs', 'tokens.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
+const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'owner-colors.mjs', 'tokens.mjs', 'token-reachability.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
 
 export function discoverProject(config) {
   const tsx = listSources(config.design, sourceDirectories(config)).map(file => relative(config, file));
@@ -42,9 +43,15 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
     if (!inventory.tsx.includes(source)) throw Error(`Undiscovered TSX source ${source}.`);
     requestedSources.add(source);
     if (!buildPromises.has(source)) buildPromises.set(source, (async () => {
-      if (!persist) return buildSource(config, path.join(config.root, source), { write: false, allowLegacy: false });
-      storePromise ??= createBuildStore({ config: { ...config, sourceFiles: inventory.tsx }, cacheDirectory: buildDirectory });
-      const built = await (await storePromise).get(path.relative(config.design, path.join(config.root, source)).split(path.sep).join('/'));
+      let built;
+      if (!persist) {
+        const snapshot = new Map();
+        built = await buildSource(config, path.join(config.root, source), { write: false, allowLegacy: false, snapshot });
+        built.dependencyHashes = Object.fromEntries([...snapshot].map(([file, bytes]) => [path.relative(config.design, file), indexDigest(bytes === null ? 'missing\0' : Buffer.concat([Buffer.from('present\0'), bytes]))]));
+      } else {
+        storePromise ??= createBuildStore({ config: { ...config, sourceFiles: inventory.tsx }, cacheDirectory: buildDirectory });
+        built = await (await storePromise).get(path.relative(config.design, path.join(config.root, source)).split(path.sep).join('/'));
+      }
       for (const [name, hash] of Object.entries(built.dependencyHashes)) {
         if (observedInputs.has(name) && observedInputs.get(name) !== hash) throw new CliError('OWNER_INDEX_CHANGED', `Design dependency changed during query: ${name}.`);
         observedInputs.set(name, hash);
@@ -62,9 +69,14 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
   return {
     inventory,
     getBuild,
-    async source(source) {
+    async source(source, { tokens = false } = {}) {
       const built = await getBuild(source);
-      return cached('source', { source, build: built.inputHash ?? indexDigest(JSON.stringify({ ...built, frames: built.frames.map(({ document, ...frame }) => frame) })) }, () => sourceFacts(config, source, built));
+      const inputs = { source, build: built.inputHash ?? indexDigest(JSON.stringify({ ...built, frames: built.frames.map(({ document, ...frame }) => frame) })) };
+      const facts = await cached('source', inputs, () => sourceFacts(config, source, built));
+      if (!tokens) return facts;
+      const tokenDependencies = await cached('token-dependencies', inputs, () => built.frames.map(frame => ({ frame: frame.name,
+        themes: ['light', 'dark'].map(theme => ({ theme, ...tokenReachability(`${built.cssWithoutTokens}\n${frame.html}`, built.tokenCss, theme) })) })));
+      return { ...facts, tokenDependencies };
     },
     tokens() { assertOpen(); return tokenFacts(config); },
     async mappings({ selected, map: supplied, ...selection } = {}) {
@@ -94,6 +106,7 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
       await shards.put(key, [...entries]); return value;
     },
     async verifyInputs() {
+      if (JSON.stringify(discoverProject(config)) !== JSON.stringify(inventory)) throw new CliError('OWNER_INDEX_CHANGED', 'Design source inventory changed during query.');
       for (const [name, hash] of observedInputs) {
         let value;
         try { value = indexDigest(Buffer.concat([Buffer.from('present\0'), await readFile(path.join(config.design, name))])); }
@@ -108,9 +121,10 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
       try { text = await readFile(path.join(config.root, side), 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
       return cached('architecture', { source, text }, () => ({ source, sidecar: side, ...sidecar(text) }));
     },
-    async relationships() {
+    async relationships({ facts: supplied, projectPaths = false } = {}) {
       const assets = await Promise.all(inventory.tsx.map(async source => {
-        const facts = await this.source(source);
+        const facts = supplied?.get(source) ?? await this.source(source);
+        if (projectPaths) return { path: source, imports: facts.imports };
         const designRelative = file => path.relative(config.design, path.join(config.root, file)).split(path.sep).join('/');
         return { path: designRelative(source), imports: facts.imports.map(designRelative) };
       }));

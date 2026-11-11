@@ -6,7 +6,7 @@ import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 import { CliError, createOutput, withHumanOutput } from './cli-output.mjs';
 
-export const commands = ['open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner'];
+export const commands = ['open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact'];
 const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
 const usage = {
   open: `[directory] [--port=<n>] [--no-open] [--state-dir=<path>] ${targetOptions}`,
@@ -18,6 +18,7 @@ const usage = {
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
   diff: '[source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]',
   owner: '(--file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --text=<text> [--contains] [--locale=<tag>] | --color=<css> | --token=<name>) [--theme=both|light|dark] [--state-dir=<path>] [--json]',
+  impact: '(--source=<path>... [--part=<name>] | --token=<name>... | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --base=<rev> [--head=<rev>]) [--theme=both|light|dark] [--explain] [--state-dir=<path>] [--json]',
 };
 const details = {
   migrate: 'Rename a project configuration and runtime imports, update editor paths and ignore entries, remove old generated files and regenerate declarations. Refuses mixed config names; safe to run again.',
@@ -30,6 +31,7 @@ const details = {
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
   diff: 'Compare the Git base and working-tree source/frame union. Existing frames require exact pixels and CSS/device size; added Frame parent declarations enable structural part evidence under diff.thresholds. Defaults to both themes at 2× and <configured output>/diff. Writes before, after and difference PNGs plus report.json. A structural batch requires all existing frames in both themes; source/frame/theme restrictions report partial coverage. Exit 0 identical/structural, 1 changed, 2 incomplete.',
   owner: 'Find owning design sources, parts, frames and tokens from an implementation path, rendered text, absolute CSS color or token name. Paths resolve from the project root; quote globs. --line returns the containing export/anchor region, including unmapped exports; non-exported helpers belong to the preceding export. Text is NFC/whitespace normalized and exact unless --contains; --locale filters exact Frame locale annotations without translation. Colors use 8-bit sRGB RGBA equality. Owner evidence is scoped to the query: mappings for files, text runs for text, computed paint for colors and authored references for tokens. Text authoredIn lists literal-search copy candidates; escaped or concatenated strings may be missed. Color evidence may include compact same-element/property references. Defaults to both themes. Broad color/token JSON can be around 100 KB; read owners first and narrow with --theme. Empty, stale and ambiguous results exit 0; invalid/incomplete requests exit 2.',
+  impact: 'List potential frame impact using the shared project index: direct and transitive build dependencies, emitted part occurrences, lexical token reachability and implementation mappings. --base compares the exact commit with staged, unstaged and untracked working files; --head selects a second exact commit. Hypothetical token inputs assume unchanged Tailwind classification. Only candidate frames are listed; other rows are counted as unassessed. --explain adds one witness per reason. No unaffected proofs or selective rendering yet. Exit 0 completed, including empty or incomplete mappings; 2 invalid/incomplete execution.',
 };
 export function help(command) {
   if (command) return `Usage: adg ${command} ${usage[command]}\n\n${details[command]}\n\n-h, --help  Show help\nExit codes: 0 success, 1 check/compare/diff problems, 2 usage/configuration/environment error.`;
@@ -41,21 +43,38 @@ export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' } };
   const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
-  const strings = { open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'line', 'symbol', 'locale', 'theme', 'state-dir'] };
+  const strings = { open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
   if (command === 'open' || command === 'link') options.tokens = { type: 'boolean' };
   if (command === 'check') options['read-only'] = { type: 'boolean' };
   if (command === 'owner') options.contains = { type: 'boolean' };
+  if (command === 'impact') {
+    options.explain = { type: 'boolean' };
+    for (const name of ['source', 'token']) options[name].multiple = true;
+  }
   if (command === 'compare') { options.all = { type: 'boolean' }; options.page = { type: 'boolean' }; }
   if (command === 'compare') options.click = { type: 'string', multiple: true };
   let parsed;
-  try { parsed = parseArgs({ args: explicit ? args.slice(1) : args, options, allowPositionals: true, tokens: command === 'owner' }); }
+  try { parsed = parseArgs({ args: explicit ? args.slice(1) : args, options, allowPositionals: true, tokens: command === 'owner' || command === 'impact' }); }
   catch (error) { throw new CliError('USAGE_INVALID', `${error.message}; run adg ${command} --help`); }
   const { values, positionals } = parsed;
   if (globalJson) values.json = true;
   if (!values.help && !values.version) {
+    if (command === 'impact') {
+      const kinds = ['source', 'token', 'file', 'base'].filter(key => values[key] !== undefined), seen = new Set();
+      for (const token of parsed.tokens) if (token.kind === 'option' && !['json', 'help', 'version', 'source', 'token'].includes(token.name)) {
+        if (seen.has(token.name)) throw new CliError('USAGE_INVALID', `Do not repeat --${token.name}; run adg impact --help.`);
+        seen.add(token.name);
+      }
+      if (positionals.length || kinds.length !== 1 || strings.impact.some(key => values[key] !== undefined && (Array.isArray(values[key]) ? values[key] : [values[key]]).some(value => !value.trim())) ||
+        values.theme !== undefined && !['both', 'light', 'dark'].includes(values.theme) ||
+        values.part !== undefined && (kinds[0] !== 'source' || values.source.length !== 1) ||
+        values.head !== undefined && kinds[0] !== 'base' ||
+        (values.line !== undefined || values.symbol !== undefined) && kinds[0] !== 'file' ||
+        values.line !== undefined && (!/^[1-9]\d*$/.test(values.line) || !Number.isSafeInteger(Number(values.line)))) throw new CliError('USAGE_INVALID', 'Choose one nonempty impact selector family and compatible options; run adg impact --help.');
+    }
     if (command === 'owner') {
       const kinds = ['file', 'text', 'color', 'token'].filter(key => values[key] !== undefined);
       const seen = new Set();
@@ -136,6 +155,7 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
     return {data:values['print-key'] ? {action:'print-key',stateDirectory,key} : {action:'rotate-key',stateDirectory,rotated:true}};
   }
   const config = await loadConfig(cwd);
+  if (command === 'impact') return (await import('./toolkit/impact.mjs')).impact(config, { ...values, ...(values['state-dir'] !== undefined ? { 'state-dir': path.resolve(cwd, values['state-dir']) } : {}) }, { log: output.log });
   if (command === 'owner') return (await import('./toolkit/owner.mjs')).owner(config, { ...values, ...(values['state-dir'] !== undefined ? { 'state-dir': path.resolve(cwd, values['state-dir']) } : {}) }, { log: output.log });
   if (command === 'init') return { data: (await import('./toolkit/project.mjs')).init(config, output.log) };
   if (command === 'compare') return (await import('./toolkit/compare.mjs')).compare(config, positionals, values, {log:output.log});

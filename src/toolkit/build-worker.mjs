@@ -25,7 +25,9 @@ parentPort.on('message', async ({ id, config, name, type }) => {
       const bytes=snapshot.get(path.join(config.design,name));
       return [name,createHash('sha256').update(bytes===null?'missing\0':'present\0').update(bytes??'').digest('hex')];
     }));
-    if (!shuttingDown) parentPort.postMessage({ id, result: { frames, parts: built.parts ?? [], css: built.css, ...(config.overlay?{baseBlob:built.baseBlob}:{}), imports: built.imports, dependencies, dependencyHashes }, heapBytes: process.memoryUsage().heapUsed });
+    if (!shuttingDown) parentPort.postMessage({ id, result: { frames, parts: built.parts ?? [], css: built.css,
+      ...(built.tokenCss !== undefined ? { tokenCss: built.tokenCss, cssWithoutTokens: built.cssWithoutTokens } : {}),
+      ...(config.overlay?{baseBlob:built.baseBlob}:{}), imports: built.imports, dependencies, dependencyHashes }, heapBytes: process.memoryUsage().heapUsed });
   } catch (error) {
     const diagnostics=error.errors ?? error.cause?.errors ?? [];
     // esbuild's onLoad error keeps transform diagnostics under detail.errors.

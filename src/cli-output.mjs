@@ -20,6 +20,8 @@ export const errorCatalog = {
   OWNER_INPUT_NOT_FOUND: [2, 'owner-help', 'Choose an existing in-project file or directory.'],
   OWNER_UNSETTLED: [2, 'owner', 'Stabilize the named frame and resources before repeating the query.'],
   OWNER_INDEX_CHANGED: [2, 'owner', 'Finish concurrent input edits before repeating the query.'],
+  IMPACT_INPUT_NOT_FOUND: [2, 'impact-help', 'Choose an existing design input, registered part or declared token.'],
+  IMPACT_INPUT_CHANGED: [2, 'impact', 'Finish concurrent input edits before repeating the query.'],
   MIGRATION_REQUIRED: [2, 'migrate', 'Migrate the legacy project.'],
   MIGRATION_CONFLICT: [2, 'migration', 'Inspect migration inputs before resolving the conflict.'],
   VERSION_UNSATISFIED: [2, 'install', 'Install a version satisfying project requires.'],
@@ -74,7 +76,7 @@ export class CliError extends Error {
 }
 
 const canonicalCommands = new Set([
-  'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner',
+  'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact',
   'root add', 'root remove', 'root list', 'root scan',
   'service install', 'service uninstall', 'service status', 'service logs', 'service migrate',
   'help', 'version', 'adg',
@@ -110,6 +112,18 @@ export function nextActions(code, context = {}) {
     case 'check-help': argv = helpArgv('check'); break;
     case 'render-help': argv = helpArgv('render'); break;
     case 'owner-help': argv = helpArgv('owner'); break;
+    case 'impact-help': argv = helpArgv('impact'); break;
+    case 'impact': {
+      if (context.command !== 'impact') { argv = helpArgv('impact'); break; }
+      const values = context.values ?? {};
+      argv = ['adg', 'impact'];
+      for (const key of ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir']) {
+        const inputs = Array.isArray(values[key]) ? values[key] : typeof values[key] === 'string' ? [values[key]] : [];
+        for (const value of inputs) argv.push(`--${key}=${value}`);
+      }
+      if (values.explain) argv.push('--explain');
+      argv.push('--json'); break;
+    }
     case 'owner': {
       const values = context.values ?? {};
       if (context.command !== 'owner' || !['file', 'text', 'color', 'token'].some(key => typeof values[key] === 'string' && values[key].trim())) { argv = helpArgv('owner'); break; }
