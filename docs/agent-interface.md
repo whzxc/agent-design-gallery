@@ -837,14 +837,13 @@ type ImpactReason = {
     |'global'|'lifecycle'|'unknown',
   scope:'direct'|'transitive'|'declared'|'global'|'support',
   sides:('before'|'after')[], count:number,
-  witness?:{origin:'emitted'|'build'|'lexical'|'declaration', source:ProjectPath|null,
-    part:string|null, token:string|null, via:string[], mappingPointer:string|null}
+  witness?:{origin:'emitted'|'build'|'lexical'|'declaration', source?:ProjectPath,
+    part?:string, token?:string, via?:string[], mappingPointer?:string}
 };
-type ImpactFrame = {
-  ref:FrameRef, status:'matched'|'added'|'removed'|'current',
-  matchKind:'exact'|'unmatched'|'renamed_or_unknown'|null, matchCandidates:FrameRef[],
-  themes:{theme:Theme, candidate:true, disposition:'render', reasons:ImpactReason[],
-    proof:null, unassessedReasons:[]}[]
+type ImpactFrameGroup = {
+  source:ProjectPath, frames:string[], status:'matched'|'added'|'removed'|'current',
+  matchKind?:'exact'|'unmatched'|'renamed_or_unknown', matchCandidates?:FrameRef[],
+  rows:{themes:Theme[], candidate:true, disposition:'render', reasons:ImpactReason[]}[]
 };
 type ImpactData = {
   project:string, complete:boolean, query:ImpactQuery,
@@ -855,43 +854,54 @@ type ImpactData = {
     status:'modified'|'added'|'deleted'|'renamed'|'type_changed',
     role:'design'|'token'|'implementation'|'mapping'|'architecture'|'config'
       |'global_css'|'environment'|'outside_design_inputs'|'unknown'}[],
-  facts:ImpactFact[], frames:ImpactFrame[], mappingFindings:(MappingFinding & {sides:('before'|'after')[]})[],
+  facts:ImpactFact[], frames:ImpactFrameGroup[], mappingFindings:(MappingFinding & {sides:('before'|'after')[]})[],
   unresolvedInputs:{path:string|null,reason:string,fallback:'none'}[],
   coverage:{inventory:'complete'|'incomplete',mapping:'not_requested'|'valid'|'absent'|'stale',
     expectedRows:number,candidateRows:number,directRows:number,transitiveRows:number,
-    renderRows:number,provenRows:0,unassessedRows:number,proofComplete:false},
+    renderRows:number,provenRows:0,unassessedRows:number,proofComplete:false,
+    tokenScan:{reachableRows:number,fullSheetRows:number,
+      fallbackReasons:('tokens_parse_failed'|'unbalanced_var')[]}},
   timings:{prepareMs:number,indexMs:number,materializeMs:0,proofMs:0,
     queryMs:number,totalMs:number}
 };
 ```
 
-`frames` contains only candidate frame/theme rows. Noncandidates are counted as unassessed,
-including in Git mode; an empty unassessedReasons array adds no claim about their safety.
-`renderRows` is a proposed candidate-work count, not completed captures. Its sum with
-unassessedRows equals expectedRows, the complete requested-theme universe. Direct and
-transitive counts can overlap. A working-tree sha is observed HEAD, not uncommitted input identity.
+`frames` contains source groups for candidate frames only. Equal theme records merge into
+`rows[].themes`; equal records within a source merge into `frames` in declared order.
+Groups follow their first frame's order. Empty matchCandidates and null matchKind are omitted.
+No proof/null or unassessedReasons/empty fields are emitted by this segment. Noncandidates
+are counted as unassessed. `renderRows` counts proposed frame/theme work, not captures;
+renderRows + unassessedRows equals expectedRows. Direct/transitive counts can overlap.
+A working-tree sha is observed HEAD, not uncommitted input identity.
 
-Dependencies are conservative, including helpers and unrendered exports. Part occurrences are
-emitted provenance, not painted visibility. Lexical token dependencies scan every `--ident`
-outside the builder's raw token block, including text and unused CSS, then close over theme-local
-aliases/fallbacks. Escaped identifiers, cycles, unresolved aliases or unsupported sheet syntax
-fall back to the full sheet. Architecture conservatively depends on the full token sheet.
-No token-value equality or absence of occurrences proves a frame unaffected.
+Dependencies are conservative, including helpers and unrendered exports. Emitted provenance
+does not claim painted visibility. Lexical token reachability scans the union of raw, CSS-escape-
+decoded and HTML-character-reference-decoded text outside the builder's token block, then closes
+over var targets/fallbacks. Hex escapes (including optional whitespace) and single-character
+escapes add names. Cycles stop at visited names; missing declarations record absence. Only
+parseTokens failure or an unbalanced var() in a reached token declaration requires full-sheet
+fallback. `coverage.tokenScan` counts classified TSX input rows in each mode, including cached
+facts and both Git sides; architecture's intentional full-sheet dependency is excluded.
+Any fallback emits one `IMPACT_TOKEN_FALLBACK` warning with its reason names. No token-value
+equality or absence of occurrences proves a frame unaffected.
 
 Mapping selectors and locators reuse owner. Stale locators retain resolvable design targets;
 missing mappings do not broaden to all frames. Mapping frame subsets scope declaration evidence,
 while source dependencies remain conservative. Renames stay added/removed with candidate hints.
 
-Default reasons coalesce by fact/class/scope and retain side sets/counts. `--explain` adds one
-witness per reason, never all routes or DOM nodes. No text, paint, boxes or observation evidence
-is attached; use `adg owner` for those. Results sort by source, frame declaration order, theme,
-fact and reason class. No candidate list is silently truncated.
+Default reasons coalesce by fact/class/scope and side set. Counts sum witnesses across the
+represented frame/theme rows. `--explain` keeps one witness from each group's first frame
+and first represented theme; differing witnesses do not split groups. Optional null/empty
+witness fields are omitted. No text/paint/boxes/observations are attached; use `adg owner`.
+All candidate identities remain represented without truncation. Consumers count frames by
+summing group.frames.length, not the number of groups.
 
 | Code | Exit | Recovery |
 | --- | --- | --- |
 | `IMPACT_INPUT_NOT_FOUND` | 2 | `["adg","impact","--help","--json"]`; select a registered part, declared token or design helper. |
 | `IMPACT_INPUT_CHANGED` | 2 | Original impact invocation after concurrent edits finish. |
 | `IMPACT_MAPPING_INCOMPLETE` | Warning / 0 | `["adg","check","--read-only","--json"]`; repair the named mapping findings. |
+| `IMPACT_TOKEN_FALLBACK` | Warning / 0 | `["adg","check","--read-only","--json"]`; repair token syntax or an unbalanced var() declaration. |
 | `IMPACT_NO_MATCH` | Warning / 0 | Owner query for the supplied file/token, otherwise read-only check. |
 | `IMPACT_NO_CHANGES` | Warning / 0 | No changed design candidates; `next:[]`. |
 

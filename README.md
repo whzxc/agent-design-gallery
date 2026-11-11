@@ -132,7 +132,7 @@ answers can be around 100 KB; read `owners` first and narrow with `--theme`. See
 
 `adg impact` lists conservative direct/transitive frame candidates from sources, parts, tokens,
 implementation mappings or exact Git endpoints. It uses emitted provenance and lexical token
-reachability, with compact optional `--explain` witnesses. Noncandidates are counted, not listed.
+reachability, with compact optional `--explain` witnesses. Equal theme records and same-source frame records are grouped; noncandidates are counted.
 This segment supplies candidate queries; it does not yet prove unaffected frames or selectively
 render them. See the [impact contract](docs/agent-interface.md#impact).
 

@@ -141,7 +141,8 @@ needed dependency generations before returning; concurrent input changes fail wi
 The finite `impact` command reuses these source facts, dependency closures, token declarations and
 mapping locators for conservative direct/transitive frame candidates. It reads no observation shards.
 The builder exposes the raw token block and CSS without that block; `token-reachability.mjs` scans
-lexical document names and theme-local alias/fallback closure. New token postings use the same
+raw/CSS-decoded/HTML-decoded names and theme-local alias/fallback closure, retaining absent declarations.
+Only token parsing or unbalanced var() triggers a counted, warned full-sheet fallback. New postings use the same
 bounded index store. Historical queries reuse diff preparation and read-only temporary indexes.
 No unaffected proofs or render/check/diff scheduling are implemented yet. Those later segments
 extend the same index without changing owner output or `/relationships` responses.

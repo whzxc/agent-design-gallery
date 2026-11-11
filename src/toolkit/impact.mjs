@@ -11,6 +11,7 @@ import { selectorMatches } from './owner-locators.mjs';
 import { relatedSources } from '../../public/relationships.js';
 import { commandFailure, cleanup } from './results.mjs';
 import { indexDigest } from './index-store.mjs';
+import { groupImpactFrames, impactFrameCount } from './impact-output.mjs';
 
 const slash = name => name.split(path.sep).join('/');
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
@@ -66,7 +67,8 @@ export async function impact(config, values, { log = console.log, openIndex = op
       after: { kind: inputs?.after.revision ? 'revision' : 'working_tree', sha: inputs?.head ?? null },
       selection: { themes, explain: !!values.explain }, changes: [], facts: [], frames: [], mappingFindings: [], unresolvedInputs: [],
       coverage: { inventory: 'incomplete', mapping: 'not_requested', expectedRows: 0, candidateRows: 0, directRows: 0, transitiveRows: 0,
-        renderRows: 0, provenRows: 0, unassessedRows: 0, proofComplete: false }, timings };
+        renderRows: 0, provenRows: 0, unassessedRows: 0, proofComplete: false,
+        tokenScan: { reachableRows: 0, fullSheetRows: 0, fallbackReasons: [] } }, timings };
 
     await timed('indexMs', async () => {
       for (const [side, endpoint] of inputs ? [['before', inputs.before], ['after', inputs.after]] : [['after', { config, revision: null }]]) {
@@ -76,7 +78,16 @@ export async function impact(config, values, { log = console.log, openIndex = op
         for (const file of await configInputFiles(current)) { await track(file); view.configInputs.add(slash(path.relative(await realpath(current.root), file))); }
         for (const name of ['adg.config.mjs', 'adg.config.js', 'adg.config.ts']) await track(path.join(current.root, name));
         await track(path.join(current.design, 'tokens.css'));
-        for (const source of index.inventory.tsx) view.facts.set(source, await index.source(source, { tokens: query.kind === 'token' || query.kind === 'git' }));
+        for (const source of index.inventory.tsx) {
+          const facts = await index.source(source, { tokens: query.kind === 'token' || query.kind === 'git' });
+          view.facts.set(source, facts);
+          for (const frame of facts.tokenDependencies ?? []) for (const row of frame.themes) if (themes.includes(row.theme)) {
+            const scan = data.coverage.tokenScan;
+            if (row.mode === 'reachable_declarations') scan.reachableRows++;
+            else scan.fullSheetRows++;
+            for (const reason of row.fallbackReasons) if (!scan.fallbackReasons.includes(reason)) scan.fallbackReasons.push(reason);
+          }
+        }
         for (const source of index.inventory.architecture) {
           const metadata = await index.architecture(source);
           await track(path.join(current.root, source)); await track(path.join(current.root, metadata.sidecar));
@@ -89,6 +100,10 @@ export async function impact(config, values, { log = console.log, openIndex = op
         }
       }
     });
+    const scan = data.coverage.tokenScan;
+    scan.fallbackReasons.sort(compare);
+    if (scan.fullSheetRows) warn('IMPACT_TOKEN_FALLBACK', `Token scan used the full sheet for ${scan.fullSheetRows} frame/theme inputs: ${scan.fallbackReasons.join(', ')}.`,
+      checkNext('Repair the reported token syntax or unbalanced var() declaration, then repeat the impact query.'));
     const current = views.at(-1), previous = inputs ? views[0] : null;
     const allSources = [...new Set(views.flatMap(view => [...view.facts.keys()]))].sort(compare);
     let rows;
@@ -269,11 +284,12 @@ export async function impact(config, values, { log = console.log, openIndex = op
     }
   }
   timings.totalMs = performance.now() - started;
+  if (data) data.frames = groupImpactFrames(data.frames, { explain: !!values.explain });
   if (primary) throw primary;
   data.complete = true;
   if (!values.json) {
-    log(`${data.frames.length} candidate frames; ${data.coverage.candidateRows} theme rows; ${data.coverage.unassessedRows} unassessed. No unaffected proofs.`);
-    for (const frame of data.frames) log(`${frame.ref.source}#${frame.ref.frame} [${frame.themes.map(row => row.theme).join(',')}] ${[...new Set(frame.themes.flatMap(row => row.reasons.map(reason => reason.class)))].join(', ')}`);
+    log(`${impactFrameCount(data.frames)} candidate frames; ${data.coverage.candidateRows} theme rows; ${data.coverage.unassessedRows} unassessed. No unaffected proofs.`);
+    for (const group of data.frames) log(`${group.source}#${group.frames.join(', ')} [${group.rows.flatMap(row => row.themes).join(',')}] ${[...new Set(group.rows.flatMap(row => row.reasons.map(reason => reason.class)))].join(', ')}`);
     for (const warning of warnings) log(`${warning.code}: ${warning.message}`);
   }
   return { data, warnings };

@@ -1,42 +1,58 @@
+import { decodeHTML } from 'entities';
 import { parseTokens } from './tokens.mjs';
 
-// Deliberately lexical: text, inactive rules and unused utilities all participate.
-const identifiers = text => [...text.matchAll(/--[\p{L}\p{N}_-]+/gu)].map(match => match[0]);
-const escaped = text => /--[\p{L}\p{N}_-]*\\/u.test(text);
+export function decodeCssEscapes(text) {
+  return text.replace(/\\(?:([\da-f]{1,6})(?:\r\n|[ \t\r\n\f])?|(\r\n|[\r\n\f])|([\s\S]))/gi, (_, hex, newline, char) => {
+    if (hex) {
+      const code = Number.parseInt(hex, 16);
+      return String.fromCodePoint(!code || code > 0x10ffff || code >= 0xd800 && code <= 0xdfff ? 0xfffd : code);
+    }
+    return newline ? '' : char;
+  });
+}
 
-/** Conservative token inputs, shared by impact candidates and the later document proof. */
-export function tokenReachability(document, tokenSource, theme) {
-  const roots = [...new Set(identifiers(document))].sort();
-  let tokens;
-  const fallback = () => ({ mode: 'full_sheet', names: [...new Set([...roots, ...identifiers(tokenSource)])].sort(), via: {} });
-  try { tokens = parseTokens(tokenSource); } catch { return fallback(); }
-  if (escaped(document)) return fallback();
-  const definitions = new Map(tokens.light);
-  if (theme === 'dark') for (const [name, value] of tokens.dark) definitions.set(name, value);
-  const via = {}, visited = new Set(), active = new Set(), edges = new Map();
-  let invalid = false;
-  function visit(name, route, alias = false) {
-    if (active.has(name)) { invalid = true; return; }
-    if (!definitions.has(name)) { if (alias) invalid = true; return; }
-    if (visited.has(name)) return;
-    visited.add(name); active.add(name);
-    const value = definitions.get(name);
-    if (escaped(value)) invalid = true;
-    // Every var target, including nested fallbacks, is conservative reachability.
-    const targets = [...value.matchAll(/var\(\s*(--[\p{L}\p{N}_-]+)/gu)].map(match => match[1]);
-    if ((value.match(/var\(/g) ?? []).length !== targets.length || /var\([^)]*$/.test(value)) invalid = true;
-    edges.set(name, targets);
-    for (const target of targets) visit(target, [...route, name], true);
-    active.delete(name);
+function forms(text) {
+  const css = decodeCssEscapes(text), html = decodeHTML(text);
+  return [...new Set([text, css, html, decodeCssEscapes(html), decodeHTML(css)])];
+}
+// Decoding only adds candidates; raw spellings, text and inactive rules still participate.
+const identifiers = text => [...new Set(forms(text).flatMap(value => [...value.matchAll(/--[\p{L}\p{N}_-]+/gu)].map(match => match[0])))];
+
+function unbalancedVar(value) {
+  const stack = [];
+  let quote = null;
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if (char === '\\') { i++; continue; }
+    if (quote) { if (char === quote) quote = null; continue; }
+    if (char === '"' || char === "'") { quote = char; continue; }
+    if (char === '(') stack.push(/\bvar$/i.test(value.slice(Math.max(0, i - 3), i)));
+    else if (char === ')') stack.pop();
   }
-  for (const name of roots) visit(name, []);
-  if (invalid) return fallback();
-  const queue = roots.map(name => ({ name, route: [] }));
+  return stack.includes(true);
+}
+
+/** Conservative names/declarations (including absence), shared by candidates and later proofs. */
+export function tokenReachability(document, tokenSource, theme) {
+  const roots = identifiers(document).sort();
+  let tokens, definitions;
+  const result = (mode, names, via, fallbackReasons) => ({ mode, names, via,
+    declarations: definitions ? Object.fromEntries(names.map(name => [name, definitions.get(name) ?? null])) : {}, fallbackReasons });
+  const fallback = reason => result('full_sheet', [...new Set([...roots, ...identifiers(tokenSource)])].sort(), {}, [reason]);
+  try { tokens = parseTokens(tokenSource); } catch { return fallback('tokens_parse_failed'); }
+  definitions = new Map(tokens.light);
+  if (theme === 'dark') for (const [name, value] of tokens.dark) definitions.set(name, value);
+  const via = {}, queue = roots.map(name => ({ name, route: [] }));
   for (let i = 0; i < queue.length; i++) {
     const { name, route } = queue[i];
     if (Object.hasOwn(via, name)) continue;
     via[name] = route;
-    for (const target of edges.get(name) ?? []) queue.push({ name: target, route: [...route, name] });
+    const value = definitions.get(name);
+    if (value === undefined) continue;
+    const variants = forms(value);
+    if (variants.some(unbalancedVar)) return fallback('unbalanced_var');
+    const targets = new Set(variants.flatMap(value => [...value.matchAll(/\bvar\(\s*(--[\p{L}\p{N}_-]+)/giu)].map(match => match[1])));
+    for (const target of targets) queue.push({ name: target, route: [...route, name] });
   }
-  return { mode: 'reachable_declarations', names: Object.keys(via).sort(), via };
+  return result('reachable_declarations', Object.keys(via).sort(), via, []);
 }
