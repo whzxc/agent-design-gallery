@@ -4,7 +4,7 @@ import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { configFile, loadConfig, VERSION, requireMigration } from '../toolkit/config.mjs';
+import { configFile, loadConfig, VERSION, requireMigration, legacyConfigFile } from '../toolkit/config.mjs';
 import { listSources, archFiles } from '../toolkit/project.mjs';
 
 const exec = promisify(execFile);
@@ -62,11 +62,17 @@ async function scan(root) {
       if ((await stat(path.join(directory, '.git')).catch(() => null))?.isFile()) return;
       entries = await readdir(directory, { withFileTypes: true });
     } catch (error) {
-      if (['ENOENT', 'ENOTDIR', 'EACCES'].includes(error.code)) return;
-      throw error;
+      if (directory === root.path) throw error;
+      return;
     }
-    requireMigration(directory);
-    if (configFile(directory)) projects.push({ path: directory });
+    if (configFile(directory) || legacyConfigFile(directory)) {
+      projects.push({ path: directory });
+      try {
+        await loadConfig(directory, { checkVersion: false });
+      } catch (error) {
+        console.error(`adg: ${directory}: ${error.message.replace(/\s*\n\s*/g, ' ')}; fix the project config and rescan.`);
+      }
+    }
     if (depth >= root.depth) return;
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;

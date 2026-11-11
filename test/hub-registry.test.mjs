@@ -4,6 +4,8 @@ import { mkdtemp, mkdir, readFile, writeFile, rm, readdir, realpath, symlink } f
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { addRoot, removeRoot, listRoots, scanRoots, listProjects, projectSlug } from '../src/hub/registry.mjs';
 import { loadConfig, discoverRoot } from '../src/toolkit/config.mjs';
 
@@ -134,4 +136,37 @@ test('TypeScript config loads via esbuild without generated files and metadata r
   assert.equal(metadata.frameCount, null);
   assert.equal(metadata.compatibility.compatible, false);
   assert.equal(metadata.compatibility.requires, '>=99.0.0');
+});
+
+
+test('Regression: root add and scan retain failing configs, discover siblings and prune missing paths', async t => {
+  const { root, state, project } = await fixture(t);
+  const valid = await project('valid');
+  const stale = await project('old-checkout');
+  const legacy = path.join(root, 'legacy');
+  await mkdir(legacy);
+  await writeFile(path.join(legacy, 'sdg.config.mjs'), 'export default {};');
+  const invalid = await project('invalid', 'mjs', '{ name: 42 }');
+  const cli = async (...args) => promisify(execFile)(process.execPath,
+    [path.resolve('src/cli.mjs'), 'root', ...args, '--state-dir', state]);
+  const added = await cli('add', root);
+  assert.equal(JSON.parse(added.stdout)[0].projectCount, 4);
+  for (const result of [added]) {
+    assert.equal(result.stderr.trim().split('\n').length, 2);
+    assert.ok(result.stderr.includes(`adg migrate ${JSON.stringify(legacy)}`));
+    assert.ok(result.stderr.includes(`${invalid}: Set name to a non-empty project name`));
+  }
+  await rm(stale, { recursive: true });
+  const newcomer = await project('new-checkout');
+  const scanned = await cli('scan', root);
+  assert.equal(JSON.parse(scanned.stdout)[0].projectCount, 4);
+  assert.equal(scanned.stderr.trim().split('\n').length, 2);
+  assert.ok(scanned.stderr.includes(`adg migrate ${JSON.stringify(legacy)}`));
+  const projects = await listProjects(state);
+  assert.deepEqual(projects.map(item => item.path), [valid, legacy, invalid, newcomer].sort());
+  assert.match(projects.find(item => item.path === legacy).error, /adg migrate/);
+  assert.match(projects.find(item => item.path === invalid).error, /Set name/);
+  assert.equal(projects.find(item => item.path === valid).error, undefined);
+  await rm(root, { recursive: true });
+  await assert.rejects(cli('scan'), /ENOENT/);
 });
