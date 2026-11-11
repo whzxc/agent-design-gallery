@@ -17,7 +17,7 @@ parentPort.on('message', async ({ id, config, name, type }) => {
   if (shuttingDown) return;
   try {
     const snapshot = new Map();
-    const build = async browser => config.overlay && name.endsWith('.mmd') ? (await import('./arch-overlay.mjs')).buildOverlay(config,path.join(config.root,name),{base:config.overlay,browser,snapshot}) : buildSource(config, path.join(name.endsWith('.mmd')?config.root:config.design, name), { write: false, snapshot, browser });
+    const build = async browser => config.overlay && name.endsWith('.mmd') ? (await import('./arch-overlay.mjs')).buildOverlay(config,path.join(config.root,name),{base:config.overlay,browser,snapshot}) : buildSource(config, path.join(name.endsWith('.mmd')?config.root:config.design, name), { write: false, snapshot, browser, allowLegacy: config.allowLegacy ?? true });
     const built = await (name.endsWith('.mmd') ? archBrowser.run(build) : build());
     const frames = JSON.parse(JSON.stringify(built.frames.map(({ document, ...frame }) => frame))); 
     const dependencies = [...new Set(built.dependencies.map(file => path.relative(config.design, file).split(path.sep).join('/')))].sort();
@@ -26,7 +26,8 @@ parentPort.on('message', async ({ id, config, name, type }) => {
       return [name,createHash('sha256').update(bytes===null?'missing\0':'present\0').update(bytes??'').digest('hex')];
     }));
     if (!shuttingDown) parentPort.postMessage({ id, result: { frames, parts: built.parts ?? [], css: built.css,
-      ...(built.tokenCss !== undefined ? { tokenCss: built.tokenCss, cssWithoutTokens: built.cssWithoutTokens } : {}),
+      ...(built.tokenCss !== undefined ? { tokenCss: built.tokenCss, cssWithoutTokens: built.cssWithoutTokens,
+        cssBeforeTokens: built.cssBeforeTokens, cssAfterTokens: built.cssAfterTokens } : {}),
       ...(config.overlay?{baseBlob:built.baseBlob}:{}), imports: built.imports, dependencies, dependencyHashes }, heapBytes: process.memoryUsage().heapUsed });
   } catch (error) {
     const diagnostics=error.errors ?? error.cause?.errors ?? [];

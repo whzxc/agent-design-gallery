@@ -87,10 +87,11 @@ export function viewport(value) {
   if (!match) throw new CliError('CONFIG_INVALID', `Invalid viewport ${value}; use <width>x<height>, for example 1280x800`);
   return { width: Number(match[1]), height: Number(match[2]) };
 }
-async function importConfig(file) {
+let configEvaluation = 0;
+async function importConfig(file, fresh) {
   if (!file.endsWith('.ts')) {
     const info = statSync(file), url = pathToFileURL(file);
-    url.searchParams.set('revision', `${info.mtimeMs}-${info.size}`);
+    url.searchParams.set('revision', `${info.mtimeMs}-${info.size}${fresh ? `-${++configEvaluation}` : ''}`);
     return (await import(url.href)).default;
   }
   const require = createRequire(pathToFileURL(file));
@@ -108,14 +109,14 @@ async function importConfig(file) {
         }
       });
     }}] });
-  return (await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)).default;
+  return (await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}${fresh ? `#${++configEvaluation}` : ''}`)).default;
 }
-export async function loadConfig(cwd = process.cwd(), { checkVersion = true, discover = true } = {}) {
+export async function loadConfig(cwd = process.cwd(), { checkVersion = true, discover = true, fresh = false } = {}) {
   const root = discover ? discoverRoot(cwd) : path.resolve(cwd), file = configFile(root);
   if (!discover) requireMigration(root);
   let config = {};
   if (file) {
-    try { config = await importConfig(file); }
+    try { config = await importConfig(file, fresh); }
     catch (error) { throw new CliError('CONFIG_INVALID', `Cannot load ${file}: ${error.message}; fix ${path.basename(file)}`, { cause: error }); }
   }
   if (!config || typeof config !== 'object' || Array.isArray(config)) throw new CliError('CONFIG_INVALID', 'Export a default object from adg.config.mjs');

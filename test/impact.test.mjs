@@ -222,8 +222,8 @@ test('Git working tree and exact endpoints include old/new closures, staged/unst
   assert.equal(tree.data.after.kind, 'working_tree');
   assert.deepEqual(tree.data.changes.map(change => change.after), ['design/components/control.tsx', 'design/surfaces/leaf.tsx', 'design/surfaces/new.tsx']);
   assert.equal(expand(tree.data).find(frame => frame.ref.frame === 'new').status, 'added');
-  assert.ok(tree.data.coverage.unassessedRows > 0); assert.equal(tree.data.coverage.proofComplete, false);
-  assert.ok(expand(tree.data).every(frame => frame.themes.every(row => row.proof === null && row.unassessedReasons.length === 0)));
+  assert.equal(tree.data.coverage.unassessedRows, 0); assert.equal(tree.data.coverage.proofComplete, true);
+  assert.ok(expand(tree.data).every(frame => frame.themes.every(row => ['render', 'proven_unaffected'].includes(row.disposition))));
   f.git('add', 'design'); f.git('commit', '-qm', 'fixture changed'); const head = f.git('rev-parse', 'HEAD');
   await f.put('design/surfaces/uncommitted.tsx', `import {Frame} from 'adg';export default()=> <Frame name="uncommitted"><div/></Frame>;`);
   const revisions = await impact(f.config, f.values({ base, head }));
@@ -245,6 +245,8 @@ test('Git working tree and exact endpoints include old/new closures, staged/unst
   assert.ok(changed.data.mappingFindings.some(finding => finding.code === 'OWNER_IMPLEMENTATION_MISSING' && finding.sides.includes('after')));
   assert.ok(expand(changed.data).some(frame => frame.matchKind === 'renamed_or_unknown'));
   assert.ok(expand(changed.data).some(frame => frame.ref.source === 'arch/example.mmd' && frame.status === 'removed'));
+  assert.ok(expand(changed.data).filter(frame => frame.status !== 'matched' || frame.matchKind !== 'exact')
+    .every(frame => frame.themes.every(row => row.disposition === 'render' && !row.proof)));
 });
 
 test('JSON success/empty/error/human output and late input changes close the shared index', async t => {
@@ -259,7 +261,7 @@ test('JSON success/empty/error/human output and late input changes close the sha
   }
   const logs = [];
   await impact(f.config, f.values({ source: ['surfaces/leaf'], json: false }), { log: text => logs.push(text) });
-  assert.match(logs[0], /1 candidate frames/); assert.match(logs[1], /leaf/);
+  assert.match(logs[0], /1 listed frames/); assert.match(logs[1], /leaf/);
   let closed = 0;
   await assert.rejects(impact(f.config, f.values({ source: ['surfaces/leaf'] }), { openIndex: async (...args) => {
     const index = await openProjectIndex(...args), verify = index.verifyInputs, close = index.close;

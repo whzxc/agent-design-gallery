@@ -144,8 +144,13 @@ The builder exposes the raw token block and CSS without that block; `token-reach
 raw/CSS-decoded/HTML-decoded names and theme-local alias/fallback closure, retaining absent declarations.
 Only token parsing or unbalanced var() triggers a counted, warned full-sheet fallback. New postings use the same
 bounded index store. Historical queries reuse diff preparation and read-only temporary indexes.
-No unaffected proofs or render/check/diff scheduling are implemented yet. Those later segments
-extend the same index without changing owner output or `/relationships` responses.
+Git impact uses the same BuildPool for operation-local fresh execution, bypassing executed payloads
+and derived source shards. The builder and proof share frame-document construction and explicit
+token-block boundaries. parse5 HTML parsing and css-tree tokenization inspect script/resource
+eligibility without a browser. Canonical input bytes establish equality; optional explanation
+digests are not equality evidence. Architecture uses exact raw inputs. Final generation checks
+run after worker shutdown. Proofs are never persisted. Render/check/diff scheduling remains a later
+segment, without changes to owner output or `/relationships` responses.
 
 ## Git frame diff pipeline
 

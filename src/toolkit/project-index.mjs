@@ -1,11 +1,11 @@
-import { readFile, realpath } from 'node:fs/promises';
+import { readFile, realpath, readdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { listSources, archFiles, sourceDirectories, relative, loadTokens } from './project.mjs';
 import { tokenLocations } from './tokens.mjs';
 import { CliError } from '../cli-output.mjs';
 import { buildSource } from './build.mjs';
-import { createBuildStore } from './build-store.mjs';
+import { createBuildStore, BuildPool } from './build-store.mjs';
 import { sourceFacts } from './source-facts.mjs';
 import { sidecar } from './arch.mjs';
 import { loadImplementationMap, validateImplementationMap } from './implementation-map.mjs';
@@ -13,6 +13,7 @@ import { createIndexStore, indexDigest } from './index-store.mjs';
 import { defaultStateDirectory } from '../hub/registry.mjs';
 import { sourceRelationships } from '../../public/relationships.js';
 import { tokenReachability } from './token-reachability.mjs';
+import { frameDocument } from './frame-document.mjs';
 export { sourceFacts } from './source-facts.mjs';
 
 const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'owner-colors.mjs', 'tokens.mjs', 'token-reachability.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
@@ -30,12 +31,31 @@ export function tokenFacts(config) {
       .map(item => ({ ...item, line: (item.theme === 'dark' && !item.inherited ? locations.dark : locations.light).get(name), references: [...item.declaration.matchAll(/var\(\s*(--[\w-]+)/g)].map(match => match[1]) })) }));
 }
 
-export async function openProjectIndex(config, { stateDirectory = defaultStateDirectory, persist = true } = {}) {
+async function resolutionFiles(config) {
+  const files = [];
+  async function visit(directory) {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (['.git', '.adg', 'node_modules'].includes(entry.name)) continue;
+      const file = path.join(directory, entry.name);
+      if (file === config.output) continue;
+      if (entry.isDirectory()) await visit(file);
+      else files.push(path.relative(config.design, file));
+    }
+  }
+  try { await visit(config.design); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  return files.sort();
+}
+
+export async function openProjectIndex(config, { stateDirectory = defaultStateDirectory, persist = true, fresh = false } = {}) {
   const inventory = discoverProject(config), root = await realpath(config.root), buildPromises = new Map();
   const directory = path.join(stateDirectory, 'cache', indexDigest(root), 'index-v1');
   const shards = await createIndexStore({ directory, persist });
   const buildDirectory = path.join(stateDirectory, 'cache', indexDigest(root), 'build');
   let storePromise, closed = false;
+  let freshPool;
+  const materializations = new Map();
+  const resolution = fresh ? await resolutionFiles(config) : null;
+  const physicalDesign = inventory.tsx.length ? await realpath(config.design) : null;
   const observedInputs = new Map(), requestedSources = new Set();
   const assertOpen = () => { if (closed) throw Error('Project index is closed.'); };
   async function getBuild(source) {
@@ -52,13 +72,31 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
         storePromise ??= createBuildStore({ config: { ...config, sourceFiles: inventory.tsx }, cacheDirectory: buildDirectory });
         built = await (await storePromise).get(path.relative(config.design, path.join(config.root, source)).split(path.sep).join('/'));
       }
-      for (const [name, hash] of Object.entries(built.dependencyHashes)) {
-        if (observedInputs.has(name) && observedInputs.get(name) !== hash) throw new CliError('OWNER_INDEX_CHANGED', `Design dependency changed during query: ${name}.`);
-        observedInputs.set(name, hash);
-      }
-      return built;
+      return observeDependencies(built);
     })().finally(() => buildPromises.delete(source)));
     return buildPromises.get(source);
+  }
+  function observeDependencies(built) {
+    for (const [name, hash] of Object.entries(built.dependencyHashes)) {
+      if (observedInputs.has(name) && observedInputs.get(name) !== hash) throw new CliError('OWNER_INDEX_CHANGED', `Design dependency changed during query: ${name}.`);
+      observedInputs.set(name, hash);
+    }
+    return built;
+  }
+  function materialize(source) {
+    assertOpen();
+    if (!inventory.tsx.includes(source)) throw Error(`Undiscovered TSX source ${source}.`);
+    if (!materializations.has(source)) {
+      requestedSources.add(source); freshPool ??= new BuildPool();
+      materializations.set(source, freshPool.run({ config: { root, design: physicalDesign ?? config.design, output: config.output,
+        sources: config.sources, arch: config.arch, check: config.check, allowLegacy: false },
+      name: path.relative(physicalDesign ?? config.design, path.join(root, source)).split(path.sep).join('/') }, new AbortController().signal).then(built => {
+        observeDependencies(built);
+        for (const frame of built.frames) frame.document = theme => frameDocument(frame, theme, built.css);
+        return built;
+      }));
+    }
+    return materializations.get(source);
   }
   async function cached(projection, inputs, collect) {
     const key = JSON.stringify({ version: 1, collectorIdentity, projection, inputs });
@@ -69,13 +107,15 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
   return {
     inventory,
     getBuild,
-    async source(source, { tokens = false } = {}) {
-      const built = await getBuild(source);
-      const inputs = { source, build: built.inputHash ?? indexDigest(JSON.stringify({ ...built, frames: built.frames.map(({ document, ...frame }) => frame) })) };
-      const facts = await cached('source', inputs, () => sourceFacts(config, source, built));
+    materialize,
+    async source(source, { tokens = false, fresh = false } = {}) {
+      const built = fresh ? await materialize(source) : await getBuild(source);
+      const inputs = fresh ? null : { source, build: built.inputHash ?? indexDigest(JSON.stringify({ ...built, frames: built.frames.map(({ document, ...frame }) => frame) })) };
+      const facts = fresh ? sourceFacts(config, source, built) : await cached('source', inputs, () => sourceFacts(config, source, built));
       if (!tokens) return facts;
-      const tokenDependencies = await cached('token-dependencies', inputs, () => built.frames.map(frame => ({ frame: frame.name,
-        themes: ['light', 'dark'].map(theme => ({ theme, ...tokenReachability(`${built.cssWithoutTokens}\n${frame.html}`, built.tokenCss, theme) })) })));
+      const collect = () => built.frames.map(frame => ({ frame: frame.name,
+        themes: ['light', 'dark'].map(theme => ({ theme, ...tokenReachability(frameDocument(frame, theme, built.cssBeforeTokens + built.cssAfterTokens), built.tokenCss, theme) })) }));
+      const tokenDependencies = fresh ? collect() : await cached('token-dependencies', inputs, collect);
       return { ...facts, tokenDependencies };
     },
     tokens() { assertOpen(); return tokenFacts(config); },
@@ -107,6 +147,7 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
     },
     async verifyInputs() {
       if (JSON.stringify(discoverProject(config)) !== JSON.stringify(inventory)) throw new CliError('OWNER_INDEX_CHANGED', 'Design source inventory changed during query.');
+      if (resolution && JSON.stringify(await resolutionFiles(config)) !== JSON.stringify(resolution)) throw new CliError('OWNER_INDEX_CHANGED', 'Design resolution inventory changed during query.');
       for (const [name, hash] of observedInputs) {
         let value;
         try { value = indexDigest(Buffer.concat([Buffer.from('present\0'), await readFile(path.join(config.design, name))])); }
@@ -131,11 +172,12 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
       assets.push(...inventory.architecture.map(source => ({ path: source, imports: [] })));
       return sourceRelationships(assets);
     },
-    stats: async () => ({ shards: shards.stats(), builds: storePromise ? (await storePromise).stats() : null, requestedSources: [...requestedSources] }),
+    stats: async () => ({ shards: shards.stats(), builds: storePromise ? (await storePromise).stats() : null,
+      materializations: freshPool?.stats() ?? null, requestedSources: [...requestedSources] }),
     async close() {
       closed = true;
       try { if (storePromise) await (await storePromise).close(); }
-      finally { await shards.close(); }
+      finally { try { await freshPool?.close(); materializations.clear(); } finally { await shards.close(); } }
     },
   };
 }

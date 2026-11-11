@@ -12,12 +12,16 @@ import { relatedSources } from '../../public/relationships.js';
 import { commandFailure, cleanup } from './results.mjs';
 import { indexDigest } from './index-store.mjs';
 import { groupImpactFrames, impactFrameCount } from './impact-output.mjs';
+import { loadConfig } from './config.mjs';
+import { canonicalBytes, capturePolicy, materializedProjection, architectureProjection, equalProof } from './impact-proof.mjs';
+import { createEligibilityChecker } from './impact-eligibility.mjs';
 
 const slash = name => name.split(path.sep).join('/');
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const outside = name => name === '..' || name.startsWith('../') || path.isAbsolute(name);
 const array = value => value === undefined ? [] : Array.isArray(value) ? value : [value];
 const themesFor = values => values.theme && values.theme !== 'both' ? [values.theme] : ['light', 'dark'];
+const trackedHash = contents => indexDigest(contents === null ? 'missing\0' : Buffer.concat([Buffer.from('present\0'), contents]));
 async function bytes(file) {
   try { return await readFile(file); } catch (error) { if (['ENOENT', 'ENOTDIR'].includes(error.code)) return null; throw error; }
 }
@@ -41,16 +45,35 @@ function mappingBuild(facts) {
     owners: frame.parts.map(part => ({ source: part.source, export: part.part })) })) };
 }
 
-/** Finite candidate query. Segment 1 deliberately produces no unaffected proofs. */
+/** Candidate queries and operation-local fresh-input proofs for exact Git endpoints. */
 export async function impact(config, values, { log = console.log, openIndex = openProjectIndex, prepareInputs = prepareImpactInputs } = {}) {
   const started = performance.now(), themes = themesFor(values);
   const timings = { prepareMs: 0, indexMs: 0, materializeMs: 0, proofMs: 0, queryMs: 0, totalMs: 0 };
   const timed = async (name, work) => { const start = performance.now(); try { return await work(); } finally { timings[name] += performance.now() - start; } };
   let inputs, data, primary;
   const views = [], warnings = [], tracked = new Map();
-  async function track(file) { if (!tracked.has(file)) tracked.set(file, indexDigest(await bytes(file) ?? 'missing\0')); }
+  async function track(file) { if (!tracked.has(file)) tracked.set(file, trackedHash(await bytes(file))); }
   const warn = (code, message, next = []) => { if (!warnings.some(warning => warning.code === code)) warnings.push({ code, message, next }); };
   const checkNext = reason => [{ argv: ['adg', 'check', '--read-only', '--json'], reason }];
+  async function verifyGeneration() {
+    // Detect edits before re-evaluating potentially broken configuration, then
+    // check again after evaluation so a config hook cannot mutate a tracked input.
+    for (const [file, expected] of tracked) if (trackedHash(await bytes(file)) !== expected) throw new CliError('IMPACT_INPUT_CHANGED', `Input changed during impact query: ${file}.`);
+    for (const view of views) {
+      await view.index.verifyInputs();
+      if (inputs) {
+        let resolved;
+        try { resolved = await loadConfig(view.config.root, { discover: false, fresh: true }); }
+        catch (cause) { throw new CliError('IMPACT_INPUT_CHANGED', `Configuration could not be revalidated: ${view.config.root}. ${cause.message}`, { cause }); }
+        if (canonicalBytes(resolved) !== view.resolved) throw new CliError('IMPACT_INPUT_CHANGED', `Resolved configuration changed during query: ${view.config.root}.`);
+        const files = await configInputFiles(resolved);
+        const names = files.map(file => slash(path.relative(resolved.root, file))).sort(compare);
+        if (canonicalBytes(names) !== canonicalBytes([...view.configInputs].sort(compare))) throw new CliError('IMPACT_INPUT_CHANGED', 'Configuration dependency inventory changed during query.');
+      }
+    }
+    for (const [file, expected] of tracked) if (trackedHash(await bytes(file)) !== expected) throw new CliError('IMPACT_INPUT_CHANGED', `Input changed during impact query: ${file}.`);
+    await inputs?.verifyChanges();
+  }
   try {
     let query, fileInput;
     await timed('prepareMs', async () => {
@@ -70,16 +93,31 @@ export async function impact(config, values, { log = console.log, openIndex = op
         renderRows: 0, provenRows: 0, unassessedRows: 0, proofComplete: false,
         tokenScan: { reachableRows: 0, fullSheetRows: 0, fallbackReasons: [] } }, timings };
 
-    await timed('indexMs', async () => {
-      for (const [side, endpoint] of inputs ? [['before', inputs.before], ['after', inputs.after]] : [['after', { config, revision: null }]]) {
-        const current = endpoint.config, index = await openIndex(current, { stateDirectory: values['state-dir'], persist: !endpoint.revision });
-        const view = { side, config: current, index, facts: new Map(), graph: null, routes: new Map(), tokens: null, map: null }; views.push(view);
-        view.configInputs = new Set();
+    if (inputs && !inputs.after.revision) for (const change of inputs.changes) {
+      for (const name of [change.before, change.after].filter(Boolean)) await track(path.join(inputs.repository, name));
+    }
+    for (const [side, endpoint] of inputs ? [['before', inputs.before], ['after', inputs.after]] : [['after', { config, revision: null }]]) {
+      const view = await timed('indexMs', async () => {
+        const current = endpoint.config;
+        const index = await openIndex(current, { stateDirectory: values['state-dir'], persist: !inputs && !endpoint.revision, fresh: !!inputs });
+        const view = { side, config: current, index, facts: new Map(), built: new Map(), architecture: new Map(),
+          graph: null, routes: new Map(), tokens: null, map: null, configInputs: new Set(), resolved: canonicalBytes(current) };
+        views.push(view);
         for (const file of await configInputFiles(current)) { await track(file); view.configInputs.add(slash(path.relative(await realpath(current.root), file))); }
         for (const name of ['adg.config.mjs', 'adg.config.js', 'adg.config.ts']) await track(path.join(current.root, name));
-        await track(path.join(current.design, 'tokens.css'));
+        view.tokenFile = path.join(current.design, 'tokens.css');
+        await track(view.tokenFile); view.tokenBytes = await bytes(view.tokenFile);
+        if (inputs) for (const source of index.inventory.tsx) await track(path.join(current.root, source));
+        return view;
+      });
+      const { index, config: current } = view;
+      if (inputs) await timed('materializeMs', async () => {
+        const settled = await Promise.allSettled(index.inventory.tsx.map(async source => [source, await index.materialize(source)]));
+        for (const result of settled) { if (result.status === 'rejected') throw result.reason; view.built.set(...result.value); }
+      });
+      await timed('indexMs', async () => {
         for (const source of index.inventory.tsx) {
-          const facts = await index.source(source, { tokens: query.kind === 'token' || query.kind === 'git' });
+          const facts = await index.source(source, { tokens: query.kind === 'token' || query.kind === 'git', fresh: !!inputs });
           view.facts.set(source, facts);
           for (const frame of facts.tokenDependencies ?? []) for (const row of frame.themes) if (themes.includes(row.theme)) {
             const scan = data.coverage.tokenScan;
@@ -89,17 +127,16 @@ export async function impact(config, values, { log = console.log, openIndex = op
           }
         }
         for (const source of index.inventory.architecture) {
-          const metadata = await index.architecture(source);
-          await track(path.join(current.root, source)); await track(path.join(current.root, metadata.sidecar));
-          view.facts.set(source, { source, parts: [], imports: [], dependencies: [source, metadata.sidecar, relative(current, path.join(current.design, 'tokens.css'))], frames: [{ name: 'default', parts: [] }] });
+          const metadata = await index.architecture(source), file = path.join(current.root, source), sidecar = path.join(current.root, metadata.sidecar);
+          await track(file); await track(sidecar);
+          view.architecture.set(source, { source: await bytes(file), sidecar: await bytes(sidecar), tokens: view.tokenBytes, config: current });
+          view.facts.set(source, { source, parts: [], imports: [], dependencies: [source, metadata.sidecar, relative(current, view.tokenFile)], frames: [{ name: 'default', parts: [] }] });
         }
         view.graph = await index.relationships({ facts: view.facts, projectPaths: true });
         view.tokens = view.facts.size || query.kind === 'token' ? index.tokens() : [];
-        if (query.kind === 'file' || query.kind === 'git') {
-          view.map = await loadImplementationMap(current); await track(view.map.file);
-        }
-      }
-    });
+        if (query.kind === 'file' || query.kind === 'git') { view.map = await loadImplementationMap(current); await track(view.map.file); }
+      });
+    }
     const scan = data.coverage.tokenScan;
     scan.fallbackReasons.sort(compare);
     if (scan.fullSheetRows) warn('IMPACT_TOKEN_FALLBACK', `Token scan used the full sheet for ${scan.fullSheetRows} frame/theme inputs: ${scan.fallbackReasons.join(', ')}.`,
@@ -113,6 +150,8 @@ export async function impact(config, values, { log = console.log, openIndex = op
       rows = matchDiffFrames(allSources, previous.facts, current.facts, renames);
     } else rows = allSources.flatMap(source => current.facts.get(source).frames.map(frame => ({ source, frame: frame.name, status: 'current', matchKind: null, matchCandidates: [], before: null, after: frame })));
     data.coverage.expectedRows = rows.length * themes.length;
+    const eligible = createEligibilityChecker();
+    const requiredParents = new Set(rows.filter(row => row.status === 'added' && row.after.parent).map(row => JSON.stringify([row.after.parent.source, row.after.parent.frame])));
     const seeds = [], factKeys = new Map();
     function seed(view, kind, source, { part = null, token = null, selectedThemes = themes, pathIndexes = [], pointer = null, frames = null } = {}) {
       const key = JSON.stringify([kind, source, part, token, selectedThemes, pointer, pathIndexes]);
@@ -139,7 +178,12 @@ export async function impact(config, values, { log = console.log, openIndex = op
         else data.mappingFindings.push({ ...finding, sides: [view.side] });
       }
       if (validated.findings.length) data.coverage.mapping = 'stale';
-      for (const [file, hash] of Object.entries(validated.implementationHashes)) tracked.set(path.join(view.config.root, file), hash);
+      for (const [file, hash] of Object.entries(validated.implementationHashes)) {
+        const name = path.join(view.config.root, file);
+        const contents = await bytes(name), fingerprint = trackedHash(contents);
+        if (contents === null || indexDigest(contents) !== hash || tracked.has(name) && tracked.get(name) !== fingerprint) throw new CliError('IMPACT_INPUT_CHANGED', `Implementation input changed during query: ${name}.`);
+        tracked.set(name, fingerprint);
+      }
       for (const binding of validated.bindings) {
         const target = binding.design, facts = view.facts.get(target.source);
         if (!facts) continue;
@@ -150,6 +194,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
       }
     }
 
+    const proofBeforeQuery = timings.proofMs;
     await timed('queryMs', async () => {
       if (query.kind === 'source') {
         for (const input of array(values.source)) {
@@ -254,17 +299,50 @@ export async function impact(config, values, { log = console.log, openIndex = op
             if (!lifecycle) { seed(view, row.source.endsWith('.mmd') ? 'architecture' : 'source', row.source); lifecycle = seeds.at(-1); }
             add(lifecycle, 'lifecycle', 'direct', { origin: 'build', source: row.source, part: null, token: null, via: [], mappingPointer: null });
           }
+          if (inputs && requiredParents.has(JSON.stringify([row.source, row.frame]))) {
+            const child = rows.find(child => child.status === 'added' && child.after.parent?.source === row.source && child.after.parent.frame === row.frame);
+            let support = seeds.find(seed => seed.view === current && seed.fact.source === child.source);
+            if (!support) { seed(current, 'source', child.source); support = seeds.at(-1); }
+            add(support, 'dependency', 'support', { origin: 'build', source: child.source, part: null, token: null, via: [], mappingPointer: null });
+          }
+          const ordered = [...reasons.values()].sort((a, b) => compare(a.fact, b.fact) || compare(a.class, b.class) || compare(a.scope, b.scope));
           if (reasons.size) {
-            const ordered = [...reasons.values()].sort((a, b) => compare(a.fact, b.fact) || compare(a.class, b.class) || compare(a.scope, b.scope));
-            frame.themes.push({ theme, candidate: true, disposition: 'render', reasons: ordered, proof: null, unassessedReasons: [] });
-            data.coverage.candidateRows++; data.coverage.renderRows++;
+            data.coverage.candidateRows++;
             if (ordered.some(reason => reason.scope === 'direct')) data.coverage.directRows++;
             if (ordered.some(reason => reason.scope === 'transitive')) data.coverage.transitiveRows++;
-          } else data.coverage.unassessedRows++;
+          }
+          const result = { theme, candidate: !!reasons.size, disposition: 'render', reasons: ordered, proof: null, unassessedReasons: [] };
+          if (inputs) await timed('proofMs', async () => {
+            if (row.status !== 'matched' || row.matchKind !== 'exact') result.unassessedReasons = ['missing_side'];
+            else if (row.source.endsWith('.mmd')) {
+              const before = architectureProjection(previous.architecture.get(row.source)), after = architectureProjection(current.architecture.get(row.source));
+              result.proof = equalProof(before, after, 'architecture_inputs_equal', 'full_sheet', values.explain);
+            } else {
+              const builtBefore = previous.built.get(row.source), builtAfter = current.built.get(row.source);
+              const before = builtBefore.frames.find(frame => frame.name === row.frame), after = builtAfter.frames.find(frame => frame.name === row.frame);
+              const beforeDoc = before.document(theme), afterDoc = after.document(theme);
+              result.unassessedReasons = [...new Set([...eligible(beforeDoc), ...eligible(afterDoc)])].sort(compare);
+              if (!result.unassessedReasons.length) {
+                const reach = (view, frame) => view.facts.get(row.source).tokenDependencies.find(item => item.frame === frame.name).themes.find(item => item.theme === theme);
+                const left = materializedProjection(builtBefore, before, theme, capturePolicy(previous.config), reach(previous, before));
+                const right = materializedProjection(builtAfter, after, theme, capturePolicy(current.config), reach(current, after));
+                result.proof = equalProof(left.bytes, right.bytes, 'materialized_inputs_equal', left.tokenMode === 'full_sheet' || right.tokenMode === 'full_sheet' ? 'full_sheet' : 'reachable_declarations', values.explain);
+              }
+            }
+            if (result.proof && !requiredParents.has(JSON.stringify([row.source, row.frame]))) result.disposition = 'proven_unaffected';
+            else result.proof = null;
+          });
+          if (inputs) {
+            if (result.disposition === 'proven_unaffected') data.coverage.provenRows++;
+            else data.coverage.renderRows++;
+          } else if (reasons.size) data.coverage.renderRows++;
+          else { result.disposition = 'unassessed'; data.coverage.unassessedRows++; }
+          if (result.candidate || result.disposition === 'render') frame.themes.push(result);
         }
         if (frame.themes.length) data.frames.push(frame);
       }
     });
+    timings.queryMs = Math.max(0, timings.queryMs - (timings.proofMs - proofBeforeQuery));
     data.coverage.inventory = 'complete';
     if (data.unresolvedInputs.length || data.mappingFindings.length) warn('IMPACT_MAPPING_INCOMPLETE', 'Some implementation mappings are absent, unmatched or stale; inspect the resolvable targets and findings.', checkNext('Repair implementation.json and its reported locators before repeating the query.'));
     if (!data.frames.length) {
@@ -272,24 +350,41 @@ export async function impact(config, values, { log = console.log, openIndex = op
       warn(query.kind === 'git' ? 'IMPACT_NO_CHANGES' : 'IMPACT_NO_MATCH', 'No frame candidates matched the changed design facts.',
         query.kind === 'git' ? [] : observed ? nextActions('OWNER_UNSETTLED', { command: 'owner', values: observed }) : checkNext('Inspect design inputs and emitted part coverage.'));
     }
-    for (const view of views) await view.index.verifyInputs();
-    for (const [file, expected] of tracked) if (indexDigest(await bytes(file) ?? 'missing\0') !== expected) throw new CliError('IMPACT_INPUT_CHANGED', `Input changed during impact query: ${file}.`);
+
   } catch (cause) {
+    if (inputs) { try { await verifyGeneration(); } catch (changed) { cause = changed; } }
     if (cause.code === 'OWNER_INDEX_CHANGED') cause = new CliError('IMPACT_INPUT_CHANGED', cause.message, { cause });
     if (inputs) { cause.message = inputs.translate(cause.message); if (cause.context) cause.context = inputs.translate(cause.context); }
     primary = data ? commandFailure(cause, data, warnings) : cause;
   } finally {
-    for (const close of [...views].reverse().map(view => () => view.index.close()).concat([() => inputs?.close()])) {
-      try { await cleanup(close, primary); } catch (cause) { primary = data ? commandFailure(cause, data, warnings) : cause; }
+    for (const view of [...views].reverse()) {
+      try { await cleanup(() => view.index.close(), primary); } catch (cause) { primary = data ? commandFailure(cause, data, warnings) : cause; }
+    }
+    if (!primary) {
+      try { await verifyGeneration(); data.coverage.proofComplete = !!inputs; }
+      catch (cause) {
+        if (cause.code === 'OWNER_INDEX_CHANGED') cause = new CliError('IMPACT_INPUT_CHANGED', cause.message, { cause });
+        if (inputs) cause.message = inputs.translate(cause.message);
+        primary = data ? commandFailure(cause, data, warnings) : cause;
+      }
+    }
+    try { await cleanup(() => inputs?.close(), primary); } catch (cause) { primary = data ? commandFailure(cause, data, warnings) : cause; }
+  }
+
+  timings.totalMs = performance.now() - started;
+  if (primary && data) {
+    data.coverage.proofComplete = false;
+    data.coverage.unassessedRows += data.coverage.provenRows; data.coverage.provenRows = 0;
+    for (const frame of data.frames) for (const row of frame.themes) if (row.proof) {
+      row.proof = null; row.disposition = 'unassessed'; row.unassessedReasons = ['incomplete_identity'];
     }
   }
-  timings.totalMs = performance.now() - started;
   if (data) data.frames = groupImpactFrames(data.frames, { explain: !!values.explain });
   if (primary) throw primary;
   data.complete = true;
   if (!values.json) {
-    log(`${impactFrameCount(data.frames)} candidate frames; ${data.coverage.candidateRows} theme rows; ${data.coverage.unassessedRows} unassessed. No unaffected proofs.`);
-    for (const group of data.frames) log(`${group.source}#${group.frames.join(', ')} [${group.rows.flatMap(row => row.themes).join(',')}] ${[...new Set(group.rows.flatMap(row => row.reasons.map(reason => reason.class)))].join(', ')}`);
+    log(`${impactFrameCount(data.frames)} listed frames; ${data.coverage.candidateRows} theme rows; ${data.coverage.unassessedRows} unassessed. ${data.coverage.provenRows} proven.`);
+    for (const group of data.frames) log(`${group.source}#${group.frames.join(', ')} [${group.rows.flatMap(row => row.themes).join(',')}] ${[...new Set(group.rows.flatMap(row => (row.reasons ?? []).map(reason => reason.class)))].join(', ')}`);
     for (const warning of warnings) log(`${warning.code}: ${warning.message}`);
   }
   return { data, warnings };

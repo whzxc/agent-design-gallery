@@ -794,8 +794,8 @@ findings still exits 1 under `CHECK_FAILED`.
 
 ### Impact
 
-`impact` is a finite candidate query over the shared project index. It does not take screenshots,
-collect browser observations, prove frames unaffected or change render/check/diff scheduling.
+`impact` returns frame candidates and, for Git queries, operation-local materialized-input proofs.
+It takes no screenshots and changes no render/check/diff scheduling.
 
 ```sh
 adg impact --source=design/components/button.tsx --part=Button --explain --json
@@ -843,7 +843,12 @@ type ImpactReason = {
 type ImpactFrameGroup = {
   source:ProjectPath, frames:string[], status:'matched'|'added'|'removed'|'current',
   matchKind?:'exact'|'unmatched'|'renamed_or_unknown', matchCandidates?:FrameRef[],
-  rows:{themes:Theme[], candidate:true, disposition:'render', reasons:ImpactReason[]}[]
+  rows:{themes:Theme[], candidate:boolean, disposition:'render'|'proven_unaffected'|'unassessed',
+    reasons?:ImpactReason[],
+    proof?:{kind:'materialized_inputs_equal'|'architecture_inputs_equal',version:1,
+      tokenMode:'reachable_declarations'|'full_sheet',projection?:string},
+    unassessedReasons?:('external_resource'|'dynamic_document'|'unsupported_css'
+      |'missing_side'|'incomplete_identity')[]}[]
 };
 type ImpactData = {
   project:string, complete:boolean, query:ImpactQuery,
@@ -858,21 +863,49 @@ type ImpactData = {
   unresolvedInputs:{path:string|null,reason:string,fallback:'none'}[],
   coverage:{inventory:'complete'|'incomplete',mapping:'not_requested'|'valid'|'absent'|'stale',
     expectedRows:number,candidateRows:number,directRows:number,transitiveRows:number,
-    renderRows:number,provenRows:0,unassessedRows:number,proofComplete:false,
+    renderRows:number,provenRows:number,unassessedRows:number,proofComplete:boolean,
     tokenScan:{reachableRows:number,fullSheetRows:number,
       fallbackReasons:('tokens_parse_failed'|'unbalanced_var')[]}},
-  timings:{prepareMs:number,indexMs:number,materializeMs:0,proofMs:0,
+  timings:{prepareMs:number,indexMs:number,materializeMs:number,proofMs:number,
     queryMs:number,totalMs:number}
 };
 ```
 
-`frames` contains source groups for candidate frames only. Equal theme records merge into
+`frames` contains source groups for candidates or rows that require rendering. Equal theme records merge into
 `rows[].themes`; equal records within a source merge into `frames` in declared order.
 Groups follow their first frame's order. Empty matchCandidates and null matchKind are omitted.
-No proof/null or unassessedReasons/empty fields are emitted by this segment. Noncandidates
-are counted as unassessed. `renderRows` counts proposed frame/theme work, not captures;
-renderRows + unassessedRows equals expectedRows. Direct/transitive counts can overlap.
+Empty reasons/unassessedReasons and null proof fields are omitted. Noncandidate proven rows
+are counted without listing. `renderRows` counts proposed frame/theme work, not captures;
+renderRows + provenRows + unassessedRows equals expectedRows. Direct/transitive counts can overlap.
 A working-tree sha is observed HEAD, not uncommitted input identity.
+
+Git queries freshly build and execute every TSX entry at both endpoints through the shared build
+pool, once per operation. Transform caches can be reused; executed source payloads cannot.
+Compare canonical document/metadata/policy bytes directly. The document is exactly the builder's
+per-theme document with its own token block replaced by reachable theme-local declarations or
+absence; full_sheet mode retains the complete raw sheet. Parent/dimensions and resolved capture
+policy also participate. The policy fixes initial viewport, reduced motion, locale/timezone,
+animation/caret behavior and per-side diff policy; no machine/environment fingerprint is used.
+Architecture compares raw .mmd bytes, sidecar presence/bytes, full token bytes and resolved architecture config.
+
+Eligibility parses HTML and tokenizes CSS without launching Chromium. Script elements, on* attributes,
+javascript: URLs, iframe/object/embed require rendering (`dynamic_document`). Resource references
+must be data: or fragment-only, including srcset, CSS url/image-set/import/font sources and SVG
+href/xlink:href, nested data SVG/CSS and animated resource URLs (`external_resource`). Uninspectable
+CSS resource expressions use `unsupported_css`; parser/resource decoding failure uses
+`incomplete_identity`. Plain hyperlinks, animations, media and canvas are otherwise permitted.
+
+Successful Git rows are either render or proven_unaffected; proofComplete:true means the entire
+requested union was classified. Added/removed/rename candidates never prove (`missing_side`).
+Required new-part parents remain render with support evidence. Unchanged source bytes can still
+render after fresh Date/random output differs. A render row without a dependency reason can result
+from this fresh output comparison. Hypothetical queries stay proof-free, with noncandidates unassessed.
+
+Proofs exist only in the operation, with default fields kind/version/tokenMode. --explain adds the
+first represented frame/theme's projection digest; digests never decide equality or split groups.
+Final validation checks dependency bytes, discovery/resolution inventories, tracked/config/token
+inputs and freshly resolved config after worker shutdown. Concurrent changes fail
+IMPACT_INPUT_CHANGED, exit 2. Incomplete results discard every proof and set proofComplete:false.
 
 Dependencies are conservative, including helpers and unrendered exports. Emitted provenance
 does not claim painted visibility. Lexical token reachability scans the union of raw, CSS-escape-

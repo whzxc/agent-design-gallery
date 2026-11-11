@@ -4,6 +4,7 @@ import { configFile } from './config.mjs';
 import { prepareDiffInputs } from './diff-inputs.mjs';
 import { revisionChanges, currentHead } from './arch-git.mjs';
 import { cleanup } from './results.mjs';
+import { CliError } from '../cli-output.mjs';
 
 const slash = name => name.split(path.sep).join('/');
 const within = (name, directory) => name === directory || name.startsWith(directory + '/');
@@ -48,6 +49,11 @@ export async function prepareImpactInputs(config, values) {
       head: head?.base.sha ?? await currentHead(base.base),
       warnings: sessions.flatMap(session => session.warnings),
       translate: value => sessions.reduce((result, session) => session.translateDiagnostic(result), value),
+      async verifyChanges() {
+        if (head) return;
+        const current = (await revisionChanges(base.base)).filter(change => [change.before, change.after].some(name => name !== null && !excluded(name)));
+        if (JSON.stringify(current) !== JSON.stringify(changes)) throw new CliError('IMPACT_INPUT_CHANGED', 'Git input inventory changed during query.');
+      },
       async close() {
         let failure;
         for (const session of [...sessions].reverse()) {

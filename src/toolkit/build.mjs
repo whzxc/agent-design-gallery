@@ -6,8 +6,9 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadTokens, refreshTypes, rejectLegacy, relative, isSourcePath, sourceDirectories } from './project.mjs';
 import { themeCss, parseTokens } from './tokens.mjs';
-import { escape, componentOwner } from './runtime.mjs';
+import { componentOwner } from './runtime.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
+import { frameDocument } from './frame-document.mjs';
 const require = createRequire(import.meta.url);
 const runtime = fileURLToPath(new URL('./runtime.mjs', import.meta.url));
 const tailwind = path.dirname(require.resolve('tailwindcss/package.json'));
@@ -17,6 +18,7 @@ const tailwind = path.dirname(require.resolve('tailwindcss/package.json'));
 const sourceTransforms = new Map();
 let transformBytes = 0;
 const transformLimit = 8 * 1024 * 1024;
+let evaluation = 0;
 function forgetTransform(file) {
   const entry = sourceTransforms.get(file);
   if (entry) { transformBytes -= entry.bytes; sourceTransforms.delete(file); }
@@ -140,7 +142,7 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     // Retain esbuild's human diagnostics and details while carrying the owning boundary's code.
     throw Object.assign(new CliError(typed.code, error.message, { cause: error, context: typed.context }), { errors: error.errors });
   });
-  const mod = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}#${Date.now()}`);
+  const mod = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}#${++evaluation}`);
   if (typeof mod.default !== 'function') throw Error(`${relative(config,file)}: export a default function returning Frames`);
   const value = mod.default(), frames = (Array.isArray(value) ? value.flat(Infinity) : [value]).filter(v => v != null && v !== false);
   if (!frames.length) throw Error(`${relative(config,file)}: default export must return at least one Frame`);
@@ -156,7 +158,7 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
   const defaults = 'html,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-adg-frame]{display:flex;align-items:flex-start;position:relative;background:var(--canvas)}[data-adg-frame]>*,svg{flex-shrink:0} @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}';
   const css = `${utilities}\n${tokenSource}\n${defaults}`;
   for (const frame of frames) {
-    frame.document = theme => `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="${escape(frame.name)}" style="${frame.width ? `width:${frame.width}px;` : 'width:max-content;'}${frame.height ? `height:${frame.height}px;` : ''}">${frame.html}</div></body></html>`;
+    frame.document = theme => frameDocument(frame, theme, css);
     if (write) { const destination = path.join(config.output, path.relative(base,file).replace(/\.tsx$/, ''), `${encodeURIComponent(frame.name)}.html`); mkdirSync(path.dirname(destination),{recursive:true}); writeFileSync(destination,frame.document('light')); }
   }
   const sourceName = path.relative(base, file).split(path.sep).join('/');
@@ -165,5 +167,6 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     return owner && owner.source === sourceName && owner.export === name;
   }).sort();
   return { frames, parts, dependencies: [...dependencies], imports: [...imports].sort(), css,
-    tokenCss: tokenSource, cssWithoutTokens: `${utilities}\n${defaults}` };
+    tokenCss: tokenSource, cssWithoutTokens: `${utilities}\n${defaults}`,
+    cssBeforeTokens: `${utilities}\n`, cssAfterTokens: `\n${defaults}` };
 }

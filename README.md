@@ -133,8 +133,8 @@ answers can be around 100 KB; read `owners` first and narrow with `--theme`. See
 `adg impact` lists conservative direct/transitive frame candidates from sources, parts, tokens,
 implementation mappings or exact Git endpoints. It uses emitted provenance and lexical token
 reachability, with compact optional `--explain` witnesses. Equal theme records and same-source frame records are grouped; noncandidates are counted.
-This segment supplies candidate queries; it does not yet prove unaffected frames or selectively
-render them. See the [impact contract](docs/agent-interface.md#impact).
+Git queries freshly materialize both endpoints and prove equivalent closed rendering inputs for
+this operation. Hypothetical queries remain candidate lookups; selective rendering is a later segment. See the [impact contract](docs/agent-interface.md#impact).
 
 See the [toolkit contract](docs/design-toolkit.md) for source format and compare adapters, and the [changelog](CHANGELOG.md) for version changes. Node.js executes design modules at build time; open sources you trust.
 
