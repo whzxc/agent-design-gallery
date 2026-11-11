@@ -61,6 +61,16 @@ function trimTransforms() {
 export function validateFrame(frame) {
   if (!frame?.frame || typeof frame.name !== 'string' || !frame.name.trim()) throw Error('Default export must return named Frames');
   for (const key of ['width', 'height']) if (frame[key] !== undefined && !(Number.isFinite(frame[key]) && frame[key] > 0)) throw Error(`Invalid Frame ${key}; use positive CSS pixels`);
+  const parent = frame.parent;
+  if (parent !== undefined) {
+    if (!parent || typeof parent !== 'object' || Array.isArray(parent) ||
+      Object.keys(parent).some(key => !['source', 'frame', 'selector'].includes(key)) ||
+      ['source', 'frame', 'selector'].some(key => typeof parent[key] !== 'string' || !parent[key].trim()) ||
+      !/\.(tsx|mmd)$/.test(parent.source) || /[\\:]|^\//.test(parent.source) ||
+      parent.source.split('/').some(part => ['', '.', '..'].includes(part))) {
+      throw Error('Invalid Frame parent; use project-relative source, frame and selector strings');
+    }
+  }
   const c = frame.capture;
   if (c !== undefined) {
     if (!c || typeof c !== 'object' || ['region','selector','page'].filter(k => c[k] !== undefined).length !== 1 || (c.page !== undefined && c.page !== true) || ['region','selector'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim())) || (c.viewport !== undefined && !/^[1-9]\d*x[1-9]\d*$/.test(c.viewport)) || (c.origin !== undefined && (!c.page || !/^\d+(?:\.\d+)? \d+(?:\.\d+)?$/.test(c.origin))) || (c.clicks !== undefined && (!Array.isArray(c.clicks) || c.clicks.some(v => typeof v !== 'string' || !v)))) throw Error('Invalid capture; use region, selector or page with viewport, origin and clicks');

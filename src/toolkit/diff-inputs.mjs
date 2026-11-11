@@ -182,34 +182,48 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
     });
     let closed = false;
     return {
-      base, before, after, sources, warnings, environment: { configDependencies, baseMigration },
+      base, before, after, sources, warnings, translateDiagnostic: translate, environment: { configDependencies, baseMigration },
       async buildFrames({ browser } = {}) {
         if (closed) throw new CliError('SOURCE_BUILD_FAILED', 'Diff inputs are closed; prepare a new comparison.');
-        const built = [];
-        for (const side of [before, after]) {
-          const builds = new Map(), snapshot = new Map();
-          for (const source of sources) {
-            const file = side.sources.get(source);
-            if (!file) continue;
-            try {
-              const work = () => buildSource(side.config, file, { write: false, allowLegacy: false, snapshot, browser });
-              builds.set(source, await (side === before ? withHumanOutputMapping(work, translate) : work()));
-            }
-            catch (error) {
-              const failure = side === before ? revisionError(historicalFailure(error), tree.directory, base) : error;
-              if (failure instanceof CliError) failure.warnings.push(...warnings);
-              throw failure;
-            }
+        const built = [new Map(), new Map()], snapshots = [new Map(), new Map()];
+        const build = async (side, index, source) => {
+          if (built[index].has(source) || !side.sources.has(source)) return;
+          try {
+            const work = () => buildSource(side.config, side.sources.get(source), { write: false, allowLegacy: false, snapshot: snapshots[index], browser });
+            built[index].set(source, await (side === before ? withHumanOutputMapping(work, translate) : work()));
+          } catch (error) {
+            const failure = side === before ? revisionError(historicalFailure(error), tree.directory, base) : error;
+            if (failure instanceof CliError) failure.warnings.push(...warnings);
+            throw failure;
           }
-          built.push(builds);
+        };
+        for (const source of sources) {
+          await build(before, 0, source);
+          await build(after, 1, source);
         }
         const frames = matchDiffFrames(sources, built[0], built[1], renames, options.frame);
+        const support = [], parents = new Map();
+        const selected = new Map(frames.map(row => [frameKey(row), row]));
+        for (const row of frames.filter(row => row.status === 'added' && row.after.parent)) {
+          const ref = row.after.parent, key = frameKey({ source: ref.source, frame: ref.frame });
+          if (!parents.has(key)) {
+            await build(before, 0, ref.source);
+            await build(after, 1, ref.source);
+            const old = built[0].get(ref.source)?.frames.find(frame => frame.name === ref.frame);
+            const current = built[1].get(ref.source)?.frames.find(frame => frame.name === ref.frame);
+            if (!old || !current) throw new CliError('DIFF_REFERENCE_INVALID', `${row.source}: ${row.frame}: parent ${ref.source}: ${ref.frame} must exist at both revisions.`);
+            const parent = selected.get(key) ?? { source: ref.source, frame: ref.frame, before: old, after: current, status: 'matched', matchKind: 'exact', matchCandidates: [] };
+            parents.set(key, parent);
+            if (!selected.has(key)) support.push(parent);
+          }
+          row.parentRow = parents.get(key);
+        }
         const candidates = frames.filter(row => row.matchKind === 'renamed_or_unknown');
         if (candidates.length) warnings.push({
           code: 'DIFF_RENAMED_OR_UNKNOWN',
           message: `Unmatched frames have rename candidates: ${candidates.map(row => frameKey(row)).join(', ')}.`, next: [],
         });
-        return { frames, before: built[0], after: built[1] };
+        return { frames, before: built[0], after: built[1], support };
       },
       async close() { closed = true; await tree.close(); },
     };

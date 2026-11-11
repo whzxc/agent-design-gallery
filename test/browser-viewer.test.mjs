@@ -1,3 +1,4 @@
+// Start the longest browser suite in the initial test-runner batch.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, readFile, writeFile, access, stat } from 'node:fs/promises';

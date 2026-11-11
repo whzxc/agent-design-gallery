@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 import { sourceDirectories, archFiles } from './project.mjs';
+import { resolveDiffPolicy } from './diff-policy.mjs';
 
 export const VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url))).version;
 export const UPDATE = 'npm install -g @whzxc/agent-design-gallery';
@@ -133,5 +134,5 @@ export async function loadConfig(cwd = process.cwd(), { checkVersion = true, dis
   if (typeof config.arch === 'string' && (path.isAbsolute(config.arch) || path.relative(root,path.resolve(root,config.arch)).startsWith('..'))) throw new CliError('CONFIG_INVALID', 'Set arch to a project-root-relative directory in adg.config.mjs');
   const arch = config.arch === false ? false : path.resolve(root,config.arch ?? 'arch');
   const design=path.resolve(root,config.design??'design');
-  return { root, name: config.name ?? path.basename(root), requires: config.requires ?? null, compatible, archDirectory: arch, arch: arch && (config.arch !== undefined || archFiles(arch).length) ? arch : false, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{archMaxEdges:30,importDirection:true,...config.check}, compare };
+  return { root, name: config.name ?? path.basename(root), requires: config.requires ?? null, compatible, archDirectory: arch, arch: arch && (config.arch !== undefined || archFiles(arch).length) ? arch : false, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{archMaxEdges:30,importDirection:true,...config.check}, compare, diff: resolveDiffPolicy(config.diff) };
 }
