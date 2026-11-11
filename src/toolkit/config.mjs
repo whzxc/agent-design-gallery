@@ -109,8 +109,9 @@ async function importConfig(file) {
     }}] });
   return (await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`)).default;
 }
-export async function loadConfig(cwd = process.cwd(), { checkVersion = true } = {}) {
-  const root = discoverRoot(cwd), file = configFile(root);
+export async function loadConfig(cwd = process.cwd(), { checkVersion = true, discover = true } = {}) {
+  const root = discover ? discoverRoot(cwd) : path.resolve(cwd), file = configFile(root);
+  if (!discover) requireMigration(root);
   let config = {};
   if (file) {
     try { config = await importConfig(file); }

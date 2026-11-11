@@ -27,6 +27,7 @@ export const errorCatalog = {
   SOURCE_BUILD_FAILED: [2, 'check', 'Read source diagnostics after repairing the source.'],
   GIT_UNAVAILABLE: [2, 'git-version', 'Verify Git after installing it.'],
   GIT_BASE_INVALID: [2, 'git', 'Inspect the project repository and base revision.'],
+  DIFF_BASE_DEPENDENCIES_UNAVAILABLE: [2, 'help', 'Restore the reported historical import or its installed dependency before retrying.'],
   CHECK_FAILED: [1, 'check', 'Recheck after fixing findings.'],
   COMPARE_FAILED: [1, 'compare', 'Compare again after reviewing the reports.'],
   PLAYWRIGHT_UNAVAILABLE: [2, 'install', 'Restore the packaged browser dependency.'],
