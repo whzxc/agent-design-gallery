@@ -220,6 +220,16 @@ test('structural classes conserve counts, apply precedence and strict limits, an
   const bitmapEdge = image(100, 100, first.data), mask = Array.from({ length: 10 }, (_, index) => index);
   for (const pixel of mask) bitmapEdge.data.set([0, 0, 0, 255], pixel * 4);
   assert.equal(compare(first, bitmapEdge, { ...evidence, rasterMask: mask }, first).pixels.classes.bitmap_resampling.withinThreshold, false);
+  assert.ok([16, 48].every(contrast => [1, 2].every(residual => [false, true].every(reverse => {
+    const low = 10, high = low + contrast;
+    const old = image(3, 3, Array.from({ length: 9 }, (_, pixel) => {
+      const value = pixel === 4 ? reverse ? high - residual : low + residual : pixel % 3 === 2 ? high : low;
+      return [value, value, value, 255];
+    }).flat());
+    const current = image(3, 3, old.data), anchor = reverse ? low : high;
+    current.data.set([anchor, anchor, anchor, 255], 16);
+    return compare(old, current, { ...evidence, edgeBoxes: [{ x: 0, y: 0, width: 3, height: 3 }] }, old).pixels.classes.antialiasing.pixels === 0;
+  }))), 'Property: a flip between an anchor and a color within residual distance of either anchor is never antialiasing');
 });
 
 test('part shape, thresholds, snapshot findings and settlement have bounded pure contracts', async () => {

@@ -6,7 +6,8 @@ export function pixelComparator() {
     let channel = 0;
     for (let index = 1; index < 4; index++) if (Math.abs(b[index] - a[index]) > Math.abs(b[channel] - a[channel])) channel = index;
     const t = (value[channel] - a[channel]) / (b[channel] - a[channel]);
-    return t >= 0 && t <= 1 && value.every((number, index) => Math.abs(number - a[index] - t * (b[index] - a[index])) <= 2) ? t : null;
+    return t >= 0 && t <= 1 && value.every((number, index) => Math.abs(number - a[index] - t * (b[index] - a[index])) <= 2)
+      ? delta(value, a) > 2 && delta(value, b) > 2 : null;
   };
   const antialias = (before, after, x, y, a, b, minimum) => {
     const anchors = new Map();
@@ -21,7 +22,7 @@ export function pixelComparator() {
     for (let i = 0; i < colors.length; i++) for (let j = i + 1; j < colors.length; j++) {
       if (delta(colors[i], colors[j]) <= minimum || luminance(colors[i]) === luminance(colors[j])) continue;
       const old = blend(a, colors[i], colors[j]), current = blend(b, colors[i], colors[j]);
-      if (old !== null && current !== null && (old > 0 && old < 1 || current > 0 && current < 1)) return true;
+      if (old !== null && current !== null && (old || current)) return true;
     }
     return false;
   };

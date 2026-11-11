@@ -108,7 +108,6 @@ export async function isolateParent(pair, context) {
     finally {
       await cleanup(() => page.evaluate(() => {
         for (const [node, style] of window.__adgIsolation) {
-          node.getAttribute('style');
           if (style === null) node.removeAttribute('style'); else node.setAttribute('style', style);
         }
         delete window.__adgIsolation;
