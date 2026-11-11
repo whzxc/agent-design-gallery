@@ -7,17 +7,17 @@ project's UI design sources and architecture diagrams. Milestones run in order. 
 specification and ends with tests, checks, the benchmark and the global installation update. New viewer chrome starts in
 the design sources and needs user gallery approval before implementation.
 
-## 1. Architecture sources (in progress)
+## 1. Architecture sources (done)
 
 - Segment A (done): discover Mermaid `.mmd` sources under `arch/`, build them with Pele, paint both themes from project tokens,
   apply semantic phases and marks with an in-artboard legend, show sidecar notes and owners, and support `check` and
   `render`.
 - Segment B (done): proposal overlays against a Git base revision (`--base`) for render, open, link and the viewer. Added,
   changed and removed nodes and edges are marked; removed elements stay visible as ghosts.
-- ARC adoption: semantic classes and sidecars for ARC's diagrams, then ARC's rule that architecture changes update their
+- ARC adoption (done): semantic classes and sidecars for ARC's diagrams, then ARC's rule that architecture changes update their
   diagrams before implementation.
 
-## 2. Rename to ADG (in progress)
+## 2. Rename to ADG (done, 0.6.0)
 
 - Package `@whzxc/agent-design-gallery`, CLI `adg`, repository `whzxc/agent-design-gallery`.
 - Scope: CLI, config file names, the TSX runtime specifier, the generated `.adg/` directory, the hub service label and
