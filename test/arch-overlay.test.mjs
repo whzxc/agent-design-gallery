@@ -7,7 +7,7 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { parse, render as peleRender } from 'pele';
 import { overlayModels, stampOverlay, buildOverlay } from '../src/toolkit/arch-overlay.mjs';
-import { resolveBase, readBase } from '../src/toolkit/arch-git.mjs';
+import { resolveBase, readBase, baseArchFiles } from '../src/toolkit/arch-git.mjs';
 import { loadConfig } from '../src/toolkit/config.mjs';
 import { buildSource } from '../src/toolkit/build.mjs';
 import { createBuildStore } from '../src/toolkit/build-store.mjs';
@@ -21,8 +21,8 @@ import { startHub } from '../src/hub.mjs';
 import { addRoot, listProjects } from '../src/hub/registry.mjs';
 const exec=promisify(execFile),asset='arch/mechanisms/work.mmd',cli=new URL('../src/cli.mjs',import.meta.url).pathname;
 const git=(c,...args)=>exec('git',['-c','user.name=SDG Test','-c','user.email=sdg-test@example.invalid',...args],{cwd:c.root});
-async function fixture(t) {
-  const root=await realpath(await mkdtemp(path.join(tmpdir(),'sdg-overlay-')));
+async function fixture(t, directory=tmpdir()) {
+  const root=await realpath(await mkdtemp(path.join(directory,'sdg-overlay-')));
   await cp(new URL('../fixtures/arch-sample/',import.meta.url),root,{recursive:true});
   t.after(()=>rm(root,{recursive:true,force:true}));
   const c=await loadConfig(root);
@@ -100,6 +100,23 @@ test('an absent base diagram is entirely added; unsupported types retain a note'
   assert.match(built.frames[0].note,/overlays are unsupported/);assert.match(built.frames[0].html,/Duck/);
 });
 
+test('unlabeled added and removed edges stay unlabeled in all supported diagram types',()=>{
+  const diagrams=[
+    ['flowchart LR\nA --> B','flowchart LR\nA --> C','edge',model=>model.edges.map(edge=>[edge.id,edge.text])],
+    ['stateDiagram-v2\nA --> B','stateDiagram-v2\nA --> C','transition',model=>model.graph.edges.map(edge=>[edge.id,edge.label])],
+    ['sequenceDiagram\nA->>B:','sequenceDiagram\nA->>C:','message',model=>model.messages.map(message=>[`i${message.id}`,message.message])],
+  ];
+  for(const [old,current,kind,labels] of diagrams) {
+    const overlay=compare(old,current),markup=svg(overlay);
+    assert.ok(overlay.changes.includes(`+ ${kind} A -> C`));
+    assert.ok(overlay.changes.includes(`- ${kind} A -> B`));
+    for(const [id,label] of labels(overlay.model)) {
+      assert.equal(label,'');
+      assert.doesNotMatch(markup,new RegExp(`<g class="pele-edge-label[^\"]*" data-id="${id}"`));
+    }
+  }
+});
+
 test('overlay style combines phase fill and diff border and stamps labels and arrowheads in both themes',async t=>{
   const c=await fixture(t);
   await writeFile(path.join(c.root,asset),'flowchart LR\nA[Old] -. old .-> B[Stable]\nB -->|gone| Z[Gone]\nclass A progress,experimental');
@@ -116,11 +133,31 @@ test('overlay style combines phase fill and diff border and stamps labels and ar
       const node=getComputedStyle(document.querySelector('.pele-node.changed>rect'));
       const edge=getComputedStyle(document.querySelector('.pele-edge.added'));
       const marker=getComputedStyle(document.querySelector('.pele-edge.added .pele-marker'));
-      return {width:node.strokeWidth,dash:node.strokeDasharray,fill:node.fill,edge:edge.stroke,edgeWidth:edge.strokeWidth,marker:marker.fill,removed:getComputedStyle(document.querySelector('.pele-node.removed')).opacity,changedDash:getComputedStyle(document.querySelector('.pele-edge.changed>path:not(.pele-marker)')).strokeDasharray,removedDash:getComputedStyle(document.querySelector('.pele-edge.removed>path:not(.pele-marker)')).strokeDasharray};
+      const removedLabel=document.querySelector('.pele-edge-label.removed');
+      const labelOpacity={group:getComputedStyle(removedLabel).opacity,text:getComputedStyle(removedLabel.querySelector('text')).opacity,background:getComputedStyle(removedLabel.querySelector('rect')).opacity};
+      return {width:node.strokeWidth,dash:node.strokeDasharray,fill:node.fill,edge:edge.stroke,edgeWidth:edge.strokeWidth,marker:marker.fill,removed:getComputedStyle(document.querySelector('.pele-node.removed')).opacity,changedDash:getComputedStyle(document.querySelector('.pele-edge.changed>path:not(.pele-marker)')).strokeDasharray,removedDash:getComputedStyle(document.querySelector('.pele-edge.removed>path:not(.pele-marker)')).strokeDasharray,labelOpacity};
     });
     assert.equal(styles.width,'2.5px');assert.equal(styles.dash,'4px, 3px');assert.equal(styles.edgeWidth,'2.25px');
     assert.equal(styles.edge,styles.marker);assert.equal(styles.removed,'0.5');assert.equal(styles.changedDash,'4px, 3px');assert.equal(styles.removedDash,'5px, 4px');assert.ok(styles.fill.includes('color('));
+    assert.deepEqual(styles.labelOpacity,{group:'1',text:'0.5',background:'1'});
   }
+});
+
+test('base reads and discovery preserve source paths through a symlinked project root, including deletions',async t=>{
+  const directory=new URL('../output/arch-segment-b/',import.meta.url).pathname;
+  await mkdir(directory,{recursive:true});
+  const c=await fixture(t,directory),link=c.root+'-link';
+  await symlink(c.root,link);t.after(()=>rm(link,{force:true}));
+  const linked=await loadConfig(link),file=path.join(link,asset),base=await resolveBase(linked,'HEAD');
+  const original=await readBase(base,file);
+  assert.equal(base.root,c.root);assert.match(original.text,/flowchart LR/);
+  assert.deepEqual(await baseArchFiles(linked,base),[file]);
+  const built=await buildOverlay(linked,file,{base});assert.match(built.frames[0].html,/Compared with/);
+  await rm(path.join(c.root,'arch'),{recursive:true});
+  assert.deepEqual(await readBase(base,file),original);
+  assert.deepEqual(await baseArchFiles(linked,base),[file]);
+  const {stdout}=await exec(process.execPath,[cli,'render',asset,'--base=HEAD','--json'],{cwd:link});
+  const result=JSON.parse(stdout);assert.deepEqual(result.deleted,[asset]);assert.deepEqual(result.captures,[]);
 });
 
 test('Git failures name a next action and base blobs use the resolved repository commit',async t=>{

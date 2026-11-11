@@ -8,6 +8,8 @@ export const diffClasses=['added','changed','removed'];
 const words=value=>(Array.isArray(value)?value.join(' '):value??'').split(/[\s,]+/).filter(Boolean);
 const addClass=(object,key,name)=>{object[key]=Array.isArray(object[key])?[...words(object[key]),name]:[...words(object[key]),name].join(' ');};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const labelDetail=text=>text?.trim()?`: ${text}`:'';
+const diffLabel=(name,text)=>name!=='changed'&&text?.trim()?`${name==='added'?'+':'-'} ${text}`:text;
 function changeDetail(oldLabel,label,oldParent,parent,oldShape,shape) {
   const changes=[];
   if(oldLabel!==label)changes.push(`${oldLabel} -> ${label}`);
@@ -40,12 +42,13 @@ function compareEdges(current,base,kind,result) {
     const old=oldEdges.get(key),name=!old?'added':!same([old.text,old.type,old.stroke,old.parent],[edge.text,edge.type,edge.stroke,edge.parent])?'changed':null;
     if(name) {
       edge.diff=name;
-      result.changes.push(`${name==='added'?'+':'~'} ${kind} ${edge.start} -> ${edge.end}: ${name==='changed'?changeDetail(old.text,edge.text,old.parent,edge.parent,`${old.type??''}/${old.stroke??''}`,`${edge.type??''}/${edge.stroke??''}`):edge.text}`);
+      const detail=name==='changed'?changeDetail(old.text,edge.text,old.parent,edge.parent,`${old.type??''}/${old.stroke??''}`,`${edge.type??''}/${edge.stroke??''}`):edge.text;
+      result.changes.push(`${name==='added'?'+':'~'} ${kind} ${edge.start} -> ${edge.end}${labelDetail(detail)}`);
     }
   }
   for(const [key,edge] of oldEdges)if(!newEdges.has(key)) {
     const ghost=structuredClone(edge);ghost.diff='removed';current.push(ghost);
-    result.changes.push(`- ${kind} ${edge.start} -> ${edge.end}: ${edge.text}`);
+    result.changes.push(`- ${kind} ${edge.start} -> ${edge.end}${labelDetail(edge.text)}`);
   }
   return current;
 }
@@ -85,7 +88,7 @@ function flowchart(model,base,result) {
   for(const [i,edge] of model.edges.entries()) {
     if(!edge.id||used.has(edge.id))edge.id=`sdg-overlay-edge${i}`;
     used.add(edge.id);
-    if(edge.diff){if(edge.stroke==='invisible')edge.stroke='normal';addClass(edge,'classes',edge.diff);result.edges.set(edge.id,edge.diff);if(edge.diff!=='changed')edge.text=`${edge.diff==='added'?'+':'-'} ${edge.text}`;}
+    if(edge.diff){if(edge.stroke==='invisible')edge.stroke='normal';addClass(edge,'classes',edge.diff);result.edges.set(edge.id,edge.diff);edge.text=diffLabel(edge.diff,edge.text);}
   }
   model.edgeById=new Map(model.edges.map(edge=>[edge.id,edge]));
 }
@@ -115,7 +118,7 @@ function state(model,base,result) {
   const edges=compareEdges(transitions(model),transitions(base),'transition',result);
   model.graph.edges=edges.map((edge,i)=>{
     edge.id=`edge${i}`;edge.label=edge.text;
-    if(edge.diff){addClass(edge,'classes',edge.diff);result.edges.set(edge.id,edge.diff);if(edge.diff!=='changed')edge.label=`${edge.diff==='added'?'+':'-'} ${edge.text}`;}
+    if(edge.diff){addClass(edge,'classes',edge.diff);result.edges.set(edge.id,edge.diff);edge.label=diffLabel(edge.diff,edge.text);}
     return edge;
   });
 }
@@ -146,7 +149,7 @@ function sequence(model,base,result) {
     if(a.diff&&b?.diff&&a.diff!==b.diff&&a.from===b.from&&a.to===b.to) {
       const next=a.diff==='added'?a:b,previous=a.diff==='removed'?a:b;
       merged.push({...next,diff:'changed'});result.changes.push(`~ message ${a.from} -> ${a.to}: ${previous.message} -> ${next.message}`);n++;
-    } else {merged.push(a);if(a.diff)result.changes.push(`${a.diff==='added'?'+':'-'} message ${a.from} -> ${a.to}: ${a.message}`);}
+    } else {merged.push(a);if(a.diff)result.changes.push(`${a.diff==='added'?'+':'-'} message ${a.from} -> ${a.to}${labelDetail(a.message)}`);}
   }
   const withControls=[];let cursor=0;
   for(const message of merged) {
@@ -161,7 +164,7 @@ function sequence(model,base,result) {
   model.messages=withControls.map((message,index)=>{
     if(message.diff!=='removed')positions.set(message.id,index);
     message.id=String(index);
-    if(message.diff){addClass(message,'classes',message.diff);result.edges.set(`i${index}`,message.diff);if(message.diff!=='changed'&&typeof message.message==='string')message.message=`${message.diff==='added'?'+':'-'} ${message.message}`;}
+    if(message.diff){addClass(message,'classes',message.diff);result.edges.set(`i${index}`,message.diff);message.message=diffLabel(message.diff,message.message);}
     return message;
   });
   for(const entries of [model.createdActors,model.destroyedActors])for(const [id,index] of entries)entries.set(id,positions.get(String(index))??index);
@@ -193,7 +196,8 @@ ${diffClasses.map(name=>`[data-sdg-arch] .pele :is(.pele-node,.pele-cluster).${n
 [data-sdg-arch] .pele .pele-edge.${name},[data-sdg-arch] .pele .pele-edge.${name}>:is(path,line,polyline){stroke:var(--arch-${name});stroke-width:2.25px;stroke-dasharray:${name==='changed'?'4 3':name==='removed'?'5 4':'none'}}
 [data-sdg-arch] .pele .pele-edge.${name} .pele-marker{fill:var(--arch-${name});stroke:var(--arch-${name});stroke-dasharray:none}
 [data-sdg-arch] .pele .pele-edge-label.${name}{fill:var(--arch-${name})}`).join('\n')}
-[data-sdg-arch] .pele :is(.pele-node,.pele-cluster,.pele-edge,.pele-edge-label).removed{opacity:.5}
+[data-sdg-arch] .pele :is(.pele-node,.pele-cluster,.pele-edge).removed{opacity:.5}
+[data-sdg-arch] .pele .pele-edge-label.removed text{opacity:.5}
 .arch-key.changed .arch-swatch{border:2.5px dashed var(--arch-color);background:transparent}.arch-key.added .arch-swatch{border-width:2.5px;background:transparent}.arch-key.removed .arch-swatch{border:2px dashed var(--arch-color);background:transparent;opacity:.5}
 .arch-comparison{margin-bottom:16px;color:var(--text-secondary,var(--text));font-size:12px}`;
 }
