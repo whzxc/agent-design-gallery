@@ -36,7 +36,7 @@ test('lazy projections preserve provenance, tokens, graph shape and architecture
   assert.deepEqual(facts.parts, [], 're-export is owned by its defining source');
   assert.deepEqual(facts.frames[0].parts, [{ source: 'drawings/components/button.tsx', part: 'Button' }]);
   assert.ok(facts.dependencies.includes('drawings/fixtures/value.ts')); assert.equal(facts.frames[0].html, undefined);
-  const tokens = index.tokens(); assert.deepEqual(tokens.find(t => t.name === '--accent').values[1], { theme: 'dark', declaration: 'var(--text)', inherited: true, references: ['--text'] });
+  const tokens = index.tokens(); assert.deepEqual(tokens.find(t => t.name === '--accent').values[1], { theme: 'dark', declaration: 'var(--text)', inherited: true, line: 6, references: ['--text'] });
   const architecture = await index.architecture('arch/example.mmd');
   assert.deepEqual(architecture.owners, ['ui/**']); assert.deepEqual(architecture.ownerLines, [3]); assert.equal(architecture.status, 'Reviewed');
   const graph = await index.relationships();

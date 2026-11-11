@@ -42,7 +42,13 @@ export function symbolRegions(text, file, selectors) {
     }
   }
   const result = [...boundaries.values()].sort((a, b) => a.line - b.line);
-  return result.map((boundary, index) => ({ ...boundary, nextBoundaryLine: result[index + 1]?.line ?? text.replaceAll('\r\n', '\n').split('\n').length + 1 }));
+  return result.map((boundary, index) => ({ ...boundary, nextBoundaryLine: result[index + 1]?.line ?? sourceLineCount(text) + 1 }));
+}
+
+export const sourceLineCount = text => Math.max(1, text.replaceAll('\r\n', '\n').split('\n').length - Number(text.endsWith('\n')));
+
+export function selectorMatches(selector, file) {
+  return selector.file !== undefined ? selector.file === file : selector.directory !== undefined ? file.startsWith(selector.directory) : globPattern(selector.glob).test(file);
 }
 
 export function regionAt(regions, line) {

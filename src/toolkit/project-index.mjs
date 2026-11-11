@@ -1,6 +1,9 @@
 import { readFile, realpath } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { listSources, archFiles, sourceDirectories, relative, loadTokens } from './project.mjs';
+import { tokenLocations } from './tokens.mjs';
+import { CliError } from '../cli-output.mjs';
 import { buildSource } from './build.mjs';
 import { createBuildStore } from './build-store.mjs';
 import { sourceFacts } from './source-facts.mjs';
@@ -11,7 +14,7 @@ import { defaultStateDirectory } from '../hub/registry.mjs';
 import { sourceRelationships } from '../../public/relationships.js';
 export { sourceFacts } from './source-facts.mjs';
 
-const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'tokens.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
+const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'tokens.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
 
 export function discoverProject(config) {
   const tsx = listSources(config.design, sourceDirectories(config)).map(file => relative(config, file));
@@ -20,9 +23,10 @@ export function discoverProject(config) {
 
 export function tokenFacts(config) {
   const { light, dark } = loadTokens(config);
+  const locations = tokenLocations(readFileSync(path.join(config.design, 'tokens.css'), 'utf8'));
   return [...light].map(([name, value]) => ({ name, source: relative(config, path.join(config.design, 'tokens.css')),
     values: [{ theme: 'light', declaration: value, inherited: false }, { theme: 'dark', declaration: dark.get(name) ?? value, inherited: !dark.has(name) }]
-      .map(item => ({ ...item, references: [...item.declaration.matchAll(/var\(\s*(--[\w-]+)/g)].map(match => match[1]) })) }));
+      .map(item => ({ ...item, line: (item.theme === 'dark' && !item.inherited ? locations.dark : locations.light).get(name), references: [...item.declaration.matchAll(/var\(\s*(--[\w-]+)/g)].map(match => match[1]) })) }));
 }
 
 export async function openProjectIndex(config, { stateDirectory = defaultStateDirectory, persist = true } = {}) {
@@ -31,14 +35,21 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
   const shards = await createIndexStore({ directory, persist });
   const buildDirectory = path.join(stateDirectory, 'cache', indexDigest(root), 'build');
   let storePromise, closed = false;
+  const observedInputs = new Map(), requestedSources = new Set();
   const assertOpen = () => { if (closed) throw Error('Project index is closed.'); };
   async function getBuild(source) {
     assertOpen();
     if (!inventory.tsx.includes(source)) throw Error(`Undiscovered TSX source ${source}.`);
+    requestedSources.add(source);
     if (!buildPromises.has(source)) buildPromises.set(source, (async () => {
       if (!persist) return buildSource(config, path.join(config.root, source), { write: false, allowLegacy: false });
       storePromise ??= createBuildStore({ config: { ...config, sourceFiles: inventory.tsx }, cacheDirectory: buildDirectory });
-      return (await storePromise).get(path.relative(config.design, path.join(config.root, source)).split(path.sep).join('/'));
+      const built = await (await storePromise).get(path.relative(config.design, path.join(config.root, source)).split(path.sep).join('/'));
+      for (const [name, hash] of Object.entries(built.dependencyHashes)) {
+        if (observedInputs.has(name) && observedInputs.get(name) !== hash) throw new CliError('OWNER_INDEX_CHANGED', `Design dependency changed during query: ${name}.`);
+        observedInputs.set(name, hash);
+      }
+      return built;
     })().finally(() => buildPromises.delete(source)));
     return buildPromises.get(source);
   }
@@ -56,11 +67,25 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
       return cached('source', { source, build: built.inputHash ?? indexDigest(JSON.stringify({ ...built, frames: built.frames.map(({ document, ...frame }) => frame) })) }, () => sourceFacts(config, source, built));
     },
     tokens() { assertOpen(); return tokenFacts(config); },
-    async mappings({ selected } = {}) {
+    async mappings({ selected, map: supplied, ...selection } = {}) {
       assertOpen();
       // Implementation inventories and locator bytes are re-read each invocation.
-      const map = await loadImplementationMap(config);
-      return { map, ...await validateImplementationMap(config, map, { sources: inventory.tsx, selected, getBuild }) };
+      const map = supplied ?? await loadImplementationMap(config);
+      return { map, ...await validateImplementationMap(config, map, { sources: inventory.tsx, selected, getBuild, ...selection }) };
+    },
+    async observation(source, built, frame, theme, environment, collect) {
+      assertOpen();
+      if (environment === null) return collect();
+      const build = built.inputHash ?? indexDigest(JSON.stringify({ css: built.css, frame }));
+      return cached('owner-observation', { source, build, frame: frame.name, theme, environment }, collect);
+    },
+    async verifyInputs() {
+      for (const [name, hash] of observedInputs) {
+        let value;
+        try { value = indexDigest(Buffer.concat([Buffer.from('present\0'), await readFile(path.join(config.design, name))])); }
+        catch (error) { if (error.code !== 'ENOENT') throw error; value = indexDigest('missing\0'); }
+        if (value !== hash) throw new CliError('OWNER_INDEX_CHANGED', `Design dependency changed during query: ${name}.`);
+      }
     },
     async architecture(source) {
       assertOpen();
@@ -78,7 +103,7 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
       assets.push(...inventory.architecture.map(source => ({ path: source, imports: [] })));
       return sourceRelationships(assets);
     },
-    stats: async () => ({ shards: shards.stats(), builds: storePromise ? (await storePromise).stats() : null }),
+    stats: async () => ({ shards: shards.stats(), builds: storePromise ? (await storePromise).stats() : null, requestedSources: [...requestedSources] }),
     async close() {
       closed = true;
       try { if (storePromise) await (await storePromise).close(); }

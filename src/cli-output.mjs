@@ -16,6 +16,9 @@ export const errorCatalog = {
   CONFIG_INVALID: [2, 'check', 'Recheck after fixing configuration.'],
   TOKENS_INVALID: [2, 'check', 'Recheck after repairing tokens.css.'],
   OWNER_MAP_INVALID: [2, 'check', 'Recheck after repairing implementation.json.'],
+  OWNER_INPUT_NOT_FOUND: [2, 'owner-help', 'Choose an existing in-project file or directory.'],
+  OWNER_UNSETTLED: [2, 'owner', 'Stabilize the named frame and resources before repeating the query.'],
+  OWNER_INDEX_CHANGED: [2, 'owner', 'Finish concurrent input edits before repeating the query.'],
   MIGRATION_REQUIRED: [2, 'migrate', 'Migrate the legacy project.'],
   MIGRATION_CONFLICT: [2, 'migration', 'Inspect migration inputs before resolving the conflict.'],
   VERSION_UNSATISFIED: [2, 'install', 'Install a version satisfying project requires.'],
@@ -70,7 +73,7 @@ export class CliError extends Error {
 }
 
 const canonicalCommands = new Set([
-  'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff',
+  'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner',
   'root add', 'root remove', 'root list', 'root scan',
   'service install', 'service uninstall', 'service status', 'service logs', 'service migrate',
   'help', 'version', 'adg',
@@ -105,6 +108,16 @@ export function nextActions(code, context = {}) {
     case 'migrate-help': argv = helpArgv('migrate'); break;
     case 'check-help': argv = helpArgv('check'); break;
     case 'render-help': argv = helpArgv('render'); break;
+    case 'owner-help': argv = helpArgv('owner'); break;
+    case 'owner': {
+      const values = context.values ?? {};
+      if (context.command !== 'owner' || !['file', 'text', 'color', 'token'].some(key => typeof values[key] === 'string' && values[key].trim())) { argv = helpArgv('owner'); break; }
+      argv = ['adg', 'owner'];
+      for (const key of ['file', 'line', 'symbol', 'text', 'color', 'token', 'locale']) if (typeof values[key] === 'string') argv.push(`--${key}=${values[key]}`);
+      if (values.contains) argv.push('--contains');
+      for (const key of ['theme', 'state-dir']) if (typeof values[key] === 'string') argv.push(`--${key}=${values[key]}`);
+      argv.push('--json'); break;
+    }
     case 'serve-help': argv = helpArgv('serve'); break;
     case 'roots': argv = ['adg', 'root', 'list', ...state, '--json']; break;
     case 'rotate': argv = ['adg', 'serve', '--rotate-key', ...state, '--json']; break;

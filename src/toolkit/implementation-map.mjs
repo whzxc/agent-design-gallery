@@ -1,7 +1,8 @@
 import { readFile, realpath, stat, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { CliError } from '../cli-output.mjs';
-import { portablePath, globPattern, resolveLocator, symbolRegions } from './owner-locators.mjs';
+import { portablePath, globPattern, resolveLocator, symbolRegions, selectorMatches } from './owner-locators.mjs';
+import { indexDigest } from './index-store.mjs';
 import { mappingFacts } from './source-facts.mjs';
 
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -39,7 +40,7 @@ export async function loadImplementationMap(config) {
   let text;
   try { text = await readFile(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return { file, source: rel(config, file), present: false, mappings: [] }; throw error; }
   if (!inside(await realpath(config.root), await realpath(file))) invalid('implementation.json resolves outside the project.');
-  return { ...parseImplementationMap(text), file, source: rel(config, file), present: true };
+  return { ...parseImplementationMap(text), file, source: rel(config, file), present: true, inputHash: indexDigest(text) };
 }
 
 /** Expands only the selector prefix; escaping symlinks are rejected, not followed. */
@@ -79,7 +80,7 @@ export async function implementationFiles(config, selector) {
   return files.sort();
 }
 
-export async function validateImplementationMap(config, map, { sources, selected, getBuild, onFinding = () => {} }) {
+export async function validateImplementationMap(config, map, { sources, selected, getBuild, onFinding = () => {}, mappingIndices, implementationSelection }) {
   const findings = [], bindings = [], regions = {}, seen = new Set(), builds = new Map(), contents = new Map();
   const sourceSet = new Set(sources), scope = selected && new Set(selected);
   const report = (code, pointer, selector, target, message, candidates = [], frame = null) => {
@@ -88,9 +89,12 @@ export async function validateImplementationMap(config, map, { sources, selected
     findings.push(finding); onFinding(finding);
   };
   for (const [index, mapping] of map.mappings.entries()) {
+    if (mappingIndices && !mappingIndices.has(index)) continue;
     const targets = mapping.design.map((target, i) => ({ target, pointer: `/mappings/${index}/design/${i}` })).filter(({ target }) => !scope || scope.has(target.source));
     if (!targets.length) continue;
-    const selector = mapping.implementation, pointer = `/mappings/${index}/implementation`, files = await implementationFiles(config, selector);
+    const selector = mapping.implementation, pointer = `/mappings/${index}/implementation`;
+    const files = implementationSelection ? implementationSelection.filter(file => selectorMatches(selector, file)) : await implementationFiles(config, selector);
+    if (implementationSelection && !files.length) continue;
     let locator = { line: null, candidates: [], stale: false };
     if (!files.length) report('OWNER_IMPLEMENTATION_MISSING', pointer, selector, null, 'Selector matches no current implementation file.');
     else if (selector.symbol) {
@@ -104,7 +108,7 @@ export async function validateImplementationMap(config, map, { sources, selected
       if (seen.has(duplicate)) { report('OWNER_MAPPING_DUPLICATE', targetPointer, selector, target, 'Duplicate implementation/design binding.'); continue; }
       seen.add(duplicate);
       if (!sourceSet.has(target.source)) { report('OWNER_SOURCE_MISSING', targetPointer, selector, target, `Undiscovered source ${target.source}.`); valid = false; }
-      else {
+      else if (!implementationSelection || valid) {
         if (!builds.has(target.source)) builds.set(target.source, Promise.resolve(getBuild(target.source)).then(mappingFacts));
         const built = await builds.get(target.source);
         if (target.part && !(built.parts ?? []).includes(target.part)) { report('OWNER_PART_MISSING', targetPointer, selector, target, `Missing design component ${target.part}.`); valid = false; }
@@ -120,5 +124,5 @@ export async function validateImplementationMap(config, map, { sources, selected
     }
   }
   for (const [file, text] of contents) regions[file] = symbolRegions(text, file, map.mappings.map(m => m.implementation).filter(s => s.file === file));
-  return { findings, bindings, regions };
+  return { findings, bindings, regions, implementationHashes: Object.fromEntries([...contents].map(([file, text]) => [file, indexDigest(text)])) };
 }

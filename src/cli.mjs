@@ -6,7 +6,7 @@ import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 import { CliError, createOutput, withHumanOutput } from './cli-output.mjs';
 
-export const commands = ['open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff'];
+export const commands = ['open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner'];
 const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
 const usage = {
   open: `[directory] [--port=<n>] [--no-open] [--state-dir=<path>] ${targetOptions}`,
@@ -17,6 +17,7 @@ const usage = {
   migrate: '[project]', init: '', check: '[source...] [--read-only]', render: '[source...] [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json] [--base=<rev>]',
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
   diff: '[source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]',
+  owner: '--file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --text=<text> [--contains] [--locale=<tag>] | --color=<css> | --token=<name> [--theme=both|light|dark] [--state-dir=<path>] [--json]',
 };
 const details = {
   migrate: 'Rename a project configuration and runtime imports, update editor paths and ignore entries, remove old generated files and regenerate declarations. Refuses mixed config names; safe to run again.',
@@ -28,6 +29,7 @@ const details = {
   check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render selected frames as PNG. Defaults to both themes at 2×. --json prints a versioned result with capture geometry and absolute paths.',
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
   diff: 'Compare the Git base and working-tree source/frame union. Existing frames require exact pixels and CSS/device size; added Frame parent declarations enable structural part evidence under diff.thresholds. Defaults to both themes at 2× and <configured output>/diff. Writes before, after and difference PNGs plus report.json. A structural batch requires all existing frames in both themes; source/frame/theme restrictions report partial coverage. Exit 0 identical/structural, 1 changed, 2 incomplete.',
+  owner: 'Find owning design sources, parts, frames and token references from an implementation file, directory or quoted glob. Paths resolve from the project root. --symbol uses an exact mapping label; --line uses the preceding export/anchor region, including unmapped exports. Non-exported helpers belong to the preceding export region. Defaults to both themes. Empty, stale and ambiguous observations exit 0; invalid/incomplete requests exit 2. Text, color and token queries are parsed but not implemented until segment 3; they currently return USAGE_INVALID with file-query guidance.',
 };
 export function help(command) {
   if (command) return `Usage: adg ${command} ${usage[command]}\n\n${details[command]}\n\n-h, --help  Show help\nExit codes: 0 success, 1 check/compare/diff problems, 2 usage/configuration/environment error.`;
@@ -39,20 +41,34 @@ export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' } };
   const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
-  const strings = { open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
+  const strings = { open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'line', 'symbol', 'locale', 'theme', 'state-dir'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
   if (command === 'open' || command === 'link') options.tokens = { type: 'boolean' };
   if (command === 'check') options['read-only'] = { type: 'boolean' };
+  if (command === 'owner') options.contains = { type: 'boolean' };
   if (command === 'compare') { options.all = { type: 'boolean' }; options.page = { type: 'boolean' }; }
   if (command === 'compare') options.click = { type: 'string', multiple: true };
   let parsed;
-  try { parsed = parseArgs({ args: explicit ? args.slice(1) : args, options, allowPositionals: true }); }
+  try { parsed = parseArgs({ args: explicit ? args.slice(1) : args, options, allowPositionals: true, tokens: command === 'owner' }); }
   catch (error) { throw new CliError('USAGE_INVALID', `${error.message}; run adg ${command} --help`); }
   const { values, positionals } = parsed;
   if (globalJson) values.json = true;
   if (!values.help && !values.version) {
+    if (command === 'owner') {
+      const kinds = ['file', 'text', 'color', 'token'].filter(key => values[key] !== undefined);
+      const seen = new Set();
+      for (const token of parsed.tokens) if (token.kind === 'option' && !['json', 'help', 'version'].includes(token.name)) {
+        if (seen.has(token.name)) throw new CliError('USAGE_INVALID', `Do not repeat --${token.name}; run adg owner --help.`);
+        seen.add(token.name);
+      }
+      if (positionals.length || kinds.length !== 1 || strings.owner.some(key => values[key] !== undefined && !values[key].trim()) ||
+        values.theme !== undefined && !['both', 'light', 'dark'].includes(values.theme) ||
+        (values.line !== undefined || values.symbol !== undefined) && kinds[0] !== 'file' ||
+        (values.contains !== undefined || values.locale !== undefined) && kinds[0] !== 'text' ||
+        values.line !== undefined && (!/^[1-9]\d*$/.test(values.line) || !Number.isSafeInteger(Number(values.line)))) throw new CliError('USAGE_INVALID', 'Choose one nonempty owner input and compatible options; run adg owner --help.');
+    }
     if (command === 'diff' && (typeof values.base !== 'string' || !values.base.trim())) throw new CliError('USAGE_INVALID', 'Set --base to a Git revision; run adg diff --help.');
     if ((command === 'init' && positionals.length) || (['open', 'migrate'].includes(command) && positionals.length > 1) || (command === 'compare' && (values.all ? positionals.length || values.frame : positionals.length !== 1 || !values.frame))) throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
     if (command === 'link' && positionals.length !== 1) throw new CliError('USAGE_INVALID', 'Expected one viewer URL. Run adg link --help.');
@@ -88,6 +104,7 @@ function errorCommand(args) {
 }
 
 async function dispatch({ command, values, positionals }, cwd, output, serviceOptions) {
+  if (command === 'owner' && values.file === undefined) throw new CliError('USAGE_INVALID', 'Text, color and token ownership queries are not implemented until segment 3. Use --file with an implementation path, directory or quoted glob; run adg owner --help.');
   if (command === 'migrate') return { data: await (await import('./toolkit/migrate.mjs')).migrate(positionals[0] === undefined ? cwd : path.resolve(cwd, positionals[0]), output.log) };
   if (command === 'link') {
     const { previewTarget, previewURL } = await import('./link.mjs');
@@ -120,6 +137,7 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
     return {data:values['print-key'] ? {action:'print-key',stateDirectory,key} : {action:'rotate-key',stateDirectory,rotated:true}};
   }
   const config = await loadConfig(cwd);
+  if (command === 'owner') return (await import('./toolkit/owner.mjs')).owner(config, { ...values, ...(values['state-dir'] !== undefined ? { 'state-dir': path.resolve(cwd, values['state-dir']) } : {}) }, { log: output.log });
   if (command === 'init') return { data: (await import('./toolkit/project.mjs')).init(config, output.log) };
   if (command === 'compare') return (await import('./toolkit/compare.mjs')).compare(config, positionals, values, {log:output.log});
   if (command === 'diff') return (await import('./toolkit/diff.mjs')).diff(config, positionals, values, { log: output.log });

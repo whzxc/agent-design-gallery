@@ -1,4 +1,13 @@
 import { CliError } from '../cli-output.mjs';
+export function tokenLocations(css) {
+  const clean = css.replace(/\/\*[\s\S]*?\*\//g, comment => comment.replace(/[^\n]/g, ' '));
+  const blocks = [...clean.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  const maps = blocks.map(block => {
+    const start = block.index + block[0].indexOf('{') + 1;
+    return new Map([...block[2].matchAll(/(--[\w-]+)\s*:/g)].map(match => [match[1], clean.slice(0, start + match.index).split('\n').length]));
+  });
+  return { light: maps[0] ?? new Map(), dark: maps[1] ?? new Map() };
+}
 export function parseTokens(css) {
   const source = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const blocks = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
