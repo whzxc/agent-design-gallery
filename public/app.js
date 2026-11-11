@@ -50,6 +50,7 @@ const labelLayer = new Labels($("#labels"), copyError => {
 document.fonts.ready.then(() => {labelLayer.metrics.clear();requestDraw()});
 let labelsDirty = true, labelObstacles = null;
 let drawingDirty = true, drawingView = null, drawingMargin = 0, drawingReady = 0, drawingCount = 0;
+let drawingPreviews = new Set();
 const zoomValue = $("#zoom-value"), zoomOutput = $("output");
 const cache = new Map(),
   pointers = new Map();
@@ -684,10 +685,12 @@ function fitWorld(area, data) {
   const fit=fitView(box,area,24);
   return fit.scale <= 1 ? fit : {scale:1,x:area.x+(area.width-box.width)/2-x,y:area.y+(area.height-box.height)/2-y};
 }
-function frame(box, padding = 0) {
+function frame(box, padding = 0, settled = false) {
   const target=box===world?'all':groups.includes(box)?'group':'selection';
   for(const name of ['all','group','selection']) $("#zoom-fit-"+name).setAttribute('aria-current',String(name===target));
-  commit(box===world ? fitWorld(cameraArea(),manifest) : fitView(box, cameraArea(), padding));
+  const next = box===world ? fitWorld(cameraArea(),manifest) : fitView(box, cameraArea(), padding);
+  if (settled) { view=next;requestDraw(); }
+  else commit(next);
 }
 function fit() {
   remember();
@@ -753,26 +756,27 @@ function rounded(x, y, w, h, r, fill) {
 function assetURL(a, p) {
   return `${a.path}|${effectiveTheme}|${a.version}|${p.id}${a.onlyFrame ? `|frame:${a.onlyFrame}` : ''}`;
 }
-function ensureImage(a, p) {
+function ensureImage(a, { part:p, x, y }) {
   const key = assetURL(a, p);
+  const box = {x,y,width:p.width,height:p.height};
+  drawingPreviews.add(key);
   let e = cache.get(key);
   if (e) {
-    e.used = performance.now();e.asset=a;e.part=p;
+    Object.assign(e,{used:performance.now(),asset:a,part:p,box});
     return e;
   }
-  e = { key, asset: a, part: p, theme:effectiveTheme, used: performance.now(), state: "queued" };
+  e = { key, asset: a, part: p, box, theme:effectiveTheme, used: performance.now(), state: "queued" };
   cache.set(key, e);
   queued.push(e);
-  queueMicrotask(pump);
   return e;
 }
 function pump() {
   // New vector parsing/decoding waits until the gesture settles. Existing exact
   // raster previews continue to move with the camera during interaction.
-  if(moving)return;
-  queued.sort((a,b)=>Number(visible(b.asset))-Number(visible(a.asset))||
-    Math.hypot(view.x+(a.asset.x+a.asset.width/2)*view.scale-width/2,view.y+(a.asset.y+a.asset.height/2)*view.scale-height/2)-
-    Math.hypot(view.x+(b.asset.x+b.asset.width/2)*view.scale-width/2,view.y+(b.asset.y+b.asset.height/2)*view.scale-height/2));
+  if(moving || loading >= 3 || !queued.length)return;
+  const focused = e => e.asset.id === selectedId && (e.part.id === selectedForm || e.part.id === `detail-${selectedForm}`);
+  const distance = ({box}) => Math.hypot(view.x+(box.x+box.width/2)*view.scale-width/2,view.y+(box.y+box.height/2)*view.scale-height/2);
+  queued.sort((a,b)=>Number(visible(b.box))-Number(visible(a.box))||Number(focused(b))-Number(focused(a))||distance(a)-distance(b));
   while (loading < 3 && queued.length) {
     const e = queued.shift();
     if (!cache.has(e.key)) continue;
@@ -830,7 +834,7 @@ async function loadPreview(e) {
       error(`Cannot render ${e.asset.path}: ${failure.message}`);
   } finally {
     if(local&&url)URL.revokeObjectURL(url);
-    loading--;requestDraw(false);pump();
+    loading--;requestDraw(false);
   }
 }
 
@@ -849,7 +853,17 @@ function thumbnail(e, upgrade = false) {
   e.bitmapScale = limit;
   return c;
 }
-function placements(a) { return a.shown.map(part => ({ part, x: a.x, y: a.y })); }
+function placements(a, detail) {
+  if (!detail) return a.shown.map(part => ({ part, x: a.x, y: a.y }));
+  // Keep the bleed within the gaps between forms. Each crop has a stable ID
+  // and position so moving the camera can reuse it.
+  return a.parts.flatMap(form => {
+    const box = frameBox(a,form);
+    const part = {...form,id:`detail-${form.id}`,x:form.x-16,y:form.y-24,width:form.width+32,height:form.height+48};
+    const position = {x:box.x-16,y:box.y-24,width:part.width,height:part.height};
+    return visible(position,drawingMargin) ? [{...position,part}] : [];
+  });
+}
 // Rasterize the screen-space dots once instead of submitting thousands of arcs per frame.
 let backgroundKey;
 function drawBackground() {
@@ -886,6 +900,7 @@ function draw() {
   const reuse = !drawingDirty && drawingView?.scale === view.scale &&
     Math.abs(dx) <= drawingMargin && Math.abs(dy) <= drawingMargin;
   if (!reuse) {
+    drawingPreviews = new Set();
     const zooming = moving && drawingView?.scale !== view.scale;
     drawingMargin = zooming ? 0 : Math.ceil(Math.min(width, height) / 4);
     const bufferWidth = Math.round((width + drawingMargin * 2) * dpr), bufferHeight = Math.round((height + drawingMargin * 2) * dpr);
@@ -904,16 +919,19 @@ function draw() {
     let ready = 0, count = 0;
     for (const a of displayed) {
       if (!visible(a, drawingMargin)) continue;
-      const parts = placements(a).map(pos => ({ ...pos, image: ensureImage(a, pos.part) }));
+      const detail = a.kind === 'set' && a.format === 'tsx' && a.parts.length >= 12 && view.scale >= .2;
+      const parts = placements(a,detail).map(pos => ({ ...pos, image: ensureImage(a,pos) }));
       const raster = moving || view.scale < .8;
       ctx.beginPath(); ctx.roundRect(a.x, a.y, a.width, a.height, Math.min(6 / view.scale, a.width / 2, a.height / 2));
       // Cached previews already contain the asset background; avoid painting it twice.
-      if (!raster || parts.some(pos => pos.image.state !== 'ready')) {
+      if (detail || !raster || parts.some(pos => pos.image.state !== 'ready')) {
         ctx.fillStyle = a.background || palette.canvas; ctx.fill();
       }
       ctx.save(); ctx.clip();
-      const inViewport = visible(a);
+      const overview = detail && parts.some(pos => pos.image.state !== 'ready') && cache.get(assetURL(a,a.shown[0]));
+      if (overview?.state === 'ready') ctx.drawImage(overview.bitmap ?? overview.image,a.x,a.y,a.shown[0].width,a.shown[0].height);
       for (const pos of parts) {
+        const inViewport = visible(pos.image.box);
         if (inViewport) count++;
         const e = pos.image;
         if (e.state !== 'ready') continue;
@@ -948,12 +966,15 @@ function draw() {
   window.__sdg.revision = manifest?.revision;
   window.__sdg.visibleReady = drawingReady; window.__sdg.visibleCount = drawingCount;
   drawMap();
-  if(!moving&&queued.length)pump();
-  if (cache.size > 100) {
-    const activeKeys = new Set(displayed.filter(a => visible(a, drawingMargin))
-      .flatMap(a => placements(a).map(({part}) => assetURL(a, part))));
-    evictPreviews(cache, activeKeys);
+  if (queued.length || cache.size > 100) {
+    queued = queued.filter(entry => {
+      if (drawingPreviews.has(entry.key) && cache.get(entry.key) === entry) return true;
+      if (cache.get(entry.key) === entry) cache.delete(entry.key);
+      return false;
+    });
+    evictPreviews(cache, drawingPreviews);
   }
+  pump();
 }
 function backgroundColor() { return backgroundChoice === 'theme' ? palette.canvas : backgroundColors[backgroundChoice]; }
 
@@ -1379,21 +1400,39 @@ async function applyManifest(data, force = false) {
   const versionTheme = effectiveTheme;
   const link = initializedDirectory === undefined && !fixtureState ? initialLink : null;
   const entry = !changedRoot && scopeRequest===data.scope ? scopeEntry : null;
+  const target = entry ? entry.target : link ?? data.selection;
+  const saved = data.selection;
+  const sameSelection = link && saved && (link.path
+    ? link.path === saved.path && link.form === saved.form && link.element?.id === saved.element?.id
+    : !saved.path && link.group === saved.group);
+  const reload = performance.getEntriesByType('navigation')[0]?.type === 'reload';
+  const focusTarget = entry?.target || (link && (onlyFrame || !(reload && sameSelection && data.view)));
+  const jobs = data.assets.map((asset, index) => ({asset, index}));
+  const priority = jobs.findIndex(({asset}) => asset.path === target?.path);
+  if (priority > 0) jobs.unshift(...jobs.splice(priority, 1));
   const groupTitle = groups[active]?.title;
   restorePacking(data.packing);
   const previous=manifest, results=new Array(data.assets.length), signal=refreshController?.signal;
   let next=0,publishFrame=0,streamView=null,streamMoved=false,publishedCount=0,nextPublish=1;
-  const streaming=first && !leavingTokens;
+  const streaming=first && !fixtureState;
   const publish=()=>{
     publishFrame=0;
     if(signal?.aborted||versionTheme!==effectiveTheme)return;
     const available=results.filter(Boolean);
-    if(!available.length)return;
+    if(!available.length || (focusTarget && priority >= 0 && !results[priority]))return;
     publishedCount=available.length;nextPublish=Math.max(publishedCount+1,publishedCount*2);
     if(streamView&&view!==streamView)streamMoved=true;
+    const previousBox=selectedBox() || currentItem();
     manifest={...data,assets:available,renderTheme:versionTheme,loading:true};
     layout(manifest,false);
-    if(streaming&&!streamMoved){view=entry?.view??data.view??fitWorld(cameraArea(),data);streamView=view;}
+    if (tokenManifest) { tokenManifest=null;updateChrome();renderNav(); }
+    if (focusTarget && priority >= 0) {
+      restoreSelection(target);
+      const box=selectedBox() || currentItem();
+      if (box && !streamMoved) view=fitView(box,cameraArea(),24);
+      else if (box && previousBox) view={...view,x:view.x+(previousBox.x-box.x)*view.scale,y:view.y+(previousBox.y-box.y)*view.scale};
+    } else if (!streamMoved) view=entry?.view??data.view??fitWorld(cameraArea(),data);
+    streamView=view;
     requestDraw();
   };
   for(let i=0;i<data.assets.length;i++) {
@@ -1404,9 +1443,9 @@ async function applyManifest(data, force = false) {
   let completed=results.filter(Boolean).length;
   if(streaming&&completed)publish();
   await Promise.all(Array.from({length:4},async()=>{
-    while(next<data.assets.length) {
+    while(next<jobs.length) {
       signal?.throwIfAborted();
-      const i=next++,a=data.assets[i];
+      const {asset:a,index:i}=jobs[next++];
       if(results[i])continue;
       let entry;
       if(a.hash&&a.metadataRefs?.[versionTheme]) {
@@ -1424,12 +1463,14 @@ async function applyManifest(data, force = false) {
       const metadata=measuredMetadata(entry);
       metadataCache.set(sourceKey(entry,versionTheme,data.directory),metadata);
       results[i]=decorateMetadata(a,metadata);completed++;
-      if(streaming&&completed>=nextPublish&&!publishFrame)publishFrame=requestAnimationFrame(publish);
+      if(streaming&&(completed>=nextPublish || i===priority)&&!publishFrame)publishFrame=requestAnimationFrame(publish);
     }
   }));
   if(publishFrame)cancelAnimationFrame(publishFrame);
   if(versionTheme!==effectiveTheme){pending=true;return;}
   signal?.throwIfAborted();
+  if(streamView && view!==streamView)streamMoved=true;
+  const previousBox=selectedBox() || currentItem();
   for(const [key,entry] of prepared)if(!data.assets.some(a=>key===sourceKey(a,versionTheme,data.directory)||key===sourceKey(a,versionTheme==='dark'?'light':'dark',data.directory)))prepared.delete(key);
   const live=new Set(data.assets.flatMap(a=>['light','dark'].map(t=>sourceKey(a,t,data.directory))));
   for(const key of metadataCache.keys())if(!live.has(key))metadataCache.delete(key);
@@ -1437,7 +1478,7 @@ async function applyManifest(data, force = false) {
   tokenManifest = null;
   // Early streamed worlds can use a much larger camera scale. Discard those
   // raster intermediates so the completed world starts at its exact final scale.
-  if(streaming&&publishedCount<data.assets.length)for(const entry of cache.values()){delete entry.bitmap;delete entry.bitmapScale;}
+  if(streaming&&!focusTarget&&publishedCount<data.assets.length)for(const entry of cache.values()){delete entry.bitmap;delete entry.bitmapScale;}
   catalog = null;
   layout(
     manifest,
@@ -1448,17 +1489,12 @@ async function applyManifest(data, force = false) {
   $("#app-directory").title=data.directory||'';
   document.title = `${data.label} — SVG Design Gallery`;
   if (first) {
-    const target = entry ? entry.target : link ?? data.selection;
     if (!fixtureState) restoreSelection(target);
-    const saved = data.selection;
-    const sameSelection = link && saved && (link.path
-      ? link.path === saved.path && link.form === saved.form && link.element?.id === saved.element?.id
-      : !saved.path && link.group === saved.group);
-    const reload = performance.getEntriesByType('navigation')[0]?.type === 'reload';
     if (entry?.view) view=entry.view;
-    else if (entry?.target || (link && (onlyFrame || !(reload && sameSelection && data.view)))) {
-      const target = selectedBox() || currentItem() || groups[active] || world;
-      frame(target, selected ? 24 : 0);
+    else if (focusTarget) {
+      const box = selectedBox() || currentItem() || groups[active] || world;
+      if (streamMoved && previousBox) view={...view,x:view.x+(previousBox.x-box.x)*view.scale,y:view.y+(previousBox.y-box.y)*view.scale};
+      else frame(box, selected ? 24 : 0, !!streamView);
     } else if (data.view) view = data.view;
     else if (!streamMoved) frame(world);
   } else if (groupTitle) {

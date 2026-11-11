@@ -126,9 +126,20 @@ export function imageURL(asset, crop, onSource) {
     return URL.createObjectURL(
       new Blob([asset.source], { type: "image/svg+xml" }),
     );
+  if (asset.sharedStyleRange && (crop.id === 'overview' || crop.id === 'full')) {
+    // The prepared set already contains valid SVG and a single copy of its CSS.
+    // Change the crop without parsing and serializing all of its forms again.
+    const start = asset.frameRanges[0][0];
+    const header = asset.source.slice(0,start).replace(/width="[^"]*" height="[^"]*" viewBox="[^"]*">$/,
+      `width="${crop.width}" height="${crop.height}" viewBox="${crop.x} ${crop.y} ${crop.width} ${crop.height}">`);
+    const source = header + asset.source.slice(start);
+    onSource?.(source);
+    return URL.createObjectURL(new Blob([source], {type:'image/svg+xml'}));
+  }
   // TSX preparation records the exact character range of each top-level frame.
   // Parse only the requested frame instead of reparsing all its siblings.
-  const range = typeof crop.id === 'string' && /^\d+$/.test(crop.id) && asset.frameRanges?.[crop.id];
+  const frameId = typeof crop.id === 'string' && crop.id.replace(/^detail-/, '');
+  const range = frameId && /^\d+$/.test(frameId) && asset.frameRanges?.[frameId];
   let fragment=range?asset.source.slice(...range):null;
   if(range&&asset.sharedStyleRange)
     fragment=fragment.replace('<style>/* shared stylesheet */</style>',asset.source.slice(...asset.sharedStyleRange));
@@ -269,7 +280,10 @@ export function arrange(data) {
 function formDocument(form,css,theme) {
   if(form.document)return form.document;
   const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-sdg-frame="${escape(form.name)}" style="${form.width ? `width:${form.width}px;` : 'width:max-content;'}${form.height ? `height:${form.height}px;` : ''}">${form.html}</div></body></html>`;
+  return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-sdg-frame="${escape(form.name)}" style="${frameStyle(form)}">${form.html}</div></body></html>`;
+}
+function frameStyle(form) {
+  return `${form.width ? `width:${form.width}px;` : 'width:max-content;'}${form.height ? `height:${form.height}px;` : ''}`;
 }
 async function prepareSource(asset, built, theme, signal) {
   const parts = [];
@@ -285,16 +299,24 @@ async function prepareSource(asset, built, theme, signal) {
         await (globalThis.scheduler?.yield?.()??new Promise(resolve=>setTimeout(resolve,0)));
         sliceStart=performance.now();
       }
-      const documentSource=formDocument(form,built.css,theme);
       frame.style.width=(form.width ?? 1600)+'px'; frame.style.height=(form.height ?? 1200)+'px';
       if (index === 0) {
-        await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=documentSource;});
+        await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=formDocument(form,built.css,theme);});
       } else {
-        // Frames from one source share CSS. Keep its sandbox document and viewport,
-        // replacing only the specimen instead of navigating for every form.
-        const parsed = new DOMParser().parseFromString(documentSource, 'text/html');
-        frame.contentDocument.body.replaceChildren(frame.contentDocument.importNode(parsed.querySelector('[data-sdg-frame]'), true));
-        await Promise.all([...frame.contentDocument.images].map(image => image.decode().catch(() => {})));
+        const document = frame.contentDocument;
+        // Parse only the specimen. The sandbox already holds the shared stylesheet.
+        let shell;
+        if (form.document) {
+          const parsed = new DOMParser().parseFromString(form.document, 'text/html');
+          shell = document.importNode(parsed.querySelector('[data-sdg-frame]'), true);
+        } else {
+          shell = document.createElement('div');
+          shell.dataset.sdgFrame = form.name;
+          shell.setAttribute('style', frameStyle(form));
+          shell.innerHTML = form.html;
+        }
+        document.body.replaceChildren(shell);
+        if (document.images.length) await Promise.all([...document.images].map(image => image.decode().catch(() => {})));
       }
       await frame.contentDocument.fonts.ready;
       const shell=frame.contentDocument.querySelector('[data-sdg-frame]');
