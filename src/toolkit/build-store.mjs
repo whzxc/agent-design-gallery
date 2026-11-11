@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { mkdir, readFile, writeFile, rename, readdir, stat, unlink, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { perfSpan } from '../perf.mjs';
+import { CliError, errorCatalog } from '../cli-output.mjs';
 
 const digest = value => createHash('sha256').update(value).digest('hex');
 const aborted = () => Object.assign(new Error('Build superseded'), { name: 'AbortError' });
@@ -60,20 +61,22 @@ class BuildPool {
     this.retiring.add(done);
   }
   create() {
-    const slot = { worker: new Worker(new URL('./build-worker.mjs', import.meta.url), { resourceLimits: { maxOldGenerationSizeMb: 256 } }), attempts: 0, job: null };
+    const slot = { worker: new Worker(new URL('./build-worker.mjs', import.meta.url), { resourceLimits: { maxOldGenerationSizeMb: 256 },stdout:true,stderr:true }), attempts: 0, job: null };
+    slot.worker.stdout.pipe(process.stderr);slot.worker.stderr.pipe(process.stderr);
     this.slots.add(slot); this.counters.spawned++;
     slot.worker.on('message', message => {
       if (slot.retired || message.id !== slot.job?.id) return;
       const job = slot.job; slot.job = null;
       slot.heapBytes = message.heapBytes;
-      this.finish(job, message.error ? Object.assign(new Error(message.error.message), message.error) : null, message.result);
+      const failure=message.error && Object.assign(Object.hasOwn(errorCatalog,message.error.code) ? new CliError(message.error.code,message.error.message,{context:message.error.context}) : new Error(message.error.message),message.error);
+      this.finish(job, failure || null, message.result);
       if (slot.attempts >= recycleAfter) { this.counters.recycled++; this.retire(slot); }
       else slot.worker.unref();
       this.drain();
     });
     const failed = error => {
       if (slot.retired) return;
-      if (slot.job) this.finish(slot.job, error);
+      if (slot.job) this.finish(slot.job, new CliError('INTERNAL_ERROR',error.message,{cause:error}));
       this.retire(slot); this.drain();
     };
     slot.worker.on('error', failed);

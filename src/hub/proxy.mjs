@@ -1,7 +1,8 @@
 import { request as httpRequest } from 'node:http';
+import { CliError } from '../cli-output.mjs';
 
 // Pipe through the owning server, preserving streaming and backpressure.
-export function proxy(request, response, port, pathname, viewerBase) {
+export function proxy(request, response, port, pathname, viewerBase, onDiagnostic) {
   return new Promise(resolve => {
     const headers = { ...request.headers, host: `127.0.0.1:${port}` };
     for (const name of Object.keys(headers)) {
@@ -15,11 +16,12 @@ export function proxy(request, response, port, pathname, viewerBase) {
       delete outgoing['set-cookie'];
       response.writeHead(incoming.statusCode, outgoing);
       incoming.pipe(response);
-      incoming.on('error', () => response.destroy());
+      incoming.on('error', error => { if (!response.destroyed) onDiagnostic?.(new CliError('NETWORK_FAILED',error.message,{cause:error})); response.destroy(); });
     });
     const done = () => { upstream.destroy(); resolve(); };
     response.once('close', done);
-    upstream.on('error', () => {
+    upstream.on('error', error => {
+      if (!response.destroyed) onDiagnostic?.(new CliError('NETWORK_FAILED','Viewer unavailable.',{cause:error}));
       if (!response.headersSent) response.writeHead(502, { 'Content-Type': 'application/json' });
       if (!response.destroyed) response.end(JSON.stringify({ error: 'Viewer unavailable.' }));
     });

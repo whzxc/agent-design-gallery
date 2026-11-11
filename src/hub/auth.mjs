@@ -3,13 +3,14 @@ import { mkdir, readFile, writeFile, rename, chmod } from 'node:fs/promises';
 import path from 'node:path';
 import { directLocal } from '../http.mjs';
 import { defaultStateDirectory } from './registry.mjs';
+import { CliError } from '../cli-output.mjs';
 
 export async function hubKey(stateDirectory = defaultStateDirectory, { rotate = false } = {}) {
   const file = path.join(stateDirectory, 'hub.key');
   if (!rotate) {
     try {
       const key = (await readFile(file, 'utf8')).trim();
-      if (!/^adg_[a-f0-9]{64}$/.test(key)) throw new Error(`Invalid hub key in ${file}; run adg serve --rotate-key.`);
+      if (!/^adg_[a-f0-9]{64}$/.test(key)) throw new CliError('HUB_KEY_INVALID', `Invalid hub key in ${file}; run adg serve --rotate-key.`, { context: {stateDirectory:path.resolve(stateDirectory)} });
       await chmod(file, 0o600);
       return key;
     } catch (error) { if (error.code !== 'ENOENT') throw error; }

@@ -27,6 +27,9 @@ parentPort.on('message', async ({ id, config, name, type }) => {
     }));
     if (!shuttingDown) parentPort.postMessage({ id, result: { frames, css: built.css, ...(config.overlay?{baseBlob:built.baseBlob}:{}), imports: built.imports, dependencies, dependencyHashes }, heapBytes: process.memoryUsage().heapUsed });
   } catch (error) {
-    if (!shuttingDown) parentPort.postMessage({ id, error: { message: error.message, stack: error.stack, code: error.code }, heapBytes: process.memoryUsage().heapUsed });
+    const diagnostics=error.errors ?? error.cause?.errors ?? [];
+    // esbuild's onLoad error keeps transform diagnostics under detail.errors.
+    const location=diagnostics.find(item=>item.location)?.location ?? diagnostics.find(item=>item.detail?.errors?.[0]?.location)?.detail.errors[0].location;
+    if (!shuttingDown) parentPort.postMessage({ id, error: { message: error.message, stack: error.stack, code: error.code, context:error.context, location }, heapBytes: process.memoryUsage().heapUsed });
   }
 });

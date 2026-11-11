@@ -16,7 +16,8 @@ import os from "node:os";
 import { perfSpan } from './perf.mjs';
 
 import { createBuildStore } from './toolkit/build-store.mjs';
-import { CliError } from './cli-output.mjs';
+import { CliError, asCliError } from './cli-output.mjs';
+import { cleanup } from './toolkit/results.mjs';
 import { createViewerCache } from './viewer-cache.mjs';
 import { refreshTypes, archFiles, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
 import { loadConfig } from './toolkit/config.mjs';
@@ -41,6 +42,7 @@ export async function startServer({
   fixtures = null,
   readOnly = false,
   instanceId = randomUUID(),
+  onDiagnostic, onFatal, watchDirectory = watch,
 } = {}) {
   const endStartup = perfSpan('viewer-startup');
   let state = { recent: [], views: {}, selections: {}, theme: "system" };
@@ -85,6 +87,20 @@ export async function startServer({
     for (const client of clients)
       client.write(`data: ${JSON.stringify(data)}\n\n`);
   };
+  const diagnostic = (error, name = null, fallback = 'SOURCE_BUILD_FAILED') => {
+    if (error.name === 'AbortError') return;
+    const at = error.location ?? error.errors?.[0]?.location ?? error.cause?.errors?.[0]?.location;
+    const source = name && activeProject ? (name.endsWith('.mmd') ? name : path.relative(activeProject.root,path.join(root,name)).split(path.sep).join('/')) : null;
+    onDiagnostic?.(asCliError(error,fallback),source ? {source,frame:null,theme:null,line:Number.isInteger(at?.line)&&at.line>0?at.line:null,column:Number.isInteger(at?.column)?at.column+1:null} : null);
+  };
+  const refreshError = error => {
+    if (error.name === 'AbortError') return;
+    emit({error:error.message}); diagnostic(error,null,'WATCH_FAILED');
+  };
+  const watcherError = (error,kind) => {
+    const failure = new CliError('WATCH_FAILED',`${kind} watcher: ${error.message}`,{cause:error});
+    emit({error:failure.message}); onFatal?.(failure);
+  };
   async function closeOverlays() {
     resettingOverlays = true;
     try { await Promise.all([...overlayStores.values()].map(async pending=>(await pending).close())); }
@@ -110,7 +126,9 @@ export async function startServer({
     return [...affected];
   }
   async function overlayBuild(name,base) {
-    const built=await (await overlayStore(base)).get(name);
+    let built;
+    try { built=await (await overlayStore(base)).get(name); }
+    catch(error) { diagnostic(error,name); throw error; }
     overlayHashes.add(built.hash);frameCounts.set(name,built.frames.length);
     return built;
   }
@@ -158,15 +176,15 @@ export async function startServer({
     archWatcher?.close();archWatcher=null;
     const directory=project.archDirectory;
     if(project.design!==base || !directory || !existsSync(directory)) return;
-    archWatcher=watch(directory,{recursive:true},(_event,filename)=>{
+    archWatcher=watchDirectory(directory,{recursive:true},(_event,filename)=>{
       if(!filename || !/\.(mmd|md)$/.test(String(filename)))return;
       const file=path.join(directory,String(filename));
       const dependency=path.relative(base,file).split(path.sep).join('/');
       const name=path.relative(project.root,file).split(path.sep).join('/');
-      touched.add(dependency);touched.add(name);invalidateBuilds([dependency,name]).catch(e=>emit({error:e.message}));
-      clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>refresh().catch(e=>emit({error:e.message})),80);
+      touched.add(dependency);touched.add(name);invalidateBuilds([dependency,name]).catch(refreshError);
+      clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>refresh().catch(refreshError),80);
     });
-    archWatcher.on('error',e=>emit({error:`Architecture watcher: ${e.message}`}));
+    archWatcher.on('error',e=>watcherError(e,'Architecture'));
   }
   async function openDirectory(input) {
     let next;
@@ -193,21 +211,21 @@ export async function startServer({
       if(nextFiles.has(built.path)) {knownBuilds.set(built.path,built);Object.assign(nextFiles.get(built.path),{hash:built.hash,version:built.hash});frameCounts.set(built.path,built.frames.length);}
     }
     // Complete discovery before starting the watcher.
-    const nextWatcher = watch(next, { recursive: true }, (_event, filename) => {
+    const nextWatcher = watchDirectory(next, { recursive: true }, (_event, filename) => {
       if (filename && String(filename).split(path.sep).some(part => part.startsWith("."))) return;
       if (filename) {
         const name=String(filename).split(path.sep).join('/');
         touched.add(name);
-        invalidateBuilds([name]).catch(e=>emit({error:e.message}));
+        invalidateBuilds([name]).catch(refreshError);
       }
       clearTimeout(refreshTimer);
       refreshTimer = setTimeout(
-        () => refresh().catch((e) => emit({ error: e.message })),
+        () => refresh().catch(refreshError),
         80,
       );
     });
     nextWatcher.on("error", (e) =>
-      emit({ error: `File watcher: ${e.message}` }),
+      watcherError(e,'File'),
     );
     watcher?.close();
     watcher = nextWatcher;
@@ -337,6 +355,7 @@ export async function startServer({
         result.tokens = [...light].map(([name, value]) => [name, value, dark.get(name) ?? null]);
       } catch (error) {
         result.tokenError = error.code ? `Cannot read ${data.tokenSource}.` : error.message;
+      diagnostic(new CliError('TOKENS_INVALID',error.message,{cause:error}));
       }
       return applyFixtureManifest(result, url.searchParams.get('fixture'));
     }
@@ -390,7 +409,7 @@ export async function startServer({
   async function sourceBuild(name) {
     const endBuild = perfSpan('build', name);
     let built;
-    try{built=await buildStore.get(name);}catch(error){if(error.name!=='AbortError')failedSources.add(name);throw error;}
+    try{built=await buildStore.get(name);}catch(error){if(error.name!=='AbortError'){failedSources.add(name);diagnostic(error,name);}throw error;}
     finally {endBuild?.();}
     knownBuilds.set(name,describe(built));dirtyBuilds.delete(name);failedSources.delete(name);frameCounts.set(name,built.frames.length);
     if(files.has(name))Object.assign(files.get(name),{hash:built.hash,version:built.hash});
@@ -605,41 +624,53 @@ export async function startServer({
       });
       response.end(request.method === "HEAD" ? undefined : content);
     } catch (error) {
+      if (response.destroyed) return;
       response.writeHead(error.name==='AbortError'?409:400, { "Content-Type": "application/json" });
       response.end(JSON.stringify({ error: error.message }));
     }
   });
-  if (directory) {
-    try {
-      await openDirectory(directory);
-    } catch (error) {
-      watcher?.close();archWatcher?.close();
-      throw error;
-    }
-  }
-  try {
-    await new Promise((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(port, "127.0.0.1", resolve);
-    });
-  } catch (error) {
-    watcher?.close();archWatcher?.close();
-    throw error;
-  }
-  const close = async () => {
-    if (closing) return;
+  let closePromise;
+  const close = () => closePromise ??= (async () => {
     closing = true;
     clearTimeout(refreshTimer);
-    watcher?.close();archWatcher?.close();
-    for (const c of clients) c.end();
-    const disconnected = new Promise(resolve => server.close(resolve));
-    server.closeAllConnections();
-    await disconnected;
-    await writes;
-    await buildStore?.close();await closeOverlays();await viewerCache?.close();
-  };
+    let primary;
+    for (const step of [
+      async () => { watcher?.close(); },
+      async () => { archWatcher?.close(); },
+      async () => {
+        for (const client of clients) client.end();
+        const disconnected = server.listening ? new Promise(resolve => server.close(resolve)) : Promise.resolve();
+        server.closeAllConnections(); await disconnected;
+      },
+      async () => { await writes; },
+      async () => { await buildStore?.close(); },
+      closeOverlays,
+      async () => { await viewerCache?.close(); },
+    ]) {
+      try { await cleanup(step,primary); }
+      catch (error) { primary=error; }
+    }
+    if (primary) throw primary;
+  })();
+  try {
+    if (directory) await openDirectory(directory);
+    await new Promise((resolve,reject) => {
+      const startupError = error => { server.off('listening',listening); reject(error); };
+      const listening = () => {
+        server.off('error',startupError);
+        server.on('error',error => { if (!closing) onFatal?.(asCliError(error)); });
+        resolve();
+      };
+      server.once('error',startupError);
+      server.listen(port,'127.0.0.1',listening);
+    });
+  } catch (cause) {
+    const primary=asCliError(cause);
+    await cleanup(close,primary);
+    throw primary;
+  }
   endStartup?.();
-  return { id: instanceId, directory: root, url: `http://127.0.0.1:${server.address().port}/`, port: server.address().port, close,
+  return { id: instanceId, directory: root, stateDirectory:path.resolve(stateDirectory), url: `http://127.0.0.1:${server.address().port}/`, port: server.address().port, close,
     cacheStats:()=>({builds:buildStore?.stats(),viewer:viewerCache?.stats()}),
     stats: () => {
       const entries = [...files.keys()].filter(name => /\.(tsx|mmd)$/.test(name));

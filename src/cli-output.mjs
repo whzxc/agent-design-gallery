@@ -7,7 +7,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 /** @typedef {keyof typeof errorCatalog} ErrorCode */
 /** @typedef {{schemaVersion: 1, command: string, ok: boolean, data: unknown, warnings: Diagnostic[], error: Diagnostic | null}} Envelope */
 /** @typedef {{command?: string, project?: string, stateDirectory?: string, gitCause?: 'repository' | 'revision' | 'read', positionals?: string[], values?: Record<string, string | string[] | boolean>, failureCode?: ErrorCode}} ErrorContext */
-/** @typedef {{json: boolean, command: string, stdout?: (text: string) => void, stderr?: (text: string) => void}} OutputOptions */
+/** @typedef {{json: boolean, command: string, revealKey?: boolean, stdout?: (text: string) => void, stderr?: (text: string) => void}} OutputOptions */
 
 // Recovery kinds keep the catalog declarative; actions are constructed from known operands.
 /** @satisfies {Record<string, [number, string, string]>} */
@@ -163,6 +163,13 @@ export function classifyError(cause, context = {}) {
   };
 }
 
+/** @param {unknown} cause @param {ErrorCode} [fallback] */
+export function asCliError(cause, fallback = 'INTERNAL_ERROR') {
+  if (cause instanceof CliError) return cause;
+  const classified = classifyError(cause);
+  return new CliError(classified.error.code === 'INTERNAL_ERROR' ? fallback : classified.error.code, cause instanceof Error ? cause.message : String(cause), { cause });
+}
+
 /** @param {unknown} value @returns {unknown} */
 function sanitizedValue(value) {
   if (typeof value === 'string') return sanitize(value);
@@ -199,9 +206,17 @@ export async function withHumanOutput(work, stderr) {
 }
 
 /** @param {OutputOptions} options */
-export function createOutput({ json, command, stdout = text => { process.stdout.write(text); }, stderr = text => { process.stderr.write(text); } }) {
+export function createOutput({ json, command, revealKey = false, stdout = text => { process.stdout.write(text); }, stderr = text => { process.stderr.write(text); } }) {
   /** @param {Envelope} envelope */
-  const emit = envelope => stdout(`${JSON.stringify(sanitizedValue(envelope))}\n`);
+  const emit = envelope => {
+    const clean = /** @type {Envelope} */ (sanitizedValue(envelope));
+    const data = envelope.data;
+    if (json && revealKey && command === 'serve' && envelope.ok && data && typeof data === 'object' && 'action' in data && data.action === 'print-key' && 'key' in data && typeof data.key === 'string' && /^adg_[a-f0-9]{64}$/.test(data.key) && clean.data && typeof clean.data === 'object') {
+      // Only the explicit print-key result field is exempt; siblings and diagnostics stay sanitized.
+      Object.assign(clean.data, { key: data.key });
+    }
+    stdout(`${JSON.stringify(clean)}\n`);
+  };
   /** @param {string} text */
   const log = text => (json ? stderr : stdout)(`${sanitize(text)}\n`);
   return {

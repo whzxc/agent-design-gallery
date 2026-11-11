@@ -6,6 +6,8 @@
 - Return structured JSON for `link`, `init`, `migrate` and root actions, including completed file changes and scan warnings. Classify configuration, version, discovery, token, Git and browser-launch failures at their owning boundaries while retaining human diagnostics.
 - Return structured capture geometry, coded check findings and comparison results under `--json`, including observed partial results on execution failure. `check` build and frame-execution failures now exit 2 instead of 1 in human mode too; completed rule findings still exit 1. Comparison target, adapter and unsettled-measurement failures exit 2, while completed text/position differences exit 1.
 - The 0.7.0 quality-gate contract uses exit 1 with `ok:false` and `data.complete:true` for completed checks or comparisons with findings, and exit 2 whenever evaluation could not complete. The exit distinction applies in human mode too.
+- Return structured service status, bounded logs and completed migration changes under `--json`. Foreground `open` and `serve` stream readiness, recoverable diagnostics and one terminal event as NDJSON; readiness confirms serving only. Clean SIGINT/SIGTERM shuts down owned resources and exits 0, while terminal failures exit 2.
+- Reveal the hub key only in the explicit `serve --print-key --json` result field. Rotation returns `rotated:true`; conflicting key flags and `--port` with either key flag now fail with a usage error in both output modes.
 
 ## 0.6.0
 

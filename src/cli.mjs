@@ -59,6 +59,7 @@ export function parseCli(args) {
       if (extra.length || !rootActions.includes(action) || (['add', 'remove'].includes(action) && !directory) || (action === 'list' && directory) || (values.depth !== undefined && action !== 'add')) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg root --help');
     }
     if (command === 'serve' && positionals.length) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg serve --help');
+    if (command === 'serve' && ((values['print-key'] && values['rotate-key']) || (values.port !== undefined && (values['print-key'] || values['rotate-key'])))) throw new CliError('USAGE_INVALID','Choose --print-key or --rotate-key without --port; run adg serve --help');
   } else if (values.json && values.help && ['root', 'service'].includes(command) && (positionals.length > 1 || (positionals.length && !(command === 'root' ? rootActions : serviceActions).includes(positionals[0])))) {
     throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
   }
@@ -83,10 +84,8 @@ function errorCommand(args) {
   return args[0] && !args[0].startsWith('-') ? 'open' : 'adg';
 }
 
-// Temporary: service/lifecycle writers await their assigned adapters.
-async function dispatch({ command, values, positionals }, cwd, output) {
+async function dispatch({ command, values, positionals }, cwd, output, serviceOptions) {
   if (command === 'migrate') return { data: await (await import('./toolkit/migrate.mjs')).migrate(positionals[0] === undefined ? cwd : path.resolve(cwd, positionals[0]), output.log) };
-  if (command === 'open') return (await import('./open.mjs')).open(positionals, values);
   if (command === 'link') {
     const { previewTarget, previewURL } = await import('./link.mjs');
     const data = { url: previewURL(positionals[0], previewTarget(values)).href };
@@ -94,7 +93,9 @@ async function dispatch({ command, values, positionals }, cwd, output) {
     return { data };
   }
   if (command === 'service') {
-    return (await import('./service.mjs')).service(positionals[0], values);
+    const options={...serviceOptions,output:output.log};
+    if (values['state-dir'] !== undefined) values={...values,'state-dir':path.resolve(cwd,values['state-dir'])};
+    return (await import('./service.mjs')).service(positionals[0], values, options);
   }
   if (command === 'root') {
     const [action, directory] = positionals;
@@ -109,16 +110,11 @@ async function dispatch({ command, values, positionals }, cwd, output) {
     return result;
   }
   if (command === 'serve') {
-    if (values['print-key'] || values['rotate-key']) {
-      const key = await (await import('./hub/auth.mjs')).hubKey(values['state-dir'], { rotate: !!values['rotate-key'] });
-      console.log(values['print-key'] ? key : 'Hub key rotated.'); return 0;
-    }
-    const port = values.port === undefined ? 4310 : Number(values.port);
-    if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('--port must be an integer from 0 to 65535.');
-    const hub = await (await import('./hub.mjs')).startHub({ port, stateDirectory: values['state-dir'] });
-    console.log(`ADG: ${hub.url}`);
-    for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => hub.close().catch(error => { console.error(error.message); process.exitCode = 2; }));
-    return 0;
+    const {defaultStateDirectory}=await import('./hub/registry.mjs');
+    const stateDirectory=path.resolve(cwd,values['state-dir'] ?? defaultStateDirectory);
+    const key=await (await import('./hub/auth.mjs')).hubKey(stateDirectory,{rotate:!!values['rotate-key']});
+    if (!values.json && !values['print-key']) output.log('Hub key rotated.');
+    return {data:values['print-key'] ? {action:'print-key',stateDirectory,key} : {action:'rotate-key',stateDirectory,rotated:true}};
   }
   const config = await loadConfig(cwd);
   if (command === 'init') return { data: (await import('./toolkit/project.mjs')).init(config, output.log) };
@@ -129,6 +125,7 @@ async function dispatch({ command, values, positionals }, cwd, output) {
 export async function main(args = process.argv.slice(2), cwd = process.cwd(), {
   stdout = process.stdout.write.bind(process.stdout), stderr = process.stderr.write.bind(process.stderr),
   exit = code => { process.exitCode = code; },
+  serviceOptions, openOptions, hubOptions, signals = process, stdoutEvents = process.stdout,
 } = {}) {
   let command = errorCommand(args), parsed;
   const json = jsonRequested(args);
@@ -137,7 +134,7 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd(), {
   try {
     parsed = parseCli(args);
     command = parsed.values.help ? 'help' : parsed.values.version ? 'version' : commandIdentity(parsed);
-    output = createOutput({ json, command, stdout, stderr });
+    output = createOutput({ json, command, stdout, stderr, revealKey:command === 'serve' && !!parsed.values['print-key'] });
     if (command === 'help') {
       const text = help(parsed.explicit ? parsed.command : undefined);
       if (json) output.success({ subject: parsed.explicit ? commandIdentity(parsed) : null, usage: text.split('\n')[0], text });
@@ -147,11 +144,24 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd(), {
       if (json) output.success({ version: VERSION });
       else output.log(VERSION);
       code = 0;
-    } else if (['link', 'init', 'migrate', 'root', 'render', 'check', 'compare'].includes(parsed.command)) {
-      const result = json ? await withHumanOutput(() => dispatch(parsed, cwd, output), stderr) : await dispatch(parsed, cwd, output);
+    } else if (command === 'open' || (command === 'serve' && !parsed.values['print-key'] && !parsed.values['rotate-key'])) {
+      const {defaultStateDirectory}=await import('./hub/registry.mjs');
+      const stateDirectory=path.resolve(cwd,parsed.values['state-dir'] ?? defaultStateDirectory);
+      const port=parsed.values.port === undefined ? command === 'open' ? 0 : 4310 : Number(parsed.values.port);
+      if (!Number.isInteger(port) || port < 0 || port > 65535) throw new CliError('USAGE_INVALID','--port must be an integer from 0 to 65535.');
+      const {runForeground}=await import('./lifecycle.mjs');
+      const start=command === 'open'
+        ? async callbacks => (await import('./open.mjs')).open(parsed.positionals,parsed.values,{...openOptions,cwd,...callbacks})
+        : async callbacks => (await import('./hub.mjs')).startHub({...hubOptions,port,stateDirectory,...callbacks});
+      const run=()=>runForeground(command,start,{output,json,signals,stdoutEvents,context:{...parsed,command,stateDirectory}});
+      code=json ? await withHumanOutput(run,stderr) : await run();
+    } else {
+      const run=()=>dispatch(parsed,cwd,output,serviceOptions);
+      const result = json ? await withHumanOutput(run, stderr) : await run();
       if (json) output.success(result.data, result.warnings);
+      else if (command === 'serve' && parsed.values['print-key']) stdout(`${result.data.key}\n`);
       code = 0;
-    } else code = await dispatch(parsed, cwd, output);
+    }
   } catch (error) {
     code = output.failure(error, {
       ...(parsed ?? {}), command,

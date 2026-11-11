@@ -7,8 +7,11 @@ import { proxy } from './hub/proxy.mjs';
 import { listInstances, stopInstance } from './hub/instances.mjs';
 import { hubKey, authorized } from './hub/auth.mjs';
 import { json, shell, viewerFile } from './http.mjs';
+import { CliError, asCliError } from './cli-output.mjs';
+import { loadConfig } from './toolkit/config.mjs';
+import { cleanup } from './toolkit/results.mjs';
 
-export async function startHub({ port = 4310, stateDirectory = defaultStateDirectory, idleTimeout = 300_000 } = {}) {
+export async function startHub({ port = 4310, stateDirectory = defaultStateDirectory, idleTimeout = 300_000, onDiagnostic, onFatal, startViewer = startServer } = {}) {
   await hubKey(stateDirectory);
   let closing = false;
   const id = randomUUID(), viewers = new Map(), streams = new Set();
@@ -56,7 +59,7 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
           if (!instance.proxyable) return json(response, 409, { error: 'Instance viewer does not support authenticated proxying.' });
           if (!route[2]) { response.writeHead(302, { Location: `${url.pathname}/${url.search}` }); response.end(); return; }
           streams.add(response);
-          try { await proxy(request, response, instance.port, route[2] + url.search, `/i/${instance.id}/`); }
+          try { await proxy(request, response, instance.port, route[2] + url.search, `/i/${instance.id}/`, onDiagnostic); }
           finally { streams.delete(response); }
           return;
         }
@@ -66,8 +69,9 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
           entry = { active: 0, last: Date.now() };
           entry.pending = (async () => {
             const project = (await listProjects(stateDirectory)).find(item => item.slug === slug);
-            if (!project) throw new Error('Unknown project; run adg root scan.');
-            entry.viewer = await startServer({ directory: project.design, stateDirectory: path.join(stateDirectory, 'projects', slug) });
+            if (!project) throw new CliError('PROJECT_NOT_FOUND','Unknown project; run adg root scan.');
+            if (project.error) { await loadConfig(project.path); throw new CliError('CONFIG_INVALID',project.error); }
+            entry.viewer = await startViewer({ directory: project.design, stateDirectory: path.join(stateDirectory, 'projects', slug), onDiagnostic, onFatal });
             return entry.viewer;
           })();
           viewers.set(slug, entry);
@@ -75,12 +79,15 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
         try { await entry.pending; }
         catch (error) { if (viewers.get(slug) === entry) viewers.delete(slug); throw error; }
         entry.active++;
-        try { await proxy(request, response, entry.viewer.port, route[2] + url.search); }
+        try { await proxy(request, response, entry.viewer.port, route[2] + url.search, undefined, onDiagnostic); }
         finally { entry.active--; entry.last = Date.now(); }
         return;
       }
       json(response, read ? 404 : 405, { error: 'Not found.' });
     } catch (error) {
+      if (error.code === 'STATE_INVALID') onFatal?.(error);
+      else if (error.name !== 'AbortError' && !['PROJECT_NOT_FOUND','USAGE_INVALID'].includes(error.code)) onDiagnostic?.(asCliError(error));
+      if (response.destroyed) return;
       if (response.headersSent) response.destroy();
       else json(response, 400, { error: error.message });
     }
@@ -89,25 +96,33 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
     for (const [slug, entry] of viewers) {
       if (!entry.active && entry.viewer && Date.now() - entry.last > idleTimeout) {
         viewers.delete(slug);
-        entry.viewer.close().catch(() => {});
+        entry.viewer.close().catch(error => { if (!closing) onDiagnostic?.(new CliError('SHUTDOWN_FAILED',error.message,{cause:error})); });
       }
     }
   }, Math.min(idleTimeout, 30_000));
   reap.unref();
-  try { await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); }); }
-  catch (error) { clearInterval(reap); throw error; }
-  return {
-    id, url: `http://127.0.0.1:${server.address().port}/`,
-    async close() {
-      closing = true;
-      clearInterval(reap);
+  let closePromise;
+  const close = () => closePromise ??= (async () => {
+    closing = true; clearInterval(reap);
+    let primary;
+    const steps = [async () => {
       for (const response of streams) response.destroy();
-      await Promise.all([...viewers.values()].map(async entry => {
-        let viewer; try { viewer = await entry.pending; } catch { return; }
-        await viewer.close();
-      }));
-      server.closeAllConnections();
-      await new Promise(resolve => server.close(resolve));
-    },
+      const disconnected = server.listening ? new Promise(resolve => server.close(resolve)) : Promise.resolve();
+      server.closeAllConnections(); await disconnected;
+    }, ...[...viewers.values()].map(entry => async () => {
+      let viewer; try { viewer=await entry.pending; } catch { return; }
+      await viewer.close();
+    })];
+    for (const step of steps) try { await cleanup(step,primary); } catch (error) { primary=error; }
+    if (primary) throw primary;
+  })();
+  try { await new Promise((resolve,reject) => {
+    const startupError=error=>{server.off('listening',listening);reject(error);};
+    const listening=()=>{server.off('error',startupError);server.on('error',error=>{if(!closing)onFatal?.(asCliError(error));});resolve();};
+    server.once('error',startupError);server.listen(port,'127.0.0.1',listening);
+  }); }
+  catch (cause) { const primary=asCliError(cause);await cleanup(close,primary);throw primary; }
+  return {
+    id, url: `http://127.0.0.1:${server.address().port}/`,port:server.address().port,stateDirectory:path.resolve(stateDirectory),close,
   };
 }

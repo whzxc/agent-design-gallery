@@ -130,7 +130,7 @@ test('service migrate moves whole state, replaces job, preserves port and lists 
   const oldAgent = await put(agents, 'org.svg-design-gallery.hub.plist', renderLaunchAgent({ nodePath: '/old/node', cliPath: '/old/cli', stateDirectory: oldState, port: 4567 }).replace(SERVICE_LABEL, 'org.svg-design-gallery.hub'));
   const other = await put(agents, 'other.plist', `<string>${oldState}</string><string>${key}</string>`);
   const calls = [], lines = [];
-  await service('migrate', { 'state-dir': target }, {
+  const result=await service('migrate', { 'state-dir': target }, {
     home, platform: 'darwin', uid: 999, nodePath: process.execPath, cliPath: cli,
     run: async (command, args) => { calls.push([command, ...args]); return { stdout: '' }; },
     output: line => lines.push(line),
@@ -144,6 +144,9 @@ test('service migrate moves whole state, replaces job, preserves port and lists 
   assert.match(plist, /org.agent-design-gallery.hub/);
   assert.ok(plist.includes(target)); assert.ok(plist.includes('<string>4567</string>'));
   assert.ok(lines.includes(other)); assert.ok(!lines.join('\n').includes(key));
-  assert.deepEqual(calls.map(call => call[1]), ['print', 'bootout', 'bootstrap']);
+  assert.deepEqual(calls.map(call => call[1]), ['print', 'bootout', 'bootstrap', 'print']);
+  assert.equal(result.data.complete,true);assert.equal(result.data.service.loaded,true);
+  assert.equal(result.data.keyPrefixUpdated,true);assert.deepEqual(result.data.references,[other]);
+  assert.equal(result.warnings[0].code,'MIGRATION_REFERENCES_REMAIN');
   assert.equal(await readFile(other, 'utf8'), `<string>${oldState}</string><string>${key}</string>`);
 });
