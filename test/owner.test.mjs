@@ -193,6 +193,6 @@ export default()=>['primary','secondary'].map(name=><Frame name={name} width={16
   assert.ok(tokens.includes('--accent')); assert.ok(tokens.includes('--text')); assert.ok(tokens.includes('--fallback')); assert.ok(!tokens.includes('--sibling'));
   assert.ok(tokens.includes('--pseudo'), 'nested Tailwind pseudo rules retain token references');
   assert.deepEqual(result.data.tokens.find(token => token.name === '--accent').values.map(value => value.rgba), [[23, 23, 23, 255], [255, 255, 255, 255]]);
-  assert.ok(result.data.owners[0].evidence.some(evidence => evidence.matchKind === 'token_fallback_reference'));
+  assert.ok(result.data.owners[0].evidence.every(evidence => evidence.detail.kind === 'mapping'));
   assert.equal(result.data.coverage.completedObservations, 4);
 });

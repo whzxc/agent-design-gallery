@@ -10,6 +10,59 @@ import { launch } from '../src/toolkit/browser.mjs';
 import { loadConfig } from '../src/toolkit/config.mjs';
 import { validateFrame } from '../src/toolkit/build.mjs';
 import { jsonLocations } from '../src/toolkit/json-locations.mjs';
+import { textAuthoring } from '../src/toolkit/owner-authoring.mjs';
+import { openProjectIndex } from '../src/toolkit/project-index.mjs';
+import { starterTokens } from '../src/toolkit/project.mjs';
+
+test('owner evidence is scoped to its query and color references require the same element and property', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-evidence-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const put = async (name, text) => { const file = path.join(root, name); await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, text); };
+  await put('design/tokens.css', starterTokens.replace('--text: #171717;', '--text: #171717;\n--accent:#336699;\n--unrelated:#abcdef;'));
+  await put('ui/view.ts', 'export const View=1;');
+  await put('design/surfaces/view.tsx', "import {Frame} from 'adg';export default()=> <Frame name='demo'><button>Save</button></Frame>;");
+  await put('design/implementation.json', JSON.stringify({ version:1, mappings:[{ implementation:{file:'ui/view.ts'},design:[{source:'design/surfaces/view.tsx'}] }] }));
+  const config = await loadConfig(root), box = {x:0,y:0,width:80,height:20};
+  const reference = (path, property, token, matchKind = 'token_reference', via = []) => ({path,property,token,matchKind,via,declaration:`var(${token})`});
+  const observation = {nodes:[{path:'0',parentPath:null,owners:[],box},{path:'1',parentPath:'0',owners:[],box},{path:'2',parentPath:'0',owners:[],box}],
+    texts:[{path:'1/run-0',ownerPath:'1',raw:'Save',normalized:'Save',fragments:[{elementPath:'1/text-0',text:'Save',boxes:[box]}]}],
+    paints:[{path:'1',property:'color',computed:'rgb(51, 102, 153)',rgba:[51,102,153,255],box}],
+    references:[reference('1','color','--accent'),reference('1','color','--accent','token_alias_reference',['--alias']),reference('1','color','--accent','token_fallback_reference'),
+      reference('0','color','--unrelated'),reference('1','box-shadow','--unrelated'),reference('2','color','--unrelated')]};
+  const deps = { environment:async()=> 'fixture', launchBrowser:async()=>assert.fail('prepared observations launched browser'), openIndex:async config=> {
+    const index = await openProjectIndex(config,{persist:false});
+    return {...index, observation:async()=>observation, palette:async tokens=>tokens.map(token=>({name:token.name,resolved:'#336699',rgba:[51,102,153,255]}))};
+  }};
+  const run = flags => owner(config,{...flags,json:true},deps);
+  const file = await run({file:'ui/view.ts'});
+  assert.ok(file.data.owners[0].tokens.includes('--unrelated'));
+  assert.ok(file.data.owners[0].evidence.every(e=>e.detail.kind==='mapping'));
+  for (const flags of [{text:'Save'},{text:'av',contains:true}]) {
+    const text = await run(flags), row = text.data.owners[0];
+    assert.ok(row.evidence.every(e=>['text_exact','text_contains'].includes(e.matchKind)));
+    assert.deepEqual(row.authoredIn,[{source:'design/surfaces/view.tsx',line:1}]);
+    assert.ok(row.evidence.every(e=>JSON.stringify(e.authoredIn)===JSON.stringify(row.authoredIn)));
+  }
+  const color = await run({color:'#336699'}), row = color.data.owners[0];
+  assert.deepEqual(row.tokens,['--accent']);
+  assert.ok(row.evidence.every(e=>e.matchKind==='color_value' && e.references.length===3 && e.references.every(ref=>ref.token==='--accent' && Object.keys(ref).join(',')==='token,kind,via')));
+  const token = await run({token:'--accent'});
+  assert.deepEqual([...new Set(token.data.owners[0].evidence.map(e=>e.matchKind))].sort(),['token_alias_reference','token_fallback_reference','token_reference']);
+});
+
+test('text authoredIn searches direct raw literals in the closure and orders part, frame and other dependencies', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-authoring-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const files = {'components/leaf.tsx':'first\r\nSave\r\nSave', 'surfaces/view.tsx':'Save', 'fixtures/a.json':'{"copy":"Save"}', 'fixtures/z.ts':"export const copy='Save';", 'tokens.css':'Save', 'unrelated.ts':'Save'};
+  for (const [file,text] of Object.entries(files)) { await mkdir(path.dirname(path.join(root,'design',file)),{recursive:true}); await writeFile(path.join(root,'design',file),text); }
+  const search = textAuthoring({root,design:path.join(root,'design')},'design/surfaces/view.tsx',{dependencies:['fixtures/z.ts','tokens.css','surfaces/view.tsx',path.join(root,'design/components/leaf.tsx'),'fixtures/a.json']});
+  const run = {fragments:[{elementPath:'1/text-0',text:'Save'},{elementPath:'2/text-0',text:'Save'},{elementPath:'3/text-0',text:' '}]};
+  assert.deepEqual(await search(run,['design/components/leaf.tsx']),[
+    {source:'design/components/leaf.tsx',line:2},{source:'design/components/leaf.tsx',line:3},
+    {source:'design/surfaces/view.tsx',line:1},{source:'design/fixtures/a.json',line:1},{source:'design/fixtures/z.ts',line:1}]);
+  assert.deepEqual(await search({fragments:[{elementPath:'1/text-0',text:'Computed copy'}]},[]),[]);
+  assert.deepEqual(await search({fragments:[{elementPath:'1::before',text:'Save'}]},[]),[]);
+});
 
 test('text normalization, locale validation, JSON locations and fast color syntax are deterministic', async () => {
   assert.equal(normalizeOwnerText(' \r\nCafe\u0301\u00a0changes\t'), 'Café changes');

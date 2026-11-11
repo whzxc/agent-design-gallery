@@ -141,8 +141,6 @@ export async function owner(config, values, { log = console.log, openIndex = ope
           const reference = occurrenceContext(observation, rawReference);
           if (row.part && !roots.some(root => reference.ancestors.includes(root.path))) continue;
           if (!row.tokens.includes(reference.token)) row.tokens.push(reference.token);
-          row.evidence.push({ matchKind: reference.matchKind, frame: ref, theme: task.theme, elementPath: reference.path, boxes: [reference.box], owners: projectOwners(reference.owners),
-            detail: { kind: 'reference', token: reference.token, property: reference.property, declaration: reference.declaration, via: reference.via, usage: 'authored_reference' } });
           const token = byName.get(reference.token), value = token?.values.find(value => value.theme === task.theme), observed = palette.get(reference.token);
           if (!value || !observed) continue;
           if (!tokenResults.has(token.name)) tokenResults.set(token.name, { name: token.name, source: token.source, matchKind: 'token_name', values: [], evidence: [] });

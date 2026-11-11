@@ -8,6 +8,7 @@ import { installColorResolver, resolveQueryColor, colorHex } from './owner-color
 import { launch, browserTask } from './browser.mjs';
 import { commandFailure, cleanup } from './results.mjs';
 import { compareNames, compareRanks } from './owner.mjs';
+import { textAuthoring, orderAuthoredIn } from './owner-authoring.mjs';
 
 function queryFor(values) {
   const kinds = ['text', 'color', 'token'].filter(kind => values[kind] !== undefined);
@@ -80,6 +81,7 @@ export async function searchOwner(config, values, { log = console.log, openIndex
     }
     if (!unknown) for (const source of index.inventory.tsx) {
       const built = await index.getBuild(source); frameOrder.set(source, built.frames.map(frame => frame.name));
+      const authoredIn = query.kind === 'text' ? textAuthoring(config, source, built) : null;
       for (const frame of built.frames) {
         if (query.locale !== null && frame.locale !== query.locale) continue;
         data.coverage.requestedObservations += query.themes.length;
@@ -99,18 +101,24 @@ export async function searchOwner(config, values, { log = console.log, openIndex
             const evidence = { matchKind: kind, frame: ref, theme, elementPath: match.path, boxes: query.kind === 'text' ? match.fragments.flatMap(f => f.boxes) : ctx.box ? [ctx.box] : [], owners, detail };
             const scope = new Set(ctx.ancestors);
             for (const fragment of match.fragments ?? []) for (const ancestor of occurrenceContext(observation, { path: fragment.elementPath }).ancestors) scope.add(ancestor);
-            const references = query.kind === 'token' ? [match] : observation.references.filter(reference => scope.has(reference.path));
+            const references = query.kind === 'token' ? [match] : query.kind === 'color'
+              ? observation.references.filter(reference => reference.path === match.path && reference.property === match.property)
+              : observation.references.filter(reference => scope.has(reference.path));
+            if (query.kind === 'text') evidence.authoredIn = await authoredIn(match, owners.map(owner => owner.source));
+            if (query.kind === 'color') evidence.references = [...new Map(references.map(reference => {
+              const compact = { token: reference.token, kind: reference.matchKind, via: reference.via };
+              return [JSON.stringify(compact), compact];
+            })).values()];
             for (const target of owning) {
               const key = JSON.stringify([target.source, target.part]);
               if (!rows.has(key)) rows.set(key, { source: target.source, part: target.part, matchKind: kind, rank, frames: [], tokens: [], evidence: [] });
               const row = rows.get(key); if (compareRanks(rank, row.rank) < 0) { row.rank = rank; row.matchKind = kind; }
               if (!row.frames.some(f => f.source === source && f.frame === frame.name && f.theme === theme)) row.frames.push({ ...ref, theme, locale: frame.locale ?? null });
               row.evidence.push(evidence);
+              if (query.kind === 'text') row.authoredIn = orderAuthoredIn([...(row.authoredIn ?? []), ...evidence.authoredIn], [row.source, ...row.frames.map(frame => frame.source)]);
               for (const reference of references) {
                 if (!row.tokens.includes(reference.token)) row.tokens.push(reference.token);
                 if (query.kind === 'text') await addToken(reference.token, theme);
-                const context = occurrenceContext(observation, reference);
-                if (query.kind !== 'token') row.evidence.push({ matchKind: reference.matchKind, frame: ref, theme, elementPath: reference.path, boxes: context.box ? [context.box] : [], owners: projectOwners(context.owners), detail: { kind: 'reference', token: reference.token, property: reference.property, declaration: reference.declaration, via: reference.via, usage: 'authored_reference' } });
               }
             }
           }
