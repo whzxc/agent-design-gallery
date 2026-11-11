@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { parseTokens } from './tokens.mjs';
 export const starterTokens = `:root {
@@ -129,15 +129,22 @@ export function rejectLegacy(config, files) {
     }
   }
 }
-export function selectSources(config, args = [], { write = true } = {}) {
+export function selectSources(config, args = [], { write = true, additional = [] } = {}) {
   if (write && (!args.length || args.some(arg=>!arg.endsWith('.mmd')))) refreshTypes(config);
   if (!args.length) rejectLegacy(config);
   const directories = sourceDirectories(config);
   readGroups(config.design, directories);
-  const sources = [...listSources(config.design, directories), ...archFiles(config.arch)];
+  const sources = [...new Set([...listSources(config.design, directories), ...archFiles(config.arch), ...additional])];
   if (!args.length) return sources;
   return args.map(arg => {
     const fromRoot = path.resolve(config.root, arg);
+    if(path.isAbsolute(arg)) {
+      const root=realpathSync(config.root),file=existsSync(arg)?realpathSync(arg):path.resolve(arg);
+      const relative=path.relative(root,file);
+      if(relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw Error(`Source ${arg} is outside the project root; choose a source inside ${config.root}.`);
+      const found=sources.find(source=>(existsSync(source)?realpathSync(source):path.resolve(source))===file);
+      if(found)return found;
+    }
     if (arg.endsWith('.mmd') && sources.includes(fromRoot)) return fromRoot;
     let file = path.isAbsolute(arg) || fromRoot.startsWith(config.design + path.sep) ? fromRoot : path.resolve(config.design, arg);
     if (existsSync(file)) rejectLegacy(config, [file]);

@@ -1,7 +1,7 @@
 import { readViewRoute, viewURL, viewerBase } from '../public/view-route.js';
 
 export function previewTarget(options) {
-  const { asset, frame, group, layer, tokens, mode = 'query' } = options;
+  const { asset, frame, group, layer, tokens, base, mode = 'query' } = options;
   if (!['path', 'query'].includes(mode)) throw Error('Choose --mode=path or --mode=query.');
   const targets = [asset, group, layer, tokens].filter(value => value !== undefined && value !== false);
   if (targets.length > 1 || (frame !== undefined && !asset) || targets.some(value => value === '') || frame === '')
@@ -9,7 +9,8 @@ export function previewTarget(options) {
   if (asset && (!/\.(tsx|svg|mmd)$/i.test(asset) || asset.includes('\\') || asset.split('/').some(part => !part || part === '.' || part === '..')))
     throw Error('Use a design-relative .tsx/.svg or project-root-relative .mmd file path for --asset.');
   if (tokens && mode === 'path') throw Error('Use --mode=query for --tokens.');
-  return { asset, frame, group, layer, tokens, mode };
+  if(base!==undefined && !base.trim())throw Error('Set --base to a Git revision, for example HEAD.');
+  return { asset, frame, group, layer, tokens, mode, ...(base!==undefined?{base}:{}) };
 }
 
 export function previewURL(input, target) {
@@ -33,7 +34,9 @@ export function previewURL(input, target) {
   const tokens = target.tokens || kind === 'tokens';
   const { mode } = target;
   base.pathname = root;
+  const revision=target.base ?? base.searchParams.get('base');
   base.search = base.hash = '';
+  if(revision!==null && revision!==undefined)base.searchParams.set('base',revision);
   if (tokens && mode === 'path') throw Error('Use --mode=query for --tokens.');
   if (tokens) return viewURL(base, 'tokens');
   if (mode === 'query') {

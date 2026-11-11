@@ -10,11 +10,13 @@ export function isViewPath(pathname) {
 
 export function readViewRoute(url) {
   const query = url.searchParams;
+  const base=query.has('base')?{base:query.get('base')}:{};
   const path = url.pathname.slice(viewerBase(url.pathname).length);
   const explicitScope = query.get('scope');
   const asset = query.get('asset'), group = query.get('group');
   if (explicitScope || asset || group) {
     return {
+      ...base,
       scope: explicitScope ?? (asset ? `asset:${asset}` : `group:${group}`),
       target: asset || group ? { path: asset, group, form: query.get('frame'), element: query.has('element') ? { id: query.get('element') } : null } : null,
       onlyFrame: asset && !explicitScope ? query.get('frame') : null,
@@ -28,12 +30,13 @@ export function readViewRoute(url) {
     const [layer, kind, key, frame, element] = match.slice(1).map(value => value === undefined ? null : decodeURIComponent(value));
     if (kind !== 'asset' && frame) throw Error('A frame needs an asset path.');
     return {
+      ...base,
       scope: layer ? `layer:${layer}` : 'all',
       target: kind ? { path: kind === 'asset' ? key : null, group: kind === 'group' ? key : null, form: frame, element: element ? { id: element } : null } : null,
       strict: true,
     };
   }
-  return { scope: 'default', target: null };
+  return { ...base, scope: 'default', target: null };
 }
 
 export function viewURL(base, scope, target = {}, { isolated = false, onlyFrame = null } = {}) {

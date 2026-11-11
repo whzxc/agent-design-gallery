@@ -9,10 +9,10 @@ the design sources and needs user gallery approval before implementation.
 
 ## 1. Architecture sources (in progress)
 
-- Segment A: discover Mermaid `.mmd` sources under `arch/`, build them with Pele, paint both themes from project tokens,
+- Segment A (done): discover Mermaid `.mmd` sources under `arch/`, build them with Pele, paint both themes from project tokens,
   apply semantic phases and marks with an in-artboard legend, show sidecar notes and owners, and support `check` and
   `render`.
-- Segment B: proposal overlays against a Git base revision (`--base`) for render, open, link and the viewer. Added,
+- Segment B (done): proposal overlays against a Git base revision (`--base`) for render, open, link and the viewer. Added,
   changed and removed nodes and edges are marked; removed elements stay visible as ghosts.
 - ARC adoption: semantic classes and sidecars for ARC's diagrams, then ARC's rule that architecture changes update their
   diagrams before implementation.

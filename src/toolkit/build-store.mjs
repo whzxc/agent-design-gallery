@@ -104,13 +104,14 @@ class BuildPool {
 
 export async function createBuildStore({ config, cacheDirectory }) {
   const design = await realpath(config.design);
-  const workerConfig = { root: await realpath(config.root), design, output: config.output, sources: config.sources, arch:config.arch, check:config.check };
+  const workerConfig = { root: await realpath(config.root), design, output: config.output, sources: config.sources, arch:config.arch, check:config.check, ...(config.overlay?{overlay:config.overlay}:{}) };
   const require = createRequire(import.meta.url);
   const fingerprint = digest(Buffer.concat(await Promise.all([
     ...['../../package.json', './build.mjs', './runtime.mjs', './tokens.mjs', './text.mjs', './project.mjs', './build-worker.mjs', './build-store.mjs', './arch.mjs', './arch-browser.mjs', './browser.mjs'].map(file => new URL(file, import.meta.url)),
+    ...(config.overlay?['./arch-overlay.mjs','./arch-git.mjs'].map(file=>new URL(file,import.meta.url)):[]),
     require.resolve('esbuild/package.json'), require.resolve('tailwindcss/package.json'),
   ].map(file => readFile(file)))));
-  const namespace = digest(JSON.stringify({ fingerprint, design, arch:config.arch, check:config.check, sources: config.sources, sourceFiles: config.sourceFiles }));
+  const namespace = digest(JSON.stringify({ fingerprint, design, ...(config.overlay?{overlay:config.overlay}:{}), arch:config.arch, check:config.check, sources: config.sources, sourceFiles: config.sourceFiles }));
   const directory = cacheDirectory, indexPath = path.join(directory, 'index.json');
   await mkdir(directory, { recursive: true });
   const pool = new BuildPool(), entries = new Map(), reverse = new Map(), pending = new Map(), generations = new Map(), memory = new Map();
@@ -121,7 +122,7 @@ export async function createBuildStore({ config, cacheDirectory }) {
     if (access.size > 4096) access.delete(access.keys().next().value);
   };
   const counters = { cacheHits: 0, diskHits: 0, builds: 0 };
-  const inputHash = hashes => digest(JSON.stringify({ namespace, dependencies: Object.entries(hashes).sort(([a], [b]) => a.localeCompare(b)) }));
+  const inputHash = (hashes,baseBlob) => digest(JSON.stringify({ namespace, ...(config.overlay?{baseBlob}:{}), dependencies: Object.entries(hashes).sort(([a], [b]) => a.localeCompare(b)) }));
   const remember = (hash, payload) => {
     const size = Buffer.byteLength(JSON.stringify(payload));
     if (memory.has(hash)) { memoryBytes -= memory.get(hash).size; memory.delete(hash); }
@@ -147,7 +148,7 @@ export async function createBuildStore({ config, cacheDirectory }) {
   }
   async function valid(entry, cache) {
     const hashes = await hashesFor(entry.dependencies, cache);
-    return hashes && inputHash(hashes) === entry.inputHash;
+    return hashes && inputHash(hashes,entry.baseBlob) === entry.inputHash;
   }
   function persist(hash, payload) {
     writes = writes.catch(() => {}).then(async () => {
@@ -230,8 +231,8 @@ export async function createBuildStore({ config, cacheDirectory }) {
         const built = await pool.run({ config: workerConfig, name }, controller.signal); counters.builds++;
         if (controller.signal.aborted || generation !== (generations.get(name) ?? 0)) throw aborted();
         const payload = { frames: built.frames, css: built.css };
-        const hash = digest(JSON.stringify({ path: name, component: !name.startsWith('surfaces/'), ...payload, imports: built.imports }));
-        const entry = { path: name, hash, inputHash: inputHash(built.dependencyHashes), imports: built.imports, dependencies: built.dependencies, dependencyHashes: built.dependencyHashes,
+        const hash = digest(JSON.stringify({ path: name, component: !name.startsWith('surfaces/'), ...payload, ...(config.overlay?{base:config.overlay.sha,baseBlob:built.baseBlob}:{}), imports: built.imports }));
+        const entry = { path: name, hash, inputHash: inputHash(built.dependencyHashes,built.baseBlob), ...(config.overlay?{baseBlob:built.baseBlob}:{}), imports: built.imports, dependencies: built.dependencies, dependencyHashes: built.dependencyHashes,
           frames: built.frames.map(({ html, ...frame }) => frame) };
         if (old) unlinkEntry(old); entries.set(name, entry); link(entry); remember(hash, payload);
         touch(hash);

@@ -37,13 +37,22 @@ export function showUnauthorized() {
 function storedKey() {
   return typeof window === 'undefined' ? null : window.localStorage.getItem(storageKey);
 }
+function withBase(input) {
+  if(typeof window==='undefined')return input;
+  const base=new URL(window.location.href).searchParams.get('base');
+  if(base===null)return input;
+  const url=new URL(input,document.baseURI);
+  if(!url.searchParams.has('base'))url.searchParams.set('base',base);
+  return url.href;
+}
 export function keyURL(input) {
-  const url = new URL(input, document.baseURI), key = storedKey();
+  const url = new URL(withBase(input), document.baseURI), key = storedKey();
   if (url.origin !== window.location.origin) throw new Error('SDG data requests must use the same origin.');
   if (key) url.searchParams.set('key', key);
   return url.href;
 }
 export async function dataFetch(input, init = {}) {
+  input=withBase(input);
   if (typeof window !== 'undefined' && new URL(input, document.baseURI).origin !== window.location.origin)
     throw new Error('SDG data requests must use the same origin.');
   const headers = new Headers(init.headers), key = storedKey();

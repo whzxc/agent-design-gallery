@@ -15,6 +15,7 @@ export async function open(positionals, values) {
       throw new Error("--port must be an integer from 0 to 65535.");
     const input = path.resolve(positionals[0] ?? process.cwd());
     const config = await loadConfig(input);
+    if(values.base!==undefined && (!target.asset || target.asset.endsWith('.mmd'))) await (await import('./toolkit/arch-git.mjs')).resolveBase(config,values.base);
     const directory = config.root === input && existsSync(config.design) ? config.design : input;
     const server = await startServer({
       directory,

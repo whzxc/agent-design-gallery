@@ -96,6 +96,7 @@ code owners and status. Pele is pinned to 1.12.0.
 sdg open . --asset=arch/system-map.mmd
 sdg check arch/system-map.mmd --read-only
 sdg render arch/system-map.mmd --theme=both --json
+sdg open . --asset=arch/system-map.mmd --base=HEAD
 ```
 
 See [architecture source format](docs/design-toolkit.md#architecture-sources) for the

@@ -97,9 +97,8 @@ and fail only architecture builds; the same worker continues building TSX source
 CLI `check` and `render` supply the browser they already own and close it at command
 completion.
 
-The `renderArch(model, tokenSource)` boundary can render a model supplied by a later Git
-overlay; `buildArch` also accepts an optional precomputed `model`. Segment A performs
-no Git comparison and adds no overlay command or UI. Pele's actual SVG edge IDs are
+The `renderArch(model, tokenSource)` boundary renders ordinary models and proposal
+overlay models; `buildArch` also accepts a precomputed `model`. Pele's actual SVG edge IDs are
 preserved: state diagrams use `edgeN`, flowcharts use model edge IDs such as
 `L_A_B_0`, and sequence messages use `iN`. A future overlay must map these through
 its diagram's parse model and source order, rather than assume one universal ID.
@@ -128,3 +127,37 @@ assigned classes from Pele's model and recognizes additional source assignments
 within one line; classDiagram declarations and methods remain structural content.
 Init/frontmatter paint checks inspect property keys, preserving prose titles and
 quoted values such as `Background work`.
+
+## Git proposal overlays
+
+`arch-git.mjs` resolves a revision to one commit SHA for each request, locates the
+repository even for a nested project and reads the base blob with Git. `arch-overlay.mjs`
+compares parsed flowchart, state and sequence models. Flowchart membership and the
+flattened state graph preserve node identity and parent relationships. Parallel
+edges match by endpoints and occurrence; sequence messages use LCS alignment, with
+adjacent same-endpoint replacements becoming changes. Removed elements are reinserted
+as ghosts with surviving base parents or root placement. The combined model is still
+a Pele parse model: its internal brand is retained, and base objects are copied before
+reinsertion.
+
+Label prefixes are part of the model before font measurement. After Pele renders,
+computed classes are stamped onto the node/cluster, edge and edge-label groups using
+actual rendered IDs: flowchart model edge IDs, state `edgeN`, and sequence `iN` IDs.
+This also covers Pele renderers that omit edge class lists. Overlay CSS adds token
+roles and stronger diff borders while preserving phase fills. The used-class legend,
+commit caption and Inspector change list are assembled in the frame document.
+
+The viewer carries `base` through its existing query/path locators and data/cache
+requests, including hub proxies. The server creates independent build stores per
+resolved base and displayed revision. Worker configuration selects the overlay builder;
+ordinary requests keep the segment A builder and payload format. Overlay input/output
+hashes include the immutable base blob identity as well as commit and current inputs.
+Live source, sidecar and token invalidation reaches all active overlay stores. Browser
+leases and worker retirement use the existing segment A lifecycle.
+
+Overlay metadata/previews use their own content hashes and base cache context.
+Camera/selection preferences also include the requested base, preserving normal views. Normal
+metadata, build payloads and catalog caches are not overwritten. A source deleted
+since base has no artboard; CLI rendering reports selected deletions in its base JSON
+envelope. Unsupported kinds or type changes retain the current drawing and report the
+comparison limit in the Inspector note. There is no viewer chrome addition.

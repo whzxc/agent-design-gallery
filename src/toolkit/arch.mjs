@@ -177,8 +177,8 @@ export async function renderArch(model, tokenSource, {browser: suppliedBrowser} 
 export async function buildArch(config,file,{snapshot,model:overlayModel,browser}={}) {
   const dependencies=[],read=name=>{
     dependencies.push(name);
-    let bytes;
-    try{bytes=readFileSync(name);}catch(error){if(error.code!=='ENOENT'||!name.endsWith('.md'))throw error;bytes=null;}
+    let bytes=snapshot?.get(name);
+    if(!snapshot?.has(name))try{bytes=readFileSync(name);}catch(error){if(error.code!=='ENOENT'||!name.endsWith('.md'))throw error;bytes=null;}
     snapshot?.set(name,bytes);return bytes?.toString('utf8')??'';
   };
   const text=read(file),metadata=sidecar(read(file.replace(/\.mmd$/,'.md'))),tokenSource=read(path.join(config.design,'tokens.css'));

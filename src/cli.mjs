@@ -5,14 +5,14 @@ import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 
 export const commands = ['open', 'link', 'serve', 'root', 'service', 'init', 'check', 'render', 'compare'];
-const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path]';
+const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
 const usage = {
   open: `[directory] [--port=<n>] [--no-open] [--state-dir=<path>] ${targetOptions}`,
   link: `<viewer-url> ${targetOptions}`,
   serve: '[--port=4310] [--state-dir=<path>] [--print-key | --rotate-key]',
   service: 'install|uninstall|status|logs [--state-dir=<path>] [--port=4310]',
   root: 'add <dir> [--depth=2] | remove <dir> | list | scan [dir] [--state-dir=<path>]',
-  init: '', check: '[source...] [--read-only]', render: '[source...] [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]',
+  init: '', check: '[source...] [--read-only]', render: '[source...] [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json] [--base=<rev>]',
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
 };
 const details = {
@@ -31,8 +31,8 @@ export function help(command) {
 export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' } };
-  const locators = ['asset', 'frame', 'group', 'layer', 'mode'];
-  const strings = { open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
+  const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
+  const strings = { open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };

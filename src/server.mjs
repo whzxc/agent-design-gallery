@@ -58,6 +58,8 @@ export async function startServer({
     revision = 0,
     closing = false,
     buildStore, viewerCache, codePaths=new Set();
+  const overlayStores = new Map(), overlayHashes = new Set();
+  let resettingOverlays = false;
   const knownBuilds = new Map(), legacyDependencies = new Map(), failedSources=new Set(), dirtyBuilds=new Set();
   const describe=built=>({...built,css:undefined,frames:built.frames.map(({html,...frame})=>frame)});
   const clients = new Set(),
@@ -80,6 +82,35 @@ export async function startServer({
     for (const client of clients)
       client.write(`data: ${JSON.stringify(data)}\n\n`);
   };
+  async function closeOverlays() {
+    resettingOverlays = true;
+    try { await Promise.all([...overlayStores.values()].map(async pending=>(await pending).close())); }
+    finally { overlayStores.clear();overlayHashes.clear();resettingOverlays = false; }
+  }
+  async function overlayStore(base) {
+    if(closing || resettingOverlays)throw Object.assign(Error('Overlay build superseded; retry after refresh.'),{name:'AbortError'});
+    const key=base.sha+'\0'+base.rev;
+    if(!overlayStores.has(key)) {
+      const pending=createBuildStore({config:{...activeProject,design:root,sources,sourceFiles:[...codePaths].sort(),overlay:base},
+        cacheDirectory:path.join(stateDirectory,'cache',digest(root),'overlay',base.sha,digest(base.rev))}).then(async store=>{
+          for(const built of await store.metadata())overlayHashes.add(built.hash);
+          return store;
+        });
+      overlayStores.set(key,pending);
+      pending.catch(()=>{if(overlayStores.get(key)===pending)overlayStores.delete(key);});
+    }
+    return overlayStores.get(key);
+  }
+  async function invalidateBuilds(paths) {
+    const affected=new Set(buildStore?.invalidate(paths)??[]);
+    for(const pending of overlayStores.values())for(const name of (await pending).invalidate(paths))affected.add(name);
+    return [...affected];
+  }
+  async function overlayBuild(name,base) {
+    const built=await (await overlayStore(base)).get(name);
+    overlayHashes.add(built.hash);frameCounts.set(name,built.frames.length);
+    return built;
+  }
   async function collect(base, relative = "", out = new Map(), sourceNames = sources, discoveredCode = new Set()) {
     for (const entry of await readdir(path.join(base, relative), {
       withFileTypes: true,
@@ -129,7 +160,7 @@ export async function startServer({
       const file=path.join(directory,String(filename));
       const dependency=path.relative(base,file).split(path.sep).join('/');
       const name=path.relative(project.root,file).split(path.sep).join('/');
-      touched.add(dependency);touched.add(name);buildStore?.invalidate([dependency,name]);
+      touched.add(dependency);touched.add(name);invalidateBuilds([dependency,name]).catch(e=>emit({error:e.message}));
       clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>refresh().catch(e=>emit({error:e.message})),80);
     });
     archWatcher.on('error',e=>emit({error:`Architecture watcher: ${e.message}`}));
@@ -153,7 +184,7 @@ export async function startServer({
     const cacheBase=path.join(stateDirectory,'cache',digest(next));
     const nextStore=await createBuildStore({config:{...project,design:next,sources:nextSources,sourceFiles:[...nextCode].sort()},cacheDirectory:path.join(cacheBase,'build')});
     const nextViewerCache=await createViewerCache(path.join(cacheBase,'viewer'));
-    await buildStore?.close();await viewerCache?.close();
+    await buildStore?.close();await closeOverlays();await viewerCache?.close();
     buildStore=nextStore;viewerCache=nextViewerCache;knownBuilds.clear();dirtyBuilds.clear();failedSources.clear();frameCounts.clear();
     for(const built of await buildStore.metadata()) {
       if(nextFiles.has(built.path)) {knownBuilds.set(built.path,built);Object.assign(nextFiles.get(built.path),{hash:built.hash,version:built.hash});frameCounts.set(built.path,built.frames.length);}
@@ -164,7 +195,7 @@ export async function startServer({
       if (filename) {
         const name=String(filename).split(path.sep).join('/');
         touched.add(name);
-        buildStore?.invalidate([name]);
+        invalidateBuilds([name]).catch(e=>emit({error:e.message}));
       }
       clearTimeout(refreshTimer);
       refreshTimer = setTimeout(
@@ -220,9 +251,9 @@ export async function startServer({
       const grouping=JSON.stringify(groups)!==JSON.stringify(nextGroups);
       const configChanged=JSON.stringify(sources)!==JSON.stringify(nextSources)||activeProject.arch!==project.arch;
       const structural=configChanged || [...new Set([...codePaths,...nextCode])].some(name=>codePaths.has(name)!==nextCode.has(name));
-      if(structural){await buildStore.close();buildStore=await createBuildStore({config:{...project,design:base,sources:nextSources,sourceFiles:[...nextCode].sort()},cacheDirectory:path.join(stateDirectory,'cache',digest(base),'build')});}
+      if(structural){await closeOverlays();await buildStore.close();buildStore=await createBuildStore({config:{...project,design:base,sources:nextSources,sourceFiles:[...nextCode].sort()},cacheDirectory:path.join(stateDirectory,'cache',digest(base),'build')});}
       const observedPaths=[...new Set([...observed,...stamps])];
-      const affected=new Set(await buildStore.invalidate(structural?[...knownBuilds.keys(),...observedPaths]:observedPaths));
+      const affected=new Set(await invalidateBuilds(structural?[...knownBuilds.keys(),...observedPaths]:observedPaths));
       for(const name of failedSources)affected.add(name);
       for(const name of stamps)if(/\.(tsx|mmd)$/.test(name)&&next.has(name))affected.add(name);
       const legacyDirty=[...legacyDependencies.values()].some(dependencies=>dependencies.some(name=>observedPaths.includes(name)));
@@ -279,7 +310,7 @@ export async function startServer({
     inspector: false,
     tokenSource,
   });
-  const preferenceKey = scope => !scope || scope === 'all' ? root : JSON.stringify([root, scope]);
+  const preferenceKey = (scope,base) => base ? JSON.stringify([root,scope??'all','base',base]) : !scope || scope === 'all' ? root : JSON.stringify([root, scope]);
   function applyFixtureManifest(data,name) {
     if (!fixtures || !name) return data;
     if (Number.isFinite(fixtures.assetModifiedAt)) data.assets = data.assets.map(a => ({...a,modifiedAt:fixtures.assetModifiedAt}));
@@ -289,7 +320,7 @@ export async function startServer({
       label: 'agent-remote-control', recent: fixtures.recent, view: null, theme: preset.themeChoice ?? preset.theme,
       sidebar: preset.sidebar, inspector: !!preset.inspector, fixture: { name, ...preset } };
   }
-  const contextFor=async url=>(await viewerVersion)+'|'+(url.searchParams.get('context')??'');
+  const contextFor=async url=>(await viewerVersion)+'|'+(url.searchParams.get('context')??'')+(url.searchParams.has('base')?'|base:'+url.searchParams.get('base'):'');
   async function manifest(url) {
     const data=baseManifest(),context=await contextFor(url), requested=url.searchParams.get('scope');
     const fixtureScope=fixtures?.states[url.searchParams.get('fixture')]?.scope;
@@ -309,13 +340,20 @@ export async function startServer({
     const scoped=resolveScope(data,sources,desired === 'tokens' ? 'default' : desired);
     if (url.searchParams.has('strict') && desired !== scoped.scope) throw Error('Design link target does not exist.');
     Object.assign(data,scoped);
-    const key=preferenceKey(data.scope);
+    let base;
+    if(url.searchParams.has('base')&&data.assets.some(asset=>asset.path.endsWith('.mmd'))) {
+      base=await (await import('./toolkit/arch-git.mjs')).resolveBase(activeProject,url.searchParams.get('base'));
+      data.base={rev:base.rev,sha:base.sha};
+      const cached=new Map((await (await overlayStore(base)).metadata()).map(built=>[built.path,built]));
+      data.assets=data.assets.map(asset=>asset.path.endsWith('.mmd')?{...asset,hash:cached.get(asset.path)?.hash,version:cached.get(asset.path)?.hash??`${asset.stamp}-${base.sha}-${base.rev}`}:{...asset});
+    }
+    const key=preferenceKey(data.scope,url.searchParams.get('base'));
     data.view=state.views[key] ?? null;
     data.selection=state.selections[key] ?? null;
     // Rehash previously built sources only when a viewer requests their scope.
     // An unchanged result retains its measured metadata and cropped previews.
     if (requested) {
-      const rebuild = data.assets.filter(asset=>dirtyBuilds.has(asset.path));
+      const rebuild = data.assets.filter(asset=>dirtyBuilds.has(asset.path)&&!(base&&asset.path.endsWith('.mmd')));
       let index=0;
       await Promise.all(Array.from({length:Math.min(2,rebuild.length)},async()=>{
         while(index<rebuild.length) {
@@ -353,7 +391,7 @@ export async function startServer({
     if(files.has(name))Object.assign(files.get(name),{hash:built.hash,version:built.hash});
     return built;
   }
-  async function svg(name, theme, chain = [], onlyFrame = null) {
+  async function svg(name, theme, chain = [], onlyFrame = null, base = null) {
     if (chain.includes(name))
       throw new Error(`Circular SVG reference: ${name}`);
     const asset = files.get(name);
@@ -362,7 +400,7 @@ export async function startServer({
       cached = svgCache.get(key);
     if (cached?.version === asset.version) return cached;
     if (/\.(tsx|mmd)$/.test(name)) {
-      const built=await sourceBuild(name);
+      const built=base&&name.endsWith('.mmd')?await overlayBuild(name,base):await sourceBuild(name);
       const frames = onlyFrame ? built.frames.filter(frame => frame.name === onlyFrame) : built.frames;
       if (!frames.length && onlyFrame) throw Error(`Frame ${onlyFrame} does not exist in ${name}.`);
       return {version:built.hash,imports:built.imports,dependencies:built.dependencies,
@@ -450,7 +488,7 @@ export async function startServer({
         const cacheRoute=url.pathname.match(/^\/(metadata|preview)\/([a-f0-9]{64})$/);
         if(cacheRoute) {
           const [,kind,hash]=cacheRoute,theme=url.searchParams.get('theme')==='dark'?'dark':'light',context=await contextFor(url);
-          if(![...knownBuilds.values()].some(built=>built.hash===hash))return json(response,409,{error:'Source changed; reload its metadata.'});
+          if(![...knownBuilds.values()].some(built=>built.hash===hash)&&!overlayHashes.has(hash))return json(response,409,{error:'Source changed; reload its metadata.'});
           if(kind==='metadata') {
             const data=await body(request,32*1024*1024),metadata=data.metadata;
             if(!metadata||!Array.isArray(metadata.parts)||!metadata.full||!Number.isFinite(metadata.full.width)||!Number.isFinite(metadata.full.height))throw Error('Invalid measured source metadata.');
@@ -471,7 +509,7 @@ export async function startServer({
         const data = await body(request);
         if (url.pathname === "/preferences") {
           if (typeof data.sidebar === "boolean") state.sidebar = data.sidebar;
-          const key = preferenceKey(data.scope);
+          const key = preferenceKey(data.scope,url.searchParams.get('base'));
           if (["system", "light", "dark"].includes(data.theme))
             state.theme = data.theme;
           if (
@@ -539,15 +577,16 @@ export async function startServer({
         }
         const theme =
           url.searchParams.get("theme") === "dark" ? "dark" : "light";
+        const base=name.endsWith('.mmd')&&url.searchParams.has('base')?await (await import('./toolkit/arch-git.mjs')).resolveBase(activeProject,url.searchParams.get('base')):null;
         const onlyFrame = url.searchParams.get('frame');
         const variant = onlyFrame ? `-${digest(onlyFrame)}` : '';
         etag = `"${files.get(name).version}-${theme}${variant}"`;
-        if (request.headers["if-none-match"] === etag) {
+        if (!base && request.headers["if-none-match"] === etag) {
           response.writeHead(304);
           response.end();
           return;
         }
-        const rendered=await svg(name,theme,[],onlyFrame);
+        const rendered=await svg(name,theme,[],onlyFrame,base);
         content=rendered.body;etag=`"${rendered.version}-${theme}${variant}"`;
         type = /\.(tsx|mmd)$/.test(name) ? "application/json" : "image/svg+xml";
       } else {
@@ -592,7 +631,7 @@ export async function startServer({
     server.closeAllConnections();
     await disconnected;
     await writes;
-    await buildStore?.close();await viewerCache?.close();
+    await buildStore?.close();await closeOverlays();await viewerCache?.close();
   };
   return { id: instanceId, directory: root, url: `http://127.0.0.1:${server.address().port}/`, port: server.address().port, close,
     cacheStats:()=>({builds:buildStore?.stats(),viewer:viewerCache?.stats()}),

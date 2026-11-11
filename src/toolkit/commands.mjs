@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { availableParallelism } from 'node:os';
 import { buildSource } from './build.mjs';
-import { selectSources, relative, loadTokens, sourceDirectories } from './project.mjs';
+import { selectSources, relative, loadTokens, sourceDirectories, archFiles } from './project.mjs';
 import { importDirectionViolations } from './asset-rules.mjs';
 import { launch, loadFrame } from './browser.mjs';
 export function inspectFrame(tokenNames) {
@@ -223,11 +223,21 @@ export async function render(config, args = [], options = {}) {
   if (options['out-dir'] === '') throw Error('Set --out-dir to a directory.');
   const output = options['out-dir'] ? path.resolve(config.root, options['out-dir']) : config.output;
   const themes = themeOption === 'both' ? ['light', 'dark'] : [themeOption];
-  const files = selectSources(config,args), browser = await launch();
+  let base,deleted=[],additional=[];
+  if(options.base!==undefined && (!args.length || args.some(arg=>arg.endsWith('.mmd')))) {
+    const git=await import('./arch-git.mjs');
+    base=await git.resolveBase(config,options.base);
+    additional=await git.baseArchFiles(config,base);
+  }
+  const selected=selectSources(config,args,{additional});
+  const {existsSync}=await import('node:fs');
+  const currentArchitecture=base?new Set(archFiles(config.arch)):null;
+  const files=selected.filter(file=>{if(!existsSync(file)||(base&&file.endsWith('.mmd')&&!currentArchitecture.has(file))){deleted.push(relative(config,file));return false;}return true;});
+  const browser = base && !files.length ? null : await launch();
   try {
     const captures = [];
     for (const file of files) {
-      const built = await buildSource(config,file,{allowLegacy:false,browser});
+      const built = base&&file.endsWith('.mmd') ? await (await import('./arch-overlay.mjs')).buildOverlay(config,file,{base,browser}) : await buildSource(config,file,{allowLegacy:false,browser});
       for (const frame of built.frames.filter(f => !options.frame || f.name === options.frame)) {
         for (const theme of themes) {
           const source = file.endsWith('.mmd') ? relative(config,file) : path.relative(config.design, file);
@@ -236,7 +246,7 @@ export async function render(config, args = [], options = {}) {
         }
       }
     }
-    if (options.frame && !captures.length) throw Error(`Unknown frame ${options.frame}; choose a declared frame`);
+    if (options.frame && !captures.length && !deleted.length) throw Error(`Unknown frame ${options.frame}; choose a declared frame`);
     let next = 0;
     const workers = await Promise.allSettled(Array.from({length:Math.min(4,availableParallelism(),captures.length)},async () => {
       while (next < captures.length) {
@@ -253,10 +263,11 @@ export async function render(config, args = [], options = {}) {
     }));
     const failed = workers.find(worker => worker.status === 'rejected');
     if (failed) throw failed.reason;
-    if (options.json) console.log(JSON.stringify(captures.map(({ source, frame, theme, target }) => ({
-      source: source.split(path.sep).join('/'), frame: frame.name, theme, path: target,
-    }))));
+    if (options.json) {
+      const output=captures.map(({source,frame,theme,target})=>({source:source.split(path.sep).join('/'),frame:frame.name,theme,path:target}));
+      console.log(JSON.stringify(base?{base:{rev:base.rev,sha:base.sha},captures:output,deleted}:output));
+    }
     else for (const {target} of captures) console.log(relative(config,target));
-  } finally { await browser.close(); }
+  } finally { await browser?.close(); }
   return 0;
 }

@@ -258,8 +258,7 @@ flowchart LR
 A phase and a mark combine: the phase supplies the fill, and the mark the border.
 The legend above the diagram lists only used classes; it is omitted for unclassified
 diagrams. Unknown classes fail checks. `added`, `removed` and `changed` are reserved
-for computed Git overlays and rejected in sources. Git overlays are a later segment;
-this release has no `--base` flag or diff query parameter.
+for computed Git overlays and rejected in sources. Use the [review overlay](#review-overlays) to compare a working-tree proposal with a Git revision.
 
 Sources do not paint. `classDef`, `style` and `linkStyle` statements are rejected,
 as are init directives or Mermaid frontmatter containing theme, themeVariables or
@@ -328,6 +327,88 @@ the review platform defined in [SDG design](design.md).
 `default-dark.png`. `--json` returns `source`, `frame`, `theme` and absolute `path`.
 A named architecture render writes no declarations or HTML into the source checkout;
 use an absolute output directory to keep a consumer checkout read-only.
+
+## Review overlays
+
+`--base=<rev>` on `render`, `open` and `link`, or `?base=<rev>` in a viewer locator,
+compares architecture sources in the working tree with a Git commit. Uncommitted
+proposals are supported. Revision names, branch names, tags and commit expressions
+are resolved to a commit SHA once per render/manifest/source request; the base source is read
+with `git show <sha>:<repository-relative-path>`. Links carry the requested revision
+and resolve it in the destination project's repository. Both direct viewers and hub
+project/instance proxies retain the query parameter through navigation.
+
+```sh
+sdg render arch/mechanisms/work.mmd --base=HEAD --theme=both --json
+sdg open . --asset=arch/mechanisms/work.mmd --base=main
+sdg link https://gallery.example/p/project/ --asset=arch/mechanisms/work.mmd --base=HEAD~1
+```
+
+Source paths may be project-relative or absolute paths resolving inside the project
+root. TSX-only named renders ignore `base` and retain their existing output format;
+TSX comparison remains roadmap milestone 4. Normal builds without `base` retain the
+same frame bytes, content hashes and JSON array format.
+
+Comparison uses Pele models:
+
+- Flowchart nodes and subgraphs match by ID. A changed label, shape or parent marks
+  the element as changed. Edges match by endpoints and occurrence among edges with
+  those endpoints; their new label and connection shape are compared. Changed
+  invisible layout edges become visible diff lines so the connection can be reviewed.
+- States match by ID, including composite states. Labels and parents are compared.
+  Transitions match by endpoints and occurrence in the flattened state graph,
+  including transitions inside composite states.
+- Sequence participants match by ID. Messages align by longest common subsequence
+  of `(from, to, text)`. Unmatched messages are added/removed; an adjacent removed
+  and added pair with the same endpoints is changed and shows the new label.
+
+The overlay model keeps current elements and adds removed elements as ghosts.
+A ghost node returns to its base parent if that parent exists in the current model,
+otherwise to the root. Ghost edges connect current or ghost endpoints. Pele lays out
+this combined graph; positions are recomputed, rather than frozen to base coordinates.
+Sequence control blocks follow the current source while removed messages remain in
+the timeline. Other diagram types, or a change between diagram types, render the
+current source with an Inspector note that comparison is unsupported.
+
+The source's phases and marks remain in force. Computed diff borders override mark
+borders while preserving phase fills:
+
+| Diff | Nodes | Edges/messages |
+| --- | --- | --- |
+| `added` | 2.5px solid border | 2.25px stroke, matching arrowheads, `+ ` label prefix |
+| `changed` | 2.5px dashed 4/3 border | 2.25px dashed stroke, new label |
+| `removed` | 0.5 opacity, dashed 5/4 border | 0.5 opacity, dashed stroke, `- ` label prefix |
+
+`--arch-added` and `--arch-changed` default to `--accent`; `--arch-removed` defaults
+to `--text-tertiary`, with theme fallbacks when the roles are absent. Projects can
+override these variables in either token block. The in-artboard legend includes the
+diff classes in use and `Compared with <short-sha> (<rev>)`. Inspector notes append
+plain-text changes, such as `+ state cancelled` or
+`~ transition awaiting -> reserved: approved -> approved locally`. All comparison
+visuals stay inside artboards; the viewer chrome is unchanged.
+
+A file absent at base renders as entirely added. A deleted current diagram is not
+rendered. With an architecture base, `render --json` returns an envelope instead of
+the ordinary capture array:
+
+```json
+{
+  "base": { "rev": "HEAD", "sha": "<commit-sha>" },
+  "captures": [
+    { "source": "arch/mechanisms/work.mmd", "frame": "default", "theme": "light", "path": "/absolute/output/default-light.png" }
+  ],
+  "deleted": ["arch/retired.mmd"]
+}
+```
+
+Unnamed renders include deleted diagrams from the configured architecture directory
+at base; naming sources limits both captures and deletions to that selection. Git
+missing, a project outside a Git repository or an unknown revision produces an error
+with a next action. Overlay build stores are separate from normal build stores.
+Their identity includes the base commit, base blob hash, displayed revision and current
+source/sidecar/token inputs; geometry and preview caches remain separated by their
+content hashes and base context. Visiting an overlay does not replace normal cache
+entries. Saving the working tree refreshes both paths through the existing watcher.
 
 ## Compare
 
