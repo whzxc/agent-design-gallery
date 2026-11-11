@@ -94,7 +94,7 @@ function renderTargets(query) {
       const labels = element('span', 'switcher-labels');
       labels.append(element('span', 'switcher-name', item.name));
       const detail = item.compatibility?.compatible === false
-        ? `Requires SDG ${item.compatibility.requires?.replace(/>=/g, '≥')} · hub ${item.compatibility.version}`
+        ? `Requires ADG ${item.compatibility.requires?.replace(/>=/g, '≥')} · hub ${item.compatibility.version}`
         : item.proxyable === false ? 'Proxy unavailable' : type === 'i' ? `:${item.port} · ${item.directory}`
         : item.error ?? item.design ?? item.path ?? item.directory;
       const meta = element('span', `switcher-detail${disabled ? ' switcher-danger' : ''}`, detail);
@@ -171,6 +171,6 @@ export async function initSwitcher() {
   } catch (failure) {
     if (isUnauthorized()) return;
     // Keep the current target visible when hub discovery is temporarily unavailable.
-    window.dispatchEvent(new CustomEvent('sdg-switcher-error', { detail: failure }));
+    window.dispatchEvent(new CustomEvent('adg-switcher-error', { detail: failure }));
   }
 }

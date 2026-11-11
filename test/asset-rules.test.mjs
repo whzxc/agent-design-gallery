@@ -13,14 +13,14 @@ import { parseCli } from '../src/cli.mjs';
 
 const layers=['components','modules','surfaces'];
 function temporary(t) {
-  const root=mkdtempSync(path.join(tmpdir(),'sdg-asset-rules-'));
+  const root=mkdtempSync(path.join(tmpdir(),'adg-asset-rules-'));
   t.after(()=>rmSync(root,{recursive:true,force:true}));
   return root;
 }
 function put(root,name,contents) {
   const file=path.join(root,name);mkdirSync(path.dirname(file),{recursive:true});writeFileSync(file,contents);return file;
 }
-const source=`import {Frame} from 'sdg';export function Part(){return <div>Example</div>};export default()=> <Frame name="default"><Part/></Frame>;`;
+const source=`import {Frame} from 'adg';export function Part(){return <div>Example</div>};export default()=> <Frame name="default"><Part/></Frame>;`;
 
 test('import lint checks ordered source layers, same-layer cycles and study exemptions',()=>{
   const graph={
@@ -42,7 +42,7 @@ test('fresh init seeds a runnable downward composition and preserves it on rerun
   const root=temporary(t),logs=[];init({root},line=>logs.push(line));
   const c=await loadConfig(root);
   assert.deepEqual(c.sources,layers);
-  assert.match(readFileSync(path.join(root,'sdg.config.mjs'),'utf8'),/requires: '>=0.5.0'/);
+  assert.match(readFileSync(path.join(root,'adg.config.mjs'),'utf8'),/requires: '>=0.5.0'/);
   assert.ok(existsSync(path.join(c.design,'fixtures/example.ts')));
   assert.ok(existsSync(path.join(c.design,'art')));
   assert.equal(existsSync(path.join(c.design,'studies')),false);
@@ -68,13 +68,13 @@ test('fresh init seeds a runnable downward composition and preserves it on rerun
 
 test('init respects explicit names and avoids starter assets in existing libraries',async t=>{
   const root=temporary(t),configuration="export default {sources:['atoms','features','pages']};\n";
-  put(root,'sdg.config.mjs',configuration);
+  put(root,'adg.config.mjs',configuration);
   const c=await loadConfig(root);init(c,()=>{});
-  assert.equal(readFileSync(path.join(root,'sdg.config.mjs'),'utf8'),configuration);
+  assert.equal(readFileSync(path.join(root,'adg.config.mjs'),'utf8'),configuration);
   assert.deepEqual(listSources(c.design,c.sources).map(f=>path.relative(c.design,f)),['atoms/example.tsx','features/example.tsx','pages/example.tsx']);
   assert.equal(existsSync(path.join(c.design,'components')),false);
   assert.equal(await check(c,[],{'read-only':true},()=>{},line=>assert.fail(line)),0);
-  const existing=temporary(t);put(existing,'sdg.config.mjs','export default {};');
+  const existing=temporary(t);put(existing,'adg.config.mjs','export default {};');
   put(existing,'design/components/control.tsx',source);put(existing,'design/tokens.css',starterTokens);
   const old=await loadConfig(existing);init(old,()=>{});
   assert.deepEqual(listSources(old.design).map(f=>path.relative(old.design,f)),['components/control.tsx']);
@@ -83,7 +83,7 @@ test('init respects explicit names and avoids starter assets in existing librari
 });
 
 test('default studies discovery needs an actual direct TSX source and never alters explicit sources',async t=>{
-  const root=temporary(t);put(root,'sdg.config.mjs','export default {};');
+  const root=temporary(t);put(root,'adg.config.mjs','export default {};');
   put(root,'design/studies/README.md','Explorations');
   assert.deepEqual((await loadConfig(root)).sources,layers);
   put(root,'design/studies/nested/helper.tsx',source);
@@ -96,12 +96,12 @@ test('default studies discovery needs an actual direct TSX source and never alte
 });
 
 test('read-only check reports resolved imports for all or selected files and opt-out keeps frame checks',async t=>{
-  const root=temporary(t);put(root,'sdg.config.mjs','export default {};');
+  const root=temporary(t);put(root,'adg.config.mjs','export default {};');
   put(root,'design/tokens.css',starterTokens);
   put(root,'design/modules/feature.tsx',source);put(root,'design/surfaces/index.tsx',source);
-  const bad=`import {Frame} from 'sdg';import {Part as Feature} from '../modules/feature';import {Part as Page} from '../surfaces';export default()=> <Frame name="default"><div><Feature/><Page/></div></Frame>;`;
+  const bad=`import {Frame} from 'adg';import {Part as Feature} from '../modules/feature';import {Part as Page} from '../surfaces';export default()=> <Frame name="default"><div><Feature/><Page/></div></Frame>;`;
   put(root,'design/components/bad.tsx',bad);
-  put(root,'design/modules/bad.tsx',`import {Part} from '../surfaces/index.tsx';import {Frame} from 'sdg';export default()=> <Frame name="default"><Part/></Frame>;`);
+  put(root,'design/modules/bad.tsx',`import {Part} from '../surfaces/index.tsx';import {Frame} from 'adg';export default()=> <Frame name="default"><Part/></Frame>;`);
   const c=await loadConfig(root),errors=[];
   assert.equal(await check(c,[],{'read-only':true},()=>{},line=>errors.push(line)),1);
   assert.equal(errors.length,3);
@@ -115,21 +115,21 @@ test('read-only check reports resolved imports for all or selected files and opt
   put(root,'design/components/bad.tsx',bad.replace('<div>','<div class="text-[#ff0101]">'));
   const paint=[];assert.equal(await check(c,['components/bad'],{'read-only':true},()=>{},line=>paint.push(line)),1);
   assert.equal(paint.length,2);assert.ok(paint.every(line=>line.includes('Color')));
-  assert.equal(existsSync(path.join(c.design,'.sdg')),false);assert.equal(existsSync(c.output),false);
+  assert.equal(existsSync(path.join(c.design,'.adg')),false);assert.equal(existsSync(c.output),false);
   assert.equal(parseCli(['check','--read-only']).values['read-only'],true);
 });
 
 test('config validates and loads the import-direction opt-out',async t=>{
   for(const value of [null,true,[],{importDirection:'false'}]) {
-    const root=temporary(t);put(root,'sdg.config.mjs',`export default {check:${JSON.stringify(value)}};`);
+    const root=temporary(t);put(root,'adg.config.mjs',`export default {check:${JSON.stringify(value)}};`);
     await assert.rejects(loadConfig(root),/Set check(?:\.importDirection)? to/);
   }
-  const root=temporary(t);put(root,'sdg.config.mjs','export default {check:{importDirection:false}};');
+  const root=temporary(t);put(root,'adg.config.mjs','export default {check:{importDirection:false}};');
   assert.equal((await loadConfig(root)).check.importDirection,false);
 });
 
 test('viewer adds and removes default studies through its file watcher', {timeout:15000},async t=>{
-  const root=temporary(t);put(root,'sdg.config.mjs','export default {};');
+  const root=temporary(t);put(root,'adg.config.mjs','export default {};');
   put(root,'design/tokens.css',starterTokens);put(root,'design/components/control.tsx',source);
   mkdirSync(path.join(root,'design/studies'));
   const server=await startServer({directory:path.join(root,'design'),stateDirectory:path.join(root,'state')});

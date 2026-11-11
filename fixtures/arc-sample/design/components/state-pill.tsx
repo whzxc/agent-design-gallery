@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 const forms = [
   { name: "running", text: "运行中" },
   { name: "waiting", text: "等待输入" },

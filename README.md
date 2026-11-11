@@ -1,15 +1,40 @@
-# SVG Design Gallery
+# Agent Design Gallery
 
 Build and browse a repository's TSX design frames with a local browser canvas.
 
 ```sh
-npm install -g @whzxc/svg-design-gallery
-sdg /path/to/design
+npm install -g @whzxc/agent-design-gallery
+adg /path/to/design
 ```
 
 Requires Node.js 22 or newer. Installation starts without a build step. TSX builds never load Chromium. Architecture builds use the bundled Playwright dependency to measure labels in Chromium, including in the viewer and hub. Each build worker starts one browser lazily, reuses it, and closes it after 30 seconds idle or on worker retirement. Browser toolkit commands also use Chromium; `check` and `render` share their existing browser with architecture measurement.
 
-`sdg` opens a loopback server in your default browser. Use `--no-open` to print its URL, `--port 5200` to select a port, or omit the directory to use the current project. Stop the server with Ctrl+C.
+`adg` opens a loopback server in your default browser. Use `--no-open` to print its URL, `--port 5200` to select a port, or omit the directory to use the current project. Stop the server with Ctrl+C.
+
+## Migrate an existing installation
+
+Install the new package, then run these one-time commands:
+
+```sh
+adg migrate /path/to/project
+adg service migrate
+```
+
+`adg migrate [project]` defaults to the current directory. It renames `sdg.config.mjs`, `.js` or `.ts` to
+`adg.config.*`, rewrites design-source imports from `sdg` (including runtime subpaths and `sdg:self`) to `adg`,
+updates design editor paths and `.sdg/` entries in the project's `.gitignore` files, deletes the old generated
+`design/.sdg/` directory and regenerates `design/.adg/` (using the configured design directory). It prints each
+change and is safe to repeat. When both config names exist, it refuses before changing files. Normal commands
+finding only an old config stop with guidance to run `adg migrate`.
+
+On macOS, `adg service migrate` stops `org.svg-design-gallery.hub`, moves its entire state directory from
+`svg-design-gallery` to `agent-design-gallery`, and replaces the LaunchAgent with `org.agent-design-gallery.hub`
+using the current Node and CLI paths and the previous port. It resolves the source from the old LaunchAgent's
+`--state-dir`, or `$XDG_STATE_HOME/svg-design-gallery` (default `~/.local/state/svg-design-gallery`). The destination
+is `$XDG_STATE_HOME/agent-design-gallery` by default; `--state-dir` selects a different destination. It refuses an
+existing target directory or new LaunchAgent. It prints steps and then lists other LaunchAgents still referencing
+the old state path without editing them or printing keys. Registry, preferences, caches and logs move together.
+The stored key prefix changes to `adg_`; update browser access with the new key through `adg serve --print-key`.
 
 ## Viewer controls
 
@@ -17,18 +42,18 @@ Drag or scroll to pan. Pinch, or hold Control/Command while scrolling, to zoom a
 
 The left toolbar holds Contents, the project picker, scope tabs, and search. **Tokens** appears first when the project provides a token file. A clean project URL opens the first nonempty design layer, normally **Components**. Use the tabs to switch layers or choose **All designs**. Contents starts closed and opens over the canvas. Asset search opens Contents with matches from the current scope. Click a group or asset name to focus it, or use its trailing **Render only** action to open it independently. An isolated asset lists its frames in Contents. Search and Fit all work within the current scope. Back restores the previous scope, selection and camera.
 
-Path links locate a selection within its design hierarchy. Query links open an independent layer, group, source, or frame. Copy the viewer URL to share its current view, or use `sdg link` to generate either form for a specific target.
+Path links locate a selection within its design hierarchy. Query links open an independent layer, group, source, or frame. Copy the viewer URL to share its current view, or use `adg link` to generate either form for a specific target.
 
 ## Share a design update
 
 ```sh
-sdg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled
-sdg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled --mode=path
-sdg open ./design --asset=components/button.tsx --frame=disabled --no-open
-sdg render components/button --frame=disabled --theme=dark --out-dir=output/review --json
+adg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled
+adg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled --mode=path
+adg open ./design --asset=components/button.tsx --frame=disabled --no-open
+adg render components/button --frame=disabled --theme=dark --out-dir=output/review --json
 ```
 
-Use the independent link in a change report. Add the path link when the surrounding assets matter. Use the project URL on a hub the recipient can reach. `sdg open` provides a live loopback preview while its server runs. `render` exports exact frame PNGs for attachments or automation. Without `--theme`, it exports both themes. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
+Use the independent link in a change report. Add the path link when the surrounding assets matter. Use the project URL on a hub the recipient can reach. `adg open` provides a live loopback preview while its server runs. `render` exports exact frame PNGs for attachments or automation. Without `--theme`, it exports both themes. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
 
 The rightmost toolbar button opens the Inspector for the selected node. It starts closed and overlays the canvas. It follows the selection and shows source path, frame name, dimensions, frames, and discovered **Uses** / **Used by** relationships. Indirect relationships are muted with their shortest `via` path. Click a relationship to focus the source, or to open it by itself when outside the current scope. An element selection shows its owning export and matching frames from the current scope. `GET /relationships` explicitly computes the complete direct graph as JSON, keyed by source path with `uses` and `usedBy` arrays.
 
@@ -42,7 +67,7 @@ The bottom zoom bar holds Back, zoom out, the zoom menu, zoom in, Fit, and Minim
 
 ## Sources and layout
 
-Design sources are TSX files directly in `design/components/`, `design/modules/` and `design/surfaces/`. Default discovery also includes `design/studies/` once it contains a direct TSX study; explicit `sources` lists remain unchanged. Fixtures and artwork stay in their supporting directories. Import `Frame` and `Icon` from `sdg`, export reusable component functions, and default-export a function returning the declared frames. JSX builds static HTML and inline SVG without React or browser scripts. Tailwind v4 utilities resolve through the project's `design/tokens.css`; light and dark are selected by the document's `data-theme`.
+Design sources are TSX files directly in `design/components/`, `design/modules/` and `design/surfaces/`. Default discovery also includes `design/studies/` once it contains a direct TSX study; explicit `sources` lists remain unchanged. Fixtures and artwork stay in their supporting directories. Import `Frame` and `Icon` from `adg`, export reusable component functions, and default-export a function returning the declared frames. JSX builds static HTML and inline SVG without React or browser scripts. Tailwind v4 utilities resolve through the project's `design/tokens.css`; light and dark are selected by the document's `data-theme`.
 
 Choose the **Tokens** tab to inspect the current project's `design/tokens.css`. Filter by category in Contents or search the table by name or value from the toolbar, compare light and dark declarations side by side, and click a token name to copy it. Colors show swatches, and pixel values for spacing, sizes, and radii show a visual sample. Share `?scope=tokens` to open the catalog directly.
 
@@ -65,38 +90,38 @@ Files group by directory unless `gallery.json` supplies project groups. Entries 
 }
 ```
 
-Unlisted assets remain in directory groups. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Theme, sidebar, inspector, and per-directory camera and selection preferences stay in `$XDG_STATE_HOME/svg-design-gallery/state.json`, defaulting to `~/.local/state/svg-design-gallery/state.json`. Refreshing or reopening a directory restores its zoom, position, selected component and form. Canvas asset headings show the source's last modification time in local time; hover for the complete timestamp. `--state-dir` isolates preferences.
+Unlisted assets remain in directory groups. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Theme, sidebar, inspector, and per-directory camera and selection preferences stay in `$XDG_STATE_HOME/agent-design-gallery/state.json`, defaulting to `~/.local/state/agent-design-gallery/state.json`. Refreshing or reopening a directory restores its zoom, position, selected component and form. Canvas asset headings show the source's last modification time in local time; hover for the complete timestamp. `--state-dir` isolates preferences.
 
 ## Design toolkit
 
 Run commands from inside the project:
 
 ```sh
-sdg init
-sdg check
-sdg render surfaces/example --frame=default --scale=2
-sdg check --read-only
+adg init
+adg check
+adg render surfaces/example --frame=default --scale=2
+adg check --read-only
 ```
 
-`init` creates tokens, components/modules/surfaces, fixtures/art, editor configuration and ignore entries. A fresh library gets one `example.tsx` per production layer, composed downward with shared fixture data; existing libraries receive no demo sources. Existing authored files are preserved, declarations are refreshed, and missing ignore entries are appended. Starter configuration requires SDG 0.5.0 or newer. `check --read-only` skips declarations and build files for an audit. Projects do not install SDG as a dependency.
+`init` creates tokens, components/modules/surfaces, fixtures/art, editor configuration and ignore entries. A fresh library gets one `example.tsx` per production layer, composed downward with shared fixture data; existing libraries receive no demo sources. Existing authored files are preserved, declarations are refreshed, and missing ignore entries are appended. Starter configuration requires ADG 0.5.0 or newer. `check --read-only` skips declarations and build files for an audit. Projects do not install ADG as a dependency.
 
-Builds produce standalone HTML and renders produce `<frame>-light.png` and `<frame>-dark.png` under `output/design/<source>/`. After configuring an implementation adapter and frame fixture/capture, use `sdg compare <source> --frame=<name>` or `sdg compare --all`. Flags override Frame capture props; `--all` writes a linked HTML index and `summary.json` under `output/design/compare/`. `sync` and `measure` have been removed.
+Builds produce standalone HTML and renders produce `<frame>-light.png` and `<frame>-dark.png` under `output/design/<source>/`. After configuring an implementation adapter and frame fixture/capture, use `adg compare <source> --frame=<name>` or `adg compare --all`. Flags override Frame capture props; `--all` writes a linked HTML index and `summary.json` under `output/design/compare/`. `sync` and `measure` have been removed.
 
 See the [toolkit contract](docs/design-toolkit.md) for source format and compare adapters, and the [changelog](CHANGELOG.md) for version changes. Node.js executes design modules at build time; open sources you trust.
 
 ## Architecture sources
 
-SDG discovers Mermaid `.mmd` files recursively under the project-root `arch/` directory.
+ADG discovers Mermaid `.mmd` files recursively under the project-root `arch/` directory.
 They appear in the Arch scope alongside UI sources, with one `default` frame per diagram.
 Set `arch: 'architecture'` or `arch: false` in the project config to change discovery.
 Project tokens paint both themes; an optional adjacent `.md` supplies Inspector notes,
 code owners and status. Pele is pinned to 1.12.0.
 
 ```sh
-sdg open . --asset=arch/system-map.mmd
-sdg check arch/system-map.mmd --read-only
-sdg render arch/system-map.mmd --theme=both --json
-sdg open . --asset=arch/system-map.mmd --base=HEAD
+adg open . --asset=arch/system-map.mmd
+adg check arch/system-map.mmd --read-only
+adg render arch/system-map.mmd --theme=both --json
+adg open . --asset=arch/system-map.mmd --base=HEAD
 ```
 
 See [architecture source format](docs/design-toolkit.md#architecture-sources) for the
@@ -116,22 +141,22 @@ After a completed runtime or dependency milestone passes its relevant checks and
 
 Maintainers publish releases to the public npm registry; a scope registry in the local npm config takes precedence over `publishConfig`, so override it with `npm publish --@whzxc:registry=https://registry.npmjs.org/`. Local milestone updates can install a tarball without publishing or changing the package version.
 
-See [SDG design](docs/design.md), [architecture](docs/architecture.md), and [performance](docs/performance.md). ARC's MIT-licensed gallery is the starting point; the MIT license and Lucide/Feather icon notices are retained in `LICENSE`.
+See [ADG design](docs/design.md), [architecture](docs/architecture.md), and [performance](docs/performance.md). ARC's MIT-licensed gallery is the starting point; the MIT license and Lucide/Feather icon notices are retained in `LICENSE`.
 
 ## Resident hub
 
-`sdg open <dir>` stays independent: no registry or hub is required, and the port is random by default. It accepts a design directory or a configured project root. The browser is read-only apart from viewer preferences. Select directories from the CLI; the browser has no reveal action.
+`adg open <dir>` stays independent: no registry or hub is required, and the port is random by default. It accepts a design directory or a configured project root. The browser is read-only apart from viewer preferences. Select directories from the CLI; the browser has no reveal action.
 
 ```sh
-sdg root add ~/Developer --depth 2
-sdg root list
-sdg root scan                 # Explicit rescan of registered roots
-sdg root scan ~/Developer
-sdg root remove ~/Developer
-sdg serve --port 4310
+adg root add ~/Developer --depth 2
+adg root list
+adg root scan                 # Explicit rescan of registered roots
+adg root scan ~/Developer
+adg root remove ~/Developer
+adg serve --port 4310
 ```
 
-Root commands output JSON. `--state-dir <path>` isolates registry and preferences. Scans run on add and explicit CLI/web rescan only. Depth defaults to 2 and accepts 0–3; hidden directories, node_modules, symlinks and Git worktrees (`.git` is a file) are skipped. Only directories containing `sdg.config.mjs`, `.js` or `.ts` are projects. TypeScript configs load through esbuild.
+Root commands output JSON. `--state-dir <path>` isolates registry and preferences. Scans run on add and explicit CLI/web rescan only. Depth defaults to 2 and accepts 0–3; hidden directories, node_modules, symlinks and Git worktrees (`.git` is a file) are skipped. Only directories containing `adg.config.mjs`, `.js` or `.ts` are projects. TypeScript configs load through esbuild.
 
 The hub binds 127.0.0.1. `GET /api/projects` returns name, path, design directory, stable slug and `/p/<slug>/` route, branch, short HEAD, last design commit time and dirty flag, source count and version compatibility. `frameCount` is null until an active viewer has built every source, then reports the exact count. Config errors are returned per project. `GET /api/roots` lists roots; `POST /api/rescan` rescans registered roots with no path input. Project viewers start on demand and stop after five idle minutes; an open SSE stream keeps a viewer active. The initial hub page is intentionally unstyled pending design approval.
 
@@ -140,18 +165,18 @@ The hub binds 127.0.0.1. `GET /api/projects` returns name, path, design director
 The hub creates `hub.key` in its state directory on first start with mode 0600. Direct-local data requests are exempt: Host must be localhost, 127.0.0.1 or ::1, with no Forwarded or X-Forwarded-* header present. The peer IP is never used for this decision.
 
 ```sh
-sdg serve --print-key                 # Print the current key and exit
-sdg serve --rotate-key                # Replace the key and exit
-sdg serve --rotate-key --print-key    # Replace and print it
+adg serve --print-key                 # Print the current key and exit
+adg serve --rotate-key                # Replace the key and exit
+adg serve --rotate-key --print-key    # Replace and print it
 ```
 
-Rotation applies to new requests in a running hub immediately. Existing streams end when disconnected. Open the hub or a canonical viewer URL with `?key=sdg_...` once: the public HTML/JS shell stores the key in localStorage (`sdg-key`) and removes the parameter using history.replaceState. There is no cookie or authentication redirect. Shells contain no project data. Data requests use `Authorization: Bearer <key>`; the server also accepts `X-SDG-Key` and `?key=`. SSE uses a query key. Frames, SVGs and artwork are fetched with headers and become self-contained blob/data previews. Missing or invalid credentials return JSON 401 and the shell shows a minimal 401 state.
+Rotation applies to new requests in a running hub immediately. Existing streams end when disconnected. Open the hub or a canonical viewer URL with `?key=adg_...` once: the public HTML/JS shell stores the key in localStorage (`adg-key`) and removes the parameter using history.replaceState. There is no cookie or authentication redirect. Shells contain no project data. Data requests use `Authorization: Bearer <key>`; the server also accepts `X-ADG-Key` and `?key=`. SSE uses a query key. Frames, SVGs and artwork are fetched with headers and become self-contained blob/data previews. Missing or invalid credentials return JSON 401 and the shell shows a minimal 401 state.
 
-`sdg open` registers itself in `<state>/instances/<id>.json` and removes its record on exit, independently of whether a hub is running. `GET /api/health` returns `{ id, capabilities: { keyAuth: 1 } }`. `GET /api/instances` checks PID liveness and the health ID, pruning dead or mismatched records. An alive PID with missing health or a viewer without the key-auth capability remains listed as not proxyable. Records include pid, port, directory, project name, branch, worktree flag, start time and SDG version.
+`adg open` registers itself in `<state>/instances/<id>.json` and removes its record on exit, independently of whether a hub is running. `GET /api/health` returns `{ id, capabilities: { keyAuth: 1 } }`. `GET /api/instances` checks PID liveness and the health ID, pruning dead or mismatched records. An alive PID with missing health or a viewer without the key-auth capability remains listed as not proxyable. Records include pid, port, directory, project name, branch, worktree flag, start time and ADG version.
 
 Close a verified live instance from its row on the hub home or in the project switcher. Closing the current viewer returns to the hub home. The switcher shows the instance's port to distinguish viewers with the same name. `POST /api/instances/<id>/stop` rechecks the registered instance before asking its process to shut down.
 
-`/i/<id>/` streams from that instance's own server, including its viewer runtime and SSE. The hub serves the project switcher and its instance controls for both prefixed routes. Public shell requests pass through without data; every proxied data request is authenticated before forwarding, then Authorization, X-SDG-Key, query key, cookies and forwarded headers are removed upstream. Relative viewer URLs preserve `/p/<slug>/` and `/i/<id>/`. Browser writes through either prefix are limited to viewer preferences and derived cache data.
+`/i/<id>/` streams from that instance's own server, including its viewer runtime and SSE. The hub serves the project switcher and its instance controls for both prefixed routes. Public shell requests pass through without data; every proxied data request is authenticated before forwarding, then Authorization, X-ADG-Key, query key, cookies and forwarded headers are removed upstream. Relative viewer URLs preserve `/p/<slug>/` and `/i/<id>/`. Browser writes through either prefix are limited to viewer preferences and derived cache data.
 
 ### nginx
 
@@ -167,7 +192,7 @@ location / {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header Forwarded "";
     proxy_set_header Authorization $http_authorization;
-    proxy_set_header X-SDG-Key $http_x_sdg_key;
+    proxy_set_header X-ADG-Key $http_x_adg_key;
     proxy_set_header Connection "";
     proxy_buffering off;
     proxy_cache off;
@@ -181,12 +206,12 @@ The proxy_pass has no URI suffix; do not strip `/p/<slug>/` or `/i/<id>/`. Disab
 ### macOS resident service
 
 ```sh
-sdg service install [--port 4310] [--state-dir /absolute/state/path]
-sdg service status
-sdg service logs
-sdg service uninstall
+adg service install [--port 4310] [--state-dir /absolute/state/path]
+adg service status
+adg service logs
+adg service uninstall
 ```
 
-The LaunchAgent `org.svg-design-gallery.hub` starts the resident hub at login with RunAtLoad and keeps it running with KeepAlive. It binds loopback and uses the same registry/key and auth contract as `sdg serve`. Installation records absolute Node and CLI paths in `~/Library/LaunchAgents/org.svg-design-gallery.hub.plist`, so launchd needs no shell PATH. Reinstall after moving the CLI or replacing the recorded Node installation.
+The LaunchAgent `org.agent-design-gallery.hub` starts the resident hub at login with RunAtLoad and keeps it running with KeepAlive. It binds loopback and uses the same registry/key and auth contract as `adg serve`. Installation records absolute Node and CLI paths in `~/Library/LaunchAgents/org.agent-design-gallery.hub.plist`, so launchd needs no shell PATH. Reinstall after moving the CLI or replacing the recorded Node installation.
 
-`status` prints JSON with installed/loaded state, PID, plist and log paths. `logs` prints the last 200 lines of each log. stdout and stderr go to `service.stdout.log` and `service.stderr.log` in the state directory. After an install with a custom state directory, status/logs/uninstall recover that directory from the plist when no override is given. Uninstall unloads the job and removes its plist, retaining registry, key, preferences and logs. Service commands on other platforms return an explicit unsupported error; `sdg serve` remains available there.
+`status` prints JSON with installed/loaded state, PID, plist and log paths. `logs` prints the last 200 lines of each log. stdout and stderr go to `service.stdout.log` and `service.stderr.log` in the state directory. After an install with a custom state directory, status/logs/uninstall recover that directory from the plist when no override is given. Uninstall unloads the job and removes its plist, retaining registry, key, preferences and logs. Service commands on other platforms return an explicit unsupported error; `adg serve` remains available there.

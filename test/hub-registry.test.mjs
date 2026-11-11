@@ -8,14 +8,14 @@ import { addRoot, removeRoot, listRoots, scanRoots, listProjects, projectSlug } 
 import { loadConfig, discoverRoot } from '../src/toolkit/config.mjs';
 
 async function fixture(t) {
-  const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'sdg-registry-')));
+  const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'adg-registry-')));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const root = path.join(temporary, 'roots'), state = path.join(temporary, 'state');
   await mkdir(root);
   const project = async (relative, extension = 'mjs', config = '{}') => {
     const directory = path.join(root, relative);
     await mkdir(directory, { recursive: true });
-    await writeFile(path.join(directory, `sdg.config.${extension}`), `export default ${config};`);
+    await writeFile(path.join(directory, `adg.config.${extension}`), `export default ${config};`);
     return directory;
   };
   return { root, state, project };
@@ -127,7 +127,7 @@ test('TypeScript config loads via esbuild without generated files and metadata r
   const config = await loadConfig(typed, { checkVersion: false });
   assert.equal(config.name, 'Typed project');
   assert.equal(config.compatible, false);
-  assert.deepEqual((await readdir(typed)).sort(), ['drawings', 'sdg.config.ts']);
+  assert.deepEqual((await readdir(typed)).sort(), ['adg.config.ts', 'drawings']);
   await addRoot(root, 2, state);
   const [metadata] = await listProjects(state);
   assert.equal(metadata.sourceCount, 1);

@@ -22,10 +22,10 @@ function rawStatus(url, headers) {
   });
 }
 async function fixture(t) {
-  const root = await mkdtemp(path.join(tmpdir(), 'sdg-auth-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-auth-'));
   const project = path.join(root, 'project'), stateDirectory = path.join(root, 'state');
   await mkdir(project);
-  await writeFile(path.join(project, 'sdg.config.mjs'), 'export default { name: "Private project" };');
+  await writeFile(path.join(project, 'adg.config.mjs'), 'export default { name: "Private project" };');
   await cp(new URL('../fixtures/arc-sample/design', import.meta.url), path.join(project, 'design'), { recursive: true });
   await addRoot(project, 0, stateDirectory);
   const hub = await startHub({ port: 0, stateDirectory });
@@ -42,7 +42,7 @@ test('direct-local exemption uses only loopback Host and absence of every forwar
       assert.equal(directLocal({headers:{host,[name]:''}}),false);
   }
   for (const host of ['localhost.evil','127.0.0.1.evil','user@localhost','evil.invalid','[::ffff:127.0.0.1]']) assert.equal(directLocal({headers:{host}}),false);
-  assert.equal(equalKey('short','longer'),false); assert.equal(equalKey('sdg_test','sdg_test'),true);
+  assert.equal(equalKey('short','longer'),false); assert.equal(equalKey('adg_test','adg_test'),true);
 });
 
 test('data endpoints require header or query keys, shells contain no project data, rotation takes effect live', async t => {
@@ -60,12 +60,12 @@ test('data endpoints require header or query keys, shells contain no project dat
   const icon = await fetch(new URL('favicon.svg',hub.url),{headers:forwarded});
   assert.equal(icon.status,200);
   assert.match(icon.headers.get('content-type'),/^image\/svg\+xml\b/);
-  assert.equal(await icon.text(),await readFile(new URL('../design/art/sdg-mark.svg',import.meta.url),'utf8'));
+  assert.equal(await icon.text(),await readFile(new URL('../design/art/adg-mark.svg',import.meta.url),'utf8'));
   for (const route of ['api/projects','api/instances','api/roots',project.url+'manifest',project.url+'relationships',project.url+'asset/components%2Fbutton.tsx',project.url+'events']) {
     for (const headers of [forwarded,{...forwarded,Authorization:'Bearer invalid'},{Host:'external.invalid'}])
       assert.equal(await rawStatus(new URL(route,hub.url),headers),401,route);
   }
-  for (const headers of [{...forwarded,'X-SDG-Key':key},auth]) assert.equal((await fetch(new URL('api/projects',hub.url),{headers})).status,200);
+  for (const headers of [{...forwarded,'X-ADG-Key':key},auth]) assert.equal((await fetch(new URL('api/projects',hub.url),{headers})).status,200);
   assert.equal((await fetch(new URL(`api/projects?key=${key}`,hub.url),{headers:forwarded})).status,200);
   assert.equal((await fetch(new URL('api/projects',hub.url))).status,200);
   assert.equal((await fetch(new URL('api/rescan',hub.url),{headers:forwarded,method:'POST'})).status,401);
@@ -81,7 +81,7 @@ test('data endpoints require header or query keys, shells contain no project dat
   assert.equal(printed.stdout.trim(),key);
   await exec(process.execPath,[cli,'serve','--rotate-key','--state-dir',stateDirectory]);
   assert.equal((await fetch(new URL('api/projects',hub.url),{headers:auth})).status,401);
-  assert.equal((await fetch(new URL('api/projects',hub.url),{headers:{...forwarded,'X-SDG-Key':await hubKey(stateDirectory)}})).status,200);
+  assert.equal((await fetch(new URL('api/projects',hub.url),{headers:{...forwarded,'X-ADG-Key':await hubKey(stateDirectory)}})).status,200);
 });
 
 test('instance proxy streams its own server and strips credentials and browser filesystem mutations', async t => {
@@ -97,7 +97,7 @@ test('instance proxy streams its own server and strips credentials and browser f
   t.after(async()=>{instance.closeAllConnections();await new Promise(resolve=>instance.close(resolve));});
   await registerInstance({directory:project,port:instance.address().port,id:'custom',stateDirectory});
   for(const route of ['','app.js','manifest','asset/anything?theme=dark']) {
-    const response=await fetch(new URL(`i/custom/${route}${route.includes('?')?'&':'?'}key=${key}`,hub.url),{headers:{...auth,'X-SDG-Key':key,Cookie:'test=discard'}});
+    const response=await fetch(new URL(`i/custom/${route}${route.includes('?')?'&':'?'}key=${key}`,hub.url),{headers:{...auth,'X-ADG-Key':key,Cookie:'test=discard'}});
     assert.equal(response.status,200);assert.equal(await response.text(),'own modified instance code');
   }
   assert.equal((await fetch(new URL('i/custom/manifest',hub.url),{headers:forwarded})).status,401);
@@ -106,7 +106,7 @@ test('instance proxy streams its own server and strips credentials and browser f
   const reader=stream.body.getReader();assert.match(new TextDecoder().decode((await reader.read()).value),/custom-stream/);await reader.cancel();
   for(const {url,headers} of seen) {
     assert.equal(new URL(url,'http://localhost').searchParams.has('key'),false);
-    for(const name of ['authorization','x-sdg-key','cookie','forwarded','x-forwarded-proto']) assert.equal(headers[name],undefined);
+    for(const name of ['authorization','x-adg-key','cookie','forwarded','x-forwarded-proto']) assert.equal(headers[name],undefined);
   }
   await writeFile(path.join(stateDirectory,'instances/legacy.json'),JSON.stringify({id:'legacy',pid:process.pid,port:instance.address().port}));
   // Reused port identities are pruned rather than ever routed.
@@ -122,20 +122,20 @@ test('browser captures localStorage key, cleans URL, authenticates prefixed view
     await page.waitForSelector('#projects a');
     assert.equal(new URL(page.url()).searchParams.has('key'),false);
     assert.equal(new URL(page.url()).searchParams.get('keep'),'yes');
-    assert.equal(await page.evaluate(()=>localStorage.getItem('sdg-key')),key);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('adg-key')),key);
     assert.equal((await context.cookies()).length,0);
     await page.locator('#projects a').click();
-    await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.waitForFunction(()=>window.__adg?.ready);
     await page.waitForFunction(()=>performance.getEntriesByType('resource').some(entry=>entry.name.includes('/asset/')));
     assert.ok(requests.some(req=>req.url.includes('/asset/')&&req.headers.authorization===`Bearer ${key}`));
     assert.ok(requests.some(req=>req.url.includes('/events?key=')));
-    await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.reload();await page.waitForFunction(()=>window.__adg?.ready);
     assert.deepEqual(errors,[]);
     const denied=await browser.newContext({extraHTTPHeaders:forwarded}),deniedPage=await denied.newPage();
     await deniedPage.goto(hub.url);
     await deniedPage.getByRole('heading', { name: 'Key required', exact: true }).waitFor();
     assert.match(await deniedPage.getByRole('alert').innerText(), /This browser needs an access key\./);
-    await deniedPage.evaluate(() => localStorage.setItem('sdg-key', 'rejected'));
+    await deniedPage.evaluate(() => localStorage.setItem('adg-key', 'rejected'));
     await deniedPage.reload();
     await deniedPage.getByRole('heading', { name: 'Key required', exact: true }).waitFor();
     assert.match(await deniedPage.getByRole('alert').innerText(), /The key saved in this browser was rejected\./);
@@ -143,13 +143,13 @@ test('browser captures localStorage key, cleans URL, authenticates prefixed view
   } finally {await browser.close();}
 });
 
-test('sdg open records actual health identity and cleans records on exit without a running hub', async t => {
-  const state=await mkdtemp(path.join(tmpdir(),'sdg-open-contract-'));
+test('adg open records actual health identity and cleans records on exit without a running hub', async t => {
+  const state=await mkdtemp(path.join(tmpdir(),'adg-open-contract-'));
   const child=spawn(process.execPath,[new URL('../src/cli.mjs',import.meta.url).pathname,'open',new URL('../fixtures/arc-sample/design',import.meta.url).pathname,'--no-open','--port','0','--state-dir',state],{stdio:['ignore','pipe','pipe']});
   t.after(async()=>{if(child.exitCode===null&&child.signalCode===null){const done=once(child,'exit');child.kill('SIGTERM');await done;}await rm(state,{recursive:true,force:true});});
   const url=await new Promise((resolve,reject)=>{
     let output='';const timeout=setTimeout(()=>reject(new Error('Instance CLI startup timed out')),5000);
-    child.stdout.on('data',chunk=>{output+=chunk;const match=output.match(/SDG: (http:\/\/\S+)/);if(match){clearTimeout(timeout);resolve(match[1]);}});
+    child.stdout.on('data',chunk=>{output+=chunk;const match=output.match(/ADG: (http:\/\/\S+)/);if(match){clearTimeout(timeout);resolve(match[1]);}});
     child.once('exit',()=>{clearTimeout(timeout);reject(new Error(output));});child.once('error',reject);
   });
   const [record]=await listInstances(state);
@@ -164,9 +164,9 @@ test('sdg open records actual health identity and cleans records on exit without
     const context=await browser.newContext({extraHTTPHeaders:forwarded}),page=await context.newPage();
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto(new URL(`i/${record.id}/?key=${await hubKey(state)}`,hub.url).href);
-    await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.waitForFunction(()=>window.__adg?.ready);
     assert.equal(new URL(page.url()).searchParams.has('key'),false);
-    await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.reload();await page.waitForFunction(()=>window.__adg?.ready);
     assert.deepEqual(errors,[]);
   } finally {await browser.close();await hub.close();}
   assert.equal((await fetch(new URL('manifest',url))).status,200);

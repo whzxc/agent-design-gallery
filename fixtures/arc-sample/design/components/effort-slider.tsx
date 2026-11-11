@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 const steps = ["Inherit", "Low", "Medium", "High", "Max"];
 export function EffortSlider({
   steps,

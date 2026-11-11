@@ -8,7 +8,7 @@ const error = document.querySelector('#error');
 const rescan = document.querySelector('#rescan');
 const media = matchMedia('(prefers-color-scheme: dark)');
 function applyTheme() {
-  const saved = localStorage.getItem('sdg-theme');
+  const saved = localStorage.getItem('adg-theme');
   document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved : media.matches ? 'dark' : 'light';
 }
 applyTheme();
@@ -89,7 +89,7 @@ function projectRow(project) {
     const warning = element('div', 'hub-warning');
     warning.append(glyph('circle-alert', 14));
     if (incompatible) warning.append(element('span', '', 'Version incompatible'),
-      element('span', 'hub-warning-detail', `Requires SDG ${project.compatibility.requires?.replace(/>=/g, '≥')} · hub ${project.compatibility.version}`));
+      element('span', 'hub-warning-detail', `Requires ADG ${project.compatibility.requires?.replace(/>=/g, '≥')} · hub ${project.compatibility.version}`));
     else warning.append(element('span', '', project.error));
     row.append(warning);
   }

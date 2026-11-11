@@ -3,10 +3,10 @@ output/
 *.tgz
 .DS_Store
 
-/design/.sdg/
+/design/.adg/
 
 /output/design/
 
-**/.sdg/
+**/.adg/
 /public/tokens.css
 /public/favicon.svg

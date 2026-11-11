@@ -11,10 +11,10 @@ import {launch} from '../src/toolkit/browser.mjs';
 const text='One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen.';
 const stage=body=>`<!doctype html><style>
   html,body{margin:0}*{box-sizing:border-box}p{margin:0}
-  [data-sdg-frame]{width:240px;height:200px;font:16px/20px monospace}
+  [data-adg-frame]{width:240px;height:200px;font:16px/20px monospace}
   .stage{position:relative;width:240px;height:200px}
   .text{position:absolute;left:16px;top:24px}
-</style><div data-sdg-frame="visibility" data-brand><div class="stage" data-free data-brand>${body}</div></div>`;
+</style><div data-adg-frame="visibility" data-brand><div class="stage" data-free data-brand>${body}</div></div>`;
 async function inspect(page,body) {
   await page.setContent(stage(body));
   return page.evaluate(inspectFrame,[]);
@@ -142,10 +142,10 @@ test('unclipped text/container/frame overflow and inline overflow-visible collis
 });
 
 test('normal check and read-only check share the clipping and opaque-occlusion fix',async t=>{
-  const root=mkdtempSync(path.join(tmpdir(),'sdg-checker-visibility-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+  const root=mkdtempSync(path.join(tmpdir(),'adg-checker-visibility-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
   mkdirSync(path.join(root,'design/surfaces'),{recursive:true});
-  writeFileSync(path.join(root,'sdg.config.mjs'),'export default {};');writeFileSync(path.join(root,'design/tokens.css'),starterTokens);
-  writeFileSync(path.join(root,'design/surfaces/visibility.tsx'),`import {Frame} from 'sdg';export default()=>[
+  writeFileSync(path.join(root,'adg.config.mjs'),'export default {};');writeFileSync(path.join(root,'design/tokens.css'),starterTokens);
+  writeFileSync(path.join(root,'design/surfaces/visibility.tsx'),`import {Frame} from 'adg';export default()=>[
     <Frame name="dialog" width={200} height={180}><div data-free data-brand style={{position:'relative',width:200,height:180}}>
       <span style={{position:'absolute',top:20}}>Underneath</span>
       <div style={{position:'absolute',inset:0,background:'white'}}><span style={{position:'absolute',top:20}}>Dialog</span></div>

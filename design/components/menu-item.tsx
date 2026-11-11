@@ -1,4 +1,4 @@
-import { Frame, Icon } from 'sdg';
+import { Frame, Icon } from 'adg';
 import { menuItemForms } from '../fixtures/rows';
 
 export function MenuItem({ form = 'item', label, meta }: { form?: string; label: string; meta?: string }) {

@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 import { Canvas } from '../components/canvas';
 import { Switcher } from '../modules/project-switcher';
 import { projects, hubNotes } from '../fixtures/hub';

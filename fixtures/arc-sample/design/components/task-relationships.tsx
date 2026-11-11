@@ -1,4 +1,4 @@
-import { Frame, Icon } from "sdg";
+import { Frame, Icon } from "adg";
 import { Tile, type TileTone } from "./tile";
 import { TopologyScene } from "./topology-scene";
 const parentTitle = "更新设计工作流";

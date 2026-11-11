@@ -1,4 +1,4 @@
-import { Frame, Icon } from 'sdg';
+import { Frame, Icon } from 'adg';
 import { Panel } from '../components/panel';
 import { geometryGroups, tokenGroups, tokenSource, type TokenGroup } from '../fixtures/tokens';
 

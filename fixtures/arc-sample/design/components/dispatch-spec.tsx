@@ -1,4 +1,4 @@
-import { Frame, Icon } from "sdg";
+import { Frame, Icon } from "adg";
 import { EffortGauge, type EffortPosition } from "./effort-gauge";
 const example = {
   model: "GPT-5.6 Sol",

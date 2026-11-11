@@ -1,4 +1,4 @@
-import { Frame, Icon } from "sdg";
+import { Frame, Icon } from "adg";
 import ArcMarkArt from "../art/arc-mark.svg";
 const forms = [
   { name: "default", lowerArcHover: false },

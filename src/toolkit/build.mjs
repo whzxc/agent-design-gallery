@@ -33,10 +33,10 @@ async function registeredSource(file, sourcePath, original) {
     // accesses preserve aliases and let the bundler drop imported frame renderers.
     const compiled = await transform(original, {loader:'tsx',format:'esm',jsx:'preserve'});
     const names = [...compiled.code.matchAll(/\nexport\s*\{([^}]+)\}\s*;\s*$/g)].flatMap(match => match[1].split(',').map(item => item.trim().split(/\s+as\s+/).at(-1)).filter(name => name && name !== 'default'));
-    const registrations = names.map(name => `__sdgRegister(__sdgExports[${JSON.stringify(name)}],${JSON.stringify(sourcePath)},${JSON.stringify(name)});`).join('\n');
+    const registrations = names.map(name => `__adgRegister(__adgExports[${JSON.stringify(name)}],${JSON.stringify(sourcePath)},${JSON.stringify(name)});`).join('\n');
     const contents = `${original}
-import * as __sdgExports from 'sdg:self';
-import {registerComponent as __sdgRegister} from 'sdg';
+import * as __adgExports from 'adg:self';
+import {registerComponent as __adgRegister} from 'adg';
 ${registrations}
 `;
     // Account for the generated text too; large individual sources need not
@@ -77,11 +77,11 @@ export async function buildSource(config, file, { write = true, allowLegacy = tr
   file = realpathSync(file);
   const base = realpathSync(config.design), dependencies = new Set([path.join(base, 'tokens.css')]);
   const imports = new Set(), sources = sourceDirectories(config);
-  const result = await build({ entryPoints: [file], bundle: true, write: false, format: 'esm', platform: 'node', jsx: 'automatic', jsxImportSource: 'sdg', jsxDev: true, metafile: true, logLevel: 'silent', plugins: [{ name: 'sdg-sources', setup(api) {
+  const result = await build({ entryPoints: [file], bundle: true, write: false, format: 'esm', platform: 'node', jsx: 'automatic', jsxImportSource: 'adg', jsxDev: true, metafile: true, logLevel: 'silent', plugins: [{ name: 'adg-sources', setup(api) {
     api.onResolve({ filter: /.*/ }, args => {
-      if (args.path === 'sdg:self') return {path:args.importer};
-      if (['sdg','sdg/jsx-runtime','sdg/jsx-dev-runtime'].includes(args.path)) return { path: pathToFileURL(runtime).href, external: true };
-      if (args.kind !== 'entry-point' && !args.path.startsWith('.')) return { errors: [{ text: `Bare import ${args.path} is unavailable; import sdg or a relative file inside design/` }] };
+      if (args.path === 'adg:self') return {path:args.importer};
+      if (['adg','adg/jsx-runtime','adg/jsx-dev-runtime'].includes(args.path)) return { path: pathToFileURL(runtime).href, external: true };
+      if (args.kind !== 'entry-point' && !args.path.startsWith('.')) return { errors: [{ text: `Bare import ${args.path} is unavailable; import adg or a relative file inside design/` }] };
       const url = args.path.endsWith('?url');
       const requested = url ? args.path.slice(0,-4) : args.path;
       let resolved = args.kind === 'entry-point' ? path.resolve(requested) : path.resolve(args.resolveDir, requested);
@@ -109,7 +109,7 @@ export async function buildSource(config, file, { write = true, allowLegacy = tr
       const source = read(args.path,'utf8');
       const forbidden = /<(?:style|script)\b|\s(?:on[\w-]+|className)\s*=/i.exec(source);
       if (forbidden) { const before=source.slice(0,forbidden.index); return {errors:[{text:'Forbidden SVG markup; remove styles, scripts and event attributes',location:{file:args.path,line:before.split('\n').length,column:before.length-before.lastIndexOf('\n')-1}}]}; }
-      return { contents: `import { artwork } from 'sdg'; export default props => artwork(${JSON.stringify(source)}, props);`, loader:'js' };
+      return { contents: `import { artwork } from 'adg'; export default props => artwork(${JSON.stringify(source)}, props);`, loader:'js' };
     });
   } }] });
   const mod = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}#${Date.now()}`);
@@ -124,9 +124,9 @@ export async function buildSource(config, file, { write = true, allowLegacy = tr
   const tokenSource = read(path.join(base,'tokens.css'),'utf8'), tokens = snapshot ? parseTokens(tokenSource) : loadTokens(config);
   const compiler = await compile(`${readFileSync(path.join(tailwind,'theme.css'),'utf8')}\n${themeCss(tokens)}\n${readFileSync(path.join(tailwind,'preflight.css'),'utf8')}\n@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));\n@tailwind utilities;`);
   const classes = [...new Set(frames.flatMap(f => [...f.html.matchAll(/\bclass="([^"]*)"/g)].flatMap(m => m[1].split(/\s+/))))];
-  const css = `${compiler.build(classes)}\n${tokenSource}\nhtml,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-sdg-frame]{display:flex;align-items:flex-start;position:relative;background:var(--canvas)}[data-sdg-frame]>*,svg{flex-shrink:0} @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}`;
+  const css = `${compiler.build(classes)}\n${tokenSource}\nhtml,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-adg-frame]{display:flex;align-items:flex-start;position:relative;background:var(--canvas)}[data-adg-frame]>*,svg{flex-shrink:0} @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}`;
   for (const frame of frames) {
-    frame.document = theme => `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-sdg-frame="${escape(frame.name)}" style="${frame.width ? `width:${frame.width}px;` : 'width:max-content;'}${frame.height ? `height:${frame.height}px;` : ''}">${frame.html}</div></body></html>`;
+    frame.document = theme => `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="${escape(frame.name)}" style="${frame.width ? `width:${frame.width}px;` : 'width:max-content;'}${frame.height ? `height:${frame.height}px;` : ''}">${frame.html}</div></body></html>`;
     if (write) { const destination = path.join(config.output, path.relative(base,file).replace(/\.tsx$/, ''), `${encodeURIComponent(frame.name)}.html`); mkdirSync(path.dirname(destination),{recursive:true}); writeFileSync(destination,frame.document('light')); }
   }
   return { frames, dependencies: [...dependencies], imports: [...imports].sort(), css };

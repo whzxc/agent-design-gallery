@@ -6,7 +6,7 @@ import path from 'node:path';
 import {startServer} from '../src/server.mjs';
 
 test('an embedded artwork edit refreshes a legacy SVG without a TSX dependency', async t=>{
-  const root=await mkdtemp(path.join(tmpdir(),'sdg-embedded-refresh-'));
+  const root=await mkdtemp(path.join(tmpdir(),'adg-embedded-refresh-'));
   t.after(()=>rm(root,{recursive:true,force:true}));
   const design=path.join(root,'design');
   await mkdir(path.join(design,'components'),{recursive:true});

@@ -23,22 +23,22 @@ export function sourceDirectories(config = {}) {
     readdirSync(path.join(config.design, 'studies'), {withFileTypes:true}).some(entry => entry.isFile() && isSourcePath(`studies/${entry.name}`, ['studies']));
   const sources = config.sources === undefined ? [...defaultSources, ...(studies ? ['studies'] : [])] : config.sources;
   if (!Array.isArray(sources) || !sources.length || sources.some(name => typeof name !== 'string' || !/^[A-Za-z0-9_-]+$/.test(name))) {
-    throw Error('Set sources to a non-empty array of plain top-level directory names in sdg.config.mjs; nesting is not allowed');
+    throw Error('Set sources to a non-empty array of plain top-level directory names in adg.config.mjs; nesting is not allowed');
   }
   return [...new Set(sources)];
 }
 const sourceLocations = sources => sources.map(name => `${name}/`).join(', ');
 export function refreshTypes(config) {
-  mkdirSync(path.join(config.design, '.sdg'), { recursive: true });
+  mkdirSync(path.join(config.design, '.adg'), { recursive: true });
   const runtime = readFileSync(new URL('./runtime.d.ts', import.meta.url), 'utf8');
-  writeFileSync(path.join(config.design, '.sdg/runtime.d.ts'), runtime);
-  writeFileSync(path.join(config.design, '.sdg/assets.d.ts'), `declare module '*?url' { const url: string; export default url; }\ndeclare module '*.svg' { const Art: (props: Record<string, unknown>) => any; export default Art; }\n${['png','jpg','jpeg','webp'].map(ext => `declare module '*.${ext}' { const url: string; export default url; }`).join('\n')}\n`);
+  writeFileSync(path.join(config.design, '.adg/runtime.d.ts'), runtime);
+  writeFileSync(path.join(config.design, '.adg/assets.d.ts'), `declare module '*?url' { const url: string; export default url; }\ndeclare module '*.svg' { const Art: (props: Record<string, unknown>) => any; export default Art; }\n${['png','jpg','jpeg','webp'].map(ext => `declare module '*.${ext}' { const url: string; export default url; }`).join('\n')}\n`);
 }
-export const tsconfig = { compilerOptions: { target: 'ESNext', module: 'ESNext', moduleResolution: 'Bundler', jsx: 'react-jsx', jsxImportSource: 'sdg', noEmit: true, strict: true, paths: { sdg: ['./.sdg/runtime.d.ts'], 'sdg/jsx-runtime': ['./.sdg/runtime.d.ts'] } }, include: ['**/*.tsx', '**/*.ts', '.sdg/*.d.ts'] };
+export const tsconfig = { compilerOptions: { target: 'ESNext', module: 'ESNext', moduleResolution: 'Bundler', jsx: 'react-jsx', jsxImportSource: 'adg', noEmit: true, strict: true, paths: { adg: ['./.adg/runtime.d.ts'], 'adg/jsx-runtime': ['./.adg/runtime.d.ts'] } }, include: ['**/*.tsx', '**/*.ts', '.adg/*.d.ts'] };
 function starterSources(sources) {
   const layers=sources.filter(name=>name!=='studies');
   return layers.map((directory,index) => {
-    const imports=`import { Frame } from 'sdg';\n`;
+    const imports=`import { Frame } from 'adg';\n`;
     let body;
     if (!index) body=`import { example } from '../fixtures/example';
 
@@ -66,7 +66,7 @@ export function init(config, log = console.log) {
   const sources=sourceDirectories(config), fresh=sources.some(name=>name!=='studies') &&
     !listSources(config.design,sources).length && !existsSync(path.join(config.design,'fixtures/example.ts'));
   for (const [file, content] of [
-    [path.join(config.root, 'sdg.config.mjs'), "export default { requires: '>=0.5.0', design: 'design', output: 'output/design' };\n"],
+    [path.join(config.root, 'adg.config.mjs'), "export default { requires: '>=0.5.0', design: 'design', output: 'output/design' };\n"],
     [path.join(config.design, 'tokens.css'), starterTokens],
     ...[...sources.filter(name=>name!=='studies'), 'fixtures', 'art'].map(name => [path.join(config.design, name), null]),
     ...(fresh ? [
@@ -82,7 +82,7 @@ export function init(config, log = console.log) {
   }
   const ignore = path.join(config.root, '.gitignore');
   let text = existsSync(ignore) ? readFileSync(ignore, 'utf8') : '';
-  for (const entry of [`/${relative(config, config.design)}/.sdg/`, `/${relative(config, config.output ?? path.join(config.root, 'output/design'))}/`]) if (!text.split('\n').includes(entry)) text += `\n${entry}\n`;
+  for (const entry of [`/${relative(config, config.design)}/.adg/`, `/${relative(config, config.output ?? path.join(config.root, 'output/design'))}/`]) if (!text.split('\n').includes(entry)) text += `\n${entry}\n`;
   writeFileSync(ignore, text);
   refreshTypes(config);
   return 0;
@@ -156,5 +156,5 @@ export function selectSources(config, args = [], { write = true, additional = []
 export const relative = (config, file) => path.relative(config.root, file).split(path.sep).join('/');
 export function loadTokens(config) {
   try { return parseTokens(readFileSync(path.join(config.design, 'tokens.css'), 'utf8')); }
-  catch (error) { throw Error(`${error.message}; fix design/tokens.css or run sdg init`); }
+  catch (error) { throw Error(`${error.message}; fix design/tokens.css or run adg init`); }
 }

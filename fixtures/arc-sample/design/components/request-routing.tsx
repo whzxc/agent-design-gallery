@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 import { Button } from "./button";
 const forms = [
   { name: "passive", status: "Will be handled at the source’s next check" },

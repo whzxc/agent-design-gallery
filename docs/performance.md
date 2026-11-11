@@ -86,18 +86,20 @@ Further work should profile native SVG/canvas retention, visible vector decode c
 
 - All 5,004 theme-frame documents, CSS and imports match the baseline builder byte-for-byte.
 - All 552 cropped preview SVGs match before/after compaction and through actual cache POST/disk/GET.
-- Baseline and current full snapshot `sdg check --read-only` both pass all 140 sources with identical output.
+- Baseline and current full snapshot `adg check --read-only` both pass all 140 sources with identical output.
 - `npm test` passes 97 tests in 21.21 seconds, within the previous 36-second budget. All fixture assertions remain; independent fixture pages run with concurrency two.
 - Final samples preserve the camera on save and report no page errors.
 
 Run the comparison from this repository against a disposable source copy:
 
 ```sh
-node tooling/compare.mjs /path/to/snapshot/design output/comparison 3 --sdg-baseline=/path/to/baseline-code --warm-restart
+node tooling/compare.mjs /path/to/snapshot/design output/comparison 3 --adg-baseline=/path/to/baseline-code --warm-restart
 ```
+
+Pass `--browse-only` to the comparison runner to measure navigation without interactions, saves or screenshots.
 
 The runner derives an isolated design copy, uses separate preferences and free ports, and retains raw JSON, screenshots and logs. A baseline archive needs its dependencies available. `tooling/benchmark.mjs <url> <output.json> [snapshot-design-directory]` measures an existing direct or isolated hub URL; `--browse-only` records restart navigation without interactions. The save phase modifies only the supplied disposable copy and restores it in `finally`.
 
-The benchmark uses Fit all and an interior viewport zoom anchor, switches to the opposite theme, and waits for SDG readiness. Resource entries distinguish source/preview GETs from cache uploads. Metadata, image queues and cache writes settle before warm/restart samples and isolated save timing.
+The benchmark uses Fit all and an interior viewport zoom anchor, switches to the opposite theme, and waits for ADG readiness. Resource entries distinguish source/preview GETs from cache uploads. Metadata, image queues and cache writes settle before warm/restart samples and isolated save timing.
 
 Detailed commands and raw results are retained locally in `output/perf-round2/baseline.md`, `result.md` and `summary.json`. The local retention harness records server/driver process identities, worker statistics, current metadata coverage and renderer RSS. Copied acceptance assets and raw measurements stay under ignored `output/` and are excluded from the npm package.

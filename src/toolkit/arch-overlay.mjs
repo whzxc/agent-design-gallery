@@ -86,7 +86,7 @@ function flowchart(model,base,result) {
   model.edges=compareEdges(model.edges.map(toEdge),(base?.edges??[]).map(toEdge),'edge',result);
   const used=new Set();
   for(const [i,edge] of model.edges.entries()) {
-    if(!edge.id||used.has(edge.id))edge.id=`sdg-overlay-edge${i}`;
+    if(!edge.id||used.has(edge.id))edge.id=`adg-overlay-edge${i}`;
     used.add(edge.id);
     if(edge.diff){if(edge.stroke==='invisible')edge.stroke='normal';addClass(edge,'classes',edge.diff);result.edges.set(edge.id,edge.diff);edge.text=diffLabel(edge.diff,edge.text);}
   }
@@ -192,12 +192,12 @@ export function stampOverlay(svg,overlay) {
 export function overlayStyles() {
   const shape=':is(rect,path,polygon,circle,ellipse)';
   return `:root{--arch-added:var(--accent,#6a5ad0);--arch-changed:var(--accent,#6a5ad0);--arch-removed:var(--text-tertiary,#737373)}:root[data-theme="dark"]{--arch-added:var(--accent,#ab9fff);--arch-changed:var(--accent,#ab9fff);--arch-removed:var(--text-tertiary,#a3a3a3)}
-${diffClasses.map(name=>`[data-sdg-arch] .pele :is(.pele-node,.pele-cluster).${name}>${shape}{stroke:var(--arch-${name});stroke-width:2.5px;stroke-dasharray:${name==='changed'?'4 3':name==='removed'?'5 4':'none'}}
-[data-sdg-arch] .pele .pele-edge.${name},[data-sdg-arch] .pele .pele-edge.${name}>:is(path,line,polyline){stroke:var(--arch-${name});stroke-width:2.25px;stroke-dasharray:${name==='changed'?'4 3':name==='removed'?'5 4':'none'}}
-[data-sdg-arch] .pele .pele-edge.${name} .pele-marker{fill:var(--arch-${name});stroke:var(--arch-${name});stroke-dasharray:none}
-[data-sdg-arch] .pele .pele-edge-label.${name}{fill:var(--arch-${name})}`).join('\n')}
-[data-sdg-arch] .pele :is(.pele-node,.pele-cluster,.pele-edge).removed{opacity:.5}
-[data-sdg-arch] .pele .pele-edge-label.removed text{opacity:.5}
+${diffClasses.map(name=>`[data-adg-arch] .pele :is(.pele-node,.pele-cluster).${name}>${shape}{stroke:var(--arch-${name});stroke-width:2.5px;stroke-dasharray:${name==='changed'?'4 3':name==='removed'?'5 4':'none'}}
+[data-adg-arch] .pele .pele-edge.${name},[data-adg-arch] .pele .pele-edge.${name}>:is(path,line,polyline){stroke:var(--arch-${name});stroke-width:2.25px;stroke-dasharray:${name==='changed'?'4 3':name==='removed'?'5 4':'none'}}
+[data-adg-arch] .pele .pele-edge.${name} .pele-marker{fill:var(--arch-${name});stroke:var(--arch-${name});stroke-dasharray:none}
+[data-adg-arch] .pele .pele-edge-label.${name}{fill:var(--arch-${name})}`).join('\n')}
+[data-adg-arch] .pele :is(.pele-node,.pele-cluster,.pele-edge).removed{opacity:.5}
+[data-adg-arch] .pele .pele-edge-label.removed text{opacity:.5}
 .arch-key.changed .arch-swatch{border:2.5px dashed var(--arch-color);background:transparent}.arch-key.added .arch-swatch{border-width:2.5px;background:transparent}.arch-key.removed .arch-swatch{border:2px dashed var(--arch-color);background:transparent;opacity:.5}
 .arch-comparison{margin-bottom:16px;color:var(--text-secondary,var(--text));font-size:12px}`;
 }
@@ -214,12 +214,12 @@ export async function buildOverlay(config,file,{base,browser,snapshot}={}) {
   const names=[...vocabulary.filter(name=>used.has(name)),...overlay.classes];
   const swatches=names.map(name=>`<span class="arch-key ${name}" style="--arch-color:var(--arch-${name})"><i class="arch-swatch"></i>${name}</span>`).join('');
   let html=stampOverlay(frame.html,overlay);
-  if(swatches)html=html.includes('class="arch-legend"')?html.replace(/<div class="arch-legend">[\s\S]*?<\/div>/,()=>`<div class="arch-legend">${swatches}</div>`):html.replace('<section data-sdg-arch>',()=>`<section data-sdg-arch><div class="arch-legend">${swatches}</div>`);
-  html=html.replace(/(<section data-sdg-arch>)([\s\S]*?)(<svg\b)/,(_,start,legend,svg)=>`${start}${legend}<div class="arch-comparison">Compared with ${base.sha.slice(0,7)} (${escape(base.rev)})</div>${svg}`);
+  if(swatches)html=html.includes('class="arch-legend"')?html.replace(/<div class="arch-legend">[\s\S]*?<\/div>/,()=>`<div class="arch-legend">${swatches}</div>`):html.replace('<section data-adg-arch>',()=>`<section data-adg-arch><div class="arch-legend">${swatches}</div>`);
+  html=html.replace(/(<section data-adg-arch>)([\s\S]*?)(<svg\b)/,(_,start,legend,svg)=>`${start}${legend}<div class="arch-comparison">Compared with ${base.sha.slice(0,7)} (${escape(base.rev)})</div>${svg}`);
   const css=overlayStyles()+'\n'+built.css;
   const plain=value=>decode(value.replace(/<br\s*\/?>/gi,' ').replace(/<\/?(?:b|i|em|strong|span|code)\b[^>]*>/gi,''));
   const note=[frame.note,overlay.unsupported,...overlay.changes.map(plain)].filter(Boolean).join('\n');
   const output={...frame,html,note};
-  output.document=theme=>`<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-sdg-frame="default">${html}</div></body></html>`;
+  output.document=theme=>`<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="default">${html}</div></body></html>`;
   return {...built,frames:[output],css,baseBlob:old.blob};
 }

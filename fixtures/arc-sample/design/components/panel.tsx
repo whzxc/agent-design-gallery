@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 import { IconButton } from "./icon-button";
 const example = { title: "MCP 中枢", content: "内容区域" };
 export function Panel({

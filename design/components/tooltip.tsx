@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 export function Tooltip({ label = 'Inspector' }: { label?: string }) {
   return (
     <div

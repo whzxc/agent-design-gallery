@@ -223,7 +223,7 @@ function positionZoomMenu() {
 
 const media = matchMedia("(prefers-color-scheme: dark)");
 const modifiedDate = new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
-window.__sdg = {
+window.__adg = {
   ready: false,
   get metadataComplete() {return !!tokenManifest || (!!manifest && !manifest.loading);},
   get scope() {return tokenManifest?.scope ?? initializedScope;},
@@ -719,7 +719,7 @@ function zoom(scale, x = cameraArea().x + cameraArea().width / 2, y = cameraArea
   });
 }
 function commit(next) {
-  window.__sdg.ready = false;
+  window.__adg.ready = false;
   labelsDirty ||= view.scale !== next.scale;
   view = next;
   moving = true;
@@ -874,7 +874,7 @@ function draw() {
   raf = 0;
   drawBackground();
   if (tokenManifest) {
-    window.__sdg.ready = true;
+    window.__adg.ready = true;
     if (fixtureState) document.documentElement.dataset.fixtureReady = fixtureState.name;
     return;
   }
@@ -943,10 +943,10 @@ function draw() {
   const percentage = `${Math.round(view.scale * 100)}%`;
   if (zoomValue.textContent !== percentage) zoomValue.textContent = percentage;
   if (zoomOutput.value !== percentage) zoomOutput.value = percentage;
-  window.__sdg.ready = !!manifest && !manifest.loading && manifest.renderTheme === effectiveTheme && drawingReady === drawingCount && !moving;
-  if(fixtureState && fixtureApplied && window.__sdg.ready) document.documentElement.dataset.fixtureReady=fixtureState.name;
-  window.__sdg.revision = manifest?.revision;
-  window.__sdg.visibleReady = drawingReady; window.__sdg.visibleCount = drawingCount;
+  window.__adg.ready = !!manifest && !manifest.loading && manifest.renderTheme === effectiveTheme && drawingReady === drawingCount && !moving;
+  if(fixtureState && fixtureApplied && window.__adg.ready) document.documentElement.dataset.fixtureReady=fixtureState.name;
+  window.__adg.revision = manifest?.revision;
+  window.__adg.visibleReady = drawingReady; window.__adg.visibleCount = drawingCount;
   drawMap();
   if(!moving&&queued.length)pump();
   if (cache.size > 100) {
@@ -1037,7 +1037,7 @@ function drawMap() {
 }
 
 function applyTheme() {
-  window.__sdg.ready = false;
+  window.__adg.ready = false;
   effectiveTheme =
     theme === "system" ? (media.matches ? "dark" : "light") : theme;
   document.documentElement.dataset.theme = effectiveTheme;
@@ -1279,7 +1279,7 @@ $("#search").onkeydown = (e) => {
 $("#minus").onclick = () => zoom(view.scale / 1.25);
 $("#plus").onclick = () => zoom(view.scale * 1.25);
 function resizeViewport() {
-  window.__sdg.ready = false;
+  window.__adg.ready = false;
   const oldW = width,
     oldH = height;
   width = viewport.clientWidth;
@@ -1321,7 +1321,7 @@ function applyTokenManifest(data) {
   }
   for (const element of document.querySelectorAll('.directory-name')) element.textContent = data.label;
   $('#app-directory').title = data.directory;
-  document.title = `${data.label} — SVG Design Gallery`;
+  document.title = `${data.label} — Agent Design Gallery`;
   if (!fixtureState) {
     const url = viewURL(location.href, 'tokens');
     if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
@@ -1359,11 +1359,11 @@ async function applyManifest(data, force = false) {
     catalog = data;
     for(const element of document.querySelectorAll('.directory-name')) element.textContent=data.label;
     $("#app-directory").title=data.directory||'';
-    document.title = `${data.label} — SVG Design Gallery`;
+    document.title = `${data.label} — Agent Design Gallery`;
     updateChrome();
     renderNav();
   }
-  window.__sdg.ready = false;
+  window.__adg.ready = false;
   if (first) {
     cache.clear();
     labelLayer.clear();
@@ -1446,7 +1446,7 @@ async function applyManifest(data, force = false) {
   );
   for(const element of document.querySelectorAll('.directory-name')) element.textContent=data.label;
   $("#app-directory").title=data.directory||'';
-  document.title = `${data.label} — SVG Design Gallery`;
+  document.title = `${data.label} — Agent Design Gallery`;
   if (first) {
     const target = entry ? entry.target : link ?? data.selection;
     if (!fixtureState) restoreSelection(target);
@@ -1604,7 +1604,7 @@ await refresh();
 if(fixtureState) { try { await applyFixture(); } catch(e) { error(e.message); } }
 if ((tokenManifest || manifest) && !isUnauthorized()) {
   const events = new EventSource(keyURL('events'));
-  window.addEventListener('sdg-unauthorized', () => events.close(), { once: true });
+  window.addEventListener('adg-unauthorized', () => events.close(), { once: true });
   events.onmessage = (e) => {
     const data = JSON.parse(e.data);
     if (data.error) error(data.error);

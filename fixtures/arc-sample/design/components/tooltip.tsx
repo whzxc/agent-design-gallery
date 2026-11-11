@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 const example = "权限与就绪";
 export function Tooltip({
   text,

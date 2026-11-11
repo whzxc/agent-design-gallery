@@ -61,7 +61,7 @@ async function settle(read) {
 export async function compare(config, args, options) {
   if (options.all) return compareAll(config);
   const file = selectSources(config, args)[0], adapter = config.compare;
-  if (!adapter.fixture) throw new Error('Compare needs compare.fixture(name); add it to sdg.config.mjs');
+  if (!adapter.fixture) throw new Error('Compare needs compare.fixture(name); add it to adg.config.mjs');
   if ([options.region,options.selector,options.page].filter(Boolean).length > 1) throw Error('Choose --region, --selector or --page');
   const frame = options.frame;
   const built = await buildSource(config,file,{allowLegacy:false}), definition = built.frames.find(f=>f.name===frame);
@@ -76,16 +76,16 @@ export async function compare(config, args, options) {
     const fixtureName = options.fixture ?? definition.fixture;
     if (!fixtureName) throw Error('Frame needs a fixture; supply --fixture or Frame fixture');
     const fixture = await adapter.fixture(fixtureName);
-    if (!fixture || typeof fixture.url !== 'string' || !['light', 'dark'].includes(fixture.theme) || typeof fixture.locale !== 'string' || !fixture.locale || !Number.isFinite(Date.parse(fixture.clock))) throw new Error('compare.fixture must return url, theme (light/dark), locale and a valid clock; fix sdg.config.mjs');
+    if (!fixture || typeof fixture.url !== 'string' || !['light', 'dark'].includes(fixture.theme) || typeof fixture.locale !== 'string' || !fixture.locale || !Number.isFinite(Date.parse(fixture.clock))) throw new Error('compare.fixture must return url, theme (light/dark), locale and a valid clock; fix adg.config.mjs');
     if (fixture.timezone !== undefined) {
       try {
         if (typeof fixture.timezone !== 'string' || !fixture.timezone || /^[+-]/.test(fixture.timezone)) throw new Error();
         new Intl.DateTimeFormat('en-US', { timeZone: fixture.timezone });
-      } catch { throw new Error('compare.fixture timezone must be a valid IANA time zone such as Asia/Shanghai; fix sdg.config.mjs'); }
+      } catch { throw new Error('compare.fixture timezone must be a valid IANA time zone such as Asia/Shanghai; fix adg.config.mjs'); }
     }
     const sheet = await browser.newPage({colorScheme:fixture.theme,locale:fixture.locale,timezoneId:fixture.timezone,reducedMotion:'reduce'});
     const frameBox = await loadFrame(sheet,definition,fixture.theme);
-    let design = await sheet.locator('[data-sdg-frame] > :first-child').evaluate(implementationTexts);
+    let design = await sheet.locator('[data-adg-frame] > :first-child').evaluate(implementationTexts);
     const size = viewport(settings.viewport ?? adapter.viewport);
     const origin = (settings.origin ?? '0 0').trim().split(/\s+/).map(Number);
     if (settings.page && (origin.length !== 2 || !origin.every(Number.isFinite) || origin.some(n=>n<0) || origin[0]+frameBox.width>size.width || origin[1]+frameBox.height>size.height)) throw Error('Frame does not fit capture viewport; fix origin or viewport');
@@ -96,11 +96,11 @@ export async function compare(config, args, options) {
     if (!/^https?:/.test(url)) throw new Error('Fixture URL must use HTTP or HTTPS; fix compare.fixture');
     if (adapter.start) {
       stop = await adapter.start({ port: adapter.port, root: config.root });
-      if (typeof stop !== 'function') throw new Error('compare.start must return a stop function; fix sdg.config.mjs');
+      if (typeof stop !== 'function') throw new Error('compare.start must return a stop function; fix adg.config.mjs');
     }
     await sheet.emulateMedia({ colorScheme: fixture.theme, reducedMotion: 'reduce' });
     await sheet.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), fixture.theme);
-    design = await sheet.locator('[data-sdg-frame] > :first-child').evaluate(implementationTexts);
+    design = await sheet.locator('[data-adg-frame] > :first-child').evaluate(implementationTexts);
     const target = path.join(config.output, 'compare', `${path.relative(config.design,file).replace(/\.tsx$/, '').split(path.sep).join('-')}-${safeName(frame)}-${safeName(fixtureName)}`);
     mkdirSync(target, { recursive: true });
     await sheet.screenshot({ path: path.join(target, 'design.png'), clip: frameBox });
@@ -128,7 +128,7 @@ export async function compare(config, args, options) {
         if (await candidate.count()) { control = candidate; break; }
       }
       if (!control) {
-        console.error(`sdg: No visible control matches --click=${JSON.stringify(name)}`);
+        console.error(`adg: No visible control matches --click=${JSON.stringify(name)}`);
         return 1;
       }
       await control.click();
@@ -141,7 +141,7 @@ export async function compare(config, args, options) {
       const result = await panel.evaluate(implementationTexts, capture);
       if (adapter.texts) {
         const additional = await adapter.texts(app), box = result.box;
-        if (!Array.isArray(additional) || additional.some(t => typeof t.text !== 'string' || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(t[key])))) throw new Error('compare.texts must return text boxes in page coordinates; fix sdg.config.mjs');
+        if (!Array.isArray(additional) || additional.some(t => typeof t.text !== 'string' || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(t[key])))) throw new Error('compare.texts must return text boxes in page coordinates; fix adg.config.mjs');
         result.texts.push(...additional.filter(t => t.x >= box.x && t.y >= box.y && t.x + t.width <= box.x + box.width && t.y + t.height <= box.y + box.height).map(t => ({ ...t, x: t.x - box.x, y: t.y - box.y })));
       }
       return result;

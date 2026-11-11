@@ -11,7 +11,7 @@ export const projects = [
   {
     id: 'orbit', name: 'Orbit', path: '~/Archive/orbit/design', changed: '2 days ago', dirty: false,
     branch: 'main', head: 'c83f902', sources: 31, frames: 86,
-    incompatible: 'Requires SDG ≥0.6.0 · hub 0.5.0',
+    incompatible: 'Requires ADG ≥0.6.0 · hub 0.5.0',
   },
 ];
 
@@ -27,7 +27,7 @@ export const instances = [
 ];
 
 export const hubCopy = {
-  brand: 'SDG', projects: 'Projects', live: 'Live instances', rescan: 'Rescan', pending: 'Rescanning…',
+  brand: 'ADG', projects: 'Projects', live: 'Live instances', rescan: 'Rescan', pending: 'Rescanning…',
   changed: 'Design changed', git: 'Git', designs: 'Designs', dirty: 'Uncommitted design changes',
   incompatible: 'Version incompatible', liveState: 'Live', search: 'Find project or instance…',
   home: 'All projects', emptyMatch: 'No matches', query: 'hub', closeInstance: 'Close instance',

@@ -1,4 +1,4 @@
-# SDG design
+# ADG design
 
 [Asset rules](asset-rules.md) · [Design toolkit](design-toolkit.md) · [Architecture](architecture.md)
 
@@ -7,7 +7,7 @@ implementation mappings and review process. The asset rules take precedence over
 
 ## Governance
 
-- Minimum toolkit: SDG `>=0.5.0`, declared in `sdg.config.mjs`.
+- Minimum toolkit: ADG `>=0.5.0`, declared in `adg.config.mjs`.
 - Design root: `design/`; discovery order: `components`, `modules`, `surfaces`. No explicit source override or
   import-direction opt-out is configured. The module sources are navigation, inspector, menus, open-directory, shortcuts,
   view-controls, canvas, hub-home, project-switcher, hub-access and tokens; there are no studies.
@@ -21,14 +21,14 @@ implementation mappings and review process. The asset rules take precedence over
   no choice remains unresolved. When explicitly authorized, Codex may release structural governance changes with exact
   existing renders and content-cropped new part frames. Missing states and visual corrections remain known gaps.
   New visual changes or unresolved choices otherwise go to the user for gallery approval.
-- Capture a baseline in a disposable copy outside the checkout before editing. Run `sdg check`, render all affected
+- Capture a baseline in a disposable copy outside the checkout before editing. Run `adg check`, render all affected
   frames in both themes and compare decoded pixels per frame/theme. Use the repository `src/cli.mjs` render command,
   which waits for fonts and captures each frame/theme in an isolated page/context with bounded concurrency.
-  Commit only the authorized batch. Open review with `sdg open <design-directory> --port=<free-port>`; port 4310 is reserved.
+  Commit only the authorized batch. Open review with `adg open <design-directory> --port=<free-port>`; port 4310 is reserved.
 - This document keeps current mappings, approval/adoption state, exceptions and scope. Render, pixel-comparison and
   controller-review evidence stays in local `output/` or the external baseline copy. This document has no batch log.
 
-The approved browser mark lives in `design/art/sdg-mark.svg`. Its 32 × 32 viewBox is designed for display at 16 and 32 px,
+The approved browser mark lives in `design/art/adg-mark.svg`. Its 32 × 32 viewBox is designed for display at 16 and 32 px,
 with a 1 KiB source budget. Both the hub and viewer link to `/favicon.svg`; packaging copies the artwork to `public/favicon.svg`.
 
 ### Ownership and current scope
@@ -197,7 +197,7 @@ icons are fixture content. Container fills, radii, shadows, padding and gaps use
 ### Captures and artwork budget
 
 Surface and feature-module fixture identities and states are listed under Frames and fixtures. Their exact page crops, origins and
-viewports live in each `Frame.capture`; the adapter is `sdg.config.mjs`, with runtime states in `fixtures/viewer.mjs`.
+viewports live in each `Frame.capture`; the adapter is `adg.config.mjs`, with runtime states in `fixtures/viewer.mjs`.
 Fresh frame renders use `output/design/<source>/<frame>-<theme>.png`. Existing files at that location may be stale;
 each review uses its own baseline and newly rendered affected frames. The button specimens have no implementation
 capture of their own; their composed usage is reachable through the surface fixtures.
@@ -260,7 +260,7 @@ No new artwork or tokens are introduced.
 
 ## Direction
 
-SDG uses the Float direction. A dotted canvas fills the window. Chrome floats above it as rounded panels: the sidebar card, the tool pill at the top right, the zoom bar at the bottom center, and the inspector, menus and minimap when open. Selection is a monochrome ring. Chrome stays neutral in both themes, so each project's palette reads true on its own canvas color.
+ADG uses the Float direction. A dotted canvas fills the window. Chrome floats above it as rounded panels: the sidebar card, the tool pill at the top right, the zoom bar at the bottom center, and the inspector, menus and minimap when open. Selection is a monochrome ring. Chrome stays neutral in both themes, so each project's palette reads true on its own canvas color.
 
 ## Screen
 
@@ -270,7 +270,7 @@ SDG uses the Float direction. A dotted canvas fills the window. Chrome floats ab
 - A directory opens only through the directory picker, in the sidebar or the app bar. The picker opens the open-directory dialog, which lists recent directories.
 - The zoom bar is back, then zoom out, the zoom menu and zoom in, then Fit and the minimap toggle. The zoom menu holds Fit all (0), Fit group, Fit selection and Zoom to 100% (1).
 - More holds Arrange current group and Keyboard shortcuts (?).
-- Collapsing the sidebar leaves the app bar: the sidebar toggle, SDG and the directory picker.
+- Collapsing the sidebar leaves the app bar: the sidebar toggle, ADG and the directory picker.
 - The right inspector follows source, frame and exported-element selection after it is opened manually. Source path and frame name have inline copy controls, followed by frame sizes, a scrollable frame list and Relationships. Uses and Used by group discovered direct and indirect sources by directory; indirect entries are muted and name their shortest route. The TSX review states and shared inspector composition are in `design/modules/inspector.tsx`; the generic shell is in `design/components/panel.tsx`.
 - Frame clicks select the variant. Hovering an exported component outlines its root; clicking it shows the owning source/export and matching frames. Selecting a relationship focuses its source, and selecting a matching frame focuses that variant. Source-title clicks select the source and retain copying; the copy icon alone copies. Escape clears selection and Back restores selection and camera.
 - With no directory open, the screen shows only the app bar and the open-directory dialog without a close button.
@@ -347,7 +347,7 @@ timestamps use November 7, 2026 at 13:24:08 UTC so comparisons remain determinis
 
 ## Scene data
 
-Ordinary controls use flex/grid layout and shared component functions. Only the free-form drawing canvas and floating chrome positions use coordinates, under `data-free`. Panels and lists follow content through padding and gaps; buttons size from their label and icon. The seven scene data files hold section, asset, crop and label data for loop-based drawing. The ARC preview pictures in `design/art/arc-previews/` are light/dark PNG renders of the TSX fixture artboards, imported as data URLs only by scenes that display them; their palettes are independent of SDG chrome. `node fixtures/refresh-arc-scenes.mjs` regenerates these images and the scene data from the local fixture and its layout reference. Preview resolution is twice the largest specimen scale, capped at 4096 pixels. They are not package contents.
+Ordinary controls use flex/grid layout and shared component functions. Only the free-form drawing canvas and floating chrome positions use coordinates, under `data-free`. Panels and lists follow content through padding and gaps; buttons size from their label and icon. The seven scene data files hold section, asset, crop and label data for loop-based drawing. The ARC preview pictures in `design/art/arc-previews/` are light/dark PNG renders of the TSX fixture artboards, imported as data URLs only by scenes that display them; their palettes are independent of ADG chrome. `node fixtures/refresh-arc-scenes.mjs` regenerates these images and the scene data from the local fixture and its layout reference. Preview resolution is twice the largest specimen scale, capped at 4096 pixels. They are not package contents.
 
 The ARC snapshot at `b9e18beb` contains 51 sources (31 components and 20 surfaces), 94 artboards and six sections: Essentials (8), Agents & quota (6), Tasks & interactions (5), Connections & MCP (6), components (14) and surfaces (12). The navigation retains the four curated groups in source order; the final two contain unlisted sources. Canvas placement follows the density rules above. Fit all is about 10% at the declared viewport. The MCP inspector includes the source frame notes and its empty frame is 960 × 434.
 

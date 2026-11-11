@@ -66,7 +66,7 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
           entry = { active: 0, last: Date.now() };
           entry.pending = (async () => {
             const project = (await listProjects(stateDirectory)).find(item => item.slug === slug);
-            if (!project) throw new Error('Unknown project; run sdg root scan.');
+            if (!project) throw new Error('Unknown project; run adg root scan.');
             entry.viewer = await startServer({ directory: project.design, stateDirectory: path.join(stateDirectory, 'projects', slug) });
             return entry.viewer;
           })();

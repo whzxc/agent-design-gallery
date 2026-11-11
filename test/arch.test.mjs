@@ -18,7 +18,7 @@ import { startHub } from '../src/hub.mjs';
 import { addRoot, listProjects } from '../src/hub/registry.mjs';
 const exec = promisify(execFile), asset='arch/mechanisms/work.mmd';
 async function fixture(t) {
-  const root=await realpath(await mkdtemp(path.join(tmpdir(),'sdg-arch-')));
+  const root=await realpath(await mkdtemp(path.join(tmpdir(),'adg-arch-')));
   await cp(new URL('../fixtures/arch-sample/',import.meta.url),root,{recursive:true});
   t.after(()=>rm(root,{recursive:true,force:true}));
   return await loadConfig(root);
@@ -34,14 +34,14 @@ test('architecture discovery defaults, disable, custom directory, and config val
   await rm(c.arch,{recursive:true});assert.equal((await loadConfig(c.root)).arch,false);
   await mkdir(path.join(c.root,'architecture'));
   await writeFile(path.join(c.root,'architecture/system.mmd'),'flowchart LR\nA --> B');
-  await writeFile(path.join(c.root,'sdg.config.mjs'),"export default {arch:'architecture'}");
+  await writeFile(path.join(c.root,'adg.config.mjs'),"export default {arch:'architecture'}");
   let custom=await loadConfig(c.root);
   assert.equal(selectSources(custom,[],{write:false}).length,1);
   assert.deepEqual(selectSources(custom,['architecture/system.mmd'],{write:false}),[path.join(c.root,'architecture/system.mmd')]);
-  await writeFile(path.join(c.root,'sdg.config.mjs'),'export default {arch:false}');
+  await writeFile(path.join(c.root,'adg.config.mjs'),'export default {arch:false}');
   assert.equal((await loadConfig(c.root)).arch,false);
   for(const invalid of ["arch:true","arch:''","arch:'../outside'","arch:'/tmp'","check:{archMaxEdges:-1}","check:{archMaxEdges:1.5}"]) {
-    await writeFile(path.join(c.root,'sdg.config.mjs'),`export default {${invalid}}`);
+    await writeFile(path.join(c.root,'adg.config.mjs'),`export default {${invalid}}`);
     await assert.rejects(loadConfig(c.root),/Set arch|archMaxEdges/);
   }
 });
@@ -84,7 +84,7 @@ test('arch build carries tokens, semantics, legend, notes, font fit, and overflo
   const c=await fixture(t), built=await buildSource(c,path.join(c.root,asset),{write:false});
   assert.deepEqual(built.imports,[]);assert.equal(built.frames.length,1);
   const frame=built.frames[0];assert.equal(frame.name,'default');
-  assert.match(frame.note,/Review the queue.*\nOwners: sdg.config.mjs, arch\/mechanisms\/\*.mmd\nStatus: Draft/);
+  assert.match(frame.note,/Review the queue.*\nOwners: adg.config.mjs, arch\/mechanisms\/\*.mmd\nStatus: Draft/);
   assert.match(frame.html,/pele-node[^"<>]*progress[^"<>]*experimental/);
   for(const name of ['waiting','progress','experimental','uncertain','temporary','done'])assert.match(frame.html,new RegExp(`arch-key ${name}`));
   assert.doesNotMatch(frame.html,/arch-key stopped/);
@@ -132,7 +132,7 @@ test('CLI renders one arch frame per theme, with root-relative paths and isolate
     const bytes=await readFile(capture.path);assert.equal(bytes.subarray(1,4).toString(),'PNG');
     assert.ok(capture.path.startsWith(path.join(c.root,'output/png/arch/')));
   }
-  await assert.rejects(stat(path.join(c.design,'.sdg')),/ENOENT/);
+  await assert.rejects(stat(path.join(c.design,'.adg')),/ENOENT/);
   const target=previewTarget({asset,frame:'default'});
   assert.equal(previewURL('http://localhost:1234/',target).searchParams.get('asset'),asset);
   assert.ok(previewURL('http://localhost:1234/',{...target,mode:'path'}).pathname.startsWith('/view/layer/arch/'));
@@ -143,34 +143,34 @@ test('viewer browses arch scope, uses cache on reload, and refreshes sidecars an
   const server=await startServer({directory:c.design,stateDirectory:path.join(c.root,'state'),readOnly:true});t.after(()=>server.close());
   const browser=await launch();t.after(()=>browser.close());const page=await browser.newPage();
   await page.goto(previewURL(server.url,previewTarget({asset})).href);
-  await page.waitForFunction(()=>window.__sdg?.ready);
-  assert.equal(await page.evaluate(()=>window.__sdg.scope),`asset:${asset}`);
-  assert.deepEqual(await page.evaluate(()=>window.__sdg.items.map(i=>i.path)),[asset]);
+  await page.waitForFunction(()=>window.__adg?.ready);
+  assert.equal(await page.evaluate(()=>window.__adg.scope),`asset:${asset}`);
+  assert.deepEqual(await page.evaluate(()=>window.__adg.items.map(i=>i.path)),[asset]);
   await page.getByRole('button',{name:'Fit',exact:true}).click();
   const manifest=await (await fetch(server.url+'manifest?scope=layer:arch')).json();
   assert.ok(manifest.layers.includes('arch'));assert.equal(manifest.assets[0].layer,'arch');
   assert.deepEqual((await (await fetch(server.url+'relationships')).json())[asset],{uses:[],usedBy:[]});
   const builds=server.cacheStats().builds.builds;
-  await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
+  await page.reload();await page.waitForFunction(()=>window.__adg?.ready);
   assert.equal(server.cacheStats().builds.builds,builds);
-  const before=await page.evaluate(()=>window.__sdg.revision);
+  const before=await page.evaluate(()=>window.__adg.revision);
   await writeFile(path.join(c.root,asset.replace('.mmd','.md')),'Changed architecture note.');
-  await page.waitForFunction(revision=>window.__sdg.ready&&window.__sdg.revision>revision,before);
+  await page.waitForFunction(revision=>window.__adg.ready&&window.__adg.revision>revision,before);
   assert.equal((await (await fetch(server.url+'asset/'+encodeURIComponent(asset))).json()).frames[0].note,'Changed architecture note.');
-  const revision=await page.evaluate(()=>window.__sdg.revision);
+  const revision=await page.evaluate(()=>window.__adg.revision);
   await writeFile(path.join(c.root,asset),'flowchart LR\nA[Updated architecture] --> B');
-  await page.waitForFunction(revision=>window.__sdg.ready&&window.__sdg.revision>revision,revision);
+  await page.waitForFunction(revision=>window.__adg.ready&&window.__adg.revision>revision,revision);
   assert.match((await (await fetch(server.url+'asset/'+encodeURIComponent(asset))).json()).frames[0].html,/Updated architecture/);
-  await page.getByRole('tab',{name:'Arch',exact:true}).click();await page.waitForFunction(()=>window.__sdg.ready&&window.__sdg.scope==='layer:arch');
+  await page.getByRole('tab',{name:'Arch',exact:true}).click();await page.waitForFunction(()=>window.__adg.ready&&window.__adg.scope==='layer:arch');
   await page.getByRole('button',{name:'Contents',exact:true}).click();
   await page.getByRole('button',{name:'Render only this asset: work',exact:true}).click();
-  await page.waitForFunction(()=>window.__sdg.ready&&window.__sdg.scope.startsWith('asset:'));
-  const lastRevision=await page.evaluate(()=>window.__sdg.revision);
+  await page.waitForFunction(()=>window.__adg.ready&&window.__adg.scope.startsWith('asset:'));
+  const lastRevision=await page.evaluate(()=>window.__adg.revision);
   await rm(path.join(c.root,asset));
-  await page.waitForFunction(revision=>window.__sdg.ready&&window.__sdg.revision>revision,lastRevision);
-  const emptyRevision=await page.evaluate(()=>window.__sdg.revision);
+  await page.waitForFunction(revision=>window.__adg.ready&&window.__adg.revision>revision,lastRevision);
+  const emptyRevision=await page.evaluate(()=>window.__adg.revision);
   await writeFile(path.join(c.root,asset),'flowchart LR\nA --> B');
-  await page.waitForFunction(revision=>window.__sdg.ready&&window.__sdg.revision>revision,emptyRevision);
+  await page.waitForFunction(revision=>window.__adg.ready&&window.__adg.revision>revision,emptyRevision);
   assert.deepEqual((await (await fetch(server.url+'manifest?scope=layer:arch')).json()).assets.map(a=>a.path),[asset]);
 });
 
@@ -236,7 +236,7 @@ test('a worker launch failure reports the install hint per arch source while TSX
   t.after(()=>{if(old===undefined)delete process.env.PLAYWRIGHT_BROWSERS_PATH;else process.env.PLAYWRIGHT_BROWSERS_PATH=old;});
   const name='components/plain.tsx';
   await mkdir(path.join(config.design,'components'));
-  await writeFile(path.join(config.design,name),`import {Frame} from 'sdg';export default()=> <Frame name="default"><div>Still builds</div></Frame>;`);
+  await writeFile(path.join(config.design,name),`import {Frame} from 'adg';export default()=> <Frame name="default"><div>Still builds</div></Frame>;`);
   await writeFile(path.join(config.arch,'other.mmd'),'flowchart LR\nA --> B');
   const store=await createBuildStore({config,cacheDirectory:path.join(config.root,'failure-cache')});t.after(()=>store.close());
   assert.match((await store.get(name)).frames[0].html,/Still builds/);

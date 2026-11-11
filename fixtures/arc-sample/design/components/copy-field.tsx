@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 import { IconButton } from "./icon-button";
 const example = "teatnsestonon.ssthssr.oshranr";
 export function CopyField({

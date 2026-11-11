@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 import { AccessShell } from '../modules/hub-access';
 import { accessStates, hubNotes } from '../fixtures/hub';
 

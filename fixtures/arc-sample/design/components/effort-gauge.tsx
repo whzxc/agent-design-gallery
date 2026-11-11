@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 const forms = [
   { name: "three-levels", count: 3, index: 1 },
   { name: "four-levels", count: 4, index: 2 },

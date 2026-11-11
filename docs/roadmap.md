@@ -2,7 +2,7 @@
 
 [Architecture](architecture.md) · [Design toolkit](design-toolkit.md) · [Asset rules](asset-rules.md)
 
-SDG becomes ADG, agent-design-gallery, a sibling of ARC: one place where people and Agents see, check and discuss a
+ADG, agent-design-gallery, is a sibling of ARC: one place where people and Agents see, check and discuss a
 project's UI design sources and architecture diagrams. Milestones run in order. Each starts from a controller-reviewed
 specification and ends with tests, checks, the benchmark and the global installation update. New viewer chrome starts in
 the design sources and needs user gallery approval before implementation.
@@ -17,11 +17,11 @@ the design sources and needs user gallery approval before implementation.
 - ARC adoption: semantic classes and sidecars for ARC's diagrams, then ARC's rule that architecture changes update their
   diagrams before implementation.
 
-## 2. Rename to ADG
+## 2. Rename to ADG (in progress)
 
 - Package `@whzxc/agent-design-gallery`, CLI `adg`, repository `whzxc/agent-design-gallery`.
-- Scope: CLI, config file names, the TSX runtime specifier, the generated `.sdg/` directory, the hub service label and
-  state directory, the `X-SDG-Key` header, `window.__sdg`, documentation and links.
+- Scope: CLI, config file names, the TSX runtime specifier, the generated `.adg/` directory, the hub service label and
+  state directory, the `X-ADG-Key` header, `window.__adg`, documentation and links.
 - A one-time migration command moves consumer projects. No aliases or compatibility shims remain afterwards.
 - Consumers move in the same milestone, including ARC's AGENTS.md and design configuration.
 - Runs after milestone 1 and before milestone 3, so new commands and JSON contracts start under the new name.

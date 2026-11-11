@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 import { Canvas } from '../components/canvas';
 import { Sidebar } from '../modules/navigation';
 import { TokenCatalog } from '../modules/tokens';

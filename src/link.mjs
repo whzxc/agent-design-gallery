@@ -16,7 +16,7 @@ export function previewTarget(options) {
 export function previewURL(input, target) {
   let base;
   try { base = new URL(input); }
-  catch { throw Error('Enter an absolute SDG viewer URL.'); }
+  catch { throw Error('Enter an absolute ADG viewer URL.'); }
   if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password)
     throw Error('Enter an HTTP or HTTPS viewer URL without credentials.');
   const pathname = base.pathname.replace(/^(\/(?:p|i)\/[A-Za-z0-9_-]+)$/, '$1/');

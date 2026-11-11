@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 import { frames } from '../fixtures/menu-captures';
 import { Drawing } from './canvas';
 import { Screen } from '../components/canvas';

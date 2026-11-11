@@ -1,6 +1,6 @@
 # Design asset rules
 
-These rules define a reusable design library for any SDG consumer. The [toolkit contract](design-toolkit.md) defines TSX syntax, rendering and checks. A consumer owns its visual direction, implementation mappings, review process and adoption status in its own documentation. Its application does not need to import the design sources or depend on SDG.
+These rules define a reusable design library for any ADG consumer. The [toolkit contract](design-toolkit.md) defines TSX syntax, rendering and checks. A consumer owns its visual direction, implementation mappings, review process and adoption status in its own documentation. Its application does not need to import the design sources or depend on ADG.
 
 ## Layers and placement
 
@@ -34,7 +34,7 @@ Fixtures and artwork support these layers; they are not additional UI layers or 
 
 By default, `sources` is `['components', 'modules', 'surfaces']`. Its order is from lower to higher layers. Custom source directory names follow the same order. For example, with `sources: ['primitives', 'features', 'surfaces']`, primitives cannot import features or surfaces, and features cannot import surfaces. Same-layer imports are allowed.
 
-`sdg check` checks resolved direct source imports against this order. It reports the importing file, the imported source and the offending layer direction. It uses the same resolved edges as the viewer's relationship graph. Imports into fixtures, artwork, tokens and other helper files are outside that graph; type-only imports removed by the build are also outside it. Review helper indirection and type-only ownership during the audit below.
+`adg check` checks resolved direct source imports against this order. It reports the importing file, the imported source and the offending layer direction. It uses the same resolved edges as the viewer's relationship graph. Imports into fixtures, artwork, tokens and other helper files are outside that graph; type-only imports removed by the build are also outside it. Review helper indirection and type-only ownership during the audit below.
 
 A consumer with an intentional alternative dependency policy can disable only this lint:
 
@@ -65,15 +65,15 @@ Assets progress from proposed to reviewed to having at least one page or surface
 
 Keep proposals only while their review is active. When a batch closes, delete assets without a consumer; remove abandoned alternatives and stale imports as well. Map every adopted asset or part to its implementation location in a consumer-owned mapping document. Starter examples demonstrate authoring: replace or remove them when introducing real assets and record the real consumers.
 
-Tokens, components, modules and surfaces share the review rule: run `sdg check`, render the changed frames in both themes and obtain reviewer approval. Later target changes land in the library first. The consumer's governance document defines who proposes, approves and implements each batch, how visual acceptance runs, and how status is recorded. Work on one surface or one cohesive library family at a time.
+Tokens, components, modules and surfaces share the review rule: run `adg check`, render the changed frames in both themes and obtain reviewer approval. Later target changes land in the library first. The consumer's governance document defines who proposes, approves and implements each batch, how visual acceptance runs, and how status is recorded. Work on one surface or one cohesive library family at a time.
 
-SDG checks source structure, rendered frames and import direction. Reviewers assess ownership quality, complete state coverage, fidelity, implementation mappings and image budgets, and identify assets without consumers for deletion.
+ADG checks source structure, rendered frames and import direction. Reviewers assess ownership quality, complete state coverage, fidelity, implementation mappings and image budgets, and identify assets without consumers for deletion.
 
 ## Studies
 
 Temporary direction explorations live in `design/studies/` and are exempt from the production asset rules in this document. The toolkit's TSX/build and frame checks still apply; studies are excluded from the import-direction lint.
 
-With default discovery, SDG adds `studies` only when a direct `design/studies/*.tsx` file exists. An empty directory, a README or nested helpers do not enable it. Explicit `sources` lists are preserved exactly: add `studies` to such a list when the first study exists, and remove it after the last study is deleted or converted. `sdg init` does not create a study or an empty studies directory.
+With default discovery, ADG adds `studies` only when a direct `design/studies/*.tsx` file exists. An empty directory, a README or nested helpers do not enable it. Explicit `sources` lists are preserved exactly: add `studies` to such a list when the first study exists, and remove it after the last study is deleted or converted. `adg init` does not create a study or an empty studies directory.
 
 Once a direction is chosen, delete the study or turn it into real assets under the production rules. Studies do not become a permanent alternative library.
 
@@ -81,7 +81,7 @@ Once a direction is chosen, delete the study or turn it into real assets under t
 
 ### 1. Inventory before editing
 
-Identify the actual design root, SDG configuration, declared source directories and entry surfaces. Follow imports to inventory the parts that those surfaces use. Include unlisted sources, fixture data, artwork, studies and implementation locations recorded by the consumer.
+Identify the actual design root, ADG configuration, declared source directories and entry surfaces. Follow imports to inventory the parts that those surfaces use. Include unlisted sources, fixture data, artwork, studies and implementation locations recorded by the consumer.
 
 For each source, record its parts, frames, current layer and owner, direct and transitive consumers, and known implementation mapping. Note missing mappings as unknown. Inventory image dimensions and budgets, declared states, reviewed renders and known implementation gaps. The viewer's Uses / Used by lists and `GET /relationships` can help trace the graph.
 
@@ -92,9 +92,9 @@ Version 0.5.0 adds modules to default discovery. Projects with an explicit `sour
 Use the project's installed or chosen toolkit version from inside the consumer:
 
 ```sh
-sdg check --read-only
+adg check --read-only
 # Narrow the same checks to one source when reviewing a finding:
-sdg check modules/example --read-only
+adg check modules/example --read-only
 ```
 
 `--read-only` skips generated type declarations and build files. It keeps import, frame and theme checks. During this audit, do not edit configuration, move sources, rename frames, change implementation code or delete assets. Review existing renders; if new captures are needed, render a disposable copy outside the consumer checkout and state which copy was inspected.
@@ -139,7 +139,7 @@ The consumer keeps:
 - Its source directories in lower-to-higher order, feature owners, and any deliberate policy exception or import-lint opt-out.
 - Asset/part-to-implementation mappings, reachable fixtures/captures, review and adoption status, and concrete remaining gaps.
 - Image display dimensions and file-size budgets.
-- Review batch scope, proposer/reviewer responsibilities, approval and visual acceptance procedures, and the minimum SDG version.
+- Review batch scope, proposer/reviewer responsibilities, approval and visual acceptance procedures, and the minimum ADG version.
 
 Choose local filenames and status conventions that fit the project. Link this toolkit standard instead of copying its generic rules into every consumer's governance documents.
 
@@ -151,13 +151,13 @@ English review note, `owners` mapping to existing project files/globs and a stat
 Keep explanation in that note and preserve the diagram as the structural source.
 
 Use the toolkit's phase/mark vocabulary and project tokens; sources do not paint.
-Run `sdg check` and review rendered PNGs in both themes when changing an architecture
+Run `adg check` and review rendered PNGs in both themes when changing an architecture
 asset. Include the source and both theme renders in the review handoff. Changes to
-owning code paths should prompt review of the mapped diagrams; SDG checks that owners
+owning code paths should prompt review of the mapped diagrams; ADG checks that owners
 match files and leaves semantic freshness to reviewers.
 
 Architecture is a separate `arch` gallery layer with no source imports. Internal
 layer conventions such as a consumer's L0 system map, L1 components and L2 mechanisms
-belong to that consumer's documentation and directory structure. SDG imposes no such
+belong to that consumer's documentation and directory structure. ADG imposes no such
 hierarchy. See [architecture sources](design-toolkit.md#architecture-sources) for the
 format, sidecar grammar and commands.

@@ -1,4 +1,4 @@
-import { Frame, Icon } from "sdg";
+import { Frame, Icon } from "adg";
 const forms = [
   { name: "default", label: "服务器名称", value: "docs" },
   {

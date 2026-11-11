@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 import { Switch } from "./switch";
 const example = {
   title: "Wake control sources",

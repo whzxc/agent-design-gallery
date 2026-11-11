@@ -6,13 +6,26 @@ import { build } from 'esbuild';
 import { sourceDirectories, archFiles } from './project.mjs';
 
 export const VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url))).version;
-export const UPDATE = 'npm install -g @whzxc/svg-design-gallery';
-export const CONFIG_NAMES = ['sdg.config.mjs', 'sdg.config.js', 'sdg.config.ts'];
+export const UPDATE = 'npm install -g @whzxc/agent-design-gallery';
+export const CONFIG_NAMES = ['adg.config.mjs', 'adg.config.js', 'adg.config.ts'];
 export const configFile = directory => CONFIG_NAMES.map(name => path.join(directory, name)).find(file => statSync(file, { throwIfNoEntry: false })?.isFile());
+
+// Old names belong only to this one-time migration and the discovery error.
+export const LEGACY_CONFIG_NAMES = ['sdg.config.mjs', 'sdg.config.js', 'sdg.config.ts'];
+export function legacyConfigFile(directory) {
+  return LEGACY_CONFIG_NAMES.map(name => path.join(directory, name)).find(existsSync);
+}
+export function requireMigration(directory) {
+  const old = legacyConfigFile(directory);
+  if (old && !CONFIG_NAMES.some(name => existsSync(path.join(directory, name)))) {
+    throw Error(`Found ${old}; run adg migrate ${JSON.stringify(directory)} before using this project.`);
+  }
+}
 
 export function discoverRoot(cwd = process.cwd()) {
   let directory = path.resolve(cwd), packageRoot;
   while (true) {
+    requireMigration(directory);
     if (configFile(directory)) return directory;
     if (!packageRoot && existsSync(path.join(directory, 'package.json'))) packageRoot = directory;
     const parent = path.dirname(directory);
@@ -102,20 +115,20 @@ export async function loadConfig(cwd = process.cwd(), { checkVersion = true } = 
     try { config = await importConfig(file); }
     catch (error) { throw new Error(`Cannot load ${file}: ${error.message}; fix ${path.basename(file)}`); }
   }
-  if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('Export a default object from sdg.config.mjs');
-  if (config.name !== undefined && (typeof config.name !== 'string' || !config.name.trim())) throw new Error('Set name to a non-empty project name in the SDG config');
+  if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('Export a default object from adg.config.mjs');
+  if (config.name !== undefined && (typeof config.name !== 'string' || !config.name.trim())) throw new Error('Set name to a non-empty project name in the ADG config');
   const compatible = config.requires === undefined || satisfies(VERSION, config.requires);
-  if (checkVersion && !compatible) throw new Error(`SDG ${VERSION} does not satisfy requires ${config.requires}; run ${UPDATE}`);
-  for (const key of ['design', 'output', 'arch']) if (config[key] !== undefined && !(key === 'arch' && config[key] === false) && (typeof config[key] !== 'string' || !config[key].trim())) throw new Error(`Set ${key} to a directory path in sdg.config.mjs`);
-  if (config.check !== undefined && (!config.check || typeof config.check!=='object' || Array.isArray(config.check))) throw new Error('Set check to an object in sdg.config.mjs');
-  if (config.check?.importDirection !== undefined && typeof config.check.importDirection!=='boolean') throw new Error('Set check.importDirection to true or false in sdg.config.mjs');
+  if (checkVersion && !compatible) throw new Error(`ADG ${VERSION} does not satisfy requires ${config.requires}; run ${UPDATE}`);
+  for (const key of ['design', 'output', 'arch']) if (config[key] !== undefined && !(key === 'arch' && config[key] === false) && (typeof config[key] !== 'string' || !config[key].trim())) throw new Error(`Set ${key} to a directory path in adg.config.mjs`);
+  if (config.check !== undefined && (!config.check || typeof config.check!=='object' || Array.isArray(config.check))) throw new Error('Set check to an object in adg.config.mjs');
+  if (config.check?.importDirection !== undefined && typeof config.check.importDirection!=='boolean') throw new Error('Set check.importDirection to true or false in adg.config.mjs');
   const compare = { port: 5188, viewport: '1280x800', ...config.compare };
   viewport(compare.viewport);
-  if (!Number.isInteger(compare.port) || compare.port < 1 || compare.port > 65535) throw new Error('Set compare.port to an integer from 1 to 65535 in sdg.config.mjs');
-  for (const key of ['start', 'fixture', 'ready', 'texts']) if (compare[key] !== undefined && typeof compare[key] !== 'function') throw new Error(`Set compare.${key} to a function in sdg.config.mjs`);
-  if (compare.block !== undefined && (!Array.isArray(compare.block) || compare.block.some(value => typeof value !== 'string'))) throw new Error('Set compare.block to an array of request patterns in sdg.config.mjs');
-  if (config.check?.archMaxEdges !== undefined && (!Number.isInteger(config.check.archMaxEdges) || config.check.archMaxEdges < 0)) throw Error('Set check.archMaxEdges to a non-negative integer in sdg.config.mjs');
-  if (typeof config.arch === 'string' && (path.isAbsolute(config.arch) || path.relative(root,path.resolve(root,config.arch)).startsWith('..'))) throw Error('Set arch to a project-root-relative directory in sdg.config.mjs');
+  if (!Number.isInteger(compare.port) || compare.port < 1 || compare.port > 65535) throw new Error('Set compare.port to an integer from 1 to 65535 in adg.config.mjs');
+  for (const key of ['start', 'fixture', 'ready', 'texts']) if (compare[key] !== undefined && typeof compare[key] !== 'function') throw new Error(`Set compare.${key} to a function in adg.config.mjs`);
+  if (compare.block !== undefined && (!Array.isArray(compare.block) || compare.block.some(value => typeof value !== 'string'))) throw new Error('Set compare.block to an array of request patterns in adg.config.mjs');
+  if (config.check?.archMaxEdges !== undefined && (!Number.isInteger(config.check.archMaxEdges) || config.check.archMaxEdges < 0)) throw Error('Set check.archMaxEdges to a non-negative integer in adg.config.mjs');
+  if (typeof config.arch === 'string' && (path.isAbsolute(config.arch) || path.relative(root,path.resolve(root,config.arch)).startsWith('..'))) throw Error('Set arch to a project-root-relative directory in adg.config.mjs');
   const arch = config.arch === false ? false : path.resolve(root,config.arch ?? 'arch');
   const design=path.resolve(root,config.design??'design');
   return { root, name: config.name ?? path.basename(root), requires: config.requires ?? null, compatible, archDirectory: arch, arch: arch && (config.arch !== undefined || archFiles(arch).length) ? arch : false, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{archMaxEdges:30,importDirection:true,...config.check}, compare };

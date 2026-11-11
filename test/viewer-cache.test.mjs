@@ -6,7 +6,7 @@ import path from 'node:path';
 import {createViewerCache} from '../src/viewer-cache.mjs';
 
 async function temporary(t) {
-  const directory=await mkdtemp(path.join(tmpdir(),'sdg-viewer-cache-'));
+  const directory=await mkdtemp(path.join(tmpdir(),'adg-viewer-cache-'));
   t.after(()=>rm(directory,{recursive:true,force:true}));
   return directory;
 }

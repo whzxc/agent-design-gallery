@@ -1,4 +1,4 @@
-import { Frame, Icon } from "sdg";
+import { Frame, Icon } from "adg";
 import { Panel } from "../components/panel";
 import { Card } from "../components/card";
 import { SettingLine } from "../components/settings-row";

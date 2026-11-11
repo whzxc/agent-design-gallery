@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 import { frames } from '../fixtures/canvas-surfaces';
 import { Screen, Scrim } from '../components/canvas';
 import { Contents, ScopeTabs, Sidebar } from '../modules/navigation';

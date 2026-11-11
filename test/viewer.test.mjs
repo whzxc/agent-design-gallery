@@ -7,7 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { startServer } from '../src/server.mjs';
 import { states, recent } from '../fixtures/viewer.mjs';
-import config from '../sdg.config.mjs';
+import config from '../adg.config.mjs';
 import { icon } from '../public/icons.js';
 import { overlaps } from '../public/labels.js';
 import { launch } from '../src/toolkit/browser.mjs';
@@ -17,7 +17,7 @@ import { listSources } from '../src/toolkit/project.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 async function temporary(t) {
-  const directory = await mkdtemp(path.join(tmpdir(), 'sdg-viewer-test-'));
+  const directory = await mkdtemp(path.join(tmpdir(), 'adg-viewer-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   return directory;
 }
@@ -54,7 +54,7 @@ test('token scope reads both themes, updates on save, and preserves the design c
     }));
     const events = page.waitForResponse(response => new URL(response.url()).pathname === '/events' && response.ok());
     await page.goto(server.url + '?scope=tokens');
-    await page.waitForFunction(() => window.__sdg?.ready);
+    await page.waitForFunction(() => window.__adg?.ready);
     await events;
     assert.deepEqual(designRequests, [], 'opening tokens must not request artboards');
     const accent = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'Copy --accent', exact: true }) });
@@ -74,15 +74,15 @@ test('token scope reads both themes, updates on save, and preserves the design c
     await page.waitForFunction(() => document.querySelector('.token-value code')?.textContent === '10px');
     const switchScope = async to => {
       await page.getByRole('tab', { name: to, exact: true }).click();
-      await page.waitForFunction(scope => window.__sdg.ready && window.__sdg.scope === scope,
+      await page.waitForFunction(scope => window.__adg.ready && window.__adg.scope === scope,
         to === 'Tokens' ? 'tokens' : 'all', { timeout: 5000 });
     };
     await switchScope('All designs');
     await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-    const camera = await page.evaluate(() => window.__sdg.view);
+    const camera = await page.evaluate(() => window.__adg.view);
     await switchScope('Tokens');
     await switchScope('All designs');
-    assert.deepEqual(await page.evaluate(() => window.__sdg.view), camera);
+    assert.deepEqual(await page.evaluate(() => window.__adg.view), camera);
   } finally {
     await browser.close();
     await server.close();
@@ -101,7 +101,7 @@ test('implementation captures map to isolated fixture environments', async () =>
     assert.equal(fixture.url, `/?fixture=${name}`); assert.equal(fixture.theme,states[name].theme);
     assert.equal(fixture.locale,'en-US'); assert.ok(Number.isFinite(Date.parse(fixture.clock)));
   }
-  assert.throws(()=>config.compare.fixture('unknown'), /Unknown SDG fixture/);
+  assert.throws(()=>config.compare.fixture('unknown'), /Unknown ADG fixture/);
 });
 test('icons preserve rendered stroke and label collisions include both axes', () => {
   assert.match(icon('folder',16),/stroke-width="2.625"/);
@@ -128,7 +128,7 @@ test('missing directory CLI errors name the path on one plain line', async t => 
   await assert.rejects(promisify(execFile)(process.execPath,[path.join(root,'src/cli.mjs'),'open',directory,'--no-open']),error=>{
     assert.equal(error.code,2);assert.equal(error.stderr.trim().split('\n').length,1);
     assert.match(error.stderr,/Directory not found/);assert.ok(error.stderr.includes(directory));
-    assert.doesNotMatch(error.stderr,/ENOENT|review sdg/);return true;
+    assert.doesNotMatch(error.stderr,/ENOENT|review adg/);return true;
   });
 });
 test('catalog is usable before asset preparation and retains a queued selection', {timeout:30000}, async t => {
@@ -146,15 +146,15 @@ test('catalog is usable before asset preparation and retains a queued selection'
     assert.equal(await page.locator('#sidebar').isVisible(),false);
     assert.equal(await page.locator('#inspect').isEnabled(),false);
     await page.getByRole('button', { name: 'Contents', exact: true }).click();
-    assert.equal(await page.evaluate(()=>window.__sdg.assets),0);
-    assert.equal(await page.evaluate(()=>window.__sdg.ready),false);
+    assert.equal(await page.evaluate(()=>window.__adg.assets),0);
+    assert.equal(await page.evaluate(()=>window.__adg.ready),false);
     await page.locator('[data-navkey="file:components/button.tsx"]').click();
     release();
-    await page.waitForFunction(()=>window.__sdg.ready);
+    await page.waitForFunction(()=>window.__adg.ready);
     assert.equal(await page.locator('#source-name').textContent(),'button');
     assert.equal(await page.locator('[data-navkey="file:components/button.tsx"]').getAttribute('aria-current'),'true');
     assert.equal(await page.locator('#error').isVisible(),false);
-    const camera = await page.evaluate(() => window.__sdg.view);
+    const camera = await page.evaluate(() => window.__adg.view);
     await page.getByRole('button', {name:'Contents',exact:true}).click();
     await page.locator('#search').fill('button');
     assert.equal(await page.locator('#sidebar').isVisible(),true);
@@ -164,7 +164,7 @@ test('catalog is usable before asset preparation and retains a queued selection'
     assert.equal(await page.locator('#tools > button').last().getAttribute('id'),'inspect');
     await page.locator('#inspect').click();
     assert.equal(await page.locator('#source').isVisible(),true);
-    assert.deepEqual(await page.evaluate(() => window.__sdg.view),camera);
+    assert.deepEqual(await page.evaluate(() => window.__adg.view),camera);
     await page.locator('#more').click();
     assert.equal(await page.locator('#fullscreen').isVisible(),true);
     await page.locator('#themes [data-theme="dark"]').click();
@@ -177,16 +177,16 @@ test('camera and selected form survive immediate reload and a server restart', {
   const browser=await launch();
   try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});
-    await page.goto(server.url);await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.goto(server.url);await page.waitForFunction(()=>window.__adg?.ready);
     await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('[data-navkey="file:components/button.tsx"]').click();
     await page.locator('#inspect').click();
     await page.locator('#forms button').filter({hasText:/^secondary/}).click();
     await page.locator('#plus').click();
-    const camera=await page.evaluate(()=>window.__sdg.view);
+    const camera=await page.evaluate(()=>window.__adg.view);
     // Reload inside the save debounce, without waiting for camera settling.
-    await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
-    assert.deepEqual(await page.evaluate(()=>window.__sdg.view),camera);
+    await page.reload();await page.waitForFunction(()=>window.__adg?.ready);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.view),camera);
     assert.equal(await page.locator('[data-navkey="file:components/button.tsx"]').getAttribute('aria-current'),'true');
     assert.match(await page.locator('#forms [aria-current=true]').textContent(),/^secondary/);
     assert.equal(await page.locator('#source').isVisible(),false);
@@ -198,8 +198,8 @@ test('camera and selected form survive immediate reload and a server restart', {
     await page.close();await server.close();
     server=await startServer({directory,stateDirectory});
     const restored=await browser.newPage({viewport:{width:1440,height:900}});
-    await restored.goto(server.url);await restored.waitForFunction(()=>window.__sdg?.ready);
-    assert.deepEqual(await restored.evaluate(()=>window.__sdg.view),camera);
+    await restored.goto(server.url);await restored.waitForFunction(()=>window.__adg?.ready);
+    assert.deepEqual(await restored.evaluate(()=>window.__adg.view),camera);
     assert.equal(await restored.locator('#source-name').textContent(),'button');
     assert.match(await restored.locator('#forms [aria-current=true]').textContent(),/^secondary/);
     const heading = restored.locator('.canvas-label:not([hidden])').filter({hasText:/^button/});
@@ -225,7 +225,7 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
       try {
         await page.goto(new URL(config.compare.fixture(name).url,server.url).href);
         await Promise.race([config.compare.ready(page,name),pageError]);
-        assert.equal(await page.evaluate(()=>window.__sdg.ready),true,name);
+        assert.equal(await page.evaluate(()=>window.__adg.ready),true,name);
         assert.equal(await page.locator('html').getAttribute('data-theme'),state.theme,name);
         assert.equal(await page.locator('#sidebar').isVisible(),state.sidebar&&!state.empty,name);
         if(state.asset) assert.equal(await page.locator('#source-name').textContent(),path.basename(state.asset,'.tsx'),name);
@@ -274,14 +274,14 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
         if(name==='sample-components') {
           assert.equal(await page.locator('#search').getAttribute('placeholder'),'Find assets…');
           assert.ok(await page.locator('#labels .canvas-label:not([hidden])').count()>0);
-          const view=await page.evaluate(()=>window.__sdg.view);
+          const view=await page.evaluate(()=>window.__adg.view);
           await page.getByRole('button',{name:'Contents',exact:true}).click();
-          assert.deepEqual(await page.evaluate(()=>window.__sdg.view),view);
+          assert.deepEqual(await page.evaluate(()=>window.__adg.view),view);
           await page.getByRole('button',{name:'Contents',exact:true}).focus();
           await page.keyboard.press('1');
-          assert.equal(await page.evaluate(()=>window.__sdg.view.scale),1);
+          assert.equal(await page.evaluate(()=>window.__adg.view.scale),1);
           await page.keyboard.press('0');
-          assert.ok(await page.evaluate(()=>window.__sdg.view.scale)<.2);
+          assert.ok(await page.evaluate(()=>window.__adg.view.scale)<.2);
         }
       } finally { await page.close(); }
       }
@@ -313,21 +313,21 @@ test('camera pans retain labels, while scale, settle and viewport changes refres
       const observer=new MutationObserver(records=>{window.labelWork.childWrites+=records.filter(r=>r.target!==layer).length});
       observer.observe(layer,{subtree:true,attributes:true,childList:true,characterData:true});
       const snapshot=()=>[...layer.children].filter(el=>!el.hidden).map(el=>[el.textContent,el.style.transform]);
-      const before=snapshot(), camera=window.__sdg.view;
+      const before=snapshot(), camera=window.__adg.view;
       // Keep each event inside the idle interval; one animation frame per move.
       for(let i=0;i<12;i++) {
         viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:2,deltaY:1,bubbles:true,cancelable:true}));
         await new Promise(requestAnimationFrame);
       }
       await Promise.resolve();observer.disconnect();
-      return {before,after:snapshot(),camera,view:window.__sdg.view,work:{...window.labelWork},transform:layer.style.transform};
+      return {before,after:snapshot(),camera,view:window.__adg.view,work:{...window.labelWork},transform:layer.style.transform};
     });
     assert.ok(pan.before.length>0);
     assert.deepEqual(pan.after,pan.before);
     assert.deepEqual(pan.work,{updates:0,chromeReads:0,childWrites:0});
     assert.equal(pan.view.x,pan.camera.x-24);assert.equal(pan.view.y,pan.camera.y-12);
     assert.equal(pan.transform,'translate(-24px, -12px)');
-    await page.waitForFunction(()=>window.__sdg.ready);
+    await page.waitForFunction(()=>window.__adg.ready);
     assert.equal(await page.evaluate(()=>window.labelWork.updates),1);
     assert.equal(await page.locator('.label-layer').evaluate(el=>el.style.transform),'translate(0px, 0px)');
     const zoom=await page.evaluate(async()=>{
@@ -340,7 +340,7 @@ test('camera pans retain labels, while scale, settle and viewport changes refres
       return {...window.labelWork};
     });
     assert.equal(zoom.updates,3);assert.equal(zoom.chromeReads,0);
-    await page.waitForFunction(()=>window.__sdg.ready);
+    await page.waitForFunction(()=>window.__adg.ready);
     const immediate=await page.evaluate(async()=>{
       const viewport=document.querySelector('.gallery-viewport'),before=window.labelWork.updates;
       viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:40,deltaY:0,bubbles:true,cancelable:true}));
@@ -350,7 +350,7 @@ test('camera pans retain labels, while scale, settle and viewport changes refres
     assert.equal(immediate,1,'large pans refresh visible labels without waiting for the idle timer');
     const updates=await page.evaluate(()=>window.labelWork.updates);
     await page.setViewportSize({width:1200,height:800});
-    await page.waitForFunction(previous=>window.labelWork.updates>previous&&window.__sdg.ready,updates);
+    await page.waitForFunction(previous=>window.labelWork.updates>previous&&window.__adg.ready,updates);
     assert.ok(await page.evaluate(()=>window.labelWork.chromeReads)>0);
   } finally {await browser.close();await server.close()}
 });
@@ -371,7 +371,7 @@ test('canvas names retain copy behavior and select their source or frame without
     });
     await page.goto(new URL('/?fixture=sample-inspect-component',server.url).href);
     await config.compare.ready(page,'sample-inspect-component');
-    const view=await page.evaluate(()=>window.__sdg.view);
+    const view=await page.evaluate(()=>window.__adg.view);
     const name=page.getByRole('button',{name:'Copy button name',exact:true});
     const glyph=name.locator('.label-copy-icon');
     const bounds=await name.boundingBox();
@@ -386,7 +386,7 @@ test('canvas names retain copy behavior and select their source or frame without
     await page.mouse.move(0,0);
     assert.equal(await page.getByRole('button',{name:'Copied button',exact:true}).locator('.label-copy-icon').evaluate(el=>getComputedStyle(el).opacity),'1');
     assert.deepEqual(await page.evaluate(()=>window.copiedNames),['button']);
-    assert.deepEqual(await page.evaluate(()=>window.__sdg.view),view);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.view),view);
     assert.equal(await page.locator('#source-name').textContent(),'button');
     await name.waitFor({timeout:2500});
     assert.equal(await glyph.evaluate(el=>getComputedStyle(el).opacity),'0');
@@ -394,7 +394,7 @@ test('canvas names retain copy behavior and select their source or frame without
     assert.equal(await glyph.evaluate(el=>getComputedStyle(el).opacity),'1');
     await page.keyboard.press('Enter');
     await page.waitForFunction(()=>window.copiedNames.length===2);
-    assert.deepEqual(await page.evaluate(()=>window.__sdg.view),view);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.view),view);
     await page.evaluate(()=>{window.copyFailure=true});
     await page.getByRole('button',{name:'Copy primary name',exact:true}).click();
     await page.locator('#error').waitFor();
@@ -406,7 +406,7 @@ test('canvas names retain copy behavior and select their source or frame without
     await page.waitForFunction(()=>window.copiedNames.length===3);
     assert.equal((await page.evaluate(()=>window.copiedNames)).at(-1),'primary');
     assert.equal(await page.locator('#error').isVisible(),false);
-    assert.deepEqual(await page.evaluate(()=>window.__sdg.view),view);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.view),view);
     await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:new URL(server.url).origin});
     await page.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{value:window.nativeClipboardWrite}));
     await name.waitFor();await name.click();
@@ -427,16 +427,16 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
     await mkdir(path.dirname(path.join(directory,name)),{recursive:true});
     await writeFile(path.join(directory,name),'imports only');
   }
-  await writeFile(path.join(directory,'components/forms.tsx'),`import {Frame} from 'sdg';import {widths} from '../scenes/sizes';export default()=>widths.map((width,i)=><Frame name={'form-'+i} width={width} height={20+i*10} note={'Note '+i}><div class="bg-text text-canvas" style={{width,height:20+i*10}}>Form {i}</div></Frame>);`);
-  await writeFile(path.join(directory,'surfaces/flow.tsx'),`import {Frame} from 'sdg';export default()=>['one','two'].map(name=><Frame name={name} width={100} height={50}><div class="w-[100px] h-[50px] bg-text">{name}</div></Frame>);`);
+  await writeFile(path.join(directory,'components/forms.tsx'),`import {Frame} from 'adg';import {widths} from '../scenes/sizes';export default()=>widths.map((width,i)=><Frame name={'form-'+i} width={width} height={20+i*10} note={'Note '+i}><div class="bg-text text-canvas" style={{width,height:20+i*10}}>Form {i}</div></Frame>);`);
+  await writeFile(path.join(directory,'surfaces/flow.tsx'),`import {Frame} from 'adg';export default()=>['one','two'].map(name=><Frame name={name} width={100} height={50}><div class="w-[100px] h-[50px] bg-text">{name}</div></Frame>);`);
   const server=await startServer({directory,stateDirectory:path.join(temporaryRoot,'state')});const browser=await launch();
   try{
     const page=await browser.newPage();
     let releaseSource;const sourceGate=new Promise(resolve=>{releaseSource=resolve});
     await page.route('**/asset/components%2Fforms.tsx?*',async route=>{await sourceGate;await route.continue()});
     await page.goto(server.url+'?scope=all');
-    await page.waitForFunction(()=>window.__sdg?.assets>0&&!window.__sdg.metadataComplete);
-    releaseSource();await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.waitForFunction(()=>window.__adg?.assets>0&&!window.__adg.metadataComplete);
+    releaseSource();await page.waitForFunction(()=>window.__adg?.ready);
     const result=await page.evaluate(async()=>{
       const {prepare,arrange,imageURL,compactPreparedSource}=await import('/assets.js');const data=await(await fetch('/manifest')).json();const assets=await Promise.all(data.assets.map(a=>prepare(a,'light')));
       const set=assets.find(a=>a.component),flow=assets.find(a=>!a.component),world=arrange({...data,assets});
@@ -508,14 +508,14 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
       assert.deepEqual(await page.locator('#dedup-preview').screenshot(),original,`${theme} shared stylesheet preview pixels must remain exact`);
       await page.evaluate(()=>window.cleanupDedupPreview());
     }
-    assert.deepEqual(await page.evaluate(()=>window.__sdg.items),result.items,'streamed completion must preserve the full-source layout');
-    await page.evaluate(()=>window.__sdg.cacheFlush);
-    assert.equal(await page.evaluate(()=>window.__sdg.cacheFailures),0);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.items),result.items,'streamed completion must preserve the full-source layout');
+    await page.evaluate(()=>window.__adg.cacheFlush);
+    assert.equal(await page.evaluate(()=>window.__adg.cacheFailures),0);
     const warmRequests=[];const warmRequest=request=>{if(new URL(request.url()).pathname.startsWith('/asset/'))warmRequests.push(request.url())};
-    page.on('request',warmRequest);await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
+    page.on('request',warmRequest);await page.reload();await page.waitForFunction(()=>window.__adg?.ready);
     page.off('request',warmRequest);
     assert.deepEqual(warmRequests,[],'warm metadata and cropped previews must bypass source preparation');
-    assert.deepEqual(await page.evaluate(()=>window.__sdg.items),result.items);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.items),result.items);
     let lostPreview;
     await page.route('**/preview/**',async route=>{
       const address=route.request().url();
@@ -524,11 +524,11 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
       } else await route.continue();
     });
     const recoveredSources=[];const recoverRequest=request=>{if(new URL(request.url()).pathname.startsWith('/asset/'))recoveredSources.push(request.url())};
-    page.on('request',recoverRequest);await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
-    await page.evaluate(()=>window.__sdg.cacheFlush);page.off('request',recoverRequest);await page.unroute('**/preview/**');
+    page.on('request',recoverRequest);await page.reload();await page.waitForFunction(()=>window.__adg?.ready);
+    await page.evaluate(()=>window.__adg.cacheFlush);page.off('request',recoverRequest);await page.unroute('**/preview/**');
     assert.equal(recoveredSources.length,1,'an evicted preview must regenerate only its source');
     assert.equal(await page.locator('#error').textContent(),'');
-    assert.deepEqual(await page.evaluate(()=>window.__sdg.items),result.items);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.items),result.items);
     await writeFile(path.join(directory,'scenes/sizes.tsx'),'export const widths=[901,700,500];');
     await page.evaluate(async version=>{
       for(let i=0;i<100;i++) {
@@ -539,11 +539,11 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
       throw Error('Imported source did not invalidate its dependent');
     },result.version);
     const rebuilt=await(await fetch(new URL('/asset/components%2Fforms.tsx?theme=light',server.url))).json();assert.equal(rebuilt.frames[0].width,901);
-    await page.waitForFunction(()=>window.__sdg.ready && window.__sdg.metadataComplete);
-    const beforeGrowth=await page.evaluate(()=>({items:window.__sdg.items,revision:window.__sdg.revision,view:window.__sdg.view}));
+    await page.waitForFunction(()=>window.__adg.ready && window.__adg.metadataComplete);
+    const beforeGrowth=await page.evaluate(()=>({items:window.__adg.items,revision:window.__adg.revision,view:window.__adg.view}));
     await writeFile(path.join(directory,'scenes/sizes.tsx'),'export const widths=Array(87).fill(600);');
-    await page.waitForFunction(revision=>window.__sdg.ready && window.__sdg.metadataComplete && window.__sdg.revision>revision,beforeGrowth.revision);
-    const grown=await page.evaluate(()=>({items:window.__sdg.items,view:window.__sdg.view}));
+    await page.waitForFunction(revision=>window.__adg.ready && window.__adg.metadataComplete && window.__adg.revision>revision,beforeGrowth.revision);
+    const grown=await page.evaluate(()=>({items:window.__adg.items,view:window.__adg.view}));
     assert.deepEqual(grown.view,beforeGrowth.view,'geometry refresh must retain the camera');
     assert.deepEqual(grown.items.filter(a=>a.path==='surfaces/flow.tsx'),beforeGrowth.items.filter(a=>a.path==='surfaces/flow.tsx'),
       'unchanged regions keep their positions even when section height ordering changes');
@@ -553,7 +553,7 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
     await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('.group-name').filter({hasText:/^components/}).click();
     await page.locator('#more').click();await page.locator('#arrange').click();
-    const arranged=await page.evaluate(()=>window.__sdg.items);
+    const arranged=await page.evaluate(()=>window.__adg.items);
     assert.deepEqual(arranged.filter(a=>a.path==='surfaces/flow.tsx'),grown.items.filter(a=>a.path==='surfaces/flow.tsx'),
       'Arrange current group leaves other groups in place');
     assert.equal(arranged.find(a=>a.path===grownSet.path).y,beforeGrowth.items.find(a=>a.path===grownSet.path).y,
@@ -568,7 +568,7 @@ test('dedicated legacy SVG sheets retain measurement, form crops and renderable 
   const server = await startServer({directory:path.join(root,'fixtures/legacy-svg'),stateDirectory:await temporary(t)});
   const browser = await launch();
   try {
-    const page=await browser.newPage();await page.goto(server.url);await page.waitForFunction(()=>window.__sdg?.ready);
+    const page=await browser.newPage();await page.goto(server.url);await page.waitForFunction(()=>window.__adg?.ready);
     const result=await page.evaluate(async()=>{
       const {prepare,arrange,imageURL}=await import('/assets.js');
       const manifest=await(await fetch('/manifest')).json();
@@ -598,16 +598,16 @@ test('frame and element selection expose transitive relationships, matching expo
   for(const layer of ['components','modules','surfaces']) await rm(path.join(temporaryRoot,'design',layer,'example.tsx'));
   const directory=path.join(temporaryRoot,'design');
   await mkdir(path.join(directory,'modules'),{recursive:true});
-  await writeFile(path.join(temporaryRoot,'sdg.config.mjs'),"export default {sources:['components','modules','surfaces']};");
-  await writeFile(path.join(directory,'components/alert.tsx'),`import {Frame} from 'sdg';export const Alert=()=> <span>Alert</span>;export default()=> <Frame name="alert"><Alert/></Frame>;`);
-  await writeFile(path.join(directory,'modules/composer.tsx'),`import {Frame} from 'sdg';import {Alert} from '../components/alert';export const Composer=()=> <section class="w-[200px] h-[80px] bg-text text-canvas"><Alert/></section>;export default()=> ['composer-home-enhancement-ready','compact'].map(name=><Frame name={name}><Composer/></Frame>);`);
-  await writeFile(path.join(directory,'modules/home.tsx'),`import {Frame} from 'sdg';import {Composer} from './composer';export const Hero=()=> <div><Composer/></div>;export default()=> <Frame name="hero"><Hero/></Frame>;`);
-  await writeFile(path.join(directory,'surfaces/home.tsx'),`import {Frame} from 'sdg';import {Hero} from '../modules/home';export default()=> ['one','two'].map(name=><Frame name={name} width={400} height={200}><main class="w-[400px] h-[200px]"><Hero/></main></Frame>);`);
+  await writeFile(path.join(temporaryRoot,'adg.config.mjs'),"export default {sources:['components','modules','surfaces']};");
+  await writeFile(path.join(directory,'components/alert.tsx'),`import {Frame} from 'adg';export const Alert=()=> <span>Alert</span>;export default()=> <Frame name="alert"><Alert/></Frame>;`);
+  await writeFile(path.join(directory,'modules/composer.tsx'),`import {Frame} from 'adg';import {Alert} from '../components/alert';export const Composer=()=> <section class="w-[200px] h-[80px] bg-text text-canvas"><Alert/></section>;export default()=> ['composer-home-enhancement-ready','compact'].map(name=><Frame name={name}><Composer/></Frame>);`);
+  await writeFile(path.join(directory,'modules/home.tsx'),`import {Frame} from 'adg';import {Composer} from './composer';export const Hero=()=> <div><Composer/></div>;export default()=> <Frame name="hero"><Hero/></Frame>;`);
+  await writeFile(path.join(directory,'surfaces/home.tsx'),`import {Frame} from 'adg';import {Hero} from '../modules/home';export default()=> ['one','two'].map(name=><Frame name={name} width={400} height={200}><main class="w-[400px] h-[200px]"><Hero/></main></Frame>);`);
   const server=await startServer({directory,stateDirectory:path.join(temporaryRoot,'state')});const browser=await launch();
   try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:new URL(server.url).origin});
-    await page.goto(server.url+'?scope=all&keep=yes#notes');await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.goto(server.url+'?scope=all&keep=yes#notes');await page.waitForFunction(()=>window.__adg?.ready);
     await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('[data-navkey="group:surfaces"]').click();
     assert.equal(new URL(page.url()).searchParams.get('group'),'surfaces');
@@ -615,16 +615,16 @@ test('frame and element selection expose transitive relationships, matching expo
     await page.locator('#back').click();
     assert.equal(new URL(page.url()).searchParams.has('group'),false);
     await page.locator('[data-navkey="file:surfaces/home.tsx"]').click();
-    await page.waitForFunction(()=>window.__sdg.ready);
+    await page.waitForFunction(()=>window.__adg.ready);
     assert.deepEqual(Object.fromEntries(new URL(page.url()).searchParams),{scope:'all',keep:'yes',asset:'surfaces/home.tsx'});
     assert.equal(new URL(page.url()).hash,'#notes');
-    assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
+    assert.deepEqual(await page.evaluate(()=>window.__adg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
     assert.equal(await page.locator('#source').isVisible(),false);
     await page.locator('#inspect').click();
     assert.equal(await page.locator('#uses [data-related-path="modules/home.tsx"]').getAttribute('data-direct'),'true');
     assert.match(await page.locator('#uses [data-related-path="modules/composer.tsx"]').textContent(),/composer · via home/);
     assert.match(await page.locator('#uses [data-related-path="components/alert.tsx"]').textContent(),/via home → composer/);
-    await page.locator('#forms [data-frame="two"]').click();await page.waitForFunction(()=>window.__sdg.ready);
+    await page.locator('#forms [data-frame="two"]').click();await page.waitForFunction(()=>window.__adg.ready);
     assert.equal(new URL(page.url()).searchParams.get('frame'),'two');
     assert.equal(await page.locator('#frame-name').textContent(),'two');
     assert.equal(await page.locator('#frame-size').textContent(),'400 × 200');
@@ -633,15 +633,15 @@ test('frame and element selection expose transitive relationships, matching expo
     await page.locator('#copy-path').click();assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'surfaces/home.tsx');
     await page.locator('#inspect').click();
     const point=await page.evaluate(()=>{
-      const a=window.__sdg.items.find(a=>a.id==='surfaces/home.tsx#1'),v=window.__sdg.view;
+      const a=window.__adg.items.find(a=>a.id==='surfaces/home.tsx#1'),v=window.__adg.view;
       return {x:v.x+(a.x+16+100)*v.scale,y:v.y+(a.y+16+40)*v.scale};
     });
     await page.mouse.move(point.x,point.y);assert.equal(await page.locator('#hover-outline').isVisible(),true);
-    await page.mouse.click(point.x,point.y);await page.waitForFunction(()=>window.__sdg.ready);
+    await page.mouse.click(point.x,point.y);await page.waitForFunction(()=>window.__adg.ready);
     const elementLink=page.url();
     await page.locator('#inspect').click();
     assert.ok(new URL(elementLink).searchParams.get('element'));
-    assert.deepEqual((await page.evaluate(()=>window.__sdg.selection)).element,{source:'modules/composer.tsx',export:'Composer'});
+    assert.deepEqual((await page.evaluate(()=>window.__adg.selection)).element,{source:'modules/composer.tsx',export:'Composer'});
     assert.equal(await page.locator('#source-path').textContent(),'modules/composer.tsx');
     assert.equal(await page.locator('#source-name').textContent(),'Composer');
     assert.equal(await page.locator('#forms-heading').textContent(),'Frames using this export');
@@ -649,41 +649,41 @@ test('frame and element selection expose transitive relationships, matching expo
     assert.ok((await page.locator('#forms [data-frame="composer-home-enhancement-ready"]').boundingBox()).height>28,'long variant names wrap instead of sharing a truncated prefix');
     assert.equal(await page.locator('#used-by [data-related-path="surfaces/home.tsx"]').getAttribute('data-direct'),'false');
     // Reload flushes the pending selection save, retaining the host variant and owner.
-    await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
-    assert.equal((await page.evaluate(()=>window.__sdg.selection)).element.export,'Composer');
+    await page.reload();await page.waitForFunction(()=>window.__adg?.ready);
+    assert.equal((await page.evaluate(()=>window.__adg.selection)).element.export,'Composer');
     await page.locator('#inspect').click();
-    await page.locator('#forms [data-frame="compact"]').focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>window.__sdg.ready);
-    assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'modules/composer.tsx',frame:'compact',element:null});
-    await page.locator('#back').click();await page.waitForFunction(()=>window.__sdg.ready);
-    assert.equal((await page.evaluate(()=>window.__sdg.selection)).element.export,'Composer');
+    await page.locator('#forms [data-frame="compact"]').focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>window.__adg.ready);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.selection),{path:'modules/composer.tsx',frame:'compact',element:null});
+    await page.locator('#back').click();await page.waitForFunction(()=>window.__adg.ready);
+    assert.equal((await page.evaluate(()=>window.__adg.selection)).element.export,'Composer');
     assert.equal(page.url(),elementLink);
-    await page.locator('#used-by [data-related-path="surfaces/home.tsx"]').click();await page.waitForFunction(()=>window.__sdg.ready);
-    assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
+    await page.locator('#used-by [data-related-path="surfaces/home.tsx"]').click();await page.waitForFunction(()=>window.__adg.ready);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
     await page.locator('#inspect').click();
-    await page.reload();await page.waitForFunction(()=>window.__sdg?.ready);
+    await page.reload();await page.waitForFunction(()=>window.__adg?.ready);
     assert.equal(await page.locator('#source').isVisible(),false);
     await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('[data-navkey="file:surfaces/home.tsx"]').click();
     assert.equal(await page.locator('#source').isVisible(),false,'navigation retains the collapsed inspector');
-    await page.locator('#inspect').click();await page.locator('#forms [data-frame="one"]').click();await page.waitForFunction(()=>window.__sdg.ready);
-    const blank=await page.evaluate(()=>{const a=window.__sdg.items.find(a=>a.id==='surfaces/home.tsx#0'),v=window.__sdg.view;return{x:v.x+(a.x+16+300)*v.scale,y:v.y+(a.y+16+100)*v.scale}});
-    await page.mouse.click(blank.x,blank.y);assert.equal((await page.evaluate(()=>window.__sdg.selection)).frame,'one');
-    assert.equal((await page.evaluate(()=>window.__sdg.selection)).element,null);
-    await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>window.__sdg.selection),{path:null,frame:null,element:null});
+    await page.locator('#inspect').click();await page.locator('#forms [data-frame="one"]').click();await page.waitForFunction(()=>window.__adg.ready);
+    const blank=await page.evaluate(()=>{const a=window.__adg.items.find(a=>a.id==='surfaces/home.tsx#0'),v=window.__adg.view;return{x:v.x+(a.x+16+300)*v.scale,y:v.y+(a.y+16+100)*v.scale}});
+    await page.mouse.click(blank.x,blank.y);assert.equal((await page.evaluate(()=>window.__adg.selection)).frame,'one');
+    assert.equal((await page.evaluate(()=>window.__adg.selection)).element,null);
+    await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>window.__adg.selection),{path:null,frame:null,element:null});
     assert.equal(await page.locator('#source').isVisible(),false);
     assert.deepEqual(Object.fromEntries(new URL(page.url()).searchParams),{scope:'all',keep:'yes',group:'surfaces'});
     const shared=await browser.newPage({viewport:{width:1440,height:900}});
-    await shared.goto(groupLink);await shared.waitForFunction(()=>window.__sdg?.ready);
+    await shared.goto(groupLink);await shared.waitForFunction(()=>window.__adg?.ready);
     assert.equal(await shared.locator('[data-navkey="toggle:surfaces"]').getAttribute('aria-expanded'),'true');
-    await shared.goto(elementLink);await shared.waitForFunction(()=>window.__sdg?.ready);
-    assert.deepEqual(await shared.evaluate(()=>window.__sdg.selection),{
+    await shared.goto(elementLink);await shared.waitForFunction(()=>window.__adg?.ready);
+    assert.deepEqual(await shared.evaluate(()=>window.__adg.selection),{
       path:'surfaces/home.tsx',frame:'two',element:{source:'modules/composer.tsx',export:'Composer'},
     });
     const bounds=await shared.locator('#selection-outline').boundingBox();
     assert.ok(bounds && bounds.x>=0 && bounds.y>=0 && bounds.x+bounds.width<=1440 && bounds.y+bounds.height<=900);
     const stale=new URL(elementLink);stale.searchParams.set('frame','removed');
-    await shared.goto(stale.href);await shared.waitForFunction(()=>window.__sdg?.ready);
-    assert.deepEqual(await shared.evaluate(()=>window.__sdg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
+    await shared.goto(stale.href);await shared.waitForFunction(()=>window.__adg?.ready);
+    assert.deepEqual(await shared.evaluate(()=>window.__adg.selection),{path:'surfaces/home.tsx',frame:null,element:null});
     assert.deepEqual(Object.fromEntries(new URL(shared.url()).searchParams),{scope:'all',keep:'yes',asset:'surfaces/home.tsx'});
     assert.deepEqual(errors,[]);
   } finally {await browser.close();await server.close()}

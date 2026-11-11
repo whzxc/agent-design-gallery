@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 import { AgentIcon, type AgentIconReading, type Brand } from "./agent-icon";
 const example = {
   label: "Personal",

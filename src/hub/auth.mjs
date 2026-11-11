@@ -9,13 +9,13 @@ export async function hubKey(stateDirectory = defaultStateDirectory, { rotate = 
   if (!rotate) {
     try {
       const key = (await readFile(file, 'utf8')).trim();
-      if (!/^sdg_[a-f0-9]{64}$/.test(key)) throw new Error(`Invalid hub key in ${file}; run sdg serve --rotate-key.`);
+      if (!/^adg_[a-f0-9]{64}$/.test(key)) throw new Error(`Invalid hub key in ${file}; run adg serve --rotate-key.`);
       await chmod(file, 0o600);
       return key;
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
   await mkdir(stateDirectory, { recursive: true });
-  const key = `sdg_${randomBytes(32).toString('hex')}`;
+  const key = `adg_${randomBytes(32).toString('hex')}`;
   if (rotate) {
     const temporary = `${file}.${process.pid}.tmp`;
     await writeFile(temporary, `${key}\n`, { mode: 0o600 });
@@ -32,9 +32,9 @@ export function equalKey(actual, expected) {
 }
 export async function authorized(request, url, stateDirectory) {
   if (directLocal(request)) return true;
-  const key = request.headers.authorization?.match(/^Bearer (\S+)$/i)?.[1] ?? request.headers['x-sdg-key'] ?? url.searchParams.get('key');
+  const key = request.headers.authorization?.match(/^Bearer (\S+)$/i)?.[1] ?? request.headers['x-adg-key'] ?? url.searchParams.get('key');
   // Read back on every request so CLI rotation also applies to a running service.
   const expected = (await readFile(path.join(stateDirectory, 'hub.key'), 'utf8')).trim();
   const equal = equalKey(key, expected);
-  return /^sdg_[a-f0-9]{64}$/.test(expected) && equal;
+  return /^adg_[a-f0-9]{64}$/.test(expected) && equal;
 }

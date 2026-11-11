@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 import { Button } from "./button";
 const forms = [
   { name: "default", text: "卡片内容" },

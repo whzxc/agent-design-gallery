@@ -15,7 +15,7 @@ export const viewerFiles = {
   '/view-route.js': 'view-route.js',
 };
 export const viewerFile = pathname => isViewPath(pathname) ? 'index.html' : viewerFiles[pathname];
-const designFiles = { 'tokens.css': 'tokens.css', 'favicon.svg': 'art/sdg-mark.svg' };
+const designFiles = { 'tokens.css': 'tokens.css', 'favicon.svg': 'art/adg-mark.svg' };
 const shellTypes = { '.html': 'text/html', '.css': 'text/css', '.svg': 'image/svg+xml' };
 export function json(response, code, data) {
   response.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });

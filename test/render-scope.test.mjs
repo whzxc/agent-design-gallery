@@ -9,11 +9,11 @@ import { previewURL } from '../src/link.mjs';
 
 const fields = ['components/field.tsx', 'components/other.tsx'];
 const home = 'surfaces/home.tsx', summary = 'modules/summary.tsx';
-const source = (...names) => `import {Frame} from 'sdg'; export default () => ${JSON.stringify(names)}
+const source = (...names) => `import {Frame} from 'adg'; export default () => ${JSON.stringify(names)}
   .map(name => <Frame name={name} width={240} height={100}><div>{name}</div></Frame>);`;
 
 test('render scopes bound cold loads and live edits, with independent focus links and Back', { timeout: 30000 }, async () => {
-  const root = await mkdtemp(path.join(tmpdir(), 'sdg-render-scope-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-render-scope-'));
   const directory = path.join(root, 'design'), stateDirectory = path.join(root, 'state');
   let server, browser;
   try {
@@ -31,8 +31,8 @@ test('render scopes bound cold loads and live edits, with independent focus link
       const route = new URL(request.url()).pathname;
       if (route.startsWith('/asset/') && request.method()==='GET') requests.push(decodeURIComponent(route.slice(7)));
     });
-    const ready = scope => page.waitForFunction(scope=>window.__sdg?.ready && window.__sdg.scope===scope,scope);
-    const paths = async tab => [...new Set(await tab.evaluate(()=>window.__sdg.items.map(item=>item.path)))].sort();
+    const ready = scope => page.waitForFunction(scope=>window.__adg?.ready && window.__adg.scope===scope,scope);
+    const paths = async tab => [...new Set(await tab.evaluate(()=>window.__adg.items.map(item=>item.path)))].sort();
     const query = key => new URL(page.url()).searchParams.get(key);
     const builds = () => server.cacheStats().builds.builds;
     const switchTo = async (label, scope) => {
@@ -49,7 +49,7 @@ test('render scopes bound cold loads and live edits, with independent focus link
 
     await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('[data-navkey="group:Essentials"]').click();
-    const camera = await page.evaluate(()=>window.__sdg.view);
+    const camera = await page.evaluate(()=>window.__adg.view);
     assert.equal(new URL(page.url()).pathname,'/view/layer/components/group/Essentials');
     assert.equal(query('scope'),null);
     assert.deepEqual(await paths(page),fields);
@@ -67,7 +67,7 @@ test('render scopes bound cold loads and live edits, with independent focus link
     assert.equal(await page.locator('#source').isVisible(),false);
     const shared=await browser.newPage();
     await shared.goto(page.url());
-    await shared.waitForFunction(()=>window.__sdg?.ready);
+    await shared.waitForFunction(()=>window.__adg?.ready);
     assert.deepEqual(await paths(shared),[fields[0]]);
     assert.equal(await shared.locator('#frame-name').textContent(),'error');
     assert.equal(await shared.locator('#source').isVisible(),false);
@@ -78,17 +78,17 @@ test('render scopes bound cold loads and live edits, with independent focus link
     await page.locator('#back').click();
     await ready('layer:components');
     assert.equal(new URL(page.url()).pathname,'/view/layer/components/group/Essentials');
-    assert.deepEqual(await page.evaluate(()=>window.__sdg.view),camera);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.view),camera);
 
     await switchTo('Modules','layer:modules');
     assert.deepEqual(await paths(page),[summary]);
     await switchTo('All designs','all');
     assert.deepEqual(await paths(page),[...fields,summary,home].sort());
     await switchTo('Components','layer:components');
-    const revision=await page.evaluate(()=>window.__sdg.revision), before=builds();
+    const revision=await page.evaluate(()=>window.__adg.revision), before=builds();
     requests.length=0;
     await writeFile(path.join(directory,home),source('updated'));
-    await page.waitForFunction(revision=>window.__sdg.ready&&window.__sdg.revision>revision,revision);
+    await page.waitForFunction(revision=>window.__adg.ready&&window.__adg.revision>revision,revision);
     assert.equal(builds(),before,'an edit outside the active scope does not rebuild that source');
     assert.ok(!requests.includes(home));
     await switchTo('Surfaces','layer:surfaces');
@@ -114,9 +114,9 @@ test('render scopes bound cold loads and live edits, with independent focus link
     assert.deepEqual((await (await payload).json()).frames.map(frame => frame.name), ['error']);
     assert.deepEqual(await page.locator('#modules button').allTextContents(), ['error']);
     assert.deepEqual([...new Set(requests)], [fields[0]]);
-    const frameHeight = await page.evaluate(() => window.__sdg.items[0].height);
+    const frameHeight = await page.evaluate(() => window.__adg.items[0].height);
     await writeFile(path.join(directory, fields[0]), source('default', 'error').replace('height={100}', 'height={140}'));
-    await page.waitForFunction(height => window.__sdg.ready && window.__sdg.items[0].height === height + 40, frameHeight);
+    await page.waitForFunction(height => window.__adg.ready && window.__adg.items[0].height === height + 40, frameHeight);
     await page.getByRole('button', { name: 'Back', exact: true }).click();
     await ready(`asset:${fields[0]}`);
     await page.getByRole('button', { name: 'Contents', exact: true }).click();

@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 import { Drawing } from './canvas';
 import { Screen } from '../components/canvas';
 import { Tooltip } from '../components/tooltip';
@@ -73,7 +73,7 @@ export function AppBar({
   return (
     <Toolbar wide>
       <IconButton icon="panel-left" />
-      <span class="text-section font-[650]">SDG</span>
+      <span class="text-section font-[650]">ADG</span>
       {!empty && (
         <>
           <Separator />

@@ -122,8 +122,8 @@ export function archStyles() {
   const defaults=theme=>vocabulary.map(name=>`--arch-${name}:${roles[name]?`var(--${roles[name]}, ${fallback[name][theme]})`:fallback[name][theme]};`).join('');
   const shape=':is(rect,path,polygon,circle,ellipse)';
   return `:root{${defaults(0)}}:root[data-theme="dark"]{${defaults(1)}}
-[data-sdg-arch]{--pele-bg:var(--surface,var(--canvas));--pele-fg:var(--text);--pele-muted:var(--text-secondary,var(--text));--pele-line:var(--text-tertiary,var(--text));--pele-surface:var(--surface-subtle,var(--canvas));--pele-surface-alt:var(--surface-subtle,var(--canvas));--pele-border:var(--border-strong,var(--border,var(--text)));--pele-accent:var(--accent,var(--text));--pele-font:var(--font-ui);--pele-font-mono:var(--font-mono);--pele-radius:8px;background:var(--pele-bg);color:var(--text);padding:24px;width:max-content;font:14px var(--font-ui)}
-[data-sdg-arch]>.pele{display:block;max-width:none!important}
+[data-adg-arch]{--pele-bg:var(--surface,var(--canvas));--pele-fg:var(--text);--pele-muted:var(--text-secondary,var(--text));--pele-line:var(--text-tertiary,var(--text));--pele-surface:var(--surface-subtle,var(--canvas));--pele-surface-alt:var(--surface-subtle,var(--canvas));--pele-border:var(--border-strong,var(--border,var(--text)));--pele-accent:var(--accent,var(--text));--pele-font:var(--font-ui);--pele-font-mono:var(--font-mono);--pele-radius:8px;background:var(--pele-bg);color:var(--text);padding:24px;width:max-content;font:14px var(--font-ui)}
+[data-adg-arch]>.pele{display:block;max-width:none!important}
 .arch-legend{display:flex;align-items:center;gap:16px;margin-bottom:16px;white-space:nowrap}.arch-key{display:flex;align-items:center;gap:6px}.arch-swatch{box-sizing:border-box;width:16px;height:12px;border:1px solid var(--arch-color);background:color-mix(in srgb,var(--arch-color) 20%,var(--pele-bg));border-radius:3px}
 ${phases.map(name=>`.pele-node.${name}>${shape}{fill:color-mix(in srgb,var(--arch-${name}) 20%,var(--pele-bg));stroke:var(--arch-${name})}`).join('\n')}
 ${marks.map(name=>`.pele-node.${name}>${shape}{stroke:var(--arch-${name});stroke-width:${name==='gap'?'2.5':'2'}px;stroke-dasharray:${name==='experimental'?'6 4':name==='temporary'?'2 3':'none'}}`).join('\n')}
@@ -188,11 +188,11 @@ export async function buildArch(config,file,{snapshot,model:overlayModel,browser
   if(problems.length)throw Error(problems.join('\n'));
   const result=await renderArch(overlayModel??checked.model,tokenSource,{browser});
   const legend=checked.classes.length?`<div class="arch-legend">${checked.classes.map(name=>`<span class="arch-key ${name}" style="--arch-color:var(--arch-${name})"><i class="arch-swatch"></i>${name}</span>`).join('')}</div>`:'';
-  const html=`<section data-sdg-arch>${legend}${result.svg}</section>`;
-  const css=`${archStyles()}\n${tokenSource}\nhtml,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-sdg-frame]{display:flex;width:max-content}`;
+  const html=`<section data-adg-arch>${legend}${result.svg}</section>`;
+  const css=`${archStyles()}\n${tokenSource}\nhtml,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-adg-frame]{display:flex;width:max-content}`;
   const note=[metadata.body,metadata.owners.length?`Owners: ${metadata.owners.join(', ')}`:'',metadata.status?`Status: ${metadata.status}`:''].filter(Boolean).join('\n');
   const frame={frame:true,name:'default',html,note};
-  frame.document=theme=>`<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-sdg-frame="default">${html}</div></body></html>`;
+  frame.document=theme=>`<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="default">${html}</div></body></html>`;
   return {frames:[frame],css,imports:[],dependencies};
 }
 

@@ -8,7 +8,7 @@ import { previewTarget, previewURL } from './link.mjs';
 
 export async function open(positionals, values) {
     if (positionals.length > 1)
-      throw new Error("Expected one directory. Run sdg --help.");
+      throw new Error("Expected one directory. Run adg --help.");
     const target = previewTarget(values);
     const port = values.port === undefined ? 0 : Number(values.port);
     if (!Number.isInteger(port) || port < 0 || port > 65535)
@@ -28,7 +28,7 @@ export async function open(positionals, values) {
     const cleanup = () => { try { unlinkSync(instance.file); } catch {} };
     process.once('exit', cleanup);
     const url = previewURL(server.url, target).href;
-    console.log(`SDG: ${url}`);
+    console.log(`ADG: ${url}`);
     if (!values["no-open"]) {
       const command =
         process.platform === "darwin"

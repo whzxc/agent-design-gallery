@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 const forms = [{ name: "prompt" }, { name: "queued", status: "Queued" }];
 const example = "Apply the changes and run the project checks.";
 export function TaskMessage({

@@ -20,13 +20,13 @@ import { startServer } from '../src/server.mjs';
 import { startHub } from '../src/hub.mjs';
 import { addRoot, listProjects } from '../src/hub/registry.mjs';
 const exec=promisify(execFile),asset='arch/mechanisms/work.mmd',cli=new URL('../src/cli.mjs',import.meta.url).pathname;
-const git=(c,...args)=>exec('git',['-c','user.name=SDG Test','-c','user.email=sdg-test@example.invalid',...args],{cwd:c.root});
+const git=(c,...args)=>exec('git',['-c','user.name=ADG Test','-c','user.email=adg-test@example.invalid',...args],{cwd:c.root});
 async function fixture(t, directory=tmpdir()) {
-  const root=await realpath(await mkdtemp(path.join(directory,'sdg-overlay-')));
+  const root=await realpath(await mkdtemp(path.join(directory,'adg-overlay-')));
   await cp(new URL('../fixtures/arch-sample/',import.meta.url),root,{recursive:true});
   t.after(()=>rm(root,{recursive:true,force:true}));
   const c=await loadConfig(root);
-  await git(c,'init','-q');await git(c,'add','arch','design','sdg.config.mjs');await git(c,'commit','-qm','docs(arch): add baseline');
+  await git(c,'init','-q');await git(c,'add','arch','design','adg.config.mjs');await git(c,'commit','-qm','docs(arch): add baseline');
   return c;
 }
 const compare=(old,current)=>overlayModels(parse(current),old?parse(old):null);
@@ -165,7 +165,7 @@ test('Git failures name a next action and base blobs use the resolved repository
   assert.match(base.sha,/^[a-f0-9]{40}$/);assert.match((await readBase(base,path.join(c.root,asset))).blob,/^[a-f0-9]{40}$/);
   assert.equal((await readBase(base,path.join(c.root,'arch/missing.mmd'))).text,null);
   await assert.rejects(resolveBase(c,'missing-revision'),/Unknown Git revision.*fetch.*retry/);
-  const bare=await mkdtemp(path.join(tmpdir(),'sdg-no-git-'));t.after(()=>rm(bare,{recursive:true,force:true}));
+  const bare=await mkdtemp(path.join(tmpdir(),'adg-no-git-'));t.after(()=>rm(bare,{recursive:true,force:true}));
   await assert.rejects(resolveBase({root:bare},'HEAD'),/not in a Git repository.*initialize/);
   const previous=process.env.PATH;process.env.PATH=bare;
   try {await assert.rejects(resolveBase(c,'HEAD'),/Git is unavailable; install Git/);}
@@ -203,12 +203,12 @@ test('CLI base JSON includes captures, added diagrams and deletions; absolute so
   const all=JSON.parse((await exec(process.execPath,[cli,'render','--base=HEAD','--json','--scale=1'],{cwd:c.root})).stdout);
   assert.deepEqual(all.deleted,[asset]);assert.equal(all.captures.length,2);
   await rm(path.join(c.root,added));
-  await symlink(path.join(c.root,'sdg.config.mjs'),file);
+  await symlink(path.join(c.root,'adg.config.mjs'),file);
   const onlyDeleted=JSON.parse((await exec(process.execPath,[cli,'render',file,'--base=HEAD','--json'],{cwd:c.root,env:{...process.env,PLAYWRIGHT_BROWSERS_PATH:path.join(c.root,'missing-browser')}})).stdout);
   assert.deepEqual(onlyDeleted.captures,[]);assert.deepEqual(onlyDeleted.deleted,[asset]);
   await assert.rejects(exec(process.execPath,[cli,'render',added,'--base=missing-revision','--json'],{cwd:c.root}),/Unknown Git revision/);
   await mkdir(path.join(c.design,'components'));const tsx=path.join(c.design,'components/plain.tsx');
-  await writeFile(tsx,"import {Frame} from 'sdg';export default()=> <Frame name=\"default\"><div>Plain</div></Frame>");
+  await writeFile(tsx,"import {Frame} from 'adg';export default()=> <Frame name=\"default\"><div>Plain</div></Frame>");
   assert.deepEqual(selectSources(c,[tsx],{write:false}),[tsx]);
   const alias=path.join(c.root,'alias.tsx');await symlink(tsx,alias);assert.deepEqual(selectSources(c,[alias],{write:false}),[tsx]);
   assert.throws(()=>selectSources(c,['/tmp/outside.mmd'],{write:false}),/outside the project root/);
@@ -240,26 +240,26 @@ test('open and link locators preserve the base through query, hierarchy navigati
   const browser=await launch();t.after(()=>browser.close());const page=await browser.newPage();
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(previewURL(`${hub.url}p/${project.slug}/`,target).href);
-  await page.waitForFunction(()=>window.__sdg?.ready);
+  await page.waitForFunction(()=>window.__adg?.ready);
   assert.equal(new URL(page.url()).searchParams.get('base'),'HEAD');
-  await page.waitForFunction(()=>!window.__sdg.cachePending&&window.__sdg.metadataComplete);
+  await page.waitForFunction(()=>!window.__adg.cachePending&&window.__adg.metadataComplete);
   const manifest=await (await fetch(`${hub.url}p/${project.slug}/manifest?scope=layer:arch&base=HEAD&metadata=1&theme=light`)).json();
   assert.equal(manifest.base.rev,'HEAD');assert.notEqual(manifest.assets[0].hash,undefined);assert.deepEqual(errors,[]);
   const invalid=await (await fetch(server.url+'manifest?scope=layer:arch&base=missing-revision')).json();assert.match(invalid.error,/Unknown Git revision/);
-  const revision=await page.evaluate(()=>window.__sdg.revision);
+  const revision=await page.evaluate(()=>window.__adg.revision);
   await writeFile(path.join(c.root,asset),'flowchart LR\nUpdated --> Node');
-  await page.waitForFunction(revision=>window.__sdg.ready&&window.__sdg.revision>revision,revision);
+  await page.waitForFunction(revision=>window.__adg.ready&&window.__adg.revision>revision,revision);
   const updated=await (await fetch(server.url+'asset/'+encodeURIComponent(asset)+'?base=HEAD')).json();assert.match(updated.frames[0].html,/Updated/);
   const normal=await (await fetch(server.url+'asset/'+encodeURIComponent(asset))).json();assert.doesNotMatch(normal.frames[0].html,/Compared with/);
 });
 
-test('sdg open prints a base locator and serves its working-tree proposal',async t=>{
+test('adg open prints a base locator and serves its working-tree proposal',async t=>{
   const c=await fixture(t);await writeFile(path.join(c.root,asset),'flowchart LR\nNew --> Node');
   const child=spawn(process.execPath,[cli,'open',c.root,'--asset='+asset,'--base=HEAD','--no-open','--state-dir='+path.join(c.root,'open-state')],{stdio:['ignore','pipe','pipe']});
   const exited=new Promise(resolve=>child.once('exit',resolve));
   t.after(async()=>{child.kill('SIGTERM');await exited;});
   const url=await new Promise((resolve,reject)=>{
-    let text='';child.stdout.on('data',bytes=>{text+=bytes;const match=/SDG: (\S+)/.exec(text);if(match)resolve(match[1]);});
+    let text='';child.stdout.on('data',bytes=>{text+=bytes;const match=/ADG: (\S+)/.exec(text);if(match)resolve(match[1]);});
     child.stderr.on('data',bytes=>{text+=bytes;});child.once('error',reject);child.once('exit',code=>reject(Error(`open exited ${code}: ${text}`)));
   });
   assert.equal(new URL(url).searchParams.get('base'),'HEAD');

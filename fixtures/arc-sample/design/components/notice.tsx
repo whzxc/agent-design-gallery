@@ -1,4 +1,4 @@
-import { Frame, Icon } from "sdg";
+import { Frame, Icon } from "adg";
 import { Button } from "./button";
 const example = {
   title: "命令未能启动",

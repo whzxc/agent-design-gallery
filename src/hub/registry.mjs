@@ -4,11 +4,11 @@ import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { configFile, loadConfig, VERSION } from '../toolkit/config.mjs';
+import { configFile, loadConfig, VERSION, requireMigration } from '../toolkit/config.mjs';
 import { listSources, archFiles } from '../toolkit/project.mjs';
 
 const exec = promisify(execFile);
-export const defaultStateDirectory = path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local/state'), 'svg-design-gallery');
+export const defaultStateDirectory = path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local/state'), 'agent-design-gallery');
 const canonical = async directory => realpath(path.resolve(directory.replace(/^~(?=$|[\\/])/, os.homedir())));
 export function projectSlug(directory) {
   return path.basename(directory).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project';
@@ -65,6 +65,7 @@ async function scan(root) {
       if (['ENOENT', 'ENOTDIR', 'EACCES'].includes(error.code)) return;
       throw error;
     }
+    requireMigration(directory);
     if (configFile(directory)) projects.push({ path: directory });
     if (depth >= root.depth) return;
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
@@ -120,6 +121,7 @@ export async function projectMetadata(record) {
     lastDesignChange: { committedAt: null, dirty: false }, sourceCount: null, frameCount: null,
     compatibility: { version: VERSION, requires: null, compatible: null } };
   try {
+    requireMigration(record.path);
     if (!configFile(record.path)) throw new Error('Project config is missing; rescan registered roots.');
     const config = await loadConfig(record.path, { checkVersion: false });
     const relative = path.relative(record.path, config.design) || '.';

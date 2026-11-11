@@ -16,9 +16,9 @@ import {implementationTexts} from '../src/toolkit/document.mjs';
 import {launch,loadFrame} from '../src/toolkit/browser.mjs';
 import {matchTexts,textDelta} from '../src/toolkit/text.mjs';
 import {parseCli,help} from '../src/cli.mjs';
-const temporary=t=>{const root=mkdtempSync(path.join(tmpdir(),'sdg-v2-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
+const temporary=t=>{const root=mkdtempSync(path.join(tmpdir(),'adg-v2-'));t.after(()=>rmSync(root,{recursive:true,force:true}));return root;};
 async function project(t){const root=temporary(t);init({root},()=>{});for(const file of listSources(path.join(root,'design')))rmSync(file);return loadConfig(root);}
-const source=(body,props='')=>`import {Frame, Icon} from 'sdg'; export default()=> <Frame name="sample" width={200} height={100} ${props}>${body}</Frame>;`;
+const source=(body,props='')=>`import {Frame, Icon} from 'adg'; export default()=> <Frame name="sample" width={200} height={100} ${props}>${body}</Frame>;`;
 const put=(c,name,body)=>{const f=path.join(c.design,name);mkdirSync(path.dirname(f),{recursive:true});writeFileSync(f,body);return f;};
 
 test('string runtime escapes text and attributes, flattens children, and emits void elements',()=>{
@@ -29,11 +29,11 @@ test('string runtime escapes text and attributes, flattens children, and emits v
   assert.match(String(Icon({name:'x',size:14})),/stroke-width="3"/);
   for(const [tag,props] of [['style',{}],['script',{}],['div',{onClick:'x'}],['div',{className:'x'}]])assert.throws(()=>jsx(tag,props),/Forbidden/);
 });
-test('build resolves sdg and relative modules; SVG props override root and raster imports become data URLs',async t=>{
+test('build resolves adg and relative modules; SVG props override root and raster imports become data URLs',async t=>{
   const c=await project(t);put(c,'art/mark.svg','<svg width="12" viewBox="0 0 12 12"><path d="M0 0h12"/></svg>');
   put(c,'art/pixel.png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1kAAAAASUVORK5CYII=','base64'));
   put(c,'components/item.ts','export const title="Built";');
-  const f=put(c,'surfaces/a.tsx',`import {Frame} from 'sdg';import {jsx} from 'sdg/jsx-runtime';import Art from '../art/mark.svg';import pixel from '../art/pixel.png';import {title} from '../components/item';export default()=> <Frame name="a"><div><Art width={24} data-brand class="fill-text"/><img src={pixel}/><span>{title}</span></div></Frame>;`);
+  const f=put(c,'surfaces/a.tsx',`import {Frame} from 'adg';import {jsx} from 'adg/jsx-runtime';import Art from '../art/mark.svg';import pixel from '../art/pixel.png';import {title} from '../components/item';export default()=> <Frame name="a"><div><Art width={24} data-brand class="fill-text"/><img src={pixel}/><span>{title}</span></div></Frame>;`);
   const built=await buildSource(c,f);assert.match(built.frames[0].html,/<svg[^>]*width="24"/);assert.doesNotMatch(built.frames[0].html,/width="12"/);assert.match(built.frames[0].html,/src="data:image\/png;base64,/);assert.match(built.frames[0].html,/Built/);assert.equal(built.dependencies.length,5);
   assert.ok(readFileSync(path.join(c.output,'surfaces/a/a.html'),'utf8').startsWith('<!doctype html>'));
 });
@@ -55,7 +55,7 @@ test('?url embeds any art file, tracks its dependency and rejects files outside 
   assert.match(built.frames[0].html,/src="data:image\/svg\+xml[,;]/);
   assert.match(built.frames[0].html,/href="data:text\/plain[,;]/);
   assert.ok(built.dependencies.includes(realpathSync(art)));
-  assert.match(readFileSync(path.join(c.design,'.sdg/assets.d.ts'),'utf8'),/declare module '\*\?url'/);
+  assert.match(readFileSync(path.join(c.design,'.adg/assets.d.ts'),'utf8'),/declare module '\*\?url'/);
   put(c,'components/preview.svg','<svg/>');
   put(c,'surfaces/url.tsx',`import preview from '../components/preview.svg?url';${source('<img src={preview}/>')}`);
   await assert.rejects(buildSource(c,f),/url.tsx:1.*\?url imports must be under design\/art/s);
@@ -81,7 +81,7 @@ test('frames without dimensions follow their content, including a changed button
   const c=await project(t);put(c,'components/button.tsx',readFileSync(new URL('../design/components/button.tsx',import.meta.url),'utf8'));
   put(c,'fixtures/buttons.ts',readFileSync(new URL('../design/fixtures/buttons.ts',import.meta.url),'utf8'));
   put(c,'tokens.css',readFileSync(new URL('../design/tokens.css',import.meta.url),'utf8'));
-  const f=put(c,'components/content.tsx',`import {Frame} from 'sdg';import {Button} from './button';const labels=['Open','Open a design directory'];export default()=>labels.map((label,i)=><Frame name={String(i)}><Button label={label}/></Frame>);`);
+  const f=put(c,'components/content.tsx',`import {Frame} from 'adg';import {Button} from './button';const labels=['Open','Open a design directory'];export default()=>labels.map((label,i)=><Frame name={String(i)}><Button label={label}/></Frame>);`);
   const {frames}=await buildSource(c,f),browser=await launch();
   try {const page=await browser.newPage(),widths=[];for(const frame of frames){const size=await loadFrame(page,frame,'light');widths.push(size.width);assert.equal(size.height,32);}assert.ok(widths[1]>widths[0]+50);}
   finally{await browser.close();}
@@ -102,7 +102,7 @@ test('render produces identical PNG bytes in either frame order',async t=>{
     });
     put(c,'art/preview.png',Buffer.from(png,'base64'));
   } finally {await browser.close();}
-  const files=[20,90].map(size=>put(c,`surfaces/size-${size}.tsx`,`import preview from '../art/preview.png';import {Frame} from 'sdg';export default()=> <Frame name="sample" width={96} height={96}><svg width={${size}} height={${size}} viewBox="0 0 360 235"><image width="360" height="235" href={preview}/></svg></Frame>;`));
+  const files=[20,90].map(size=>put(c,`surfaces/size-${size}.tsx`,`import preview from '../art/preview.png';import {Frame} from 'adg';export default()=> <Frame name="sample" width={96} height={96}><svg width={${size}} height={${size}} viewBox="0 0 360 235"><image width="360" height="235" href={preview}/></svg></Frame>;`));
   const images=()=>files.flatMap(file=>['light','dark'].map(theme=>readFileSync(path.join(c.output,'surfaces',path.basename(file,'.tsx'),`sample-${theme}.png`))));
   const logs=[],expected=order=>order.flatMap(file=>['light','dark'].map(theme=>path.relative(c.root,path.join(c.output,'surfaces',path.basename(file,'.tsx'),`sample-${theme}.png`))));
   t.mock.method(console,'log',line=>logs.push(line));
@@ -115,14 +115,14 @@ test('Tailwind uses rendered classes, inline token aliases and no color, size, f
   const c=await project(t);writeFileSync(path.join(c.design,'tokens.css'),starterTokens.replace('--canvas: #ffffff;','--canvas: #ffffff;\n  --surface: #eeeeee;\n  --text-body: 13px;\n  --radius-panel: 7px;\n  --shadow-card: 0 1px 3px #171717;').replace('--canvas: #171717;','--canvas: #171717;\n  --surface: #222222;'));
   const f=put(c,'surfaces/theme.tsx',`const unused='bg-red-500';const role='surface';${source('<div class={`bg-${role} text-body font-ui rounded-panel shadow-card p-4 font-semibold`}>Theme</div>')}`);
   const {frames,css}=await buildSource(c,f);assert.match(css,/background-color: var\(--surface\)/);assert.match(css,/font-size: var\(--text-body\)/);assert.match(css,/font-family: var\(--font-ui\)/);assert.match(css,/border-radius: var\(--radius-panel\)/);assert.doesNotMatch(css,/--font-ui:\s*var\(--font-ui\)/);assert.doesNotMatch(css,/\.bg-red-500|--color-red-/);assert.match(css,/--spacing: 0.25rem/);
-  const b=await launch();try {const p=await b.newPage();for(const [theme,color] of [['light','rgb(238, 238, 238)'],['dark','rgb(34, 34, 34)']]){await loadFrame(p,frames[0],theme);assert.deepEqual(await p.locator('[data-sdg-frame]>div').evaluate(e=>{const s=getComputedStyle(e);return[s.backgroundColor,s.fontSize,s.borderRadius,s.padding,s.fontWeight]}),[color,'13px','7px','16px','600']);}}finally{await b.close();}
+  const b=await launch();try {const p=await b.newPage();for(const [theme,color] of [['light','rgb(238, 238, 238)'],['dark','rgb(34, 34, 34)']]){await loadFrame(p,frames[0],theme);assert.deepEqual(await p.locator('[data-adg-frame]>div').evaluate(e=>{const s=getComputedStyle(e);return[s.backgroundColor,s.fontSize,s.borderRadius,s.padding,s.fontWeight]}),[color,'13px','7px','16px','600']);}}finally{await b.close();}
   const {compile}=await import('tailwindcss');const base=readFileSync(new URL('../node_modules/tailwindcss/theme.css',import.meta.url),'utf8');const compiler=await compile(base+themeCss(parseTokens(readFileSync(path.join(c.design,'tokens.css'),'utf8')))+'@tailwind utilities;');
   const defaults=compiler.build(['bg-red-500','text-sm','font-sans','rounded-lg','shadow-sm']);for(const cls of ['bg-red-500','text-sm','font-sans','rounded-lg','shadow-sm'])assert.ok(!defaults.includes('.'+cls));
 });
 test('check has a failing source for every contract rule, including both themes and all paint channels',async t=>{
   const c=await project(t);
   const samples={
-    build:'export default () => <',render:source('<Missing/>'),duplicate:`import {Frame} from 'sdg';export default()=>[<Frame name="a"><div/></Frame>,<Frame name="a"><div/></Frame>];`,
+    build:'export default () => <',render:source('<Missing/>'),duplicate:`import {Frame} from 'adg';export default()=>[<Frame name="a"><div/></Frame>,<Frame name="a"><div/></Frame>];`,
     shell:source('<><div/><div/></>'),capture:source('<div/>','capture={{page:true,region:"X"}}'),
     text:source('<div class="text-[#ff0101]">Color</div>'),background:source('<div class="bg-[#ff0101]">Color</div>'),border:source('<div class="border border-[#ff0101]">Color</div>'),outline:source('<div class="outline outline-[#ff0101]">Color</div>'),fill:source('<svg width="20" height="20"><rect width="20" height="20" fill="#ff0101"/></svg>'),stroke:source('<svg width="20" height="20"><path d="M0 0L20 20" stroke="#ff0101"/></svg>'),shadow:source('<div class="shadow-[0_1px_3px_#ff0101]">Color</div>'),
     box:source('<div class="w-4 whitespace-nowrap">Text outside box</div>'),leaves:source('<div class="relative"><span class="absolute left-[190px]">Outside</span></div>'),overlap:source('<div class="relative w-[200px] h-[100px]"><span class="absolute">First</span><span class="absolute">Second</span></div>'),content:source('<div class="w-[300px] h-[110px]"/>'),
@@ -140,7 +140,7 @@ test('check permits token paint, brand art, clipped content and intentional elli
 });
 test('check, render and the canvas discover configured top-level TSX source directories',async t=>{
   assert.deepEqual(sourceDirectories(),['components','modules','surfaces']);
-  for(const sources of [[],null,'modules',['nested/modules'],['../modules'],['.sdg'],['modules\\nested'],[42]]) {
+  for(const sources of [[],null,'modules',['nested/modules'],['../modules'],['.adg'],['modules\\nested'],[42]]) {
     assert.throws(()=>sourceDirectories({sources}),/plain top-level directory names/);
   }
   assert.equal(isSourcePath('modules/a.tsx'),true);
@@ -148,7 +148,7 @@ test('check, render and the canvas discover configured top-level TSX source dire
   const {startServer}=await import('../src/server.mjs');
   for(const directories of [['components','surfaces'],['components','modules','surfaces']]) {
     const root=temporary(t);init({root},()=>{});for(const file of listSources(path.join(root,'design')))rmSync(file);
-    writeFileSync(path.join(root,'sdg.config.mjs'),`export default { sources: ${JSON.stringify(directories)} };`);
+    writeFileSync(path.join(root,'adg.config.mjs'),`export default { sources: ${JSON.stringify(directories)} };`);
     const c=await loadConfig(root);
     assert.deepEqual(c.sources,directories);
     put(c,'scenes/topology-screen.tsx','export const width=200;');
@@ -222,7 +222,7 @@ test('legacy SVG sources block all-source commands and init with exit 2 and the 
     for (const args of [['check'], ['render'], ['compare', '--all'], ['init']]) {
       await assert.rejects(promisify(execFile)(process.execPath, [path.resolve('src/cli.mjs'), ...args], { cwd: c.root }), error => {
         assert.equal(error.code, 2);
-        assert.equal(error.stderr, `sdg: design/${name}: convert this SVG source to TSX; move artwork to design/art/\n`);
+        assert.equal(error.stderr, `adg: design/${name}: convert this SVG source to TSX; move artwork to design/art/\n`);
         return true;
       });
     }
@@ -237,7 +237,7 @@ test('named check, render and compare succeed during staged conversion and permi
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));
-  writeFileSync(path.join(c.root, 'sdg.config.mjs'), `export default { compare: { fixture() { return { url: 'http://127.0.0.1:${server.address().port}', theme: 'light', locale: 'en-US', clock: '2026-01-01' }; } } };`);
+  writeFileSync(path.join(c.root, 'adg.config.mjs'), `export default { compare: { fixture() { return { url: 'http://127.0.0.1:${server.address().port}', theme: 'light', locale: 'en-US', clock: '2026-01-01' }; } } };`);
   put(c, 'components/old.svg', '<svg/>');
   put(c, 'surfaces/old.svg', '<svg/>');
   put(c, 'surfaces/unconverted.tsx', 'invalid TSX');
@@ -253,7 +253,7 @@ test('named check, render and compare succeed during staged conversion and permi
 });
 test('named commands reject a legacy SVG source and direct or transitive legacy imports', async t => {
   const c = await project(t);
-  writeFileSync(path.join(c.root, 'sdg.config.mjs'), 'export default { compare: { fixture() {} } };');
+  writeFileSync(path.join(c.root, 'adg.config.mjs'), 'export default { compare: { fixture() {} } };');
   for (const directory of ['components', 'surfaces']) {
     const name = `${directory}/old.svg`;
     put(c, name, '<svg><style>rect{fill:red}</style></svg>');
@@ -281,13 +281,13 @@ test('reader merges adjacent line segments and pairs duplicate content nearest-f
 test('root discovery prefers nearest config over package and defaults to nearest package', async t => {
   const root = temporary(t), nested = path.join(root, 'a/b'); mkdirSync(nested, { recursive: true });
   // A repository-local TMPDIR may inherit an ancestor's config before this fixture creates its own.
-  const ancestor = discoverRoot(root), inheritedConfig = existsSync(path.join(ancestor, 'sdg.config.mjs'));
+  const ancestor = discoverRoot(root), inheritedConfig = existsSync(path.join(ancestor, 'adg.config.mjs'));
   writeFileSync(path.join(root, 'package.json'), '{}'); writeFileSync(path.join(root, 'a/package.json'), '{}');
   assert.equal(discoverRoot(nested), inheritedConfig ? ancestor : path.join(root, 'a'));
-  writeFileSync(path.join(root, 'sdg.config.mjs'), "export default { design: 'drawings' };");
+  writeFileSync(path.join(root, 'adg.config.mjs'), "export default { design: 'drawings' };");
   assert.equal(discoverRoot(nested), root);
   const config = await loadConfig(nested); assert.equal(config.design, path.join(root, 'drawings')); assert.equal(config.compare.port, 5188);
-  writeFileSync(path.join(root, 'a/sdg.config.mjs'), 'export default {};'); assert.equal(discoverRoot(nested), path.join(root, 'a'));
+  writeFileSync(path.join(root, 'a/adg.config.mjs'), 'export default {};'); assert.equal(discoverRoot(nested), path.join(root, 'a'));
 });
 test('requires compares releases, prereleases and supported ranges explicitly', () => {
   for (const range of ['>=0.3.0', '^0.3.0', '~0.3.0', '>= 0.2.0 < 0.4.0', '0.2.0 || 0.3.0', '*']) assert.equal(satisfies('0.3.0', range), true, range);
@@ -342,10 +342,10 @@ Second line</textarea>
   } finally { await browser.close(); }
 });
 test('init preserves files and refreshes editor declarations; CLI accepts only v2 command flags',async t=>{
-  const c=await project(t);writeFileSync(path.join(c.design,'tsconfig.json'),'preserved');writeFileSync(path.join(c.design,'.sdg/runtime.d.ts'),'stale');init(c,()=>{});
-  assert.equal(readFileSync(path.join(c.design,'tsconfig.json'),'utf8'),'preserved');assert.match(readFileSync(path.join(c.design,'.sdg/runtime.d.ts'),'utf8'),/namespace JSX/);assert.match(readFileSync(path.join(c.root,'.gitignore'),'utf8'),/design\/\.sdg/);
+  const c=await project(t);writeFileSync(path.join(c.design,'tsconfig.json'),'preserved');writeFileSync(path.join(c.design,'.adg/runtime.d.ts'),'stale');init(c,()=>{});
+  assert.equal(readFileSync(path.join(c.design,'tsconfig.json'),'utf8'),'preserved');assert.match(readFileSync(path.join(c.design,'.adg/runtime.d.ts'),'utf8'),/namespace JSX/);assert.match(readFileSync(path.join(c.root,'.gitignore'),'utf8'),/design\/\.adg/);
   const f=put(c,'surfaces/a.tsx',source('<div/>'));assert.deepEqual(selectSources(c,['surfaces/a','design/surfaces/a.tsx']),[f,f]);
-  assert.equal(parseCli(['compare','--all']).values.all,true);assert.equal(parseCli(['render','surfaces/a','--frame=sample']).values.frame,'sample');assert.throws(()=>parseCli(['compare','a']),/help/);assert.equal(parseCli(['open','check']).positionals[0],'check');assert.doesNotMatch(help(),/sdg sync|sdg measure/);assert.deepEqual(viewport('300x200'),{width:300,height:200});
+  assert.equal(parseCli(['compare','--all']).values.all,true);assert.equal(parseCli(['render','surfaces/a','--frame=sample']).values.frame,'sample');assert.throws(()=>parseCli(['compare','a']),/help/);assert.equal(parseCli(['open','check']).positionals[0],'check');assert.doesNotMatch(help(),/adg sync|adg measure/);assert.deepEqual(viewport('300x200'),{width:300,height:200});
 });
 test('compare uses Frame capture, flags override it, both sides share a reader, and --all writes linked summaries',async t=>{
   const c=await project(t);const {createServer}=await import('node:http');

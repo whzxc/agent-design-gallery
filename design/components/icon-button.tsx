@@ -1,4 +1,4 @@
-import { Frame, Icon } from 'sdg';
+import { Frame, Icon } from 'adg';
 import { iconButtonForms, disabledIconButton } from '../fixtures/buttons';
 
 export function IconButton({

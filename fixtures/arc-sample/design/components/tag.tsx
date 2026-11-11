@@ -1,4 +1,4 @@
-import { Frame, Icon } from "sdg";
+import { Frame, Icon } from "adg";
 const forms = [
   { name: "meta", text: "acceptance" },
   { name: "fact", text: "Headers: Authorization" },

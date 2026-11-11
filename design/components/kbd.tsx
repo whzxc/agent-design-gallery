@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 import shortcutFixtures from '../fixtures/shortcuts.json';
 export function Kbd({ label = '⌘F' }: { label?: string }) {
   return (

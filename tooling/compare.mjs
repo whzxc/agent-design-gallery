@@ -5,10 +5,10 @@ import { createServer } from "node:net";
 import { loadConfig } from '../src/toolkit/config.mjs';
 const [arc, destination = `output/comparison-${Date.now()}`, count = "3"] =
   process.argv.slice(2);
-const baseline = process.argv.find(arg => arg.startsWith('--sdg-baseline='))?.slice('--sdg-baseline='.length);
+const baseline = process.argv.find(arg => arg.startsWith('--adg-baseline='))?.slice('--adg-baseline='.length);
 if (!arc)
   throw new Error(
-    "Usage: node tooling/compare.mjs <ARC checkout or design directory> [output-directory] [runs] [--reuse-snapshot | --sdg-baseline=<checkout>] [--warm-restart]",
+    "Usage: node tooling/compare.mjs <ARC checkout or design directory> [output-directory] [runs] [--reuse-snapshot | --adg-baseline=<checkout>] [--warm-restart] [--browse-only]",
   );
 const root = process.cwd(),
   out = path.resolve(destination),
@@ -19,10 +19,10 @@ if (baseline) {
   sha = execFileSync('git', ['-C', arc, 'rev-parse', 'HEAD'], {encoding:'utf8'}).trim();
   await cp(path.resolve(arc), path.join(snapshot, 'design'), {
     recursive: true,
-    filter: source => path.basename(source) !== '.sdg',
+    filter: source => path.basename(source) !== '.adg',
   });
   const config = await loadConfig(path.resolve(arc));
-  await writeFile(path.join(snapshot, 'sdg.config.mjs'), `export default { sources: ${JSON.stringify(config.sources)} };\n`);
+  await writeFile(path.join(snapshot, 'adg.config.mjs'), `export default { sources: ${JSON.stringify(config.sources)} };\n`);
 } else if (process.argv.includes("--reuse-snapshot")) {
   const previous = JSON.parse(
     await readFile(path.join(arc, "comparison.json"), "utf8"),
@@ -108,7 +108,7 @@ async function start(command, args, env) {
     child.stderr.on("data", (b) => (log += b));
     child.stdout.on("data", (b) => {
       log += b;
-      const match = log.match(/(?:DESIGN|SDG): (http:\/\/[^\s]+)/);
+      const match = log.match(/(?:DESIGN|ADG): (http:\/\/[^\s]+)/);
       if (match) {
         clearTimeout(timeout);
         resolve({ url: match[1], startupMs: performance.now() - start });
@@ -125,7 +125,7 @@ async function start(command, args, env) {
 }
 const records = [];
 for (let run = 1; run <= Number(count); run++)
-  for (const implementation of baseline ? ["baseline", "sdg"] : ["arc", "sdg"]) {
+  for (const implementation of baseline ? ["baseline", "adg"] : ["arc", "adg"]) {
     const port = await freePort();
     const launch = () => start(
       process.execPath,
@@ -154,6 +154,7 @@ for (let run = 1; run <= Number(count); run++)
             server.url,
             file,
             path.join(snapshot, "design"),
+            ...(process.argv.includes('--browse-only') ? ['--browse-only'] : []),
           ],
           { stdio: "inherit" },
         );

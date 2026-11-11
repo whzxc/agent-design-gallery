@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 import { Button } from "./button";
 const example = {
   text: "把我现有的 Codex MCP 服务导入 ARC 的 MCP 中枢，然后列出它们的工具，并告诉我哪些服务连接失败。",

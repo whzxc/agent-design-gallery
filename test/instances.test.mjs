@@ -8,11 +8,11 @@ import { registerInstance, listInstances } from '../src/hub/instances.mjs';
 import { VERSION } from '../src/toolkit/config.mjs';
 
 async function fixture(t) {
-  const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'sdg-instances-')));
+  const temporary = await realpath(await mkdtemp(path.join(os.tmpdir(), 'adg-instances-')));
   t.after(() => rm(temporary, { recursive: true, force: true }));
   const directory = path.join(temporary, 'project'), stateDirectory = path.join(temporary, 'state');
   await mkdir(directory);
-  await writeFile(path.join(directory, 'sdg.config.mjs'), "export default {name:'Instance project'};");
+  await writeFile(path.join(directory, 'adg.config.mjs'), "export default {name:'Instance project'};");
   return { directory, stateDirectory };
 }
 async function server(t, handler) {

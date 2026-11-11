@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { loadConfig, VERSION } from '../toolkit/config.mjs';
 
 // Shared instance discovery does not load or start the resident hub.
-const defaultStateDirectory = path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local/state'), 'svg-design-gallery');
+const defaultStateDirectory = path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local/state'), 'agent-design-gallery');
 const exec = promisify(execFile);
 const validId = id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id);
 const validPort = port => Number.isInteger(port) && port > 0 && port <= 65535;

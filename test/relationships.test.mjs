@@ -9,7 +9,7 @@ import { sourceRelationships, relatedSources } from '../public/relationships.js'
 import { startServer } from '../src/server.mjs';
 
 function project(t) {
-  const root = mkdtempSync(path.join(tmpdir(), 'sdg-relationships-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'adg-relationships-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const config = { root, design: path.join(root, 'design'), sources: ['components', 'modules', 'surfaces'] };
   put(config, 'tokens.css', starterTokens);
@@ -22,7 +22,7 @@ function put(config, name, text) {
   return file;
 }
 const source = (imports = '', expression = '"Example"') => `${imports}
-  import { Frame } from 'sdg';
+  import { Frame } from 'adg';
   export const label = 'Example';
   export default () => <Frame name="default"><div>{${expression}}</div></Frame>;`;
 async function graph(config) {
@@ -54,24 +54,24 @@ test('transitive relationships retain shortest via paths, prefer direct edges an
 
 test('build stamps exported JSX roots, nested wrappers, aliases and fragments without layout wrappers', async t => {
   const c=project(t);
-  put(c,'components/box.tsx',`import {Frame} from 'sdg';
+  put(c,'components/box.tsx',`import {Frame} from 'adg';
     export function Box(){return <button>Box</button>}
     const Arrow=()=> <><i>A</i><i>B</i></>; export {Arrow as Pair};
     export const count=2;
     export default()=> <Frame name="box"><div><Box/><Arrow/></div></Frame>;`);
-  put(c,'modules/wrapper.tsx',`import {Frame} from 'sdg';import {Box} from '../components/box';
+  put(c,'modules/wrapper.tsx',`import {Frame} from 'adg';import {Box} from '../components/box';
     export const Wrapper=()=> <Box/>;
     export default()=> <Frame name="wrapper"><Wrapper/></Frame>;`);
-  const file=put(c,'surfaces/home.tsx',`import {Frame} from 'sdg';import {Wrapper} from '../modules/wrapper';import {Pair} from '../components/box';
+  const file=put(c,'surfaces/home.tsx',`import {Frame} from 'adg';import {Wrapper} from '../modules/wrapper';import {Pair} from '../components/box';
     function Local(){return <p>Local</p>}
     export default()=> <Frame name="home"><main><Wrapper/><Pair/><Local/></main></Frame>;`);
   const built=await buildSource(c,file,{write:false});
   const html=built.frames[0].html;
-  const owners=[...html.matchAll(/data-sdg-owners="([^"]+)"/g)].map(m=>JSON.parse(m[1].replaceAll('&quot;','"')));
+  const owners=[...html.matchAll(/data-adg-owners="([^"]+)"/g)].map(m=>JSON.parse(m[1].replaceAll('&quot;','"')));
   assert.deepEqual(owners[0],[{source:'components/box.tsx',export:'Box'},{source:'modules/wrapper.tsx',export:'Wrapper'}]);
   assert.deepEqual(owners.slice(1),[[{source:'components/box.tsx',export:'Pair'}],[{source:'components/box.tsx',export:'Pair'}]]);
   assert.match(html,/<main><button /);assert.match(html,/<p>Local<\/p>/);
-  assert.ok(!html.includes('data-sdg-owners="[]"'));
+  assert.ok(!html.includes('data-adg-owners="[]"'));
 });
 
 test('relationships resolve relative imports, explicit extensions, duplicates and direct edges only', async t => {
@@ -86,7 +86,7 @@ test('relationships resolve relative imports, explicit extensions, duplicates an
     'modules/composer.tsx': { uses: ['components/alert.tsx'], usedBy: ['surfaces/home.tsx'] },
     'surfaces/home.tsx': { uses: ['modules/composer.tsx'], usedBy: [] },
   });
-  assert.equal(existsSync(path.join(c.design, '.sdg')), false, 'read-only builds do not write generated types');
+  assert.equal(existsSync(path.join(c.design, '.adg')), false, 'read-only builds do not write generated types');
 });
 
 test('relationships reuse extension and directory index resolution, including re-exports', async t => {
@@ -130,7 +130,7 @@ test('relationships keep cycles finite and only include configured source direct
 
 test('graph endpoint refreshes both directions after import edits, source additions and removals', { timeout: 15000 }, async t => {
   const c = project(t);
-  writeFileSync(path.join(c.root, 'sdg.config.mjs'), `export default { sources: ${JSON.stringify(c.sources)} };`);
+  writeFileSync(path.join(c.root, 'adg.config.mjs'), `export default { sources: ${JSON.stringify(c.sources)} };`);
   put(c, 'components/alert.tsx', source());
   put(c, 'modules/home.tsx', source());
   const surface = put(c, 'surfaces/home.tsx', source("import {label as imported} from '../modules/home';", 'imported'));

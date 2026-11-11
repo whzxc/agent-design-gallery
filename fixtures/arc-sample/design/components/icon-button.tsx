@@ -1,4 +1,4 @@
-import { Frame, Icon } from "sdg";
+import { Frame, Icon } from "adg";
 const forms = [
   { name: "regular", compact: false, icon: "rotate-cw" },
   { name: "compact", compact: true, icon: "trash-2" },

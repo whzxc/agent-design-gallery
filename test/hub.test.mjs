@@ -9,11 +9,11 @@ import { startServer } from '../src/server.mjs';
 import { addRoot, listProjects } from '../src/hub/registry.mjs';
 
 test('hub routes existing viewers by stable slug and keeps browser paths read-only', async t => {
-  const root = await mkdtemp(path.join(tmpdir(), 'sdg-hub-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-hub-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const project = path.join(root, 'project'), stateDirectory = path.join(root, 'state');
   await mkdir(project);
-  await writeFile(path.join(project, 'sdg.config.mjs'), 'export default { name: "Test" };');
+  await writeFile(path.join(project, 'adg.config.mjs'), 'export default { name: "Test" };');
   await cp(new URL('../fixtures/arc-sample/design', import.meta.url), path.join(project, 'design'), { recursive: true });
   await addRoot(project, 0, stateDirectory);
   const hub = await startHub({ port: 0, stateDirectory, idleTimeout: 40 });
@@ -30,7 +30,7 @@ test('hub routes existing viewers by stable slug and keeps browser paths read-on
     const page = await browser.newPage();
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(base.href);
-    await page.waitForFunction(() => window.__sdg?.ready);
+    await page.waitForFunction(() => window.__adg?.ready);
     assert.equal(await page.locator('#directories').count(), 0);
     assert.deepEqual(errors, []);
   } finally { await browser.close(); }
@@ -44,12 +44,12 @@ test('hub routes existing viewers by stable slug and keeps browser paths read-on
   await new Promise(resolve => setTimeout(resolve, 100));
   assert.equal((await fetch(new URL('manifest', base))).status, 200); // Restarts after idle release.
   await mkdir(path.join(project,'new-project'));
-  await writeFile(path.join(project,'new-project/sdg.config.mjs'),'export default {};');
+  await writeFile(path.join(project,'new-project/adg.config.mjs'),'export default {};');
   assert.equal((await listProjects(stateDirectory)).length, 1); // No implicit scan.
 });
 
 test('ephemeral server has no browser directory or reveal mutations', async t => {
-  const stateDirectory = await mkdtemp(path.join(tmpdir(),'sdg-readonly-'));
+  const stateDirectory = await mkdtemp(path.join(tmpdir(),'adg-readonly-'));
   t.after(() => rm(stateDirectory,{recursive:true,force:true}));
   const server = await startServer({directory:new URL('../fixtures/arc-sample/design',import.meta.url).pathname,stateDirectory});
   t.after(() => server.close());

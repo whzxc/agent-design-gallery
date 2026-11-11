@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 const forms = [
   { name: "active", summary: "2 进行中" },
   { name: "idle", summary: "" },

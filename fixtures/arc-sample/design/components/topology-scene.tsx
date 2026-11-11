@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 import { BoardHeader } from "./board-header";
 const example = {
   date: "1月1日 · 周四",

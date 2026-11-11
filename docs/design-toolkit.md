@@ -1,26 +1,45 @@
 # Design toolkit
 
-[Asset rules and adoption](asset-rules.md) · [SDG design](design.md) · [Architecture](architecture.md) · [Performance](performance.md)
+[Asset rules and adoption](asset-rules.md) · [ADG design](design.md) · [Architecture](architecture.md) · [Performance](performance.md)
 
-A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `sdg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, and browses them in the viewer (`sdg <directory>`).
+A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `adg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, and browses them in the viewer (`adg <directory>`).
 
 This document is the format and command contract. The [design asset rules](asset-rules.md) define layers, ownership, states, frame naming, fidelity and lifecycle, with an adoption guide for existing projects. A project's own mapping and governance documents keep its direction, declared forms, implementation locations, approval process and concrete gaps.
 
 ## Install
 
-`sdg` is installed once per machine and shared by every project. Projects do not list it in their dependencies.
+`adg` is installed once per machine and shared by every project. Projects do not list it in their dependencies.
 
 ```sh
-npm install -g @whzxc/svg-design-gallery
+npm install -g @whzxc/agent-design-gallery
 ```
 
-The package comes from the public npm registry. Run the same install again to update. `check`, `render` and `compare` launch Chromium through the Playwright that ships with `sdg`; the viewer and the build start without it. When Chromium is missing, those commands stop with the command that installs it for that Playwright version.
+The package comes from the public npm registry. Run the same install again to update. `check`, `render` and `compare` launch Chromium through the Playwright that ships with `adg`; the viewer and the build start without it. When Chromium is missing, those commands stop with the command that installs it for that Playwright version.
 
-A project may set `requires` in `sdg.config.mjs`, such as `'>=0.4.0'`. Older versions stop with exit code 2 and the update command, so every contributor checks with the same rules.
+A project may set `requires` in `adg.config.mjs`, such as `'>=0.4.0'`. Older versions stop with exit code 2 and the update command, so every contributor checks with the same rules.
+
+## One-time name migration
+
+```sh
+adg migrate /path/to/project
+adg service migrate
+```
+
+`adg migrate [project]` renames `sdg.config.mjs`, `.js` and `.ts`, rewrites `sdg`, `sdg/jsx-runtime`,
+`sdg/jsx-dev-runtime` and `sdg:self` imports under the configured design directory, updates editor paths and
+`.sdg/` ignore entries in the project's `.gitignore` files, removes the old generated directory and regenerates
+`.adg/`. Each change is printed. Repeating the command is safe; mixed old/new config names are refused before
+any edits. Commands encountering only an old config require this migration.
+
+`adg service migrate` moves the entire old hub state directory and replaces its macOS LaunchAgent with the current
+Node/CLI paths and previous port. `--state-dir` sets the destination; an existing destination or new LaunchAgent
+is refused. The key prefix is updated without printing the key. Afterwards it lists other LaunchAgents referencing
+the old path for the operator to update. See [local updates](local-updates.md#one-time-service-migration) for paths
+and service migration details.
 
 ## Project layout
 
-- `sdg.config.mjs`, `sdg.config.js` or `sdg.config.ts` at the project root configures paths, `sources`, `check` and `compare`. Every field is optional.
+- `adg.config.mjs`, `adg.config.js` or `adg.config.ts` at the project root configures paths, `sources`, `check` and `compare`. Every field is optional.
 - `design/tokens.css` holds color, type, radius, size and shadow tokens for the light and dark themes.
 - `design/components/<name>.tsx` holds one shared component. It exports the functions other sources use, and its default export returns the component's declared forms as frames.
 - `design/modules/<feature>.tsx` owns feature parts and their states, composed from components and other modules' exported parts.
@@ -28,14 +47,14 @@ A project may set `requires` in `sdg.config.mjs`, such as `'>=0.4.0'`. Older ver
 - `design/art/` holds SVG illustrations and brand artwork that sources import.
 - `design/fixtures/` holds representative content and state data. `design/studies/` holds temporary direction explorations only while they are active.
 - `design/gallery.json` optionally arranges sources into groups for the viewer.
-- `design/tsconfig.json` lets editors resolve the toolkit's types. `sdg init` writes it; every command refreshes the ignored `design/.sdg/` declarations it points to.
-- `output/design/` receives builds, renders and compare reports. Keep it and `design/.sdg/` out of Git.
+- `design/tsconfig.json` lets editors resolve the toolkit's types. `adg init` writes it; every command refreshes the ignored `design/.adg/` declarations it points to.
+- `output/design/` receives builds, renders and compare reports. Keep it and `design/.adg/` out of Git.
 
 `sources` is an optional array of plain top-level directory names. Since 0.5.0 it defaults to `['components', 'modules', 'surfaces']`, adding `studies` only when a direct `design/studies/*.tsx` file exists. Empty study directories and nested helpers do not enable studies. Saving the first study or removing the last one updates default viewer discovery. Explicit lists retain their exact directories and order, including whether to include studies. Names use letters, digits, underscores or hyphens; nested paths are rejected. Only direct TSX files in those directories are source entries. Other files under `design/`, such as shared scene data, remain imports.
 
-Production directories in `sources` are ordered from lower to higher layers. `check` rejects imports into a higher layer and permits imports within the same layer. With the default order, components cannot import modules or surfaces, and modules cannot import surfaces. Custom names use the configured order; studies are exempt. A consumer can set `check: { importDirection: false }` in `sdg.config.mjs` to disable only this lint and document its alternative policy locally. The check uses resolved direct source imports from the relationship graph, including extension/index resolution and re-exports.
+Production directories in `sources` are ordered from lower to higher layers. `check` rejects imports into a higher layer and permits imports within the same layer. With the default order, components cannot import modules or surfaces, and modules cannot import surfaces. Custom names use the configured order; studies are exempt. A consumer can set `check: { importDirection: false }` in `adg.config.mjs` to disable only this lint and document its alternative policy locally. The check uses resolved direct source imports from the relationship graph, including extension/index resolution and re-exports.
 
-Commands run from any directory inside the project. They find the nearest `sdg.config.mjs`, `.js` or `.ts` (in that priority order), or, without one, the nearest `package.json`, and resolve paths from there.
+Commands run from any directory inside the project. They find the nearest `adg.config.mjs`, `.js` or `.ts` (in that priority order), or, without one, the nearest `package.json`, and resolve paths from there.
 
 ## Tokens
 
@@ -48,7 +67,7 @@ Sources require `--font-ui`, `--font-mono`, `--canvas` and `--text`. Name the re
 Sources are TSX modules that run at build time. JSX produces static markup: there is no React, state, effect or event handling, and the output contains no scripts or event attributes. A component is a plain function of its props. Use `class`, not `className`; other attribute names follow HTML and SVG.
 
 ```tsx
-import { Frame, Icon } from 'sdg';
+import { Frame, Icon } from 'adg';
 
 export function Panel(props: { title: string; children?: unknown }) {
   return (
@@ -69,7 +88,7 @@ export default () => [
 ];
 ```
 
-The specifier `sdg` resolves to the installed toolkit's runtime. Relative imports resolve within `design/`. Importing an `.svg` file under `design/` yields a component that inlines the drawing and passes its props to the drawing's root; importing a PNG, JPEG or WebP file yields a data URL. `import url from './x.svg?url'` yields a data URL for any file under `design/art/`, preserving self-contained artwork as an image. Packages from npm are not available to sources.
+The specifier `adg` resolves to the installed toolkit's runtime. Relative imports resolve within `design/`. Importing an `.svg` file under `design/` yields a component that inlines the drawing and passes its props to the drawing's root; importing a PNG, JPEG or WebP file yields a data URL. `import url from './x.svg?url'` yields a data URL for any file under `design/art/`, preserving self-contained artwork as an image. Packages from npm are not available to sources.
 
 Reuse components and pass parameters instead of copying markup between sources. Generate repeated geometry with ordinary functions and loops in the source.
 
@@ -177,17 +196,17 @@ Review the composition of every frame before showing it. A frame that copies the
 ## Commands
 
 ```sh
-sdg [open] [directory] [--port=<n>] [--no-open] [--state-dir=<path>]
-sdg init
-sdg check [source...] [--read-only]
-sdg render [source...] [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]
-sdg compare <source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin=<x> <y>] [--click=<name>...] [--viewport=<w>x<h>]
-sdg compare --all
+adg [open] [directory] [--port=<n>] [--no-open] [--state-dir=<path>]
+adg init
+adg check [source...] [--read-only]
+adg render [source...] [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]
+adg compare <source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin=<x> <y>] [--click=<name>...] [--viewport=<w>x<h>]
+adg compare --all
 ```
 
-A first argument that names a command runs it; any other argument is a directory to open. `sdg open check` opens a directory named `check`.
+A first argument that names a command runs it; any other argument is a directory to open. `adg open check` opens a directory named `check`.
 
-- `init` creates `sdg.config.mjs` requiring `>=0.5.0`, required tokens, production source directories, fixtures/art, editor configuration and ignore entries. A fresh library gets `components/example.tsx`, `modules/example.tsx`, `surfaces/example.tsx` and `fixtures/example.ts`: one runnable downward composition with frame name `default` in each source. Explicit source names are used in place of the defaults. Existing source libraries or an existing example fixture receive no demo assets. Authored files are preserved, generated declarations are refreshed, missing ignore entries are appended, and created/skipped files are listed. It creates no study or empty studies directory.
+- `init` creates `adg.config.mjs` requiring `>=0.5.0`, required tokens, production source directories, fixtures/art, editor configuration and ignore entries. A fresh library gets `components/example.tsx`, `modules/example.tsx`, `surfaces/example.tsx` and `fixtures/example.ts`: one runnable downward composition with frame name `default` in each source. Explicit source names are used in place of the defaults. Existing source libraries or an existing example fixture receive no demo assets. Authored files are preserved, generated declarations are refreshed, missing ignore entries are appended, and created/skipped files are listed. It creates no study or empty studies directory.
 - `check` checks import direction and the named sources' frames, or all sources. `--read-only` skips generated type declarations and HTML build files; it runs the same import and both-theme frame checks without changing consumer files.
 - `render` writes `output/design/<path>/<frame>-light.png` and `-dark.png` at the given scale, for every frame or the one named.
 - `compare` compares one frame; its flags override the frame's `fixture` and `capture`.
@@ -199,16 +218,16 @@ Source arguments are paths under the design directory, with or without `design/`
 
 ## Review handoff
 
-After changing design assets, name the change and include an SDG link for each affected frame, source, or cohesive group. Choose the smallest target that covers the change. For example, report “Button disabled state — adjusted the foreground contrast” with a link to that frame. Add a PNG when the report needs an inline preview or the recipient cannot reach the viewer.
+After changing design assets, name the change and include an ADG link for each affected frame, source, or cohesive group. Choose the smallest target that covers the change. For example, report “Button disabled state — adjusted the foreground contrast” with a link to that frame. Add a PNG when the report needs an inline preview or the recipient cannot reach the viewer.
 
 | Need | Command |
 | --- | --- |
-| Live preview of the working directory | `sdg open ./design --asset=components/button.tsx --frame=disabled --no-open` |
-| Share the changed frame on a registered project | `sdg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled` |
+| Live preview of the working directory | `adg open ./design --asset=components/button.tsx --frame=disabled --no-open` |
+| Share the changed frame on a registered project | `adg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled` |
 | Include the frame's source layer for context | Add `--mode=path` to the link command. |
-| Export PNGs for a report or another tool | `sdg render components/button --frame=disabled --theme=dark --out-dir=output/review --json` |
+| Export PNGs for a report or another tool | `adg render components/button --frame=disabled --theme=dark --out-dir=output/review --json` |
 
-`open` and `link` accept one target: `--asset` with an optional `--frame`, `--group`, `--layer`, or `--tokens`. Source paths are relative to the design directory and include the extension. Query mode is the default. To convert a URL copied from the viewer, pass it to `sdg link` without target flags. `link` emits a single URL and strips unrelated query parameters, including access keys. Share a reachable hub project URL for remote review and verify that it serves the changed checkout. A direct preview uses loopback. A proxied instance link lasts until its viewer stops. Viewer links reflect the current source files and refresh after saves. Keep the PNG when the report needs a fixed snapshot.
+`open` and `link` accept one target: `--asset` with an optional `--frame`, `--group`, `--layer`, or `--tokens`. Source paths are relative to the design directory and include the extension. Query mode is the default. To convert a URL copied from the viewer, pass it to `adg link` without target flags. `link` emits a single URL and strips unrelated query parameters, including access keys. Share a reachable hub project URL for remote review and verify that it serves the changed checkout. A direct preview uses loopback. A proxied instance link lasts until its viewer stops. Viewer links reflect the current source files and refresh after saves. Keep the PNG when the report needs a fixed snapshot.
 
 `render` exports TSX frames at their exact bounds. It defaults to both themes at 2×. `--theme` selects a theme, and a relative `--out-dir` resolves from the project root. `--json` emits an ordered array with `source`, `frame`, `theme`, and absolute PNG `path` fields. Keep the default text output for interactive use.
 
@@ -272,7 +291,7 @@ then `--border`, accent to `--accent`, and fonts to `--font-ui`/`--font-mono`.
 Missing optional neutral roles fall back to canvas/text. Radius is 8px.
 Projects may override `--arch-<class>` in either token block. Defaults use violet
 `#6a5ad0`/`#ab9fff` for progress and experimental; warning, success, danger and
-tertiary roles supply the remaining colors with SDG light/dark fallbacks. Phase
+tertiary roles supply the remaining colors with ADG light/dark fallbacks. Phase
 fill mixes 20% of its color with the diagram background.
 
 ### Sidecars
@@ -297,15 +316,15 @@ Owners are project-root-relative file paths or filesystem globs (including `*`, 
 and `**`); each must match at least one file. Absolute and parent-escaping paths are
 invalid. The body appears in the existing Inspector note, followed by plain
 `Owners: ...` and `Status: ...` lines when present. These mappings are for review;
-SDG does not infer architecture layers or freshness from them.
+ADG does not infer architecture layers or freshness from them.
 
 ### Architecture check and render
 
 ```sh
-sdg check arch/mechanisms/work.mmd --read-only
-sdg render arch/mechanisms/work.mmd --theme=both --scale=2 --out-dir=output/arch --json
-sdg open . --asset=arch/mechanisms/work.mmd --frame=default
-sdg link http://127.0.0.1:4310/p/example/ --asset=arch/mechanisms/work.mmd
+adg check arch/mechanisms/work.mmd --read-only
+adg render arch/mechanisms/work.mmd --theme=both --scale=2 --out-dir=output/arch --json
+adg open . --asset=arch/mechanisms/work.mmd --frame=default
+adg link http://127.0.0.1:4310/p/example/ --asset=arch/mechanisms/work.mmd
 ```
 
 `check` includes architecture sources when no sources are named, and accepts named
@@ -316,11 +335,11 @@ line, unknown/reserved classes, painting statement lines, an edge/message count 
 outside their node shapes in either theme. The count is a check limit; it does not
 prevent browsing or rendering a larger diagram.
 
-Pele renders synchronously in Node. SDG collects its text-width requests and measures
+Pele renders synchronously in Node. ADG collects its text-width requests and measures
 them in Chromium using both project font stacks, repeating as wrapping requests new
 widths. Layout reserves the larger width across themes. Rendered shape checks use
 Chromium's actual SVG transforms and text bounds. Final font review uses macOS,
-the review platform defined in [SDG design](design.md).
+the review platform defined in [ADG design](design.md).
 
 `render` uses a fresh page/context per frame and theme, defaults to both themes at
 2×, and writes `<out-dir>/arch/mechanisms/work/default-light.png` and
@@ -339,9 +358,9 @@ and resolve it in the destination project's repository. Both direct viewers and 
 project/instance proxies retain the query parameter through navigation.
 
 ```sh
-sdg render arch/mechanisms/work.mmd --base=HEAD --theme=both --json
-sdg open . --asset=arch/mechanisms/work.mmd --base=main
-sdg link https://gallery.example/p/project/ --asset=arch/mechanisms/work.mmd --base=HEAD~1
+adg render arch/mechanisms/work.mmd --base=HEAD --theme=both --json
+adg open . --asset=arch/mechanisms/work.mmd --base=main
+adg link https://gallery.example/p/project/ --asset=arch/mechanisms/work.mmd --base=HEAD~1
 ```
 
 Source paths may be project-relative or absolute paths resolving inside the project
@@ -418,7 +437,7 @@ Both sides are read the same way. The reader takes one text per rendered line, i
 
 `output/design/compare/<source>-<frame>-<fixture>/` receives `design.png`, `implementation.png`, `overlay.png`, `report.json` and `index.html`. `report.json` records `settled: false` when the texts did not settle. A nonzero exit means it found differences. Treat them as a review list, not a zero gate. Missing or extra texts, wrong order or grouping, and one offset shared by many texts point to real defects, such as a lost font rule or a leftover border. An isolated offset of a few pixels can stay.
 
-The project describes how to run its implementation in `sdg.config.mjs`:
+The project describes how to run its implementation in `adg.config.mjs`:
 
 ```js
 export default {
@@ -466,11 +485,11 @@ The right inspector follows the selection and remembers whether it is expanded, 
 
 **Uses** and **Used by** include direct and transitive sources, grouped by directory (`surfaces`, `modules`, then `components` for the standard composition layers). Direct entries precede indirect entries in each group. An indirect entry is muted and shows its shortest `via` path; equal-length routes use source-path ordering. Each source appears once and the selected source is excluded from cyclic traversals. For example, `surfaces/home → modules/home → modules/composer` displays `composer · via home`. A direct import takes precedence over an indirect route to the same source. Click an entry to select and focus its source; Back returns to the previous frame or element.
 
-The graph comes from imports resolved by the existing bundler, including relative extensions, directory indexes and re-exports. Only TSX entries directly in configured `sources` directories are nodes. Fixtures, nested helper modules, tokens, artwork and the `sdg` runtime are excluded. Imports removed by the TypeScript transform, such as type-only imports, are excluded. Saving, adding or removing a source updates relationships through the existing file watcher.
+The graph comes from imports resolved by the existing bundler, including relative extensions, directory indexes and re-exports. Only TSX entries directly in configured `sources` directories are nodes. Fixtures, nested helper modules, tokens, artwork and the `adg` runtime are excluded. Imports removed by the TypeScript transform, such as type-only imports, are excluded. Saving, adding or removing a source updates relationships through the existing file watcher.
 
-The build registers named exported functions from configured sources by their function identity, including aliases. Static JSX rendering stamps their HTML/SVG roots with `data-sdg-owners`, preserving nested exports that return the same root. Fragments and arrays stamp each element root without adding wrappers. The default export remains the frame renderer. During the viewer's existing preview measurement, it records each stamped root's bounds, clipped to the frame and scrolling ancestors. Hover outlines the innermost root under the pointer; click selects it. Matching frames are those whose rendered roots contain the same source/export identity. Camera input only transforms these recorded bounds; it never reruns the page components. Plain text returns have no element root to hit, and unexported helper functions do not introduce a source boundary.
+The build registers named exported functions from configured sources by their function identity, including aliases. Static JSX rendering stamps their HTML/SVG roots with `data-adg-owners`, preserving nested exports that return the same root. Fragments and arrays stamp each element root without adding wrappers. The default export remains the frame renderer. During the viewer's existing preview measurement, it records each stamped root's bounds, clipped to the frame and scrolling ancestors. Hover outlines the innermost root under the pointer; click selects it. Matching frames are those whose rendered roots contain the same source/export identity. Camera input only transforms these recorded bounds; it never reruns the page components. Plain text returns have no element root to hit, and unexported helper functions do not introduce a source boundary.
 
-For non-interactive inspection, `GET /relationships` on the local viewer server returns the direct graph, keyed by source path with `uses` and `usedBy` arrays. For example, `curl http://127.0.0.1:<port>/relationships`. It reuses compiled source caches; asset responses carry direct source paths in `imports` and root stamps in frame HTML. The viewer derives shortest transitive routes from that graph. `window.__sdg.selection` exposes the host source, frame name and selected element's owning source/export for local automation.
+For non-interactive inspection, `GET /relationships` on the local viewer server returns the direct graph, keyed by source path with `uses` and `usedBy` arrays. For example, `curl http://127.0.0.1:<port>/relationships`. It reuses compiled source caches; asset responses carry direct source paths in `imports` and root stamps in frame HTML. The viewer derives shortest transitive routes from that graph. `window.__adg.selection` exposes the host source, frame name and selected element's owning source/export for local automation.
 
 ## Limits
 
@@ -480,16 +499,16 @@ For non-interactive inspection, `GET /relationships` on the local viewer server 
 
 ## Resident discovery
 
-`sdg root add <dir> [--depth 2]` registers a scan root; `root remove`, `root list` and `root scan [dir]` manage it without browser filesystem input. Only a config file identifies a hub project. TypeScript configs are bundled with the existing esbuild and keep relative imports and `import.meta.url` rooted at the original config. `sdg serve` runs the resident hub; `sdg open <dir>` remains a standalone ephemeral viewer. Config `name` overrides the directory basename in project metadata, and `requires` reports compatibility against the running hub version. Opening an incompatible project returns the normal update guidance. Scanning never builds frames; frame counts become available after viewer builds.
+`adg root add <dir> [--depth 2]` registers a scan root; `root remove`, `root list` and `root scan [dir]` manage it without browser filesystem input. Only a config file identifies a hub project. TypeScript configs are bundled with the existing esbuild and keep relative imports and `import.meta.url` rooted at the original config. `adg serve` runs the resident hub; `adg open <dir>` remains a standalone ephemeral viewer. Config `name` overrides the directory basename in project metadata, and `requires` reports compatibility against the running hub version. Opening an incompatible project returns the normal update guidance. Scanning never builds frames; frame counts become available after viewer builds.
 
 
 ## Viewer access contract
 
-`sdg open` uses a random loopback port and registers an independent instance record; `GET /api/health` identifies it with `{ id, capabilities: { keyAuth: 1 } }`. The resident hub lists live instances and proxies compatible ones under `/i/<id>/` using their own code. Older or custom viewers must implement the shared localStorage/header/query protocol and advertise that capability before they can be proxied. No project dependency on the resident hub is introduced.
+`adg open` uses a random loopback port and registers an independent instance record; `GET /api/health` identifies it with `{ id, capabilities: { keyAuth: 1 } }`. The resident hub lists live instances and proxies compatible ones under `/i/<id>/` using their own code. Older or custom viewers must implement the shared localStorage/header/query protocol and advertise that capability before they can be proxied. No project dependency on the resident hub is introduced.
 
-HTML/JS shells remain public and contain no project data. A `?key=` URL stores the key in localStorage and is cleaned with history.replaceState. Source, frame, artwork, preview, project/instance metadata and preference/rescan requests require a valid header/query key when forwarded; direct-local requests are exempt only for loopback Host without any forwarding header. Missing credentials produce 401. Use `sdg serve --print-key` or `--rotate-key` to manage the mode-0600 state key. No cookies are used. See README for the nginx Host, forwarded-header, URI and SSE requirements.
+HTML/JS shells remain public and contain no project data. A `?key=` URL stores the key in localStorage and is cleaned with history.replaceState. Source, frame, artwork, preview, project/instance metadata and preference/rescan requests require a valid header/query key when forwarded; direct-local requests are exempt only for loopback Host without any forwarding header. Missing credentials produce 401. Use `adg serve --print-key` or `--rotate-key` to manage the mode-0600 state key. No cookies are used. See README for the nginx Host, forwarded-header, URI and SSE requirements.
 
 
 ## macOS service
 
-`sdg service install` runs the resident hub as the generic `org.svg-design-gallery.hub` LaunchAgent with RunAtLoad and KeepAlive. `--port` applies to installation; `--state-dir` can select the state directory for any service command. Installation records absolute Node/CLI/state paths. `service status` returns JSON, `service logs` prints recent stdout/stderr, and `service uninstall` retains registry/key/preferences/logs. Status/logs/uninstall recover the installed state directory automatically. Other platforms return an unsupported error. Toolkit and ephemeral open commands remain independent of service installation.
+`adg service install` runs the resident hub as the generic `org.agent-design-gallery.hub` LaunchAgent with RunAtLoad and KeepAlive. `--port` applies to installation; `--state-dir` can select the state directory for any service command. Installation records absolute Node/CLI/state paths. `service status` returns JSON, `service logs` prints recent stdout/stderr, and `service uninstall` retains registry/key/preferences/logs. Status/logs/uninstall recover the installed state directory automatically. Other platforms return an unsupported error. Toolkit and ephemeral open commands remain independent of service installation.

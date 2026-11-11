@@ -8,13 +8,13 @@ import { buildSource } from '../src/toolkit/build.mjs';
 import { starterTokens } from '../src/toolkit/project.mjs';
 
 async function fixture(t) {
-  const root = await mkdtemp(path.join(tmpdir(), 'sdg-build-store-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-build-store-'));
   const config = { root, design: path.join(root, 'design'), output: path.join(root, 'output'), sources: ['components', 'surfaces'] };
   await mkdir(path.join(config.design, 'components'), { recursive: true });
   await mkdir(path.join(config.design, 'fixtures'));
   await writeFile(path.join(config.design, 'tokens.css'), starterTokens);
   await writeFile(path.join(config.design, 'fixtures/value.json'), '{"label":"first"}');
-  const source = "import {Frame} from 'sdg';import value from '../fixtures/value.json';export default()=> <Frame name=\"sample\" width={120} height={40}><div>{value.label}</div></Frame>;\n";
+  const source = "import {Frame} from 'adg';import value from '../fixtures/value.json';export default()=> <Frame name=\"sample\" width={120} height={40}><div>{value.label}</div></Frame>;\n";
   await writeFile(path.join(config.design, 'components/example.tsx'), source);
   t.after(() => rm(root, { recursive: true, force: true }));
   return { config, source, cacheDirectory: path.join(root, 'cache') };

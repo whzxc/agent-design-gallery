@@ -1,4 +1,4 @@
-# SDG 0.4 migration review
+# ADG 0.4 migration review
 
 The v2 contract from `0f16871`, including structural authoring and art URL imports, is implemented on main. The package version is 0.4.0; release remains with the control source. No contract deviations are required. The previous design document's blanket 1440×900 statement was corrected to match the existing local crops and their origins.
 
@@ -25,7 +25,7 @@ Both themes were rendered for every declared frame and reviewed beside crops fro
 | surfaces/canvas | Fine, including the minimap and both ARC preview palettes. |
 | surfaces/inspector | Full sheet is removed as requested. The shorter panel exposes the adjacent icon-button label. Other geometry matches. |
 | surfaces/menus | Fine. |
-| surfaces/open-directory | Fine; retained fixture artwork remains independent of SDG's token palette. |
+| surfaces/open-directory | Fine; retained fixture artwork remains independent of ADG's token palette. |
 
 Whole-pixel frame bounds for artboard, section and flow labels round the old fractional crop bounds by at most 1.5px. Text rasterization and natural text widths differ slightly between HTML and SVG. The menu sample's removed blank space is the only deliberate panel-size change in this rework; all fixture comparisons retain their baseline counts. Full sheet removal remains the previously approved inspector difference. No authoring-rule exceptions are needed.
 
@@ -128,19 +128,19 @@ Set `requires: '>=0.4.0'`. Replace all top-level component/surface SVG sources b
 
 ## Validation
 
-- `sdg check`: all 18 sources passed in both themes, including the two authoring rules.
+- `adg check`: all 18 sources passed in both themes, including the two authoring rules.
 - Per-frame light/dark renders at scale 1: completed and reviewed against the 0.3.3 crops for all 18 sources.
-- `sdg compare --all`: all 15 frames have the same counts as 0.3.3; exit 1 records the retained findings above. Local log: `output/authoring-compare-final.log`.
+- `adg compare --all`: all 15 frames have the same counts as 0.3.3; exit 1 records the retained findings above. Local log: `output/authoring-compare-final.log`.
 - Unit tests cover fractional class/style/frame lengths, disallowed layout styles, inherited `data-free`, allowed width/height/custom properties, art URL boundaries/dependencies/declarations and content-sized Frames.
-- `npm test` ran once: 31/32 passed. The fixture-coverage test now reads built Frames instead of scanning JSX attributes. Its targeted recheck and the content-sizing test using SDG's actual Button both passed (2/2). Logs: `output/authoring-npm-test.log` and `output/authoring-targeted-tests.log`.
+- `npm test` ran once: 31/32 passed. The fixture-coverage test now reads built Frames instead of scanning JSX attributes. Its targeted recheck and the content-sizing test using ADG's actual Button both passed (2/2). Logs: `output/authoring-npm-test.log` and `output/authoring-targeted-tests.log`.
 
 ## ARC TSX fixture refresh
 
 The fixture now contains all 51 sources from ARC `b9e18beb`, with 94 artboards in six sections. All 87 copied files match that commit; the local gallery preserves the four curated groups. The remaining sources use directory groups. The layout reference, scene data and 188 theme-specific PNG previews are regenerated from this snapshot. Legacy SVG coverage uses two standalone sheets.
 
-`sdg check` passed for all 18 SDG sources. Changed frames were rendered and visually reviewed in both themes on macOS, including the canvas, inspector, menus, open-directory and their changed components. `npm test` ran once: 41/41 passed.
+`adg check` passed for all 18 ADG sources. Changed frames were rendered and visually reviewed in both themes on macOS, including the canvas, inspector, menus, open-directory and their changed components. `npm test` ran once: 41/41 passed.
 
-`sdg compare --all` completed all 15 frames; every capture settled. Counts are offsets above 2px / missing / extra.
+`adg compare --all` completed all 15 frames; every capture settled. Counts are offsets above 2px / missing / extra.
 
 | Source / frame | 0.4.0 | ARC TSX snapshot |
 | --- | --- | --- |

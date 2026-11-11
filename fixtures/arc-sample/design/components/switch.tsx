@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 const forms = [
   { name: "on", checked: true },
   { name: "off", checked: false },

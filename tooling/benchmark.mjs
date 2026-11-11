@@ -22,8 +22,8 @@ await context.addInitScript(() => {
     const catalogReady = document.querySelector('#scope-tabs button') ||
       (document.querySelector('#modules')?.children.length && !document.querySelector('#sidebar').hidden);
     if (!loading.catalogMs && catalogReady) loading.catalogMs = now;
-    if (!loading.layoutMs && window.__sdg?.assets) loading.layoutMs = now;
-    if (!loading.drawnMs && window.__sdg?.ready) loading.drawnMs = now;
+    if (!loading.layoutMs && window.__adg?.assets) loading.layoutMs = now;
+    if (!loading.drawnMs && window.__adg?.ready) loading.drawnMs = now;
     if (last) window.__perf.frames.push(now - last);
     last = now;
     requestAnimationFrame(frame);
@@ -69,7 +69,7 @@ await page.goto(url);
 await page.locator(".gallery-viewport").waitFor();
 await page.waitForFunction(
   () =>
-    window.__sdg?.ready ||
+    window.__adg?.ready ||
     (document.querySelectorAll(".gallery-drawing img").length &&
       [...document.querySelectorAll(".gallery-drawing img")].every(
         (x) => x.complete && x.naturalWidth,
@@ -97,7 +97,7 @@ async function readLoading() {
 const loading = await readLoading();
 const firstViewCacheWrites = [...cacheWrites];
 // Cache writes are outside visible-ready latency, but complete before the warm reload.
-await page.waitForFunction(() => !window.__sdg?.cachePending && window.__sdg?.metadataComplete !== false, {}, {timeout:120000});
+await page.waitForFunction(() => !window.__adg?.cachePending && window.__adg?.metadataComplete !== false, {}, {timeout:120000});
 const metadataCompleteMs = performance.now() - begin, coldCacheWrites = [...cacheWrites], coldLoading = await readLoading();
 if (process.argv.includes('--browse-only')) {
   await mkdir(destination.substring(0, destination.lastIndexOf('/')), {recursive:true});
@@ -107,7 +107,7 @@ if (process.argv.includes('--browse-only')) {
 }
 const reloadBegin = performance.now();
 await page.reload();
-await page.waitForFunction(() => window.__sdg?.ready ||
+await page.waitForFunction(() => window.__adg?.ready ||
   (document.querySelectorAll('.gallery-drawing img').length && [...document.querySelectorAll('.gallery-drawing img')].every(x => x.complete && x.naturalWidth)));
 const reloadBrowseMs = performance.now() - reloadBegin;
 const reloadLoading = await readLoading();
@@ -170,7 +170,7 @@ await phase("pan", async () => {
 });
 await fit();
 const cameraAtOverview = await page.evaluate(() => {
-  if (window.__sdg) return window.__sdg.view;
+  if (window.__adg) return window.__adg.view;
   const m = new DOMMatrixReadOnly(
     getComputedStyle(document.querySelector(".gallery-world")).transform,
   );
@@ -178,7 +178,7 @@ const cameraAtOverview = await page.evaluate(() => {
 });
 const zoomX = viewport.x + viewport.width * 0.55;
 const zoomY = viewport.y + viewport.height * 0.5;
-const isSDG = await page.evaluate(() => !!window.__sdg);
+const isADG = await page.evaluate(() => !!window.__adg);
 await page.mouse.move(zoomX, zoomY);
 let peakZoom;
 await phase("zoom", async () => {
@@ -188,7 +188,7 @@ await phase("zoom", async () => {
       x: zoomX,
       y: zoomY,
       deltaX: 0,
-      deltaY: (i < 45 ? -20 : 20) * (isSDG ? 1 : 4),
+      deltaY: (i < 45 ? -20 : 20) * (isADG ? 1 : 4),
       modifiers: 2,
     });
     await page.waitForTimeout(8);
@@ -196,7 +196,7 @@ await phase("zoom", async () => {
       await settle();
       peakZoom = await page.evaluate(
         () =>
-          window.__sdg?.view.scale ||
+          window.__adg?.view.scale ||
           new DOMMatrixReadOnly(
             getComputedStyle(
               document.querySelector(".gallery-world"),
@@ -227,10 +227,10 @@ await phase("theme", async () => {
     .or(page.getByRole("button", { name: themeName, exact: true }));
   if (await theme.count()) await theme.first().click();
   else await page.getByRole("radio", { name: themeName, exact: true }).click();
-  if (isSDG) await page.waitForFunction(() => !window.__sdg.ready);
+  if (isADG) await page.waitForFunction(() => !window.__adg.ready);
   await page.waitForFunction(
     () =>
-      window.__sdg ? window.__sdg.ready :
+      window.__adg ? window.__adg.ready :
       [...document.querySelectorAll(".gallery-drawing img")].every(
         (x) => x.complete && x.naturalWidth,
       ),
@@ -241,7 +241,7 @@ await fit();
 await page.waitForTimeout(250);
 let update;
 if (fixtureRoot) {
-  await page.evaluate(async()=>{const flush=window.__sdg?.cacheFlush;if(flush)await flush;});
+  await page.evaluate(async()=>{const flush=window.__adg?.cacheFlush;if(flush)await flush;});
   let file = fixtureRoot + "/components/button.tsx";
   try { await access(file); } catch { file = fixtureRoot + "/components/button.svg"; }
   const original = await readFile(file, "utf8"), sourcePath = file.slice(fixtureRoot.length + 1);
@@ -250,7 +250,7 @@ if (fixtureRoot) {
   const camera = () =>
     page.evaluate(
       () =>
-        window.__sdg?.view ||
+        window.__adg?.view ||
         document.querySelector(".gallery-world").style.transform,
     );
   const before = await camera();
@@ -259,7 +259,7 @@ if (fixtureRoot) {
     if (r.method() === 'GET' && /\/(?:asset|preview)\//.test(r.url())) requests.push(r.url());
   };
   page.on("request", record);
-  const previousRevision = await page.evaluate(() => window.__sdg?.revision);
+  const previousRevision = await page.evaluate(() => window.__adg?.revision);
   const updatedManifest = page.waitForResponse(async r =>
     new URL(r.url()).pathname.endsWith("/manifest") && r.request().method() === "GET" &&
       (previousRevision === undefined || (await r.json()).revision > previousRevision),
@@ -276,8 +276,8 @@ if (fixtureRoot) {
     await image;
     await page.waitForFunction(
       (revision) =>
-        window.__sdg
-          ? window.__sdg.ready && window.__sdg.revision === revision
+        window.__adg
+          ? window.__adg.ready && window.__adg.revision === revision
           : [...document.querySelectorAll(".gallery-drawing img")].every(
               (x) => x.complete && x.naturalWidth,
             ),
@@ -300,12 +300,12 @@ if (fixtureRoot) {
     };
   } finally {
     page.off("request", record);
-    const revision = await page.evaluate(() => window.__sdg?.revision);
+    const revision = await page.evaluate(() => window.__adg?.revision);
     await writeFile(file, original);
     if (incrementalHashes) {
-      await page.waitForFunction(revision => window.__sdg.ready && window.__sdg.revision > revision,
+      await page.waitForFunction(revision => window.__adg.ready && window.__adg.revision > revision,
         revision, {timeout:120000});
-      await page.waitForFunction(() => !window.__sdg.cachePending && window.__sdg.metadataComplete !== false, {}, {timeout:120000});
+      await page.waitForFunction(() => !window.__adg.cachePending && window.__adg.metadataComplete !== false, {}, {timeout:120000});
     }
   }
   await page.waitForTimeout(250);

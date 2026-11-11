@@ -1,6 +1,6 @@
 ---
 owners:
-  - sdg.config.mjs
+  - adg.config.mjs
   - arch/mechanisms/*.mmd
 status: Draft
 ---

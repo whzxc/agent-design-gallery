@@ -14,7 +14,7 @@ import { listInstances, registerInstance } from '../src/hub/instances.mjs';
 import { launch } from '../src/toolkit/browser.mjs';
 
 async function setup(t) {
-  const root = await mkdtemp(path.join(tmpdir(), 'sdg-hub-ui-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-hub-ui-'));
   const stateDirectory = path.join(root, 'state');
   const hub = await startHub({ port: 0, stateDirectory });
   const browser = await launch();
@@ -26,8 +26,8 @@ async function project(root, name, requires) {
   const directory = path.join(root, name.toLowerCase());
   await mkdir(path.join(directory, 'design/components'), { recursive: true });
   await copyFile(new URL('../design/tokens.css', import.meta.url), path.join(directory, 'design/tokens.css'));
-  await writeFile(path.join(directory, 'sdg.config.mjs'), `export default ${JSON.stringify({ name, ...(requires ? { requires } : {}) })};`);
-  await writeFile(path.join(directory, 'design/components/sample.tsx'), `import { Frame } from 'sdg'; export default () => <Frame name="sample" width={40} height={40}><div>Sample</div></Frame>;`);
+  await writeFile(path.join(directory, 'adg.config.mjs'), `export default ${JSON.stringify({ name, ...(requires ? { requires } : {}) })};`);
+  await writeFile(path.join(directory, 'design/components/sample.tsx'), `import { Frame } from 'adg'; export default () => <Frame name="sample" width={40} height={40}><div>Sample</div></Frame>;`);
   return directory;
 }
 
@@ -70,7 +70,7 @@ test('prefixed viewer switcher searches branches, restores keyboard focus and na
   const [atlasRecord] = (await listProjects(stateDirectory)).filter(item => item.name === 'Atlas');
   const page = await browser.newPage();
   await page.goto(new URL(`/p/${atlasRecord.slug}/?asset=components%2Fsample.tsx&frame=sample`, hub.url).href);
-  await page.waitForFunction(() => window.__sdg?.ready);
+  await page.waitForFunction(() => window.__adg?.ready);
   assert.equal(await page.locator('#frame-name').textContent(), 'sample');
   const trigger = page.getByRole('button', { name: 'Switch project: Atlas', exact: true }).filter({ visible: true });
   await trigger.waitFor();
@@ -97,9 +97,9 @@ test('prefixed viewer switcher searches branches, restores keyboard focus and na
   const live = menu.getByRole('group', { name: 'Live instances', exact: true }).getByRole('link', { name: /Atlas/ });
   await live.click();
   await page.waitForURL(url => url.pathname.startsWith('/i/review/'));
-  await page.waitForFunction(() => window.__sdg?.ready);
+  await page.waitForFunction(() => window.__adg?.ready);
   await page.reload();
-  await page.waitForFunction(() => window.__sdg?.ready);
+  await page.waitForFunction(() => window.__adg?.ready);
   await page.getByRole('button', { name: 'Switch project: Atlas', exact: true }).filter({ visible: true }).waitFor();
   await page.getByRole('button', { name: 'Switch project: Atlas', exact: true }).filter({ visible: true }).click();
   await page.getByRole('navigation', { name: 'Project switcher' }).getByRole('link', { name: 'All projects', exact: true }).click();

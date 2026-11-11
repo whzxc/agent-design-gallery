@@ -1,4 +1,4 @@
-// Run from the SDG root after replacing arc-sample/design and updating its gallery.
+// Run from the ADG root after replacing arc-sample/design and updating its gallery.
 // Reads only the local fixture. Canvas data and chrome placement are the only captured geometry.
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -8,7 +8,7 @@ import { launch } from '../src/toolkit/browser.mjs';
 import { states, recent, assetModifiedAt } from './viewer.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
-const temporary = await mkdtemp(path.join(tmpdir(), 'sdg-refresh-'));
+const temporary = await mkdtemp(path.join(tmpdir(), 'adg-refresh-'));
 await mkdir(path.join(temporary, 'empty'));
 const server = await startServer({ directory: path.join(root, 'fixtures/arc-sample/design'), stateDirectory: temporary,
   fixtures: { states, recent, assetModifiedAt, paths: { [states['open-error'].submit]: path.join(temporary, 'empty') } } });
@@ -58,7 +58,7 @@ try {
         const zoom = document.querySelector('.zoom').getBoundingClientRect();
         return { backDisabled: document.querySelector('#back').disabled,
           minimapPressed: document.querySelector('#map-toggle').getAttribute('aria-pressed') === 'true',
-          view: window.__sdg.view, zoom: [zoom.x, zoom.y], labels: [...document.querySelectorAll('.canvas-label:not([hidden])')].flatMap(el => [...el.children].flatMap(span => {
+          view: window.__adg.view, zoom: [zoom.x, zoom.y], labels: [...document.querySelectorAll('.canvas-label:not([hidden])')].flatMap(el => [...el.children].flatMap(span => {
           const b = span.getBoundingClientRect(), s = getComputedStyle(span);
           const role = s.fontSize === '14px' ? 'section' : s.fontSize === '11px' ? (s.fontWeight === '550' ? 'selected-frame' : 'form') : s.fontWeight === '400' ? 'count' : s.fontWeight === '600' ? 'flow' : s.color === getComputedStyle(document.body).color ? 'selected-set' : 'set';
           const labels = [[b.x, b.y + b.height / 2, role, span.textContent]];

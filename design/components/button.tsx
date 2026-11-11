@@ -1,4 +1,4 @@
-import { Frame, Icon } from 'sdg';
+import { Frame, Icon } from 'adg';
 import { buttonForms } from '../fixtures/buttons';
 
 export function Button({ form = 'primary', label = 'Open', icon }: {

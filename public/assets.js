@@ -269,7 +269,7 @@ export function arrange(data) {
 function formDocument(form,css,theme) {
   if(form.document)return form.document;
   const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-sdg-frame="${escape(form.name)}" style="${form.width ? `width:${form.width}px;` : 'width:max-content;'}${form.height ? `height:${form.height}px;` : ''}">${form.html}</div></body></html>`;
+  return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="${escape(form.name)}" style="${form.width ? `width:${form.width}px;` : 'width:max-content;'}${form.height ? `height:${form.height}px;` : ''}">${form.html}</div></body></html>`;
 }
 async function prepareSource(asset, built, theme, signal) {
   const parts = [];
@@ -293,16 +293,16 @@ async function prepareSource(asset, built, theme, signal) {
         // Frames from one source share CSS. Keep its sandbox document and viewport,
         // replacing only the specimen instead of navigating for every form.
         const parsed = new DOMParser().parseFromString(documentSource, 'text/html');
-        frame.contentDocument.body.replaceChildren(frame.contentDocument.importNode(parsed.querySelector('[data-sdg-frame]'), true));
+        frame.contentDocument.body.replaceChildren(frame.contentDocument.importNode(parsed.querySelector('[data-adg-frame]'), true));
         await Promise.all([...frame.contentDocument.images].map(image => image.decode().catch(() => {})));
       }
       await frame.contentDocument.fonts.ready;
-      const shell=frame.contentDocument.querySelector('[data-sdg-frame]');
+      const shell=frame.contentDocument.querySelector('[data-adg-frame]');
       const box=shell.getBoundingClientRect();
       const styles=new Map(),rects=new Map();
       const styleFor=node=>{if(!styles.has(node))styles.set(node,frame.contentWindow.getComputedStyle(node));return styles.get(node)};
       const rectFor=node=>{if(!rects.has(node))rects.set(node,node.getBoundingClientRect());return rects.get(node)};
-      const elements = [...shell.querySelectorAll('[data-sdg-owners]')].flatMap((node,index) => {
+      const elements = [...shell.querySelectorAll('[data-adg-owners]')].flatMap((node,index) => {
         const rect = rectFor(node);
         let left=Math.max(rect.left,box.left),top=Math.max(rect.top,box.top),right=Math.min(rect.right,box.right),bottom=Math.min(rect.bottom,box.bottom);
         for (let parent=node.parentElement;parent && parent!==shell;parent=parent.parentElement) {
@@ -313,7 +313,7 @@ async function prepareSource(asset, built, theme, signal) {
           if (/(hidden|clip|auto|scroll)/.test(style.overflowY)) {top=Math.max(top,clip.top);bottom=Math.min(bottom,clip.bottom)}
         }
         if (right<=left || bottom<=top || styleFor(node).visibility==='hidden') return [];
-        return [{id:String(index),owners:JSON.parse(node.dataset.sdgOwners),x:left-box.x,y:top-box.y,width:right-left,height:bottom-top}];
+        return [{id:String(index),owners:JSON.parse(node.dataset.adgOwners),x:left-box.x,y:top-box.y,width:right-left,height:bottom-top}];
       });
       const content=frame.contentDocument.createElement('div');
       content.setAttribute('xmlns','http://www.w3.org/1999/xhtml');

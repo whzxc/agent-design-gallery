@@ -30,7 +30,7 @@ function tokenSourcePath(directory, project) {
 const viewerVersion = Promise.all(['assets.js','layout.js','selection.js'].map(file => readFile(new URL('../public/'+file,import.meta.url)))).then(parts => digest(Buffer.concat(parts)));
 const defaultState = path.join(
   process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
-  "svg-design-gallery",
+  "agent-design-gallery",
 );
 export async function startServer({
   directory,
@@ -300,7 +300,7 @@ export async function startServer({
     directory: root ?? null,
     label: root
       ? path.basename(root) === "design" ? path.basename(path.dirname(root)) : path.basename(root)
-      : "SVG Design Gallery",
+      : "Agent Design Gallery",
     assets: [...files.values()].sort((a, b) => a.path.localeCompare(b.path)),
     groups,
     revision,
@@ -315,7 +315,7 @@ export async function startServer({
     if (!fixtures || !name) return data;
     if (Number.isFinite(fixtures.assetModifiedAt)) data.assets = data.assets.map(a => ({...a,modifiedAt:fixtures.assetModifiedAt}));
     const preset = fixtures.states[name];
-    if (!preset) throw new Error(`Unknown fixture ${name}; choose a declared SDG fixture.`);
+    if (!preset) throw new Error(`Unknown fixture ${name}; choose a declared ADG fixture.`);
     return { ...data, ...(preset.empty ? { directory: null, assets: [], groups: [] } : {}),
       label: 'agent-remote-control', recent: fixtures.recent, view: null, theme: preset.themeChoice ?? preset.theme,
       sidebar: preset.sidebar, inspector: !!preset.inspector, fixture: { name, ...preset } };
@@ -472,7 +472,7 @@ export async function startServer({
       const host = request.headers.host;
       const url = new URL(request.url, 'http://localhost');
       const file = ['GET', 'HEAD'].includes(request.method) && viewerFile(url.pathname);
-      if (file) return await shell(request, response, file, request.headers['x-sdg-viewer-base']);
+      if (file) return await shell(request, response, file, request.headers['x-adg-viewer-base']);
       if (!directLocal(request)) return json(response, 401, { error: 'Unauthorized' });
       if(url.pathname==='/api/cache-stats'&&request.method==='GET')return json(response,200,{process:process.memoryUsage(),builds:buildStore?.stats(),viewer:viewerCache?.stats()});
       if (url.pathname === '/api/health' && request.method === 'GET') return json(response, 200, { id: instanceId, capabilities: { keyAuth: 1 } });

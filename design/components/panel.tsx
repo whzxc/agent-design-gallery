@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 import { panelSpecimens } from '../fixtures/containers';
 
 export function Panel({

@@ -1,4 +1,4 @@
-import { Frame, Icon } from "sdg";
+import { Frame, Icon } from "adg";
 import { PanelShell, PanelHeader } from "../components/panel";
 import { Button } from "../components/button";
 import { IconButton } from "../components/icon-button";

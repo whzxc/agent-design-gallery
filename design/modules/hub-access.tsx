@@ -1,4 +1,4 @@
-import { Frame, Icon } from 'sdg';
+import { Frame, Icon } from 'adg';
 import { Panel } from '../components/panel';
 import { HubBar } from './hub-home';
 import { accessStates, hubNotes } from '../fixtures/hub';

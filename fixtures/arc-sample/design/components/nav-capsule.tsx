@@ -1,4 +1,4 @@
-import { Frame, Icon } from "sdg";
+import { Frame, Icon } from "adg";
 const items = [
   { id: "settings", icon: "settings", label: "Settings" },
   { id: "agents", icon: "users", label: "Agents" },

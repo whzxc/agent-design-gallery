@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 import { HubBar, HubHeading, ProjectList, LiveInstances } from '../modules/hub-home';
 import { homeFrames, hubNotes } from '../fixtures/hub';
 

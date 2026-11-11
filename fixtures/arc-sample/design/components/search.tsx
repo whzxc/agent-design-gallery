@@ -1,4 +1,4 @@
-import { Frame, Icon } from "sdg";
+import { Frame, Icon } from "adg";
 const example = "搜索服务器和工具";
 export function SearchInput({
   placeholder,

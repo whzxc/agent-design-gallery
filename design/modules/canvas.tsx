@@ -1,4 +1,4 @@
-import { Frame, Icon } from 'sdg';
+import { Frame, Icon } from 'adg';
 import { minimapSpecimen, assetLabelSpecimen, assetLabelNote, drawingSpecimen } from '../fixtures/canvas';
 
 const labelClasses: Record<string, string> = {

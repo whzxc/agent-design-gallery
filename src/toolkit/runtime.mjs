@@ -28,7 +28,7 @@ export function jsx(type, props = {}) {
   }
   if (['script', 'style'].includes(type.toLowerCase())) throw Error(`Forbidden <${type}>; use tokens and utility classes`);
   const result = markup(`<${type}${attributes(props)}>${voids.has(type) ? '' : children(props.children) + `</${type}>`}`);
-  result.withOwner = owner => jsx(type, {...props, 'data-sdg-owners':JSON.stringify([...(props['data-sdg-owners'] ? JSON.parse(props['data-sdg-owners']) : []), owner])});
+  result.withOwner = owner => jsx(type, {...props, 'data-adg-owners':JSON.stringify([...(props['data-adg-owners'] ? JSON.parse(props['data-adg-owners']) : []), owner])});
   return result;
 }
 export const jsxs = jsx;
@@ -49,6 +49,6 @@ export function artwork(source, props) {
   let attrs = match[1];
   for (const key of Object.keys(props)) attrs = attrs.replace(new RegExp(`\\s${key}\\s*=\\s*(["']).*?\\1`, 'g'), '');
   const result = markup(`<svg${attrs}${attributes(props)}>${match[2]}</svg>`);
-  result.withOwner = owner => artwork(source, {...props, 'data-sdg-owners':JSON.stringify([...(props['data-sdg-owners'] ? JSON.parse(props['data-sdg-owners']) : []), owner])});
+  result.withOwner = owner => artwork(source, {...props, 'data-adg-owners':JSON.stringify([...(props['data-adg-owners'] ? JSON.parse(props['data-adg-owners']) : []), owner])});
   return result;
 }

@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 import { Drawing } from './canvas';
 import { Screen } from '../components/canvas';
 import navigationFixtures from '../fixtures/navigation.json';
@@ -96,7 +96,7 @@ export function Sidebar({
     <Panel height={search ? undefined : height}>
       <div class="flex items-center gap-[10px] p-[6px]">
         <IconButton icon="panel-left" />
-        <span class="text-section font-[650]">SDG</span>
+        <span class="text-section font-[650]">ADG</span>
       </div>
       <div class="flex flex-col gap-3 px-3 mt-1">
         <Field form="picker" label={directory} />

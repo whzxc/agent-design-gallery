@@ -1,4 +1,4 @@
-import { Frame } from "sdg";
+import { Frame } from "adg";
 import { BrandMark } from "./agent-icon";
 import { IconButton } from "./icon-button";
 const readings = [

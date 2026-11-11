@@ -1,4 +1,4 @@
-import { Frame } from 'sdg';
+import { Frame } from 'adg';
 export function Canvas({
   width = 280,
   height = 150,

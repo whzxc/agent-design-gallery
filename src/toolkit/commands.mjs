@@ -6,7 +6,7 @@ import { selectSources, relative, loadTokens, sourceDirectories, archFiles } fro
 import { importDirectionViolations } from './asset-rules.mjs';
 import { launch, loadFrame } from './browser.mjs';
 export function inspectFrame(tokenNames) {
-  const frame = document.querySelector('[data-sdg-frame]'), box = frame.getBoundingClientRect(), problems = new Set();
+  const frame = document.querySelector('[data-adg-frame]'), box = frame.getBoundingClientRect(), problems = new Set();
   if (frame.children.length !== 1 || [...frame.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) problems.add('Frame needs exactly one root element');
   const sample = document.createElement('i'); document.body.append(sample);
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
@@ -257,7 +257,7 @@ export async function render(config, args = [], options = {}) {
         try {
           await loadFrame(page,frame,theme);
           mkdirSync(path.dirname(target),{recursive:true});
-          await page.locator('[data-sdg-frame]').screenshot({path:target});
+          await page.locator('[data-adg-frame]').screenshot({path:target});
         } finally { await page.close(); }
       }
     }));

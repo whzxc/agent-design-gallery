@@ -1,4 +1,4 @@
-import { Frame, Icon } from 'sdg';
+import { Frame, Icon } from 'adg';
 import { treeRowForms } from '../fixtures/rows';
 
 export function TreeRow({ form = 'item', label = 'button', meta, icon, indent = 0, width = 236, height, multiline = false }: {

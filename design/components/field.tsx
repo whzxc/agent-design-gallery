@@ -1,4 +1,4 @@
-import { Frame, Icon } from 'sdg';
+import { Frame, Icon } from 'adg';
 import { fieldForms } from '../fixtures/fields';
 
 export function Field({ form = 'search', label = 'Find assets…', icon = 'folder', meta = '⌘F', width = 236, height }: {
