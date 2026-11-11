@@ -47,6 +47,35 @@ export default {
 
 Record the reason and the replacement policy in the consumer's governance documentation. Frame, token, layout and source-format checks still run.
 
+## Implementation counterparts
+
+Keep machine-readable UI counterparts in optional `design/implementation.json` (or
+under the configured design root), version 1. The [mapping authoring contract](design-toolkit.md#implementation-mappings)
+defines its strict schema, exact file/directory/glob selectors, defining-source parts
+and optional frame subsets. File symbols in JS/TS auto-resolve only when one exported
+declaration line matches the documented lexical rule. Use a unique literal anchor for
+non-exported or other-language symbols. No absolute line ranges are authored; line
+lookup uses export/anchor regions, including unmapped export boundaries.
+
+Update bindings with file/export/frame moves. A stale selector, locator, source, part,
+frame or part/frame mismatch is an `OWNER_*` check finding; duplicate bindings are also
+findings. Full `check --read-only --json` audits the map, exiting 1 for completed
+findings and 2 for invalid schema or incomplete execution. An absent map is allowed.
+Lookup excludes stale bindings and exposes their findings; it does not silently repair
+or pick a replacement identity.
+
+Migrate human-readable tables in small checked slices: split `file#Export` into `file`
+and `symbol`, map styles explicitly, omit `part` for inline compositions, and keep
+multi-target/frame bindings intact. Keep review/adoption status and drift notes in
+human documentation; link to the JSON map instead of maintaining duplicate counterpart
+rows. Follow the [migration steps](design-toolkit.md#migrate-a-mapping-table).
+
+Declare Frame `locale` when a language-specific specimen should be discoverable with
+`owner --locale`, for example `<Frame name="ready-en" locale="en">`. It is an authored
+language annotation, canonicalized as BCP 47, with exact filtering and no translation
+or rendering effects. Use distinct frame names for authored localized forms; do not
+invent locale-specific frames whose content the implementation cannot reach.
+
 ## States, frame names and fidelity
 
 - Frame names are scoped to their source file. A single-part file names its states or variants without repeating the file or part name: `components/button.tsx` uses `primary`, `disabled` and `pending`.
@@ -189,7 +218,7 @@ The consumer keeps:
 
 - Its selected visual direction, tokens, declared forms and supported platforms/viewports/locales.
 - Its source directories in lower-to-higher order, feature owners, and any deliberate policy exception or import-lint opt-out.
-- Asset/part-to-implementation mappings, reachable fixtures/captures, review and adoption status, and concrete remaining gaps.
+- Machine-readable asset/part-to-implementation counterparts in implementation.json, plus reachable fixtures/captures, review and adoption status, and concrete remaining gaps in human documentation.
 - Image display dimensions and file-size budgets.
 - Review batch scope, proposer/reviewer responsibilities, approval and visual acceptance procedures, and the minimum ADG version.
 

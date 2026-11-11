@@ -104,6 +104,8 @@ adg check
 adg render surfaces/example --frame=default --scale=2
 adg check --read-only
 adg diff --base=HEAD --json
+adg owner --file=ui/controls.tsx --symbol=Button --json
+adg owner --text="Save changes" --locale=en --json
 ```
 
 `init` creates tokens, components/modules/surfaces, fixtures/art, editor configuration and ignore entries. A fresh library gets one `example.tsx` per production layer, composed downward with shared fixture data; existing libraries receive no demo sources. Existing authored files are preserved, declarations are refreshed, and missing ignore entries are appended. Starter configuration requires ADG 0.5.0 or newer. `check --read-only` skips declarations and build files for an audit. Projects do not install ADG as a dependency.
@@ -117,6 +119,14 @@ consumer `diff.thresholds`; a `structural` batch requires full existing-frame co
 in both themes. Exit 0 is `identical`/`structural`, 1 is completed `changed`, and 2 is
 incomplete execution. See [parts and classifier limits](docs/design-toolkit.md#git-frame-diff)
 and the [JSON contract](docs/agent-interface.md#diff).
+
+`adg owner` looks up design sources, parts, frames and tokens from an implementation
+file/directory/glob, rendered text, absolute CSS color or token name. File lookup uses
+optional [implementation.json mappings](docs/design-toolkit.md#implementation-mappings).
+Text answers include literal-search `authoredIn` copy locations; token references remain
+separate from computed paint. Both themes are searched by default. Broad color/token
+answers can be around 100 KB; read `owners` first and narrow with `--theme`. See the
+[owner JSON contract](docs/agent-interface.md#owner) for ranks, evidence and diagnostics.
 
 See the [toolkit contract](docs/design-toolkit.md) for source format and compare adapters, and the [changelog](CHANGELOG.md) for version changes. Node.js executes design modules at build time; open sources you trust.
 

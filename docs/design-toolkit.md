@@ -46,6 +46,7 @@ and service migration details.
 - `design/surfaces/<name>.tsx` holds a panel, dialog, page or screen composed from components. Its default export returns its declared forms as frames.
 - `design/art/` holds SVG illustrations and brand artwork that sources import.
 - `design/fixtures/` holds representative content and state data. `design/studies/` holds temporary direction explorations only while they are active.
+- `design/implementation.json` optionally maps implementation files/symbols to design parts and frames; see [implementation mappings](#implementation-mappings).
 - `design/gallery.json` optionally arranges sources into groups for the viewer.
 - `design/tsconfig.json` lets editors resolve the toolkit's types. `adg init` writes it; every command refreshes the ignored `design/.adg/` declarations it points to.
 - `output/design/` receives builds, renders and compare reports. Keep it and `design/.adg/` out of Git.
@@ -98,6 +99,7 @@ A `Frame` is one declared form of a component or surface.
 
 - `name` is the form name, unique within the source.
 - `width` and `height` are CSS pixels. Without width or height, the frame takes its content's size.
+- `locale` optionally annotates the authored language with a canonicalizable BCP 47 tag, such as `en` or `zh-CN`. It does not change rendering, load dictionaries or set compare fixture locale. Existing frames are unspecified. `owner --locale` filters the exact canonical annotation, with no language fallback.
 - `fixture` names the compare fixture for this form.
 - `capture` tells `compare` what to capture in the implementation: `{ region }`, `{ selector }` or `{ page: true }`, each with optional `viewport` (`'<w>x<h>'`) and `clicks` (accessible names, in order). A page capture clips the page at `origin` (`'<x> <y>'`, default `'0 0'`) with the frame's size.
 - `parent` declares a new part's original region: `{ source, frame, selector }`, using a project-root-relative `.tsx` or `.mmd` source path with extension, a frame name and a CSS selector. See [Git frame diff](#git-frame-diff). `check` validates shape only; `diff` resolves an active mapping.
@@ -150,6 +152,7 @@ A source describes structure, not coordinates. Write it the way the UI is built.
 `check` builds every source and loads each frame in Chromium in both themes. It reports:
 
 - a build or render error, with its source location;
+- invalid implementation mapping declarations or stale bindings; see [mapping findings](#validate-mappings);
 - a duplicate frame name, a frame without exactly one root element, or an invalid `capture`;
 - a computed text, background, border, outline, fill, stroke or shadow color that matches no token value in the active theme, outside `data-brand`;
 - text that overflows its box without an ellipsis, leaves the frame, or overlaps other text;
@@ -161,6 +164,129 @@ A source describes structure, not coordinates. Write it the way the UI is built.
 Each problem is one line, `<path>: <frame>: <problem>`. Completed rule findings exit 1. Build or frame-execution failures exit 2; `--json` returns `complete: false` with the observed partial findings. A completed check uses `complete: true`, with `CHECK_FAILED` when findings remain.
 
 An import-direction problem is one line, `<path>: import <source> violates import direction (<lower> -> <higher>); ...`. It names the resolved source rather than a manual dependency annotation. Named-source checks lint those sources' outgoing imports, including targets outside the selected subset. Other imported helpers and erased type-only imports are outside the graph; review their ownership in the [read-only audit](asset-rules.md#2-run-a-read-only-audit).
+
+## Implementation mappings
+
+Since 0.9.0, the optional `design/implementation.json` is the machine-readable source
+of UI implementation counterparts. It lives under the configured design root when
+that root differs from `design/`. It is independent of `Frame.parent` (diff crop
+metadata), gallery grouping and architecture sidecar `owners`.
+
+```json
+{
+  "version": 1,
+  "mappings": [
+    {
+      "implementation": { "file": "ui/controls.tsx", "symbol": "Button" },
+      "design": [{ "source": "design/components/button.tsx", "part": "Button", "frames": ["primary", "disabled"] }]
+    },
+    {
+      "implementation": { "file": "ui/controls.css" },
+      "design": [{ "source": "design/components/button.tsx", "part": "Button" }]
+    },
+    {
+      "implementation": { "directory": "ui/settings/" },
+      "design": [{ "source": "design/surfaces/settings.tsx" }]
+    },
+    {
+      "implementation": { "glob": "ui/dialogs/**/*.tsx" },
+      "design": [{ "source": "design/modules/dialog.tsx", "part": "Dialog" }]
+    },
+    {
+      "implementation": { "file": "ui/settings.vue", "symbol": "SettingsPanel", "anchor": "<!-- SettingsPanel -->" },
+      "design": [{ "source": "design/surfaces/settings.tsx", "frames": ["ready"] }]
+    }
+  ]
+}
+```
+
+The loader is strict: version must be 1; unknown keys are invalid. `mappings` may be
+empty, but each mapping needs one selector and a nonempty `design` array. Bindings
+are many-to-many and overlapping selectors are allowed; duplicate identical bindings
+are findings. No `lines` field exists in version 1.
+
+- Select exactly one `file`, `directory` or `glob`. Paths are case-sensitive,
+  project-root-relative POSIX paths. Reject absolute paths, backslashes, `.`/`..`
+  segments, empty segments, `#` fragments, colons and control characters. A directory
+  ends in `/`. Globs support `*`, `?` and whole-segment `**`, without braces, brackets,
+  negation or extglobs. Escaping symlinks are invalid. Recursive expansion skips
+  `.git`, `node_modules`, `.adg` and configured generated output.
+- Only a file selector accepts `symbol` and optional `anchor`. `symbol` is an exact
+  nonempty label; an anchor requires a symbol. For `.ts/.tsx/.js/.jsx/.mjs/.cjs`, an
+  unanchored symbol resolves lexically to exactly one declaration line matching the
+  following pattern after CRLF normalization (`<symbol>` is escaped literally):
+
+  ```regex
+  ^export\s+(default\s+)?(async\s+)?(function\*?|class|const|let|var)\s+<symbol>\b
+  ```
+
+  This requires an export declaration starting at column 1. It does not parse an AST,
+  follow re-exports or resolve a second variable in a multi-declarator statement. Zero/multiple matches yield
+  `OWNER_LOCATOR_STALE`; add an explicit anchor. Non-exported symbols need an anchor;
+  other file types require one at schema validation. An explicit anchor is a literal,
+  case-sensitive substring that must occur exactly once in the CRLF-normalized file.
+  It can span lines; its first line is the boundary. It overrides automatic resolution.
+- `design[].source` names a discovered TSX entry, project-root-relative with extension.
+  `part` names an exported function in that defining source, never a component merely
+  imported there. Omit `part` for an inline/whole-source composition. Without `frames`,
+  a part selects all frames containing its stamped identity; without a part it selects
+  every frame. An explicit nonempty `frames` list uses exact names and each named frame
+  must contain the part when supplied. A part without a specimen remains a valid binding
+  but lookup warns `OWNER_PART_UNOBSERVED`. Mermaid ownership lookup is a later item.
+
+Line queries use export/anchor regions rather than authored absolute line ranges.
+Every lexical JS/TS export starts a boundary, mapped or not; declared anchors add
+boundaries. In other files only declared anchors do. A helper belongs to the preceding
+export region. Unmapped and pre-boundary lines fall back to file-level bindings with
+`OWNER_LOCATOR_UNMAPPED`. The [owner contract](agent-interface.md#owner) defines region
+reporting, ranking, evidence and empty/ambiguous results.
+
+### Validate mappings
+
+```sh
+adg check --read-only --json
+adg owner --file=ui/controls.tsx --symbol=Button --json
+```
+
+`check` reads the optional map without changing it; absence is compatible with existing
+projects. A full check validates every binding. A named-source check validates targets
+in the selected design sources. Mapping findings identify implementation.json, a JSON
+pointer and 1-based value-token line/column when available.
+
+| Finding | Repair |
+| --- | --- |
+| `OWNER_IMPLEMENTATION_MISSING` | Restore the file or update a selector that matches no files. |
+| `OWNER_LOCATOR_STALE` | Add/repair an anchor or fix the symbol's unique declaration. |
+| `OWNER_MAPPING_DUPLICATE` | Remove the duplicate selector/target binding. |
+| `OWNER_SOURCE_MISSING` | Fix the design path or configured discovery. |
+| `OWNER_PART_MISSING` | Use an export in the defining source. |
+| `OWNER_FRAME_MISSING` | Update an explicit frame name. |
+| `OWNER_PART_FRAME_MISMATCH` | Bind frames that actually contain the declared part. |
+
+Completed findings use `CHECK_FAILED`, exit 1. Invalid JSON, version, keys or path/anchor
+shape uses `OWNER_MAP_INVALID`, exit 2. Build/runtime failures retain their normal
+execution codes. `--read-only` skips generated declarations and build files. Lookup
+excludes stale bindings, reports them in `mappingFindings` with `OWNER_MAPPING_STALE`,
+and retains valid answers with exit 0. Run full check to find stale bindings outside a
+file query's selection.
+
+### Migrate a mapping table
+
+1. Convert a small representative slice first. Translate a human `ui/controls.tsx#Button`
+   counterpart into separate `file` and `symbol` fields; do not put `#Button` in a path.
+2. Keep design identities exact. Use one mapping's `design` array for multiple targets,
+   `frames` for an actual subset, a `part` only in its defining source, and no `part`
+   for an inline composition. Use an exact style-file binding where appropriate.
+3. Let exported JS/TS symbols resolve automatically. Add anchors for non-exported or
+   other-language symbols. Prefer a meaningful existing marker to adding a redundant
+   comment for every exported function.
+4. Run read-only check and representative file, symbol and line queries. Fix stale
+   findings before expanding the migration; verify returned frame subsets.
+5. Keep approval, adoption, drift and review notes in the human document. Link to
+   implementation.json for counterpart facts and remove duplicated mapping rows as
+   they are migrated. ADG does not rewrite existing tables automatically.
+
+Consumers using the feature can set `requires: '>=0.9.0'` in their ADG config.
 
 ## Workflow
 

@@ -56,6 +56,93 @@ The viewer shell sets the base URL to the direct viewer, project, or live instan
 ADG's repository-only `adg.config.mjs` starts the server on `fixtures/arc-sample` with temporary state and the explicit states in `fixtures/viewer.mjs`. These servers disable preference persistence. Only a server explicitly given fixture definitions interprets the fixture query parameter; normal installations ignore it. The viewer applies selection, camera, theme, panels, and menus before setting `data-fixture-ready`, and waits for visible previews to draw. The tooltip adapter then hovers Inspector. Fixture modules and sample assets stay outside the npm package.
 
 
+## Ownership project index
+
+The finite [owner command](agent-interface.md#owner) opens
+`src/toolkit/project-index.mjs`, independent of the hub and viewer startup. Its internal
+projections share identities and build facts for future impact, frame-data and
+architecture-owner queries; the public JSON envelope is the compatibility boundary.
+
+| Projection | Current facts / modules |
+| --- | --- |
+| Inventory | Configured TSX entries and architecture sources, discovered each invocation. |
+| Source/build | `source-facts.mjs` projects dependencies, direct source imports, exported parts, frame metadata (including locale) and stamped part occurrences. Existing `build-store.mjs` supplies content-validated compilation. |
+| Counterparts | `implementation-map.mjs` validates strict selectors/bindings; `owner-locators.mjs` expands paths and resolves lexical symbols, anchors and regions. Mapping locations/inventories are read afresh. |
+| Tokens | Declarations, theme overrides/inheritance, locations and alias references from `tokens.mjs`; browser-resolved palettes are separate theme projections. |
+| Observations | `owner-observation.mjs` collects compact preorder nodes, nearest-owner ancestry/boxes, painted text runs, paint atoms and authored CSSOM references. `owner-colors.mjs` canonicalizes colors. |
+| Architecture metadata | Lazy sidecar owners, status and declaration metadata through `arch.mjs`, without rendering diagrams. Public code-to-diagram answers are deferred. |
+
+`public/relationships.js` owns shared pure graph traversal; toolkit graph projections
+reuse it. Viewer Uses/Used by and `GET /relationships` retain their design-relative
+`uses`/`usedBy` shape. The CLI normalizes its own output paths relative to the project
+root. Dependency reachability, observed part occurrences, token references and counterpart
+bindings stay separate facts; none alone is an impact verdict.
+
+File lookup resolves applicable mappings first, builds only their mapped source targets
+and observes only bound frames/themes. No active mappings means no browser. Text and
+literal-color lookup scan all selected TSX frames/themes to establish complete answers;
+known-token lookup scans for references, while an unknown token stops at declarations.
+Architecture frames are outside the current search domain. Matching facts stream per
+source, without a persistent global inverted index. `owner-authoring.mjs` searches current
+code/data dependency bytes for text literal candidates during result projection, leaving
+DOM cache validity unchanged.
+
+A query owns at most one Chromium and one reused page. Resource/font readiness precedes
+two equal lightweight observations separated by animation frames; five seconds of
+changing observations produces `OWNER_UNSETTLED`. Observation uses no screenshots,
+PNG hashing or gallery layout. The finite command closes its page, browser, build workers
+and index even on failure. Raster diff/render continue to use their separate capture
+and snapshot rules.
+
+### Storage and freshness
+
+The state directory defaults to `$XDG_STATE_HOME/agent-design-gallery`, otherwise
+`~/.local/state/agent-design-gallery`, and accepts `--state-dir`. Content-keyed observation,
+source and palette shards live in `cache/<project identity>/index-v1/`; compilation uses
+its sibling `build/`. Derived data is external to consumer sources. The index shard LRU
+has a 32 MiB memory and 256 MiB disk budget, separate from build-store budgets. Oversized
+facts can be processed without retention; eviction changes cost, not completeness.
+
+`index-store.mjs` installs each completed shard by atomic rename, tracks sizes in memory
+and trims overflow in batches. It inventories once on open and reconciles concurrent
+finite writers once at dirty close, writing one atomic manifest then. It does not scan
+the directory or rewrite the manifest per `put()`. Commands may duplicate collection
+safely. Malformed/incomplete cache entries are disposable misses; access failures retain
+I/O diagnostics. No database daemon or cache lock is required.
+
+Observation keys include build input identity (actual source/dependency bytes), frame,
+theme, locale through build metadata, collector code identity and environment. Palette
+keys include token declarations, theme, collector and environment. Standalone Chromium
+color parsing has a bounded 128-expression cache per environment; conservative pure
+hex/RGB/HSL fast paths avoid launch. A new expression may still need Chromium even when
+all frame observations are warm.
+
+Each invocation reruns config/discovery and relevant implementation-prefix expansion.
+Build inputs are content-validated; Git HEAD and mtimes alone are not render validity.
+
+| Edit | Invalidation |
+| --- | --- |
+| Mapping or implementation symbol/anchor | Recompute bindings/locations; reuse unchanged design observations. Added/removed implementation files re-expand selectors. |
+| Design dependency | Rebuild dependent entries and their observations; preserve unrelated entries. Code-file additions/removals also invalidate resolution-sensitive build facts. |
+| Token declarations | Refresh palette and conservatively invalidate dependent frame observations through their token-sheet build dependency. |
+| Architecture sidecar | Refresh architecture metadata; no UI render is requested for that projection. |
+| Collector/tooling/config environment | Use the corresponding new identity rather than stale facts. |
+
+The environment digest records platform, OS release, architecture, fixed browser
+locale `en-US`, timezone `UTC`, DPR 1, and sorted font/executable metadata (paths, sizes,
+mtime and ctime). Fonts are inventoried from platform system/user font roots; the
+packaged Playwright Chromium executable participates too. It is computed once per
+operation. If font inventory is inaccessible, environment is unknown and persistent
+observation/palette/color reuse is bypassed. Warm geometry therefore requires a known,
+matching environment as well as matching build/collector inputs. The command verifies
+needed dependency generations before returning; concurrent input changes fail with
+`OWNER_INDEX_CHANGED` rather than certifying mixed observations.
+
+The index currently supplies facts and query projections, not transitive affected-frame
+verdicts, selective render plans, full computed-style trees or public architecture-owner
+ranking. Those later roadmap items can extend projections without changing the existing
+owner envelope or `/relationships` response.
+
 ## Git frame diff pipeline
 
 [`src/toolkit/diff.mjs`](../src/toolkit/diff.mjs) orchestrates the finite `diff` command.

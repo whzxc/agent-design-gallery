@@ -18,7 +18,7 @@ are not machine interfaces.
 
 | Invocation | Stdout framing |
 | --- | --- |
-| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, every `root` and `service` action | One envelope, then exit |
+| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, `owner`, every `root` and `service` action | One envelope, then exit |
 | `serve --print-key`, `serve --rotate-key` | One envelope, then exit |
 | `--help`, `--version`, including command-specific forms | One envelope, then exit |
 | Foreground `open`, ordinary `serve` | NDJSON: one envelope per line until termination |
@@ -50,7 +50,7 @@ result or `null` when no result has been assembled. A failure need not undo comp
 file changes. Consumers must examine `ok` and process termination, even when data exists.
 
 Canonical command identities are `open`, `link`, `serve`, `init`, `migrate`, `check`,
-`render`, `compare`, `diff`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
+`render`, `compare`, `diff`, `owner`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
 `service uninstall`, `service status`, `service logs` and `service migrate`. Help and
 version use `help` and `version`. Parse failures use the recognized command/action when
 available, or the group identity `root`/`service` or global identity `adg`. An implicit
@@ -167,6 +167,8 @@ Invalid parent declaration shape uses `SOURCE_BUILD_FAILED`; invalid thresholds 
 `CONFIG_INVALID`. Git, source selection, resource load, browser and artifact I/O errors
 retain their existing catalog codes and recovery rules. Historical diagnostics and
 recovery argv refer to original project/repository paths, never a disposable base tree.
+
+Ownership-specific errors and recovery actions are listed under [Owner diagnostics and exits](#owner-diagnostics-and-exits).
 
 ### Hub and service
 
@@ -544,6 +546,252 @@ the manifest write failed. Stale unreferenced artifacts from previous runs are n
 The ordered rows, revision labels, sizes, PNGs, notes, palette, crop/support references and
 findings are sufficient for a later review-sheet composer without re-rendering.
 
+### Owner
+
+`owner` is a finite, read-only lookup over the current project. It returns one
+`Envelope<OwnerData>` and exits. It writes derived caches to external state, without
+registering a hub project or generating files in the design checkout.
+
+```sh
+adg owner --file=ui/controls.tsx --symbol=Button --json
+adg owner --file=ui/controls.tsx --line=42 --json
+adg owner --file=ui/ --json
+adg owner --file='ui/**/*.tsx' --json
+adg owner --text='Save changes' --contains --locale=en --json
+adg owner --color='#336699' --theme=light --json
+adg owner --token=--accent --json
+```
+
+Exactly one nonempty `--file`, `--text`, `--color` or `--token` is required. There are
+no positional source operands. All modes accept `--theme=both|light|dark` (default
+`both`), `--state-dir=<path>` and `--json`. `--state-dir` resolves from invocation cwd;
+it defaults to `$XDG_STATE_HOME/agent-design-gallery`, or
+`~/.local/state/agent-design-gallery`. Repeated mode/modifier flags, unknown flags, extra
+operands and invalid combinations return `USAGE_INVALID`.
+
+| Mode | Inputs and matching |
+| --- | --- |
+| File | Exact file, directory or quoted POSIX glob, resolved from the discovered project root. In-project absolute paths are accepted; escaping paths/symlinks are rejected. Directory/glob queries expand current regular files and can succeed empty. Exact missing inputs use `OWNER_INPUT_NOT_FOUND`. Only a single existing file accepts `--line=<positive 1-based integer>` and/or `--symbol=<exact label>`; a line beyond EOF is invalid. Bindings come from [implementation.json](design-toolkit.md#implementation-mappings). |
+| Text | Unicode NFC and Unicode whitespace collapse/trim, preserving case, punctuation, accents and script. Default is exact equality; `--contains` adds literal substring matches. Whitespace-only input is invalid. `--locale=<BCP 47 tag>` canonicalizes and filters exact Frame annotations, excluding unspecified locales; there is no language fallback or translation. |
+| Color | Absolute CSS colors supported by packaged Chromium, including hex, RGB/HSL, named and modern color functions. Normalize to unpremultiplied 8-bit sRGB RGBA, clamp and round channels, canonical lowercase `#rrggbbaa`; alpha zero also zeros RGB. No compositing or tolerance. CSS-wide/system colors, `currentColor`, `var()` and context-dependent relative colors are `OWNER_COLOR_INVALID`; use `--token` for custom properties. |
+| Token | Exact case-sensitive custom-property name such as `--accent`. Invalid syntax is `USAGE_INVALID`; an undeclared valid name succeeds empty without building or launching a browser. Resolve declarations and aliases separately in light and merged light+dark maps, including noncolor tokens. |
+
+Text observations include painted HTML/SVG text, visible field values/placeholders and
+literal pseudo content. Inline fragments in the same block/control form a run; wrapping
+does not split it. Separate blocks and controls remain separate. Hidden, zero-opacity,
+fully clipped and password-value text is excluded; visible `aria-hidden` text is included.
+Accessible names alone, bitmap/canvas text and arbitrary occlusion analysis are outside
+the search. Paint observations include text, backgrounds, borders/outlines, SVG paint,
+shadows, gradients and visible pseudo-elements; absent and fully transparent paint is
+excluded. Image-internal colors and backdrop-composited colors are not inspected.
+
+A line belongs to the region starting at the nearest lexical export or declared anchor
+boundary at or above it. Every recognized JS/TS export starts a region, including
+unmapped exports. In other file types only declared anchors do. Non-exported helpers
+belong to the preceding export's region. A mapped boundary yields
+`mapping_symbol_region`; an unmapped boundary or a line before the first boundary
+falls back to file-level bindings with `OWNER_LOCATOR_UNMAPPED`. `data.region` reports
+`boundaryLine`, `symbol`, `mapped` and exclusive `nextBoundaryLine` (EOF + 1 for the last
+region), even when unmapped; it is null before the first boundary and for other query
+kinds. Adding `--symbol` also restricts symbol bindings to that exact label.
+
+#### Owner data
+
+`Theme`, `ProjectPath`, `FrameRef` and `Box` follow the definitions above. Boxes are
+frame-relative CSS pixels. Element paths are observation-local preorder identities,
+not stable cross-revision identifiers.
+
+```ts
+type ImplementationSelector =
+  | { file: ProjectPath; symbol?: string; anchor?: string }
+  | { directory: ProjectPath }
+  | { glob: ProjectPath };
+type DesignBinding = { source: ProjectPath; part?: string; frames?: string[] };
+type OwnerQuery = {
+  kind: 'file' | 'text' | 'color' | 'token';
+  input: string;                       // original query, envelope-sanitized
+  normalized: string;                  // root-relative path/glob, text, RGBA hex or token
+  pathKind: 'file' | 'directory' | 'glob' | null;
+  line: number | null; symbol: string | null;
+  contains: boolean; locale: string | null;
+  themes: Theme[];
+  rgba: [number, number, number, number] | null;
+};
+type MatchKind =
+  | 'mapping_symbol' | 'mapping_symbol_region'
+  | 'mapping_file' | 'mapping_directory' | 'mapping_glob'
+  | 'text_exact' | 'text_contains' | 'color_value'
+  | 'token_name' | 'token_value' | 'token_reference'
+  | 'token_alias_reference' | 'token_fallback_reference';
+type Evidence = {
+  matchKind: MatchKind;
+  frame: FrameRef | null; theme: Theme | null;
+  elementPath: string | null; boxes: Box[];
+  owners: { source: ProjectPath; part: string }[];
+  authoredIn?: { source: ProjectPath; line: number }[]; // present on text evidence
+  references?: { token: string; kind: 'token_reference' | 'token_alias_reference' | 'token_fallback_reference'; via: string[] }[]; // color only
+  detail:
+    | { kind: 'mapping'; file: ProjectPath; pointer: string;
+        implementation: ProjectPath; selector: ImplementationSelector;
+        locatorMatched: boolean | null; anchorLine: number | null; nextBoundaryLine: number | null }
+    | { kind: 'text'; raw: string; normalized: string;
+        fragments: { elementPath: string; text: string; boxes: Box[] }[] }
+    | { kind: 'paint'; property: string; computed: string;
+        rgba: [number, number, number, number]; usage: 'computed_value' }
+    | { kind: 'reference'; token: string; property: string;
+        declaration: string; via: string[]; usage: 'authored_reference' }
+    | { kind: 'token'; token: string; declaration: string;
+        resolved: string | null; via: string[]; source: ProjectPath;
+        line: number; inherited: boolean };
+};
+type TokenResult = {
+  name: string; source: ProjectPath;
+  matchKind: 'token_name' | 'token_value';
+  values: {
+    theme: Theme; declaration: string; line: number; inherited: boolean;
+    resolved: string | null; rgba: [number, number, number, number] | null;
+    via: string[];
+  }[];
+  evidence: Evidence[];
+};
+type OwnerMatch = {
+  source: ProjectPath; part: string | null;
+  matchKind: MatchKind; rank: number[];
+  frames: (FrameRef & { theme: Theme; locale: string | null })[];
+  tokens: string[];                     // referenced token names in matched scope
+  authoredIn?: { source: ProjectPath; line: number }[]; // present on text owners
+  evidence: Evidence[];
+};
+type MappingFinding = {
+  code: string; source: ProjectPath; pointer: string;
+  implementation: string | null; target: DesignBinding | null;
+  line: number | null; column: number | null; message: string;
+  frame: string | null; theme: null;
+  observedAnchorLines: number[];
+};
+type OwnerData = {
+  project: string; complete: boolean; query: OwnerQuery;
+  region: { boundaryLine: number; symbol: string; mapped: boolean; nextBoundaryLine: number } | null;
+  owners: OwnerMatch[]; tokens: TokenResult[];
+  ambiguous: boolean; tokenAmbiguous: boolean;
+  matchedImplementationFiles: ProjectPath[];
+  mappingFindings: MappingFinding[];
+  coverage: {
+    discoveredSources: number; builtSources: number;
+    requestedObservations: number; completedObservations: number;
+    mappingState: 'absent' | 'valid' | 'stale';
+    activeBindings: number; excludedBindings: number;
+    domain: 'tsx';
+  };
+};
+```
+
+`owners` group occurrences by defining source/export, using the nearest stamped part
+root; unmarked content belongs to its frame source with `part:null`. `frames` retain
+host source/frame, theme and authored locale (`null` when unspecified). An inline
+composition can therefore have a different host source from its leaf owner.
+
+| Query | Owner evidence scope |
+| --- | --- |
+| File | Mapping items only, including the mapping file and JSON pointer. Related tokens remain names in `owner.tokens` and declaration summaries in `data.tokens`; no token-reference owner evidence. |
+| Text | `text_exact` and `text_contains` items only, with raw/normalized runs, fragment paths/boxes and `authoredIn`. Related token names/summaries are separate. |
+| Color | `color_value` items only. Their compact `references` lists contain `{token, kind, via}` only for the same element path and property as the matching paint. No subtree-wide reference evidence. |
+| Token | Direct, alias and fallback reference items for the queried token. Equal colors alone do not establish token use. |
+
+Token reference evidence means an authored declaration applies to the observed element:
+it does not prove that declaration won the cascade or that a fallback was taken.
+`usage:"authored_reference"` and `usage:"computed_value"` remain separate. Color
+queries return matching named palette tokens in `data.tokens`; token queries return
+the named declaration even without references. File/text queries expand related token
+names there. Same-valued aliases stay separate token identities. Unresolved/cyclic
+values retain declarations and references with `resolved:null` and a warning; resolved
+noncolors have `rgba:null` without that warning.
+
+Each text evidence `authoredIn` searches the frame source's build dependency closure:
+design TSX and imported code/data modules, including fixture modules and JSON. It finds
+the exact raw literal of each non-whitespace direct text-node fragment, returning all
+matching source/1-based line pairs. It ignores pseudo/field-value fragments. Order is
+innermost part source, frame source, other nearest owner sources, then remaining paths
+and lines. The owner row deduplicates these candidates, prioritizing its own source,
+then contributing frame sources, then other paths/lines. Empty lists are valid for
+computed text. This is literal search, not AST attribution: comments or unrelated equal
+literals can match; escaped, entity-encoded, transformed or concatenated strings can be
+missed. `authoredIn` points to copy candidates, not a replacement design owner.
+
+#### Ranking, ordering and completion
+
+Rank tuples compare lexicographically, smaller first. An owner's rank/match kind is its
+best occurrence. Return all owners, without truncation; ties sort by source then part
+using Unicode code-point order. Frames sort by host source, declared frame order and
+light before dark. Tokens sort by name; evidence preserves deterministic frame/path/kind
+order and is deduplicated. Do not choose an owner from an arbitrary tie.
+
+| Query | Rank tuple and match kinds |
+| --- | --- |
+| File | `[selectorRank, -prefixOrDepth, wildcardCount, -literalCharacters, locatorRank]`. Exact file = 0, directory = 1, glob = 2. Exact files have zero specificity fields. Directories use segment depth and zero wildcard/literal fields. Globs use literal-prefix character length, number of segments containing wildcards and total non-wildcard characters. Locator rank: `mapping_symbol` = 0 for a symbol query, `mapping_symbol_region` = 1 for a line region, other bindings = 2. Unrefined bindings use `mapping_file`, `mapping_directory` or `mapping_glob`. |
+| Text | `[kindRank, unmatchedLength, ownerDistance]`: `text_exact` = 0, `text_contains` = 1; unmatched length is normalized run length minus query length in Unicode code points. |
+| Color | `[0, ownerDistance]`, `color_value`; matching palette records use `token_value` in the separate token list. |
+| Token | `[referenceKindRank, aliasHopCount, ownerDistance]`: `token_reference` = 0, `token_alias_reference` = 1, `token_fallback_reference` = 2. Declaration records use `token_name`. |
+
+`ownerDistance` counts parent steps to the nearest ownership root (0 at its marker),
+or the traversal depth through the frame root for unmarked content. `ambiguous:true` means two or more
+owners tie at the best rank. In color mode, multiple matching token identities also set
+`tokenAmbiguous:true`. Both conditions emit `OWNER_AMBIGUOUS`; neither is a failed gate.
+
+`complete:true` means all observations required by the query finished. Coverage source
+counts distinguish discovered sources from sources requested through the build store
+(`builtSources` includes cache hits); observation counts count frame/theme pairs.
+`mappingFindings` contain excluded stale bindings, pointers, candidate anchor lines and
+1-based JSON value locations. File lookup validates relevant bindings; use a full
+`check --read-only --json` to audit the entire map. `mappingState` is the state inspected
+by that lookup; text/color/token modes only load the mapping schema.
+
+Empty results succeed with `OWNER_NO_MATCH`, unless a token declaration or matching
+palette token is itself an answer. An empty file-source domain or a text/color domain with no selected TSX observations
+also gets `EMPTY_SELECTION`; token declaration answers need not warn. Stale bindings are excluded explicitly and can coexist
+with valid answers. Failures before result assembly have `data:null`; later failures
+retain partial rows/counts with `complete:false`. Read `ok`, `complete` and termination
+before treating an empty list or ambiguity flag as final.
+
+Broad color and token queries can return around 100 KB or more because every matching
+occurrence remains evidence. Read `owners` first and narrow with `--theme=light` or
+`--theme=dark`; text queries can also use exact text and `--locale`. There is no hidden
+result cap or automatic first-match choice.
+
+#### Owner diagnostics and exits
+
+| Code | Kind / exit | Recovery argv and prerequisite |
+| --- | --- | --- |
+| `OWNER_MAP_INVALID` | Error / 2 | `["adg","check","--read-only","--json"]` after fixing JSON/version/schema/path grammar. |
+| `OWNER_INPUT_NOT_FOUND` | Error / 2 | `["adg","owner","--help","--json"]`; choose an existing in-project input. |
+| `OWNER_COLOR_INVALID` | Error / 2 | Owner help argv; supply an absolute supported CSS color or use `--token`. |
+| `OWNER_UNSETTLED` | Error / 2 | Retry the original owner query after stabilizing its frame/resources; two equal observations across animation frames must occur within five seconds. |
+| `OWNER_INDEX_CHANGED` | Error / 2 | Retry the original query after concurrent input edits finish. |
+| `OWNER_MAPPING_MISSING` | Warning / 0 | Read-only check argv; add implementation.json for file lookup. |
+| `OWNER_MAPPING_STALE` | Warning / 0 | Read-only check argv; repair `mappingFindings`. |
+| `OWNER_PART_UNOBSERVED` | Warning / 0 | Read-only check argv; add a current specimen for the declared part. |
+| `OWNER_LOCATOR_UNMAPPED` | Warning / 0 | Original owner query argv after adding/refining its symbol or anchor binding. |
+| `OWNER_AMBIGUOUS` | Warning / 0 | Original owner query argv; inspect evidence and narrow the query before retrying. |
+| `OWNER_NO_MATCH` | Warning / 0 | Read-only check argv; inspect mappings, authored copy or token declarations. |
+| `OWNER_TOKEN_UNRESOLVED` | Warning / 0 | Read-only check argv after fixing the token's theme-local alias/declaration. |
+| `EMPTY_SELECTION` | Warning / 0 | `next:[]`; inspect the TSX/locale domain. |
+
+“Read-only check argv” means `["adg","check","--read-only","--json"]`.
+Owner retry starts `["adg","owner"]`, retaining explicit attached options in order
+`file`, `line`, `symbol`, `text`, `color`, `token`, `locale`, then `--contains` if set,
+then explicit `theme`, `state-dir`, then `--json`. Defaults and disambiguating operands
+are not invented. For example:
+`["adg","owner","--text=Save changes","--locale=en","--theme=light","--json"]`.
+Missing retry context falls back to owner help. Existing sanitation rules replace a
+secret-bearing recovery action with safe owner help.
+
+`USAGE_INVALID` uses owner help. Config, build, token-file, filesystem, browser/render
+and cleanup errors retain the general catalog codes/actions. Semantic `OWNER_*` check
+findings are listed under [Check](#check), not registered as execution-error codes.
+Owner exits 0 for completed observations, including empty, stale and ambiguous answers;
+it never exits 1. Invalid/incomplete execution exits 2. A completed `check` with mapping
+findings still exits 1 under `CHECK_FAILED`.
+
 ### Check
 
 ```ts
@@ -585,6 +833,18 @@ retained with `complete:false`. `--read-only` skips generated declarations and b
 | `ARCH_SIDECAR_INVALID` | Invalid sidecar frontmatter |
 | `ARCH_OWNER_INVALID` | Invalid owner path/glob or no matching file |
 | `ARCH_LABEL_OVERFLOW` | Rendered label overflows its node |
+| `OWNER_IMPLEMENTATION_MISSING` | Selector matches no current implementation file |
+| `OWNER_LOCATOR_STALE` | Symbol/anchor resolves zero or multiple times; add or repair an explicit anchor |
+| `OWNER_MAPPING_DUPLICATE` | Duplicate implementation/design binding |
+| `OWNER_SOURCE_MISSING` | Bound TSX source is not discovered |
+| `OWNER_PART_MISSING` | Named part is not exported by its defining source |
+| `OWNER_FRAME_MISSING` | Explicit frame name is absent |
+| `OWNER_PART_FRAME_MISMATCH` | Explicit frame does not contain the named part |
+
+Mapping findings identify implementation.json and its 1-based JSON value location;
+messages include a JSON pointer. With named sources, mapping target validation is
+restricted to those design sources; a full check audits the map. A missing optional
+map adds no finding. Invalid map shape is `OWNER_MAP_INVALID` (exit 2).
 
 Build exceptions, duplicate frame names and invalid Frame/capture declarations are
 execution failures, not finding codes.

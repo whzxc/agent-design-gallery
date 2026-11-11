@@ -52,8 +52,9 @@ Agents are first-class users. In priority order:
 2. `diff --base`: per-frame before/after renders with a structural classification (imperceptible, antialiasing,
    boundary bleed, bitmap resampling), consumer-configured thresholds and a verdict (done, 0.8.0). See the
    [diff contract](agent-interface.md#diff).
-3. Ownership lookup: from an implementation file, UI text or color value to the owning source, frame and token. This
-   needs machine-readable implementation mappings.
+3. Ownership lookup: `adg owner` resolves implementation files/regions/symbols, rendered text, colors and token names
+   to design sources, parts and frames with scoped evidence (done, 0.9.0). See the
+   [owner contract](agent-interface.md#owner) and [machine-readable mappings](design-toolkit.md#implementation-mappings).
 4. Impact: frames affected directly and transitively by a component or token change, and rendering only those frames.
 5. Frames as data: element tree, text, boxes and tokens, for Agents that need structure rather than pixels.
 6. Architecture owners: from a code path to the diagrams whose sidecar owners match it, so a review can tell whether a
