@@ -7,7 +7,7 @@ export async function launch() {
   try { return await chromium.launch(); }
   catch (error) {
     if (/Executable doesn't exist|playwright install/i.test(error.message)) throw new Error('Chromium is missing; run npx playwright@1.64.1 install chromium');
-    throw new Error(`Cannot launch Chromium: ${error.message.split('\n')[0]}; check your Playwright installation`);
+    throw new Error(`Cannot launch Chromium: ${error.message.split('\n')[0]}; check your Playwright installation (npx playwright@1.64.1 install chromium)`);
   }
 }
 export async function loadFrame(page, frame, theme = 'light') {

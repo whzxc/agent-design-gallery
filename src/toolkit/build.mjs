@@ -65,8 +65,8 @@ export function validateFrame(frame) {
     if (!c || typeof c !== 'object' || ['region','selector','page'].filter(k => c[k] !== undefined).length !== 1 || (c.page !== undefined && c.page !== true) || ['region','selector'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim())) || (c.viewport !== undefined && !/^[1-9]\d*x[1-9]\d*$/.test(c.viewport)) || (c.origin !== undefined && (!c.page || !/^\d+(?:\.\d+)? \d+(?:\.\d+)?$/.test(c.origin))) || (c.clicks !== undefined && (!Array.isArray(c.clicks) || c.clicks.some(v => typeof v !== 'string' || !v)))) throw Error('Invalid capture; use region, selector or page with viewport, origin and clicks');
   }
 }
-export async function buildSource(config, file, { write = true, allowLegacy = true, snapshot } = {}) {
-  if (file.endsWith('.mmd')) return (await import('./arch.mjs')).buildArch(config,file,{snapshot});
+export async function buildSource(config, file, { write = true, allowLegacy = true, snapshot, browser } = {}) {
+  if (file.endsWith('.mmd')) return (await import('./arch.mjs')).buildArch(config,file,{snapshot,browser});
   if (write) refreshTypes(config);
   const read = (name, encoding) => {
     if (!snapshot) return readFileSync(name, encoding);

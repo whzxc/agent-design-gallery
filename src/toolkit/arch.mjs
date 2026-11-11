@@ -65,21 +65,42 @@ export function inspectArch(text, maxEdges = 30) {
     const line=clean.slice(0,match.index+match[0].length).split('\n').length;
     problems.push(`Painting statement ${match[1]} at line ${line}; paint comes from tokens`);
   }
-  // Pele accepts both init directives and Mermaid YAML frontmatter. Theme config
-  // can be nested; reject paint keys anywhere in these configuration regions.
+  // Inspect configuration keys without interpreting words inside prose or values.
   const configRegions=[...text.matchAll(/%%\{[\s\S]*?\}%%/g), ...text.matchAll(/^---\r?\n[\s\S]*?\r?\n---/g)];
-  for (const match of configRegions) if (/\b(?:theme\w*|[\w-]*color[\w-]*|fill|stroke|background)\b/i.test(match[0]))
-    problems.push(`Painting directive/frontmatter at line ${text.slice(0,match.index).split('\n').length}; paint comes from tokens`);
-  for (const match of clean.matchAll(/(?:^|[;\n])\s*class\s+\S+\s+([^;\n]+)/g))
-    for(const name of match[1].trim().split(/[\s,]+/)) classes.add(name);
-  for (const match of clean.matchAll(/:::\s*([\w,-]+)/g)) for(const name of match[1].split(',')) classes.add(name);
-  for(const name of classes) if (!vocabulary.includes(name)) problems.push(`${reserved.includes(name)?'Reserved':'Unknown'} class ${name}; vocabulary: ${vocabulary.join(', ')} (added, removed, changed are reserved)`);
+  for (const region of configRegions) for(const token of region[0].matchAll(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[A-Za-z_][\w-]*/g)) {
+    const after=region[0].slice(token.index+token[0].length);
+    if(!/^[ \t]*:/.test(after))continue;
+    const before=region[0].slice(0,token.index),lineStart=before.slice(before.lastIndexOf('\n')+1);
+    if(!/[{,]\s*$/.test(before) && !/^[ \t]*(?:-[ \t]+)?$/.test(lineStart))continue;
+    const key=token[0].replace(/^["']|["']$/g,'');
+    if(/^(?:theme\w*|[\w-]*color[\w-]*|fill|stroke|background)$/i.test(key))
+      problems.push(`Painting directive/frontmatter key ${key} at line ${text.slice(0,region.index+token.index).split('\n').length}; paint comes from tokens`);
+  }
   let model;
   try {
     model=parse(text);
-    const count=([model.edges,model.relations,model.messages,model.relationships,model.rels,model.graph?.edges,model.links].find(Array.isArray)??[]).length;
+    // The state graph flattens composite states; relations contains only root edges.
+    const count=(model.type==='state' ? model.graph.edges :
+      [model.edges,model.relations,model.messages,model.relationships,model.rels,model.graph?.edges,model.links].find(Array.isArray)??[]).length;
     if(count>maxEdges) problems.push(`${count} edges/messages exceeds check.archMaxEdges (${maxEdges})`);
   } catch(error) { problems.push(`Pele: ${error.message.replace(/\s+/g,' ')} (line ${error.line ?? 1})`); }
+  if(model?.type==='flowchart' || model?.type==='state') {
+    const add=value=>{for(const name of (Array.isArray(value)?value.join(' '):value??'').split(/[ \t,]+/).filter(Boolean))classes.add(name);};
+    if(model.type==='flowchart') {
+      for(const node of model.nodes.values())add(node.classes);
+      for(const item of [...model.edges,...model.subgraphs])add(item.classes);
+    } else {
+      const visit=statements=>{for(const stmt of statements??[]) {
+        if(stmt.stmt==='applyClass')add(stmt.styleClass);
+        add(stmt.classes);add(stmt.state1?.classes);add(stmt.state2?.classes);
+        visit(stmt.doc);
+      }};
+      visit(model.rootDoc);
+    }
+    // Keep assignments to unresolved IDs visible to the vocabulary check, too.
+    for(const match of clean.matchAll(/(?:^|[;\n])[ \t]*class[ \t]+[^ \t;\r\n]+[ \t]+([^;\r\n]+)/g))add(match[1]);
+    for(const name of classes)if(!vocabulary.includes(name))problems.push(`${reserved.includes(name)?'Reserved':'Unknown'} class ${name}; vocabulary: ${vocabulary.join(', ')} (added, removed, changed are reserved)`);
+  }
   return {model,classes:vocabulary.filter(name=>classes.has(name)),problems};
 }
 export function ownerProblems(config, metadata) {
@@ -112,12 +133,13 @@ ${marks.map(name=>`.pele-node.${name}>${shape}{stroke:var(--arch-${name});stroke
 // Pele is synchronous. Collect its exact width requests, measure them together in
 // Chromium with both project font stacks, then render the model with those widths.
 // Keep the model boundary separate so a future Git overlay can supply a model.
-export async function renderArch(model, tokenSource) {
+export async function renderArch(model, tokenSource, {browser: suppliedBrowser} = {}) {
   const requests=new Map(),measured=new Map();
   const key=(text,size,style)=>JSON.stringify([text,size,style]);
-  const browser=await launch();
+  const browser=suppliedBrowser ?? await launch();
+  let page;
   try {
-    const page=await browser.newPage();
+    page=await browser.newPage();
     await page.setContent(`<style>${tokenSource.replace(/<\/style/gi,'<\\/style')}</style>`);
     const fonts=await page.evaluate(()=>{
       const style=getComputedStyle(document.documentElement);
@@ -146,10 +168,13 @@ export async function renderArch(model, tokenSource) {
       [...requests.keys()].forEach((id,i)=>measured.set(id,widths[i]));requests.clear();
     }
     throw Error('Pele label measurement did not settle after 16 passes');
-  } finally {await browser.close();}
+  } finally {
+    if(suppliedBrowser) await page?.close();
+    else await browser.close();
+  }
 }
 
-export async function buildArch(config,file,{snapshot,model:overlayModel}={}) {
+export async function buildArch(config,file,{snapshot,model:overlayModel,browser}={}) {
   const dependencies=[],read=name=>{
     dependencies.push(name);
     let bytes;
@@ -161,7 +186,7 @@ export async function buildArch(config,file,{snapshot,model:overlayModel}={}) {
   const checked=inspectArch(text,Infinity);
   const problems=[...checked.problems,...metadata.problems];
   if(problems.length)throw Error(problems.join('\n'));
-  const result=await renderArch(overlayModel??checked.model,tokenSource);
+  const result=await renderArch(overlayModel??checked.model,tokenSource,{browser});
   const legend=checked.classes.length?`<div class="arch-legend">${checked.classes.map(name=>`<span class="arch-key ${name}" style="--arch-color:var(--arch-${name})"><i class="arch-swatch"></i>${name}</span>`).join('')}</div>`:'';
   const html=`<section data-sdg-arch>${legend}${result.svg}</section>`;
   const css=`${archStyles()}\n${tokenSource}\nhtml,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-sdg-frame]{display:flex;width:max-content}`;

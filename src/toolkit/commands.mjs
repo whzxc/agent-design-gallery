@@ -193,7 +193,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
         if([...problems].some(problem=>problem.startsWith(relative(config,file)+':'))) continue;
       }
       let built;
-      try { built = await buildSource(config,file,{allowLegacy:false,write}); }
+      try { built = await buildSource(config,file,{allowLegacy:false,write,browser}); }
       catch(e) {
         const legacy = e.errors?.find(error => error.detail?.code === 'LEGACY_SVG');
         if (legacy) throw legacy.detail;
@@ -227,7 +227,7 @@ export async function render(config, args = [], options = {}) {
   try {
     const captures = [];
     for (const file of files) {
-      const built = await buildSource(config,file,{allowLegacy:false});
+      const built = await buildSource(config,file,{allowLegacy:false,browser});
       for (const frame of built.frames.filter(f => !options.frame || f.name === options.frame)) {
         for (const theme of themes) {
           const source = file.endsWith('.mmd') ? relative(config,file) : path.relative(config.design, file);

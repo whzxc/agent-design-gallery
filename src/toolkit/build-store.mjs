@@ -38,7 +38,21 @@ class BuildPool {
   retire(slot) {
     if (slot.retired) return;
     slot.retired = true;
-    const done = slot.worker.terminate().finally(() => {
+    slot.worker.ref();
+    const done = (async () => {
+      // Let the worker close its Chromium child before releasing its thread.
+      // Superseded or unresponsive project code still has a bounded shutdown.
+      if (!slot.exited) await new Promise(resolve => {
+        const onMessage = message => { if (message.type === 'closed') finish(); };
+        const finish = () => {
+          clearTimeout(timeout); slot.worker.off('message', onMessage); slot.worker.off('exit', finish); resolve();
+        };
+        const timeout = setTimeout(finish, 5000); timeout.unref();
+        slot.worker.on('message', onMessage); slot.worker.once('exit', finish);
+        try { slot.worker.postMessage({type:'shutdown'}); } catch { finish(); }
+      });
+      await slot.worker.terminate();
+    })().finally(() => {
       this.slots.delete(slot); this.retiring.delete(done); this.drain();
     });
     this.retiring.add(done);
@@ -61,7 +75,7 @@ class BuildPool {
       this.retire(slot); this.drain();
     };
     slot.worker.on('error', failed);
-    slot.worker.on('exit', code => { if (!slot.retired) failed(new Error(`Build worker exited ${code}`)); });
+    slot.worker.on('exit', code => { slot.exited = true; if (!slot.retired) failed(new Error(`Build worker exited ${code}`)); });
     slot.worker.unref();
     return slot;
   }
@@ -93,7 +107,7 @@ export async function createBuildStore({ config, cacheDirectory }) {
   const workerConfig = { root: await realpath(config.root), design, output: config.output, sources: config.sources, arch:config.arch, check:config.check };
   const require = createRequire(import.meta.url);
   const fingerprint = digest(Buffer.concat(await Promise.all([
-    ...['../../package.json', './build.mjs', './runtime.mjs', './tokens.mjs', './text.mjs', './project.mjs', './build-worker.mjs', './build-store.mjs', './arch.mjs', './browser.mjs'].map(file => new URL(file, import.meta.url)),
+    ...['../../package.json', './build.mjs', './runtime.mjs', './tokens.mjs', './text.mjs', './project.mjs', './build-worker.mjs', './build-store.mjs', './arch.mjs', './arch-browser.mjs', './browser.mjs'].map(file => new URL(file, import.meta.url)),
     require.resolve('esbuild/package.json'), require.resolve('tailwindcss/package.json'),
   ].map(file => readFile(file)))));
   const namespace = digest(JSON.stringify({ fingerprint, design, arch:config.arch, check:config.check, sources: config.sources, sourceFiles: config.sourceFiles }));

@@ -7,7 +7,9 @@ npm install -g @whzxc/svg-design-gallery
 sdg /path/to/design
 ```
 
-Requires Node.js 22 or newer. Installation starts without a build step. Browser toolkit commands use the bundled Playwright dependency; the viewer and build do not load it. `sdg` opens a loopback server in your default browser. Use `--no-open` to print its URL, `--port 5200` to select a port, or omit the directory to use the current project. Stop the server with Ctrl+C.
+Requires Node.js 22 or newer. Installation starts without a build step. TSX builds never load Chromium. Architecture builds use the bundled Playwright dependency to measure labels in Chromium, including in the viewer and hub. Each build worker starts one browser lazily, reuses it, and closes it after 30 seconds idle or on worker retirement. Browser toolkit commands also use Chromium; `check` and `render` share their existing browser with architecture measurement.
+
+`sdg` opens a loopback server in your default browser. Use `--no-open` to print its URL, `--port 5200` to select a port, or omit the directory to use the current project. Stop the server with Ctrl+C.
 
 ## Viewer controls
 

@@ -48,7 +48,7 @@ The viewer shell sets the base URL to the direct viewer, project, or live instan
 - `runtime.mjs` is the automatic JSX string runtime. It escapes text/attributes, emits void elements, records Frame metadata and draws pinned Lucide geometry. `runtime.d.ts` supplies JSX, Frame, Icon and capture types; generated asset module declarations cover SVG and raster imports.
 - `build.mjs` bundles each TSX entry through esbuild. The resolver maps `sdg` and JSX runtime imports to the installed runtime, confines relative imports to the design directory, and inlines artwork. Imports ending in `?url` embed any file under `design/art/` as a data URL; they retain a normal file dependency for watcher invalidation. Development JSX locations identify forbidden markup. Modules execute at build time and are trusted project code.
 - `tokens.mjs` parses the two token blocks and generates an inline reference Tailwind theme. Default palettes, font sizes/families, radii and shadows are removed; spacing remains. Classes are collected from rendered markup, then `compile().build()` produces CSS referencing original token variables. Each frame becomes a standalone HTML document.
-- `commands.mjs` loads frames in both themes, checks computed paint, root/capture constraints and geometry, or renders selected frames at the requested device scale. Chromium is loaded only by browser commands.
+- `commands.mjs` loads frames in both themes, checks computed paint, root/capture constraints and geometry, or renders selected frames at the requested device scale. TSX builds never load Chromium; architecture builds use it for label measurement. Browser commands also load Chromium; `check` and `render` pass their existing browser into architecture builds.
 - Design raster captures use a fresh page and browser context per frame and theme. `render` reuses the browser process and closes each page after its capture; `compare` creates independent design and implementation pages. Replacing a shared page's content retains Chromium image resampling state and can change PNG bytes with render order.
 - `document.mjs` reads rendered text lines, fields and clipping for both comparison sides, merging adjacent same-line segments. `text.mjs` pairs equal text nearest-first and compares anchored edges, centers and widths.
 - `compare.mjs` applies the fixture environment and Frame capture settings with flag overrides, waits for stable text geometry, captures both sides and writes reports. Browser canvas composes overlays. `--all` adds a linked HTML index and JSON summary.
@@ -87,8 +87,17 @@ refresh notes and cached previews through SSE.
 
 `toolkit/arch.mjs` validates source statements and the small sidecar grammar, parses
 with exactly Pele 1.12.0, measures label requests in Chromium using the project fonts,
-and passes the structural model to Pele's synchronous Node renderer. Its
-`renderArch(model, tokenSource)` boundary can render a model supplied by a later Git
+and passes the structural model to Pele's synchronous Node renderer.
+`arch-browser.mjs` gives each build worker one lazy measurement browser, reused
+across builds with a fresh, closed page/context for each source. The browser closes
+after 30 seconds without an active architecture build. Worker retirement requests
+browser shutdown before terminating the thread; superseded or unresponsive workers
+have a bounded shutdown. Chromium launch errors retain their installation guidance
+and fail only architecture builds; the same worker continues building TSX sources.
+CLI `check` and `render` supply the browser they already own and close it at command
+completion.
+
+The `renderArch(model, tokenSource)` boundary can render a model supplied by a later Git
 overlay; `buildArch` also accepts an optional precomputed `model`. Segment A performs
 no Git comparison and adds no overlay command or UI. Pele's actual SVG edge IDs are
 preserved: state diagrams use `edgeN`, flowcharts use model edge IDs such as
@@ -109,7 +118,13 @@ preview caches for unchanged output. Pele loads only for architecture builds;
 TSX-only builds retain their existing bundler and rendering path.
 
 CLI source selection combines architecture and TSX inventories. `check` uses Pele
-model edge/message counts, sidecar ownership checks and Chromium SVG shape/text
+model edge/message counts (the flattened `graph.edges` for composite states), sidecar ownership checks and Chromium SVG shape/text
 checks in both themes. `render` uses the existing isolated capture path and preserves
 project-relative architecture output directories. The resident registry includes
 architecture source counts and proxies the same viewer endpoints.
+
+Semantic class extraction is restricted to flowchart and state diagrams. It reads
+assigned classes from Pele's model and recognizes additional source assignments
+within one line; classDiagram declarations and methods remain structural content.
+Init/frontmatter paint checks inspect property keys, preserving prose titles and
+quoted values such as `Background work`.

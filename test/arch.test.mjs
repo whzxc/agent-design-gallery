@@ -10,7 +10,7 @@ import { selectSources, archFiles } from '../src/toolkit/project.mjs';
 import { inspectArch, sidecar, ownerProblems, inspectArchLabels } from '../src/toolkit/arch.mjs';
 import { buildSource } from '../src/toolkit/build.mjs';
 import { createBuildStore } from '../src/toolkit/build-store.mjs';
-import { check } from '../src/toolkit/commands.mjs';
+import { check, render } from '../src/toolkit/commands.mjs';
 import { launch, loadFrame } from '../src/toolkit/browser.mjs';
 import { startServer } from '../src/server.mjs';
 import { previewTarget, previewURL } from '../src/link.mjs';
@@ -181,4 +181,88 @@ test('resident project discovery counts arch sources and proxies their frames',a
   const hub=await startHub({port:0,stateDirectory});t.after(()=>hub.close());
   const response=await fetch(`${hub.url}p/${projects[0].slug}/asset/${encodeURIComponent(asset)}`);
   assert.equal(response.status,200);const built=await response.json();assert.match(built.frames[0].html,/pele-flowchart/);
+});
+
+
+test('class diagrams keep declarations, methods and relations out of the semantic vocabulary',async t=>{
+  const c=await fixture(t), source='classDiagram\n  class Duck {\n    +swim()\n  }\n  class Pond\n  Duck --> Pond';
+  assert.deepEqual(inspectArch(source).problems,[]);
+  assert.deepEqual(inspectArch(source).classes,[]);
+  await writeFile(path.join(c.root,asset),source);
+  const built=await buildSource(c,path.join(c.root,asset),{write:false});
+  assert.match(built.frames[0].html,/Duck/);assert.match(built.frames[0].html,/swim/);
+  const problems=[];
+  assert.equal(await check(c,[asset],{'read-only':true},()=>{},p=>problems.push(p)),0,problems.join('\n'));
+  assert.deepEqual(inspectArch('flowchart LR\nA:::progress --> B\nclass B done').classes,['progress','done']);
+  assert.deepEqual(inspectArch('flowchart LR\nA[host:::port] --> B').problems,[]);
+  assert.deepEqual(inspectArch('stateDiagram-v2\nA:::progress --> B').classes,['progress']);
+  assert.deepEqual(inspectArch('stateDiagram-v2\nstate active {\nA --> B\nclass A waiting\n}').classes,['waiting']);
+});
+
+test('state edge budgets include transitions in composite and nested composite states',()=>{
+  const source='stateDiagram-v2\nstate active {\nreserved --> executing\nstate nested {\nexecuting --> waiting\n}\n}\nactive --> completed';
+  const checked=inspectArch(source,2);
+  assert.equal(checked.model.relations.length,1);
+  assert.equal(checked.model.graph.edges.length,3);
+  assert.deepEqual(checked.problems,['3 edges/messages exceeds check.archMaxEdges (2)']);
+  assert.deepEqual(inspectArch(source,3).problems,[]);
+});
+
+test('paint detection inspects config keys and leaves titles and quoted values alone',()=>{
+  for(const source of [
+    '---\ntitle: Background work\n---\nflowchart LR\nA --> B',
+    '---\ntitle: "theme: dark, background: red"\n---\nflowchart LR\nA --> B',
+    '%%{init: {"title":"Background work", "note":"theme: dark, stroke: red"}}%%\nflowchart LR\nA --> B',
+  ]) assert.deepEqual(inspectArch(source).problems,[]);
+  for(const config of ['"theme":"dark"',"'themeVariables': {'primaryColor':'red'}",'background: "white"']) {
+    assert.ok(inspectArch(`%%{init: {${config}}}%%\nflowchart LR\nA --> B`).problems.some(p=>p.startsWith('Painting directive/frontmatter key')));
+  }
+  assert.ok(inspectArch('---\nconfig:\n  themeVariables:\n    primaryColor: red\n---\nflowchart LR\nA --> B').problems.some(p=>p.includes('key themeVariables')));
+});
+
+test('check and render each share their existing browser with architecture measurement',async t=>{
+  const c=await fixture(t),{chromium}=await import('playwright');
+  const original=chromium.launch.bind(chromium);let launches=0;
+  t.mock.method(chromium,'launch',(...args)=>{launches++;return original(...args);});
+  assert.equal(await check(c,[asset],{'read-only':true},()=>{},()=>{}),0);
+  assert.equal(launches,1);
+  await render(c,[asset],{theme:'light',scale:1,'out-dir':'output/shared-browser'});
+  assert.equal(launches,2);
+});
+
+test('a worker launch failure reports the install hint per arch source while TSX builds succeed',async t=>{
+  const config=await fixture(t),old=process.env.PLAYWRIGHT_BROWSERS_PATH;
+  process.env.PLAYWRIGHT_BROWSERS_PATH=path.join(config.root,'missing-browser');
+  t.after(()=>{if(old===undefined)delete process.env.PLAYWRIGHT_BROWSERS_PATH;else process.env.PLAYWRIGHT_BROWSERS_PATH=old;});
+  const name='components/plain.tsx';
+  await mkdir(path.join(config.design,'components'));
+  await writeFile(path.join(config.design,name),`import {Frame} from 'sdg';export default()=> <Frame name="default"><div>Still builds</div></Frame>;`);
+  await writeFile(path.join(config.arch,'other.mmd'),'flowchart LR\nA --> B');
+  const store=await createBuildStore({config,cacheDirectory:path.join(config.root,'failure-cache')});t.after(()=>store.close());
+  assert.match((await store.get(name)).frames[0].html,/Still builds/);
+  for(const source of [asset,'arch/other.mmd']) await assert.rejects(store.get(source),/Chromium is missing; run npx playwright@1\.64\.1 install chromium/);
+  store.invalidate([name]);assert.match((await store.get(name)).frames[0].html,/Still builds/);
+  assert.equal(store.stats().spawned,1,'failed architecture builds do not poison or replace the TSX worker');
+});
+
+test('real architecture workers recycle and finish browser shutdown before a standalone process exits',async t=>{
+  const c=await fixture(t), script=path.join(c.root,'close-workers.mjs');
+  await writeFile(script,`
+import {readFile,writeFile} from 'node:fs/promises';
+import {loadConfig} from ${JSON.stringify(new URL('../src/toolkit/config.mjs',import.meta.url).href)};
+import {createBuildStore} from ${JSON.stringify(new URL('../src/toolkit/build-store.mjs',import.meta.url).href)};
+const config=await loadConfig(${JSON.stringify(c.root)}),name=${JSON.stringify(asset)},file=config.root+'/'+name;
+const store=await createBuildStore({config,cacheDirectory:config.root+'/recycle-cache'});
+try {
+  const source=await readFile(file,'utf8');
+  for(let i=0;i<33;i++) {
+    await writeFile(file,source+'\\n%% revision '+i);store.invalidate([name]);await store.get(name);
+  }
+  const recycled=store.stats().recycled;
+  await store.close();console.log(JSON.stringify({recycled,workers:store.stats().workers}));
+} finally {await store.close();}
+`);
+  const {stdout}=await exec(process.execPath,[script],{timeout:20000});
+  const result=JSON.parse(stdout);
+  assert.ok(result.recycled>=1);assert.equal(result.workers,0);
 });
