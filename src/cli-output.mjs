@@ -15,6 +15,7 @@ export const errorCatalog = {
   USAGE_INVALID: [2, 'help', 'Read command arguments.'],
   CONFIG_INVALID: [2, 'check', 'Recheck after fixing configuration.'],
   TOKENS_INVALID: [2, 'check', 'Recheck after repairing tokens.css.'],
+  OWNER_MAP_INVALID: [2, 'check', 'Recheck after repairing implementation.json.'],
   MIGRATION_REQUIRED: [2, 'migrate', 'Migrate the legacy project.'],
   MIGRATION_CONFLICT: [2, 'migration', 'Inspect migration inputs before resolving the conflict.'],
   VERSION_UNSATISFIED: [2, 'install', 'Install a version satisfying project requires.'],

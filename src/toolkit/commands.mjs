@@ -7,6 +7,8 @@ import { importDirectionViolations } from './asset-rules.mjs';
 import { launch, loadFrame, browserTask } from './browser.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
 import { commandFailure, cleanup, emptySelection } from './results.mjs';
+import { loadImplementationMap, validateImplementationMap } from './implementation-map.mjs';
+import { mappingFacts } from './source-facts.mjs';
 export function inspectFrame(tokenNames) {
   const frame = document.querySelector('[data-adg-frame]'), box = frame.getBoundingClientRect(), problems = new Map();
   const add = (code, message) => problems.set(message, {code, message, line:null, column:null});
@@ -198,12 +200,14 @@ export async function check(config, args = [], options = {}, log = console.log, 
     else warnings.push(classifyError(failure).error);
   };
   try {
+    const mapping = await loadImplementationMap(config);
     const files = selectSources(config, args, { write });
     data.sources = files.map(file => relative(config, file));
     data.summary.sources = files.length;
     const tokens = files.length ? loadTokens(config) : null;
     const arch = files.some(file => file.endsWith('.mmd')) ? await import('./arch.mjs') : null;
     let page;
+    const builtSources = new Map(), failedSources = new Map();
     for (const file of files) {
       const architecture = file.endsWith('.mmd');
       if (architecture) {
@@ -225,10 +229,12 @@ export async function check(config, args = [], options = {}, log = console.log, 
         if (legacy) throw legacy.detail;
         if (['PLAYWRIGHT_UNAVAILABLE', 'CHROMIUM_UNAVAILABLE', 'BROWSER_FAILED', 'LEGACY_SOURCE'].includes(cause.code)) throw cause;
         failed(cause);
+        failedSources.set(relative(config, file), cause);
         for (const message of cause.message.split('\n')) humanProblems.add(`${relative(config, file)}: ${architecture ? '' : '-: '}${message.replace(/\s+/g, ' ')}`);
         continue;
       }
       data.summary.frames += built.frames.length;
+      if (mapping.present && !architecture) builtSources.set(relative(config, file), mappingFacts(built));
       graph[path.relative(config.design, file).split(path.sep).join('/')] = { uses: built.imports };
       for (const frame of built.frames) for (const theme of ['light', 'dark']) {
         try {
@@ -242,6 +248,19 @@ export async function check(config, args = [], options = {}, log = console.log, 
           humanProblems.add(`${relative(config, file)}: ${frame.name}: ${theme}: ${cause.message.replace(/\s+/g, ' ')}`);
         }
       }
+    }
+    if (mapping.present) {
+      const { listSources } = await import('./project.mjs');
+      await validateImplementationMap(config, mapping, {
+        sources: listSources(config.design, sourceDirectories(config)).map(file => relative(config, file)),
+        selected: args.length ? data.sources : undefined,
+        getBuild: source => {
+          if (failedSources.has(source)) throw failedSources.get(source);
+          if (!builtSources.has(source)) builtSources.set(source, buildSource(config, path.join(config.root, source), { write: false, allowLegacy: false }));
+          return builtSources.get(source);
+        },
+        onFinding: ({ code, message, line, column, frame }) => add({ code, message, line, column }, mapping.file, frame),
+      });
     }
     await cleanup(() => browser?.close(), primary);
     browser = null;

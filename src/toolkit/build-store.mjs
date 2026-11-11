@@ -238,10 +238,10 @@ export async function createBuildStore({ config, cacheDirectory }) {
         const built = await pool.run({ config: workerConfig, name }, controller.signal); counters.builds++;
         endQueue?.({frames: built.frames.length});
         if (controller.signal.aborted || generation !== (generations.get(name) ?? 0)) throw aborted();
-        const payload = { frames: built.frames, css: built.css };
+        const payload = { frames: built.frames, parts: built.parts, css: built.css };
         const hash = digest(JSON.stringify({ path: name, component: !name.startsWith('surfaces/'), ...payload, ...(config.overlay?{base:config.overlay.sha,baseBlob:built.baseBlob}:{}), imports: built.imports }));
         const entry = { path: name, hash, inputHash: inputHash(built.dependencyHashes,built.baseBlob), ...(config.overlay?{baseBlob:built.baseBlob}:{}), imports: built.imports, dependencies: built.dependencies, dependencyHashes: built.dependencyHashes,
-          frames: built.frames.map(({ html, ...frame }) => frame) };
+          parts: built.parts, frames: built.frames.map(({ html, ...frame }) => frame) };
         if (old) unlinkEntry(old); entries.set(name, entry); link(entry); remember(hash, payload);
         touch(hash);
         await persist(hash, payload);

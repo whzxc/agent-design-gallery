@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadTokens, refreshTypes, rejectLegacy, relative, isSourcePath, sourceDirectories } from './project.mjs';
 import { themeCss, parseTokens } from './tokens.mjs';
-import { escape } from './runtime.mjs';
+import { escape, componentOwner } from './runtime.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
 const require = createRequire(import.meta.url);
 const runtime = fileURLToPath(new URL('./runtime.mjs', import.meta.url));
@@ -153,5 +153,10 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     frame.document = theme => `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="${escape(frame.name)}" style="${frame.width ? `width:${frame.width}px;` : 'width:max-content;'}${frame.height ? `height:${frame.height}px;` : ''}">${frame.html}</div></body></html>`;
     if (write) { const destination = path.join(config.output, path.relative(base,file).replace(/\.tsx$/, ''), `${encodeURIComponent(frame.name)}.html`); mkdirSync(path.dirname(destination),{recursive:true}); writeFileSync(destination,frame.document('light')); }
   }
-  return { frames, dependencies: [...dependencies], imports: [...imports].sort(), css };
+  const sourceName = path.relative(base, file).split(path.sep).join('/');
+  const parts = Object.keys(mod).filter(name => {
+    const owner = typeof mod[name] === 'function' && componentOwner(mod[name]);
+    return owner && owner.source === sourceName && owner.export === name;
+  }).sort();
+  return { frames, parts, dependencies: [...dependencies], imports: [...imports].sort(), css };
 }

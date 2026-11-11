@@ -16,6 +16,7 @@ export function attributes(props) {
   }).join('');
 }
 const componentOwners = new WeakMap();
+export const componentOwner = component => componentOwners.get(component);
 export function registerComponent(component, source, name) {
   if (typeof component === 'function' && !componentOwners.has(component)) componentOwners.set(component, {source, export:name});
 }

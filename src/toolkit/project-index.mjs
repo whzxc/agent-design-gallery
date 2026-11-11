@@ -1,0 +1,88 @@
+import { readFile, realpath } from 'node:fs/promises';
+import path from 'node:path';
+import { listSources, archFiles, sourceDirectories, relative, loadTokens } from './project.mjs';
+import { buildSource } from './build.mjs';
+import { createBuildStore } from './build-store.mjs';
+import { sourceFacts } from './source-facts.mjs';
+import { sidecar } from './arch.mjs';
+import { loadImplementationMap, validateImplementationMap } from './implementation-map.mjs';
+import { createIndexStore, indexDigest } from './index-store.mjs';
+import { defaultStateDirectory } from '../hub/registry.mjs';
+import { sourceRelationships } from '../../public/relationships.js';
+export { sourceFacts } from './source-facts.mjs';
+
+const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'tokens.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
+
+export function discoverProject(config) {
+  const tsx = listSources(config.design, sourceDirectories(config)).map(file => relative(config, file));
+  return { tsx, architecture: archFiles(config.arch).map(file => relative(config, file)) };
+}
+
+export function tokenFacts(config) {
+  const { light, dark } = loadTokens(config);
+  return [...light].map(([name, value]) => ({ name, source: relative(config, path.join(config.design, 'tokens.css')),
+    values: [{ theme: 'light', declaration: value, inherited: false }, { theme: 'dark', declaration: dark.get(name) ?? value, inherited: !dark.has(name) }]
+      .map(item => ({ ...item, references: [...item.declaration.matchAll(/var\(\s*(--[\w-]+)/g)].map(match => match[1]) })) }));
+}
+
+export async function openProjectIndex(config, { stateDirectory = defaultStateDirectory, persist = true } = {}) {
+  const inventory = discoverProject(config), root = await realpath(config.root), buildPromises = new Map();
+  const directory = path.join(stateDirectory, 'cache', indexDigest(root), 'index-v1');
+  const shards = await createIndexStore({ directory, persist });
+  const buildDirectory = path.join(stateDirectory, 'cache', indexDigest(root), 'build');
+  let storePromise, closed = false;
+  const assertOpen = () => { if (closed) throw Error('Project index is closed.'); };
+  async function getBuild(source) {
+    assertOpen();
+    if (!inventory.tsx.includes(source)) throw Error(`Undiscovered TSX source ${source}.`);
+    if (!buildPromises.has(source)) buildPromises.set(source, (async () => {
+      if (!persist) return buildSource(config, path.join(config.root, source), { write: false, allowLegacy: false });
+      storePromise ??= createBuildStore({ config: { ...config, sourceFiles: inventory.tsx }, cacheDirectory: buildDirectory });
+      return (await storePromise).get(path.relative(config.design, path.join(config.root, source)).split(path.sep).join('/'));
+    })().finally(() => buildPromises.delete(source)));
+    return buildPromises.get(source);
+  }
+  async function cached(projection, inputs, collect) {
+    const key = JSON.stringify({ version: 1, collectorIdentity, projection, inputs });
+    const hit = await shards.get(key);
+    if (hit !== null) return hit;
+    const value = await collect(); await shards.put(key, value); return value;
+  }
+  return {
+    inventory,
+    getBuild,
+    async source(source) {
+      const built = await getBuild(source);
+      return cached('source', { source, build: built.inputHash ?? indexDigest(JSON.stringify({ ...built, frames: built.frames.map(({ document, ...frame }) => frame) })) }, () => sourceFacts(config, source, built));
+    },
+    tokens() { assertOpen(); return tokenFacts(config); },
+    async mappings({ selected } = {}) {
+      assertOpen();
+      // Implementation inventories and locator bytes are re-read each invocation.
+      const map = await loadImplementationMap(config);
+      return { map, ...await validateImplementationMap(config, map, { sources: inventory.tsx, selected, getBuild }) };
+    },
+    async architecture(source) {
+      assertOpen();
+      if (!inventory.architecture.includes(source)) throw Error(`Undiscovered architecture source ${source}.`);
+      const side = source.replace(/\.mmd$/, '.md'); let text = '';
+      try { text = await readFile(path.join(config.root, side), 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      return cached('architecture', { source, text }, () => ({ source, sidecar: side, ...sidecar(text) }));
+    },
+    async relationships() {
+      const assets = await Promise.all(inventory.tsx.map(async source => {
+        const facts = await this.source(source);
+        const designRelative = file => path.relative(config.design, path.join(config.root, file)).split(path.sep).join('/');
+        return { path: designRelative(source), imports: facts.imports.map(designRelative) };
+      }));
+      assets.push(...inventory.architecture.map(source => ({ path: source, imports: [] })));
+      return sourceRelationships(assets);
+    },
+    stats: async () => ({ shards: shards.stats(), builds: storePromise ? (await storePromise).stats() : null }),
+    async close() {
+      closed = true;
+      try { if (storePromise) await (await storePromise).close(); }
+      finally { await shards.close(); }
+    },
+  };
+}
