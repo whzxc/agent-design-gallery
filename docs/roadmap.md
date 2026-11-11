@@ -47,7 +47,8 @@ reverted because it optimized first content while visible readiness was the real
 
 Agents are first-class users. In priority order:
 
-1. Stable `--json` envelopes and error codes with next actions for every command.
+1. Stable `--json` envelopes and error codes with next actions for every command (done, 0.7.0). See the
+   [agent CLI interface](agent-interface.md).
 2. `diff --base`: per-frame before/after renders with a structural classification (imperceptible, antialiasing,
    boundary bleed, bitmap resampling), consumer-configured thresholds and a verdict.
 3. Ownership lookup: from an implementation file, UI text or color value to the owning source, frame and token. This
