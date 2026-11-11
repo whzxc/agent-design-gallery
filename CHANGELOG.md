@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+- Add finite `adg owner` lookups from implementation files, directories, globs, symbols and export/anchor line regions, rendered text, absolute CSS colors and token names. Schema-version-1 JSON returns ranked design sources/parts, host frames, tokens, ambiguity, scoped evidence and actionable recovery argv. Empty, stale and ambiguous observations exit 0; incomplete requests exit 2. See the [owner contract](docs/agent-interface.md#owner).
+- Add optional version-1 `design/implementation.json` counterparts with strict selectors, defining-source parts and frame subsets. JS/TS exported symbols resolve lexically without redundant anchors; explicit unique anchors support non-exported and other-language symbols. Read-only check reports stale/missing/duplicate bindings. See [authoring and table migration](docs/design-toolkit.md#implementation-mappings).
+- Search normalized painted text in both themes with exact/contains matching and optional Frame `locale` filtering. Text evidence and owner rows include literal-search `authoredIn` copy candidates from design and fixture/data dependencies; escaped or concatenated strings can be missed. Normalize supported CSS colors to 8-bit sRGB RGBA and resolve theme-local tokens/aliases, keeping authored references separate from computed paint.
+- Share demand-driven build/source/part/token/architecture facts and bounded external observation/palette shards. File queries observe mapped targets only; warm queries reuse valid shards under build, collector, font and environment identities. Batch index manifests avoid per-write directory scans. See the [index architecture](docs/architecture.md#ownership-project-index).
+
 ## 0.8.0
 
 - Add `adg diff --base=<rev>` for per-frame, both-theme Git/working-tree comparison of TSX and architecture sources, including added/removed frames and explicit rename candidates. Ordinary frames require exact decoded pixels and CSS/device sizes. The schema-version-1 JSON envelope uses exit 0 for identical/structural, exit 1 with `DIFF_FAILED` for a completed changed gate, and exit 2 for incomplete execution.
