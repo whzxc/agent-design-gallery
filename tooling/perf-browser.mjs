@@ -27,6 +27,24 @@ export function installTiming() {
 
 export async function measureNavigation(page, {url, reload=false, traceFile, screenshotFile}={}) {
   const cdp=await page.context().newCDPSession(page), errors=[], failed=[], requests=[];
+  const network=new Map();
+  cdp.on('Network.requestWillBeSent', e=>network.set(e.requestId,{
+    url:e.request.url,method:e.request.method,start:e.timestamp,wallTime:e.wallTime,
+  }));
+  cdp.on('Network.responseReceived',e=>{
+    const record=network.get(e.requestId);
+    if(record)Object.assign(record,{response:e.timestamp,timing:e.response.timing,status:e.response.status,
+      fromDiskCache:e.response.fromDiskCache,fromServiceWorker:e.response.fromServiceWorker});
+  });
+  cdp.on('Network.dataReceived',e=>{
+    const record=network.get(e.requestId);
+    if(record){record.bodyBytes=(record.bodyBytes??0)+e.dataLength;record.lastData=e.timestamp;}
+  });
+  cdp.on('Network.loadingFinished',e=>{
+    const record=network.get(e.requestId);
+    if(record)Object.assign(record,{end:e.timestamp,encodedBytes:e.encodedDataLength});
+  });
+  await cdp.send('Network.enable');
   const onError=e=>errors.push(e.message), onRequest=r=>requests.push(r), onFailed=r=>failed.push({url:r.url(),error:r.failure()});
   page.on('pageerror',onError);page.on('request',onRequest);page.on('requestfailed',onFailed);
   let traceEvents=[];
@@ -58,6 +76,15 @@ export async function measureNavigation(page, {url, reload=false, traceFile, scr
       resource.method=matches[0]?.method()??'GET';
       resource.uploadBytes=matches[0]?.postDataBuffer()?.length??0;
     }
+    result.requests=requests.map(r=>({url:r.url(),method:r.method(),uploadBytes:r.postDataBuffer()?.length??0,timing:r.timing()}));
+    result.network=[...network.values()].map(r=>{
+      const epochMs=r.wallTime*1000,relative=epochMs-result.timeOrigin;
+      return {...r,start:relative,response:r.response===undefined?undefined:relative+(r.response-r.start)*1000,
+        end:r.end===undefined?undefined:relative+(r.end-r.start)*1000,
+        lastData:r.lastData===undefined?undefined:relative+(r.lastData-r.start)*1000,
+        sendStart:r.timing?.sendStart>=0?relative+(r.timing.requestTime-r.start)*1000+r.timing.sendStart:undefined,
+        sendEnd:r.timing?.sendEnd>=0?relative+(r.timing.requestTime-r.start)*1000+r.timing.sendEnd:undefined};
+    });
     if(traceFile) {
       const done=new Promise(resolve=>cdp.once('Tracing.tracingComplete',resolve));
       await cdp.send('Tracing.end');await done;
