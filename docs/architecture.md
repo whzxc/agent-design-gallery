@@ -49,12 +49,76 @@ The viewer shell sets the base URL to the direct viewer, project, or live instan
 - `build.mjs` bundles each TSX entry through esbuild. The resolver maps `adg` and JSX runtime imports to the installed runtime, confines relative imports to the design directory, and inlines artwork. Imports ending in `?url` embed any file under `design/art/` as a data URL; they retain a normal file dependency for watcher invalidation. Development JSX locations identify forbidden markup. Modules execute at build time and are trusted project code.
 - `tokens.mjs` parses the two token blocks and generates an inline reference Tailwind theme. Default palettes, font sizes/families, radii and shadows are removed; spacing remains. Classes are collected from rendered markup, then `compile().build()` produces CSS referencing original token variables. Each frame becomes a standalone HTML document.
 - `commands.mjs` loads frames in both themes, checks computed paint, root/capture constraints and geometry, or renders selected frames at the requested device scale. TSX builds never load Chromium; architecture builds use it for label measurement. Browser commands also load Chromium; `check` and `render` pass their existing browser into architecture builds.
-- Design raster captures use a fresh page and browser context per frame and theme. `render` reuses the browser process and closes each page after its capture; `compare` creates independent design and implementation pages. Replacing a shared page's content retains Chromium image resampling state and can change PNG bytes with render order.
+- `render`/`compare` design raster captures use a fresh page and browser context per frame and theme. `render` reuses the browser process and closes each page after its capture; `compare` creates independent design and implementation pages. Replacing a shared page's content retains Chromium image resampling state and can change PNG bytes with render order.
 - `document.mjs` reads rendered text lines, fields and clipping for both comparison sides, merging adjacent same-line segments. `text.mjs` pairs equal text nearest-first and compares anchored edges, centers and widths.
 - `compare.mjs` applies the fixture environment and Frame capture settings with flag overrides, waits for stable text geometry, captures both sides and writes reports. Browser canvas composes overlays. `--all` adds a linked HTML index and JSON summary.
 
 ADG's repository-only `adg.config.mjs` starts the server on `fixtures/arc-sample` with temporary state and the explicit states in `fixtures/viewer.mjs`. These servers disable preference persistence. Only a server explicitly given fixture definitions interprets the fixture query parameter; normal installations ignore it. The viewer applies selection, camera, theme, panels, and menus before setting `data-fixture-ready`, and waits for visible previews to draw. The tooltip adapter then hovers Inspector. Fixture modules and sample assets stay outside the npm package.
 
+
+## Git frame diff pipeline
+
+[`src/toolkit/diff.mjs`](../src/toolkit/diff.mjs) orchestrates the finite `diff` command.
+Its [agent contract](agent-interface.md#diff) defines the envelope, report and artifacts;
+[the toolkit](design-toolkit.md#git-frame-diff) defines authoring, policy and classifier
+limits. The working tree remains the current input throughout the command.
+
+1. **Revision inputs.** `diff-inputs.mjs` uses `arch-git.mjs` to resolve a commit and
+   materialize its tracked tree, preserving a nested project's repository-relative
+   location. Binary `cat-file --batch` blobs stream to disk with backpressure rather
+   than accumulating a repository-sized buffer. The owned directory is disposable,
+   without a Git worktree registration. Required unavailable external inputs retain
+   actionable diagnostics at the original repository path.
+2. **Historical environment.** Load the base revision's config/helpers, tokens, art,
+   imports and source directories. If it has a legacy config, run the existing project
+   migration on the disposable tree before loading it. Record changes and emit
+   `DIFF_BASE_MIGRATED`. Base config always uses current `node_modules`; differing
+   applicable manifests/lockfiles emit `DIFF_BASE_ENVIRONMENT_REUSED`. Only an actual
+   failed historical import yields `DIFF_BASE_DEPENDENCIES_UNAVAILABLE`. Temporary
+   paths in errors, logs and recovery context are translated to original paths. No
+   dependency installation or compare-adapter lifecycle callback runs.
+3. **Union and builds.** Match the selected source/frame union by exact source/name.
+   Preserve added/removed rows and attach rename candidates without auto-matching.
+   Build revision-local documents with `write:false`, sharing captured dependency
+   bytes within each side and the existing bounded source-registration transform
+   cache. Only selected sources and active parent dependencies build. A TSX entry
+   executes its declared frames and compiles shared CSS, but only selected frames
+   and explicit support parents are captured. Architecture sources borrow the same
+   browser for label measurement and use plain revision-local tokens/sidecars.
+4. **Exact capture.** One browser serves up to four pair jobs. An ordinary pair uses
+   one fresh page/context for its frame/theme, replacing the document between base
+   and current, then reusing that page for canvas decoding. Font/image readiness,
+   fixed locale/timezone, reduced motion and capture scale are shared. CSS/device
+   sizes and decoded pixels alone decide ordinary frames; no subtree snapshots or
+   isolation work run for them. Captures are fresh, independent of viewer previews.
+5. **Part evidence.** `Frame.parent` is shape-validated in `build.mjs` and preserved
+   by the runtime/types. Only added TSX frames activate references. `part-diff.mjs`
+   resolves parents and deduplicates support rows and target selectors.
+   `part-snapshot.mjs` collects the current part and base/current parent target only:
+   semantic elements/text, exact local geometry, computed paint, complete tokens,
+   resource identities, clipping/backdrop, raster masks and edge regions. Two equal
+   animation-frame observations and unchanged post-capture evidence share one
+   monotonic five-second deadline. Unstable or unattributable paint produces a typed
+   execution failure. The native parent PNG supplies the outward-rounded device
+   crop with no resampling; crop origin and clipping remain report evidence.
+6. **Classification.** `pixel-diff.mjs` runs the same pure comparator in unit tests
+   and the browser, assigning every unequal pixel exactly once under classifier
+   version 1. `diff-policy.mjs` resolves current consumer thresholds. Matching part
+   snapshots with nonimperceptible residuals trigger one deduplicated base-parent
+   isolation capture per selector/theme, with sibling paint temporarily hidden and
+   original styles restored. External paint only receives boundary bleed inside the
+   edge band; interior external paint stays `other`. Same-image raster regions have
+   their own strict budget. Antialiasing requires stable local anchors, convex
+   blends, bounded channel delta and a strict intermediate beyond anchor rounding
+   residual. Full parent equality, snapshot/size equality and both-theme/full-project
+   coverage gate structural approval independently of candidate pixel counts.
+7. **Artifacts and cleanup.** Publish each comparison only after its PNG/snapshot
+   artifacts and per-row JSON finish. Store selected rows and extra `support` rows
+   separately; their IDs link full parent renders to cropped parts. JSON includes
+   policy, class counts, findings, environment and phase wall timings. Close pages,
+   browser and the disposable base tree before a completed gate verdict. Execution
+   or cleanup failure retains completed rows with `complete:false` and `verdict:null`.
+   The final manifest supports later review-sheet composition without re-rendering.
 
 ## Access and instance boundary
 

@@ -18,7 +18,7 @@ are not machine interfaces.
 
 | Invocation | Stdout framing |
 | --- | --- |
-| `link`, `init`, `migrate`, `check`, `render`, `compare`, every `root` and `service` action | One envelope, then exit |
+| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, every `root` and `service` action | One envelope, then exit |
 | `serve --print-key`, `serve --rotate-key` | One envelope, then exit |
 | `--help`, `--version`, including command-specific forms | One envelope, then exit |
 | Foreground `open`, ordinary `serve` | NDJSON: one envelope per line until termination |
@@ -50,7 +50,7 @@ result or `null` when no result has been assembled. A failure need not undo comp
 file changes. Consumers must examine `ok` and process termination, even when data exists.
 
 Canonical command identities are `open`, `link`, `serve`, `init`, `migrate`, `check`,
-`render`, `compare`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
+`render`, `compare`, `diff`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
 `service uninstall`, `service status`, `service logs` and `service migrate`. Help and
 version use `help` and `version`. Parse failures use the recognized command/action when
 available, or the group identity `root`/`service` or global identity `adg`. An implicit
@@ -59,7 +59,7 @@ directory invocation uses `open`.
 | Exit | Result |
 | --- | --- |
 | 0 | Successful finite result, or clean foreground shutdown |
-| 1 | Completed failing gate: `ok:false`, `CHECK_FAILED` or `COMPARE_FAILED`, `data.complete:true` |
+| 1 | Completed failing gate: `ok:false`, `CHECK_FAILED`, `COMPARE_FAILED` or `DIFF_FAILED`, `data.complete:true` |
 | 2 | Command could not complete: `ok:false`; data with a `complete` field has `complete:false` |
 
 These exits apply in human mode too. Rule findings mean a check ran and found problems;
@@ -149,6 +149,25 @@ which arguments are retained.
 | `COMPARE_ADAPTER_FAILED` | 2 | Adapter fixture/start/ready/texts callback failed without a known native cause. | `["adg","compare","--frame=default","--json","--","surfaces/demo"]` | Retry after repairing the adapter callback. |
 | `COMPARE_UNSETTLED` | 2 | Comparison text measurements did not settle within 5 seconds. | `["adg","compare","--frame=default","--json","--","surfaces/demo"]` | Retry after stabilizing fixture readiness. |
 
+### Revision diff
+
+These codes use the diff retry construction below. The example selection is
+`--base=HEAD`; all five codes have executable recovery argv
+`["adg","diff","--base=HEAD","--json"]` for that request.
+
+| Code | Exit | Meaning / retry prerequisite | Example next argv |
+| --- | --- | --- | --- |
+| `DIFF_BASE_DEPENDENCIES_UNAVAILABLE` | 2 | A historical import actually failed; restore that import or its installed dependency. Changed manifests alone produce a warning. | `["adg","diff","--base=HEAD","--json"]` |
+| `DIFF_FAILED` | 1 | Completed gate is changed; review artifacts and resolve differences. | `["adg","diff","--base=HEAD","--json"]` |
+| `DIFF_REFERENCE_INVALID` | 2 | Repair a missing parent/source/frame, invalid/nonunique selector or invisible target. | `["adg","diff","--base=HEAD","--json"]` |
+| `DIFF_UNSETTLED` | 2 | Stabilize the part/parent snapshots or isolation target. | `["adg","diff","--base=HEAD","--json"]` |
+| `DIFF_SNAPSHOT_UNSUPPORTED` | 2 | Supply static paint whose geometry, resources and external contribution can be attributed. | `["adg","diff","--base=HEAD","--json"]` |
+
+Invalid parent declaration shape uses `SOURCE_BUILD_FAILED`; invalid thresholds use
+`CONFIG_INVALID`. Git, source selection, resource load, browser and artifact I/O errors
+retain their existing catalog codes and recovery rules. Historical diagnostics and
+recovery argv refer to original project/repository paths, never a disposable base tree.
+
 ### Hub and service
 
 | Code | Exit | Meaning | Example next argv | Reason |
@@ -203,6 +222,12 @@ Next-action construction:
   order; then `"--json", "--", source`. It does not reconstruct settings from Frame
   metadata. Missing source/frame context or recovery from another command uses command
   help, retaining the catalog reason.
+- Diff retry requires canonical command `diff` and a nonempty string base. Start with
+  `["adg","diff"]`, append explicitly supplied string options as attached values in order
+  `base`, `frame`, `theme`, `scale`, `out-dir`, then `"--json"` and, when present,
+  `"--"` followed by the exact source operands. Defaults are not invented. Without a
+  usable base/context, use `["adg","diff","--help","--json"]`. Coverage warnings remove
+  frame/source restrictions and force `--theme=both`, retaining base/scale/output.
 - For catalog recovery actions, if sanitizing any proposed argument would change it,
   replace the action with safe
   command help and reason `Read command arguments without exposing credentials.`.
@@ -219,6 +244,10 @@ Warnings have the same Diagnostic shape and may have `next:[]`. Their codes incl
 | `COMPARE_FRAMES_SKIPPED` | All-mode comparison skipped frames without a fixture |
 | `MIGRATION_REFERENCES_REMAIN` | Other LaunchAgents still reference the old state directory |
 | `USAGE_INVALID` | Render ignored `--base` for an explicit TSX-only selection |
+| `DIFF_BASE_ENVIRONMENT_REUSED` | Base config uses current dependencies and applicable manifests/lockfiles differ; recorded in `environment.configDependencies`. `next:[]`. |
+| `DIFF_BASE_MIGRATED` | Legacy base was migrated in the disposable tree; recorded in `environment.baseMigration`. `next:[]`. |
+| `DIFF_RENAMED_OR_UNKNOWN` | Added/removed rows have rename candidates for review. `next:[]`. |
+| `DIFF_COVERAGE_INCOMPLETE` | A part needs full both-theme coverage; for base HEAD, `next` is `[{"argv":["adg","diff","--base=HEAD","--theme=both","--json"],"reason":"Compare all existing frames in both themes before a structural batch verdict."}]`. |
 
 Scan warnings suggest a concrete root rescan with the selected state directory.
 Recoverable background failures and additional operation failures may also use catalog
@@ -275,6 +304,245 @@ cleanup failure can return them with `complete:false`; other partial files can r
 disk without being advertised. Deleted-only architecture rendering succeeds with empty
 captures, even if a frame filter produces no capture. Ignored TSX-only `--base` adds a
 usage warning without changing the exit.
+
+### Diff
+
+```sh
+adg diff [source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]
+adg diff --base=HEAD --json
+adg diff modules/toolbar --base=HEAD~1 --frame=compact --theme=both --out-dir=output/review --json
+```
+
+The canonical identity is `diff`. The required nonempty `--base` resolves to a Git commit;
+the after side is the current working tree, including uncommitted and untracked sources.
+Omitting sources selects the union of both revisions' configured TSX and architecture
+sources. Explicit operands accept project-root-relative, design-relative or in-project
+absolute source paths; design sources may omit `.tsx`. Duplicate operands are deduplicated.
+An exact `--frame` name filters the union, retaining base-only and current-only frames.
+Unknown explicit sources/frames fail. Defaults are both themes, device scale 2 and
+`<configured output>/diff` (`output/design/diff` with default config). Scale must be a
+finite positive number. A relative output directory resolves from the project root.
+
+Identity is `(project-relative source, frame name)`, with a comparison row per theme.
+Exact matches retain native CSS/device sizes. Added and removed frames retain nulls for
+the absent side. Rename candidates remain separate added/removed rows with
+`matchKind:renamed_or_unknown` and candidate references; diff never silently pairs them.
+A size change is a failed gate even when common pixels are equal. Architecture pairs
+use plain revision-local renders, independently of the viewer/render proposal overlays.
+
+`existingCoverage` is `full` only for an unqualified source selection, no frame filter
+and both themes. Explicit source operands, a frame filter or one theme give `partial`,
+even if those operands happen to cover every frame. A source-empty union is `empty`.
+An empty unqualified comparison succeeds with `EMPTY_SELECTION`, zero counts and
+`identical`. It supplies no structural coverage evidence.
+
+| Verdict | Meaning | Exit / envelope |
+| --- | --- | --- |
+| `identical` | All selected ordinary pairs have exact decoded pixels and CSS/device sizes. | 0, `ok:true`, `complete:true` |
+| `structural` | At least one newly declared part passes its parent, snapshot, size and pixel-class gates; every selected/support row passes and existing-frame coverage is full in both themes. | 0, `ok:true`, `complete:true` |
+| `changed` | Any selected/support row or required coverage fails. | 1, `ok:false`, `DIFF_FAILED`, `complete:true` |
+| `null` | An execution or owned-resource cleanup failure prevented completion. | 2, `ok:false`, `complete:false`; completed rows remain available |
+
+Ordinary matched frames collect no part snapshots and allow no pixel tolerance.
+Only a current-only TSX Frame's `parent` declaration activates part evidence. Diff
+compares the current part against the base parent target and compares the base/current
+parent targets. Both full parent renders must remain identical in both themes.
+Unselected required parent frames are deduplicated into `support`; a selected parent
+keeps its selected row and ID. Part/classifier rules and consumer thresholds are defined
+in the [toolkit contract](design-toolkit.md#git-frame-diff) and the
+[crop/part workflow](asset-rules.md#crop-and-part-frames).
+
+A single-theme part gets `theme_coverage_incomplete` and a local `changed` verdict.
+A both-theme restricted run can retain locally `structural` rows, but its batch is
+`changed` with `existing_coverage_incomplete` and `DIFF_COVERAGE_INCOMPLETE`. Support
+captures do not promote a restricted run to full coverage.
+
+```ts
+type Verdict = 'identical' | 'structural' | 'changed'
+type RepositoryPath = string // relative to the Git repository root
+type FrameRef = { source: ProjectPath, frame: string }
+type Box = { x: number, y: number, width: number, height: number }
+type Size = { width: number, height: number, pixelWidth: number, pixelHeight: number }
+type Thresholds = {
+  imperceptible: { maxChannelDelta: number },
+  antialiasing: { maxChannelDelta: number, maxRatioExclusive: number },
+  boundaryBleed: { edgeDevicePixels: number },
+  bitmapResampling: { maxRatioExclusive: number }
+}
+type ClassStat = {
+  pixels: number, ratio: number, maxChannelDelta: number,
+  withinThreshold: boolean
+}
+type PixelStats = {
+  areaPixels: number, equalPixels: number, differentPixels: number,
+  classes: {
+    imperceptible: ClassStat, antialiasing: ClassStat,
+    boundary_bleed: ClassStat, bitmap_resampling: ClassStat, other: ClassStat
+  }
+}
+type SnapshotFinding = {
+  code: string,
+  kind: 'element' | 'layout' | 'color' | 'resource',
+  path: string, property: string,
+  before: unknown | null, after: unknown | null
+}
+type ComparisonReason =
+  | 'pixels_changed' | 'added' | 'removed' | 'renamed_or_unknown'
+  | 'size_changed' | 'snapshot_mismatch' | 'threshold_exceeded' | 'other_pixels'
+  | 'parent_changed' | 'theme_coverage_incomplete' | 'existing_coverage_incomplete'
+type DiffComparison = {
+  id: string,
+  source: ProjectPath, frame: string, theme: Theme,
+  status: 'matched' | 'added' | 'removed',
+  matchKind: 'exact' | 'unmatched' | 'renamed_or_unknown',
+  matchCandidates: FrameRef[],
+  relation: 'revision' | 'parent_crop',
+  before: FrameRef | null, after: FrameRef | null,
+  beforeSize: Size | null, afterSize: Size | null,
+  parent: null | {
+    ref: FrameRef, selector: string,
+    cssCrop: Box, deviceCrop: Box, fractionalOrigin: { x: number, y: number },
+    clipping: { before: Box[], current: Box[], after: Box[] },
+    supportIds: string[]
+  },
+  snapshots: null | {
+    elementEqual: boolean, layoutEqual: boolean,
+    colorEqual: boolean, findings: SnapshotFinding[]
+  },
+  pixels: PixelStats,
+  verdict: Verdict, reasons: ComparisonReason[],
+  note: { before: string | null, after: string | null },
+  paths: {
+    before: string | null, after: string | null, difference: string,
+    beforeSnapshot: string | null, afterSnapshot: string | null,
+    parentCurrentSnapshot: string | null,
+    report: string, parentIsolated: string | null, bleedMask: string | null
+  }
+}
+type DiffData = {
+  project: string, outputDirectory: string,
+  complete: boolean, base: { rev: string, sha: string },
+  current: { kind: 'working_tree', head: string | null },
+  selection: {
+    sources: ProjectPath[], frame: string | null, themes: Theme[], scale: number,
+    existingCoverage: 'full' | 'partial' | 'empty'
+  },
+  environment: {
+    adg: string, node: string, platform: string, arch: string, chromium: string | null,
+    esbuild: string, tailwindcss: string, pele: string, lucide: string, playwright: string,
+    locale: string, timezone: string,
+    baseThresholds: Thresholds,
+    configDependencies: { reused: boolean, changedFiles: RepositoryPath[] },
+    baseMigration: {
+      applied: boolean,
+      changes: { action: string, path: ProjectPath, from: ProjectPath | null }[]
+    }
+  },
+  classifierVersion: 1, thresholds: Thresholds,
+  comparisons: DiffComparison[], support: DiffComparison[],
+  verdict: Verdict | null, reasons: ComparisonReason[],
+  summary: {
+    sources: number, frames: number, comparisons: number, supportComparisons: number, isolationCaptures: number,
+    added: number, removed: number, matched: number,
+    identical: number, structural: number, changed: number,
+    classPixels: {
+      imperceptible: number, antialiasing: number, boundary_bleed: number,
+      bitmap_resampling: number, other: number
+    }
+  },
+  differencePalette: Record<string, string>, reportPath: string | null,
+  timings: {
+    prepareMs: number, buildMs: number, captureMs: number,
+    compareMs: number, writeMs: number, totalMs: number
+  }
+}
+```
+
+`id` is an opaque deterministic encoding of source/frame/theme and selected/support role.
+`before` points to the parent for `parent_crop`; its `beforeSize` describes the crop.
+Ordinary rows have null `parent`, `snapshots` and snapshot paths. The absent image, ref
+and size in an ordinary added/removed row are null. `reasons` explain the gate; snapshot
+findings carry a code, equality domain, context (`part` or `parent`), property path and
+actual JSON before/after values. Finding codes are `TOKEN_CHANGED`, `RESOURCE_CHANGED`,
+`CLIPPING_CHANGED`, `COLOR_CHANGED`, `ELEMENT_ADDED`, `ELEMENT_REMOVED`, `ELEMENT_CHANGED`,
+`LAYOUT_CHANGED`, `TEXT_CHANGED` and `PART_FRAME_GEOMETRY_CHANGED`.
+
+Pixels decode as sRGB RGBA; fully transparent RGB is canonicalized to zero. Every
+nonidentical pixel belongs to exactly one class. Class counts sum to `differentPixels`,
+and `equalPixels + differentPixels = areaPixels`. Unequal/absent sides use the union
+canvas: pixels present on one side are `other` with delta 255; space outside both is
+equal transparent. Ordinary differences are all `other`. Ratios use `areaPixels`; zero
+class counts have delta 0 and pass their limit. Part findings can fail a zero-pixel-diff row.
+
+Summary source/frame/lifecycle counts describe the selected union, once across themes.
+`comparisons`, verdict counts and `classPixels` count completed selected theme rows;
+`supportComparisons` counts additional completed support rows separately.
+`isolationCaptures` counts deduplicated isolation requests, including an attempted request
+in an incomplete run. Support or coverage can fail a batch whose selected rows all pass.
+
+`environment` records installed tooling and Chromium, fixed locale/timezone, base config
+dependency reuse, revision-relative migration changes and the resolved historical policy.
+Current `thresholds` govern classification and appear in every comparison report.
+`chromium:null` means it was not observed. A base/config failure before result assembly
+has `data:null`; later failures keep observed partial data. Unstarted phase timings are
+zero. Timings are milliseconds of sequential waves with up to four concurrent pairs,
+not summed worker CPU time. `compareMs` includes any isolation work. `totalMs` also
+includes startup/cleanup and orchestration; it excludes CLI bootstrap and the final
+manifest write. Timing values are diagnostic, without a fixed latency promise.
+
+Artifacts under `outputDirectory`:
+
+```text
+report.json
+frames/<encoded source components>/<encoded frame>/<theme>/
+  before.png                    # null/absent for an ordinary addition
+  after.png                     # null/absent for an ordinary removal
+  difference.png
+  comparison.json
+  before.snapshot.json          # part only: base parent target
+  parent-current.snapshot.json  # part only: current parent target
+  after.snapshot.json           # part only: current part
+  parent-isolated.png           # optional isolated base-parent crop
+  bleed-mask.png                # optional attribution mask
+support/<encoded source components>/<encoded frame>/<theme>/...
+```
+
+Each source/frame path component is URI encoded, including dots. `report.json` is the
+plain `DiffData`, while CLI stdout uses `Envelope<DiffData>`. `comparison.json` contains
+`{ classifierVersion:1, thresholds, comparison }`. Equal difference pixels are transparent;
+`differencePalette` records the class colors. Native images are never resized to compare.
+Part crops copy original device pixels using floor(left/top) and ceil(right/bottom),
+with CSS crop, device crop, fractional origin and clipping retained in the row.
+`parent.supportIds` link to full parent PNGs in either selected or support rows.
+
+A snapshot file has `snapshotVersion:1`, `ref`, `theme`, `size`, `origin`, `elements`,
+`texts`, `tokens`, `resources`, `contextEffects`, `cssCrop`, `deviceCrop`, `fractionalOrigin`,
+`clipped`, `frameClipped`, `edgeBoxes`, `rasterMask`, `unsupported` and `frameAligned`.
+Origins/boxes are CSS pixels; descendant boxes are relative to the target root.
+`deviceCrop`, `rasterMask` (linear pixel indices) and fractional origin use device pixels.
+The other records are:
+
+| Record | Fields |
+| --- | --- |
+| Element | Stable traversal `path`, `parentPath`, `tag`, `namespace`, semantic `attributes`, `childOrder`, `box`, `clientRects`, grouped `layout`/`paint`, full `computedStyle`, `pseudo.before`/`after` (null or content/style), `tokenExpressions` (property/expression/resolved), auxiliary `owners` |
+| Text | `path`, `parentPath`, direct `text`, `lines` containing text and root-relative box |
+| Token | `name`, original `declaration`, `resolved` active value; the complete active map is compared |
+| Resource | `id`, logical `source`, `kind` (`raster`, `vector`, `font`), SHA-256 `contentIdentity` of captured bytes, nullable intrinsic width/height |
+| Context | `clipping` rectangles, `clipShapes` with root-relative box/radii, `compositing` opacity/background-image/shadow records, RGBA `backdrop` |
+| Unsupported paint | `path`, `property`, `value`; nonempty records stop the operation with a typed error |
+
+Snapshot equality normalizes same-subtree fragment IDs and resource references, excludes
+class/style/ID/data-attribute spelling and ownership metadata, and preserves exact local
+geometry, semantic content, resolved styles and token declarations. Token expressions
+remain evidence alongside resolved styles; full property-to-token provenance is not
+provided. Two equal consecutive observations and an unchanged post-capture observation
+must fit one five-second monotonic deadline. Ordinary frames bypass this work.
+
+All referenced artifacts are written before their completed row is advertised. Failed
+runs keep completed rows and, when writable, a partial manifest. `reportPath:null` means
+the manifest write failed. Stale unreferenced artifacts from previous runs are not deleted.
+The ordered rows, revision labels, sizes, PNGs, notes, palette, crop/support references and
+findings are sufficient for a later review-sheet composer without re-rendering.
 
 ### Check
 

@@ -25,7 +25,7 @@ adg service migrate
 updates design editor paths and `.sdg/` entries in the project's `.gitignore` files, deletes the old generated
 `design/.sdg/` directory and regenerates `design/.adg/` (using the configured design directory). It prints each
 change and is safe to repeat. When both config names exist, it refuses before changing files. Normal commands
-finding only an old config stop with guidance to run `adg migrate`.
+finding only an old current-project config stop with guidance to run `adg migrate`. `diff` migrates a legacy base inside its disposable historical tree and reports the change.
 
 On macOS, `adg service migrate` stops `org.svg-design-gallery.hub`, moves its entire state directory from
 `svg-design-gallery` to `agent-design-gallery`, and replaces the LaunchAgent with `org.agent-design-gallery.hub`
@@ -103,11 +103,20 @@ adg init
 adg check
 adg render surfaces/example --frame=default --scale=2
 adg check --read-only
+adg diff --base=HEAD --json
 ```
 
 `init` creates tokens, components/modules/surfaces, fixtures/art, editor configuration and ignore entries. A fresh library gets one `example.tsx` per production layer, composed downward with shared fixture data; existing libraries receive no demo sources. Existing authored files are preserved, declarations are refreshed, and missing ignore entries are appended. Starter configuration requires ADG 0.5.0 or newer. `check --read-only` skips declarations and build files for an audit. Projects do not install ADG as a dependency.
 
 Builds produce standalone HTML and renders produce `<frame>-light.png` and `<frame>-dark.png` under `output/design/<source>/`. After configuring an implementation adapter and frame fixture/capture, use `adg compare <source> --frame=<name>` or `adg compare --all`. Flags override Frame capture props; `--all` writes a linked HTML index and `summary.json` under `output/design/compare/`. `sync` and `measure` have been removed.
+
+`adg diff --base=<rev>` writes per-frame/theme before, after and difference PNGs plus
+`report.json` for Git and working-tree sources, including added/removed frames. Existing
+frames require exact pixels and size. New part Frames can declare `parent` and use
+consumer `diff.thresholds`; a `structural` batch requires full existing-frame coverage
+in both themes. Exit 0 is `identical`/`structural`, 1 is completed `changed`, and 2 is
+incomplete execution. See [parts and classifier limits](docs/design-toolkit.md#git-frame-diff)
+and the [JSON contract](docs/agent-interface.md#diff).
 
 See the [toolkit contract](docs/design-toolkit.md) for source format and compare adapters, and the [changelog](CHANGELOG.md) for version changes. Node.js executes design modules at build time; open sources you trust.
 

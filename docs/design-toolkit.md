@@ -29,7 +29,7 @@ adg service migrate
 `sdg/jsx-dev-runtime` and `sdg:self` imports under the configured design directory, updates editor paths and
 `.sdg/` ignore entries in the project's `.gitignore` files, removes the old generated directory and regenerates
 `.adg/`. Each change is printed. Repeating the command is safe; mixed old/new config names are refused before
-any edits. Commands encountering only an old config require this migration.
+any edits. Commands encountering only an old current-project config require this migration. `diff` migrates a legacy base only in its disposable historical tree and records that migration.
 
 `adg service migrate` moves the entire old hub state directory and replaces its macOS LaunchAgent with the current
 Node/CLI paths and previous port. `--state-dir` sets the destination; an existing destination or new LaunchAgent
@@ -100,6 +100,7 @@ A `Frame` is one declared form of a component or surface.
 - `width` and `height` are CSS pixels. Without width or height, the frame takes its content's size.
 - `fixture` names the compare fixture for this form.
 - `capture` tells `compare` what to capture in the implementation: `{ region }`, `{ selector }` or `{ page: true }`, each with optional `viewport` (`'<w>x<h>'`) and `clicks` (accessible names, in order). A page capture clips the page at `origin` (`'<x> <y>'`, default `'0 0'`) with the frame's size.
+- `parent` declares a new part's original region: `{ source, frame, selector }`, using a project-root-relative `.tsx` or `.mmd` source path with extension, a frame name and a CSS selector. See [Git frame diff](#git-frame-diff). `check` validates shape only; `diff` resolves an active mapping.
 - `note` is a caption that the viewer shows in the inspector. It is not part of the drawing.
 
 A frame contains exactly one root element, its shell. `compare` measures design positions from the shell's top-left. The frame paints `var(--canvas)` behind the shell.
@@ -202,6 +203,7 @@ adg check [source...] [--read-only]
 adg render [source...] [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]
 adg compare <source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin=<x> <y>] [--click=<name>...] [--viewport=<w>x<h>]
 adg compare --all
+adg diff [source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]
 ```
 
 A first argument that names a command runs it; any other argument is a directory to open. `adg open check` opens a directory named `check`.
@@ -210,11 +212,131 @@ A first argument that names a command runs it; any other argument is a directory
 - `check` checks import direction and the named sources' frames, or all sources. `--read-only` skips generated type declarations and HTML build files; it runs the same import and both-theme frame checks without changing consumer files.
 - `render` writes `output/design/<path>/<frame>-light.png` and `-dark.png` at the given scale, for every frame or the one named.
 - `compare` compares one frame; its flags override the frame's `fixture` and `capture`.
+- `diff` compares Git base and working-tree frames, writes PNGs and a machine-readable report, and gates ordinary changes or structural parts. It defaults to both themes at 2×.
 - `compare --all` compares every frame that has a fixture and writes `output/design/compare/summary.json` and `index.html`, one row per frame with its counts and report link.
 
 Each design capture in `render` and `compare` uses a fresh page and browser context, including between themes, so PNG bytes are independent of frame order. `render` reuses one Chromium process for the batch, runs up to four captures concurrently within the available CPU parallelism, and closes each page after capture. Console output follows source, frame and theme order.
 
-Source arguments are paths under the design directory, with or without `design/` and `.tsx`. Exit codes are 0 for success, 1 when `check` or `compare` found problems, and 2 for a usage, configuration or environment error, with one line on stderr naming the fix.
+Source arguments are paths under the design directory, with or without `design/` and `.tsx`. Exit codes are 0 for success, 1 when `check`, `compare` or `diff` found problems, and 2 for a usage, configuration or environment error, with one line on stderr naming the fix.
+
+## Git frame diff
+
+```sh
+adg diff --base=HEAD --json
+adg diff modules/toolbar --base=HEAD~1 --frame=compact --out-dir=output/review --json
+```
+
+`diff` compares the source/frame union at a Git revision and in the current working tree.
+Omitting sources includes configured TSX and architecture sources at either revision;
+explicit selection and `--frame` limit the capture. Base-only and current-only frames
+remain visible. `--theme` defaults to `both`, `--scale` to 2 and the output to
+`<configured output>/diff`. Relative output directories resolve from the project root.
+See the [agent contract](agent-interface.md#diff) for schema, artifacts and recovery argv.
+
+Ordinary matched frames are `identical` only with exact decoded pixels and equal CSS
+and device sizes. Additions/removals, size changes and suggested renames are `changed`.
+No tolerance setting changes ordinary-frame exactness. The Git base uses its own
+config, tokens, imports and artwork, with the current installed runtime/dependencies.
+Legacy base migration changes only the disposable historical tree and is reported.
+Diff does not call compare adapter callbacks.
+
+Declare an extracted part on its new Frame:
+
+```tsx
+<Frame name="compact" width={320} height={48} parent={{
+  source: 'design/surfaces/home.tsx',
+  frame: 'ready',
+  selector: '[data-part="toolbar"]',
+}}>
+  <Toolbar />
+</Frame>
+```
+
+The parent reference has exactly `source`, `frame` and `selector`, all nonempty strings.
+The source is a canonical project-root-relative `.tsx` or `.mmd` path with `/` separators;
+absolute paths, backslashes, colons and empty/`.`/`..` path segments are invalid.
+`check` validates this shape without resolving a source or executing the selector.
+Only selected current-only TSX frames activate a mapping. Both parent revisions must
+contain that same source/frame and exactly one visible selector target. A mapping may
+stay in source after adoption; it is inactive when the part already exists at base.
+`capture` remains implementation-fixture metadata for `compare` and supplies no mapping.
+
+The part's single root must fill its standalone Frame. Its snapshot geometry is
+root-relative, preserving exact local subpixel offsets. The parent crop copies device
+pixels with outward floor/ceil rounding; it is never resampled or registered to fit.
+Clipping is recorded, and a target outside its full parent frame cannot be structural.
+Part evidence compares the current subtree and both parent target subtrees, including
+hidden descendants, direct text/line boxes, semantic attributes, image bytes, computed
+layout/paint, backdrop/clipping effects and the complete active token map. Any mismatch
+fails the part even with zero pixel difference. Readiness waits for fonts/images, then
+two equal observations and an unchanged post-capture observation within five seconds.
+Ordinary frames collect none of these snapshots.
+
+Configure the consumer's resolved limits in `adg.config.mjs`, `.js` or `.ts`:
+
+```js
+export default {
+  diff: {
+    thresholds: {
+      imperceptible: { maxChannelDelta: 2 },
+      antialiasing: { maxChannelDelta: 48, maxRatioExclusive: 0.005 },
+      boundaryBleed: { edgeDevicePixels: 2 },
+      bitmapResampling: { maxRatioExclusive: 0.001 },
+    },
+  },
+};
+```
+
+These are the defaults. Omitted individual fields inherit them. Unknown keys, nulls,
+arrays, nonnumeric or nonfinite values are invalid (`CONFIG_INVALID`). Channel deltas
+are integers in `[0,255]`, ratios are in `[0,1]`, and edge width is a nonnegative integer.
+A zero allowance permits zero pixels through that class. Current policy is resolved in
+all reports; base policy is recorded in `environment.baseThresholds` without overriding it.
+There is no snapshot/geometry epsilon or ordinary-frame tolerance.
+
+Classifier version **1** decodes sRGB RGBA and canonicalizes transparent RGB to zero.
+Delta is the maximum absolute RGBA channel difference. Each unequal pixel receives one
+class, in precedence order **imperceptible → boundary bleed → bitmap resampling →
+antialiasing → other**. Candidate counts remain visible when a budget fails.
+
+| Class | Version 1 rule |
+| --- | --- |
+| `imperceptible` | Positive channel delta at most 2 by default; no count limit. Snapshot mismatches still fail. |
+| `boundary_bleed` | Within the configured device-pixel edge band (default 2), full-parent pixel differs from isolated parent and the part pixel exactly equals isolated parent. No count/channel limit. |
+| `bitmap_resampling` | Same raster owner, resource bytes, intrinsic size, box, interpolation, object fit/transform and snapshots; only the intersected visible, unoccluded raster region qualifies. Default positive count / crop area must be strictly below 0.001. Vector SVG and CSS backgrounds receive no raster allowance. |
+| `antialiasing` | Matched text/shape/border region, matching snapshots, delta at most 48 and the stable-anchor test below. Default positive count / crop area must be strictly below 0.005. |
+| `other` | Everything else, including interior external paint; any such pixel fails. |
+
+The antialiasing test uses a clipped 3×3 neighborhood. Two distinct anchor RGBA colors
+must each occur at least three times at unchanged coordinates in both images, have
+nonzero luminance contrast and channel contrast above the imperceptible limit. Both
+candidate colors must be convex blends of the anchors, with per-channel residual at
+most 2. At least one candidate must differ from **both** anchors by channel delta
+**greater than 2**. Near-anchor-to-anchor flips do not count as a strict intermediate.
+An edge lacking stable anchors remains `other`; a text box alone grants no allowance.
+The residual 2, neighborhood and anchor requirements are fixed in classifier version 1.
+At defaults, delta 49 fails AA; 50 AA pixels or 10 raster pixels in a 10,000-pixel crop
+fail their respective strict budgets. Zero candidates pass a ratio limit of zero.
+
+Matching snapshots, equal device extents and any remaining nonimperceptible difference trigger a **single
+isolation capture per parent target and theme**, shared across parts using that target.
+It hides outside sibling subtrees with temporary visibility overrides while preserving
+layout, target, ancestors and clipping/compositing; styles are restored afterward.
+Target snapshots must remain equal around isolation. The capture rules out outside
+paint even inside raster/edge regions: interior external paint stays `other`, never AA
+or bitmap resampling. Unsupported paint produces `DIFF_SNAPSHOT_UNSUPPORTED`; unstable
+observations produce `DIFF_UNSETTLED`.
+
+A new mapped part is locally `structural` only if both complete parent renders remain
+identical in both themes, target/part snapshots and sizes agree, no `other` pixels
+remain and every class budget passes. An exact extraction is also structural. Full
+batch `structural` additionally requires every existing frame in the revision union,
+in both themes, to be identical. Restricted selection reports partial coverage and
+cannot yield a structural batch; locally passing evidence remains in its rows. One
+requested theme fails a part with `theme_coverage_incomplete`, without silently rendering
+the other theme. Exit 0 means `identical`/`structural`, exit 1 is completed `changed`
+(`DIFF_FAILED`), and exit 2 is incomplete execution. Review visual differences through
+the consumer's normal approval process.
 
 ## Review handoff
 

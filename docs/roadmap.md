@@ -50,7 +50,8 @@ Agents are first-class users. In priority order:
 1. Stable `--json` envelopes and error codes with next actions for every command (done, 0.7.0). See the
    [agent CLI interface](agent-interface.md).
 2. `diff --base`: per-frame before/after renders with a structural classification (imperceptible, antialiasing,
-   boundary bleed, bitmap resampling), consumer-configured thresholds and a verdict.
+   boundary bleed, bitmap resampling), consumer-configured thresholds and a verdict (done, 0.8.0). See the
+   [diff contract](agent-interface.md#diff).
 3. Ownership lookup: from an implementation file, UI text or color value to the owning source, frame and token. This
    needs machine-readable implementation mappings.
 4. Impact: frames affected directly and transitively by a component or token change, and rendering only those frames.

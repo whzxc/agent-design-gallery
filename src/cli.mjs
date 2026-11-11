@@ -27,7 +27,7 @@ const details = {
   link: 'Print a clean ADG preview URL. Query mode isolates a target. Path mode locates it in the design hierarchy.',
   check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render selected frames as PNG. Defaults to both themes at 2×. --json prints a versioned result with capture geometry and absolute paths.',
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
-  diff: 'Compare Git and working-tree frames by exact decoded pixels and CSS/device size. Writes before, after and difference PNGs plus report.json. Defaults to both themes at 2×. Added and removed frames require review.',
+  diff: 'Compare the Git base and working-tree source/frame union. Existing frames require exact pixels and CSS/device size; added Frame parent declarations enable structural part evidence under diff.thresholds. Defaults to both themes at 2× and <configured output>/diff. Writes before, after and difference PNGs plus report.json. A structural batch requires all existing frames in both themes; source/frame/theme restrictions report partial coverage. Exit 0 identical/structural, 1 changed, 2 incomplete.',
 };
 export function help(command) {
   if (command) return `Usage: adg ${command} ${usage[command]}\n\n${details[command]}\n\n-h, --help  Show help\nExit codes: 0 success, 1 check/compare/diff problems, 2 usage/configuration/environment error.`;

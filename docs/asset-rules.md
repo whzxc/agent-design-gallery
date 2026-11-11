@@ -59,6 +59,58 @@ Record the reason and the replacement policy in the consumer's governance docume
 
 A gap is an element without an asset, or an asset unable to express a required function or state. Extend the owning asset's props with unchanged defaults. If a new asset is required, stop implementation of that element, add and review the library asset, then continue. Report any remaining omission with its source evidence. Do not silently substitute another pattern or invent a surface-local control.
 
+## Crop and part frames
+
+Extract a part by reusing its defining component/function in the owning module or
+component source. Preserve the full parent composition and add a tightly sized Frame
+with a `parent` declaration pointing at the original instance:
+
+```tsx
+<Frame name="compact" width={320} height={48} parent={{
+  source: 'design/surfaces/home.tsx',
+  frame: 'ready',
+  selector: '[data-part="toolbar"]',
+}}>
+  <Toolbar />
+</Frame>
+```
+
+Mark that instance in the parent with `data-part="toolbar"`. The relation lives on the
+part; it is metadata and does not import the surface into a lower layer. `check` validates
+only its shape. The selector must resolve to one visible target in both revisions when
+an added part activates the declaration.
+
+Run the full both-theme gate from the project:
+
+```sh
+adg check --read-only
+adg diff --base=HEAD --json
+```
+
+Use the commit before extraction as the base. Every existing frame must keep exact
+pixels and CSS/device sizes in both themes. A new part additionally needs equal
+base/current parent target and standalone-part snapshots: element/text/resource identity,
+exact local geometry, paint, clipping/backdrop and the full token map. Its parent must
+also remain exactly identical in both themes. Device crops round outward without
+resampling. New part roots must fill their Frame and parent targets must fit inside
+their full frame.
+
+Classifier version 1 permits only configured imperceptible, stable-anchor antialiasing,
+proven edge-band external bleed and tightly budgeted same-image resampling differences.
+One isolation capture per parent target/theme attributes outside paint; interior outside
+paint stays `other`. Stable-anchor and near-anchor limits, defaults and validation are
+in the [toolkit contract](design-toolkit.md#git-frame-diff). Snapshot mismatches always
+mean `changed`, including a token edit or hidden/new element that leaves pixels unchanged.
+Unmapped additions, removals, rename candidates and size changes also need review.
+
+An unqualified, both-theme run can return `structural` for a crop/part batch. A source,
+frame or theme restriction reports partial coverage and cannot release a structural
+batch, even if its local rows pass. Read `report.json`, parent support references and
+per-theme before/after/difference images; retain them for review. A `changed` verdict
+requires the consumer's visual review process. Failed or incomplete evidence never
+supplies structural approval. Once a part exists at the chosen base, its retained
+parent declaration is inactive and exact ordinary-frame comparison applies.
+
 ## Review and lifecycle
 
 Assets progress from proposed to reviewed to having at least one page or surface consumer. A real consumer may be a composed design surface or a mapped implementation usage, including a transitive use through modules. A specimen frame or gallery entry alone does not establish adoption.
