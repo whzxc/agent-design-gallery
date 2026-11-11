@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- Rename the toolkit to Agent Design Gallery. The package is `@whzxc/agent-design-gallery`, the CLI is `adg`, project configs are `adg.config.*`, the runtime import is `adg` and generated files live in `.adg/`. Run `adg migrate [project]` once per project and `adg service migrate` once per host. Legacy configs stop with a pointer to `adg migrate`.
+- Add a resident hub. `adg root add|remove|list|scan` registers project roots, `adg serve` serves an authenticated project index and proxies live viewers, and `adg service` manages it as a macOS LaunchAgent. Root scans keep failing projects listed with a fix hint and continue with the rest.
+- Add Mermaid architecture sources under `arch/`. Semantic classes mark phases and experimental, temporary or gap elements. A sidecar `.md` records owners and status, and `adg check` confirms owner paths. `--base=<rev>` on `adg open`, `adg link` and `adg render` overlays added, changed and removed elements against a Git revision.
+- Move viewer navigation into top bars, render designs by scope, browse project tokens, copy review links, export captures, share gallery selections and close live instances.
+- Persist content-addressed builds, preview geometry and the source working set across restarts within bounded caches.
+- `adg check` accounts for text clipping, opaque occlusion and control edge hits. Frame captures run isolated with bounded concurrency. Canvas sections pack densely with adaptive form wrapping.
+
 ## 0.5.0
 
 - Default source discovery includes components, modules and surfaces; studies join only when a direct study TSX exists. Explicit source lists retain their directories and order.
