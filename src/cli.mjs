@@ -4,6 +4,7 @@ import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
+import { CliError, createOutput } from './cli-output.mjs';
 
 export const commands = ['open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare'];
 const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
@@ -31,46 +32,71 @@ export function help(command) {
   return `Usage: adg [open] [directory] [options]\n\n${commands.map(name => `  adg ${name} ${usage[name]}`).join('\n')}\n\nAny first argument that is not a command opens a directory. Use adg open check for a directory named check.\nRun adg <command> --help for details. -v, --version prints the installed version.`;
 }
 export function parseCli(args) {
+  let globalJson = false;
+  while (args[0] === '--json') { globalJson = true; args = args.slice(1); }
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
-  const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' } };
+  const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' } };
   const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
   const strings = { open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
   if (command === 'open' || command === 'link') options.tokens = { type: 'boolean' };
-  if (command === 'render') options.json = { type: 'boolean' };
   if (command === 'check') options['read-only'] = { type: 'boolean' };
   if (command === 'compare') { options.all = { type: 'boolean' }; options.page = { type: 'boolean' }; }
   if (command === 'compare') options.click = { type: 'string', multiple: true };
   let parsed;
   try { parsed = parseArgs({ args: explicit ? args.slice(1) : args, options, allowPositionals: true }); }
-  catch (error) { throw new Error(`${error.message}; run adg ${command} --help`); }
+  catch (error) { throw new CliError('USAGE_INVALID', `${error.message}; run adg ${command} --help`); }
   const { values, positionals } = parsed;
+  if (globalJson) values.json = true;
   if (!values.help && !values.version) {
-    if ((command === 'init' && positionals.length) || (['open', 'migrate'].includes(command) && positionals.length > 1) || (command === 'compare' && (values.all ? positionals.length || values.frame : positionals.length !== 1 || !values.frame))) throw new Error(`Invalid arguments; run adg ${command} --help`);
+    if ((command === 'init' && positionals.length) || (['open', 'migrate'].includes(command) && positionals.length > 1) || (command === 'compare' && (values.all ? positionals.length || values.frame : positionals.length !== 1 || !values.frame))) throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
+    if (command === 'link' && positionals.length !== 1) throw new CliError('USAGE_INVALID', 'Expected one viewer URL. Run adg link --help.');
+    if (command === 'service' && (positionals.length !== 1 || !serviceActions.includes(positionals[0]) || (values.port !== undefined && positionals[0] !== 'install'))) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg service --help');
+    if (command === 'root') {
+      const [action, directory, ...extra] = positionals;
+      if (extra.length || !rootActions.includes(action) || (['add', 'remove'].includes(action) && !directory) || (action === 'list' && directory) || (values.depth !== undefined && action !== 'add')) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg root --help');
+    }
+    if (command === 'serve' && positionals.length) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg serve --help');
+  } else if (values.json && values.help && ['root', 'service'].includes(command) && (positionals.length > 1 || (positionals.length && !(command === 'root' ? rootActions : serviceActions).includes(positionals[0])))) {
+    throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
   }
   return { command, values, positionals, explicit };
 }
-export async function main(args = process.argv.slice(2), cwd = process.cwd()) {
-  const { command, values, positionals, explicit } = parseCli(args);
-  if (values.help) { console.log(help(explicit ? command : undefined)); return 0; }
-  if (values.version) { console.log(VERSION); return 0; }
+const rootActions = ['add', 'remove', 'list', 'scan'];
+const serviceActions = ['install', 'uninstall', 'status', 'logs', 'migrate'];
+
+export function commandIdentity({ command, positionals = [] }) {
+  const actions = command === 'root' ? rootActions : command === 'service' ? serviceActions : [];
+  return actions.includes(positionals[0]) ? `${command} ${positionals[0]}` : command;
+}
+
+export function jsonRequested(args) {
+  const separator = args.indexOf('--');
+  return (separator < 0 ? args : args.slice(0, separator)).includes('--json');
+}
+
+function errorCommand(args) {
+  while (args[0] === '--json') args = args.slice(1);
+  if (commands.includes(args[0])) return commandIdentity({ command: args[0], positionals: args.slice(1) });
+  return args[0] && !args[0].startsWith('-') ? 'open' : 'adg';
+}
+
+// Temporary: legacy command success writers remain until their segment 2/3 adapters land.
+async function dispatch({ command, values, positionals }, cwd) {
   if (command === 'migrate') return (await import('./toolkit/migrate.mjs')).migrate(positionals[0] === undefined ? cwd : path.resolve(cwd, positionals[0]));
   if (command === 'open') return (await import('./open.mjs')).open(positionals, values);
   if (command === 'link') {
-    if (positionals.length !== 1) throw Error('Expected one viewer URL. Run adg link --help.');
     const { previewTarget, previewURL } = await import('./link.mjs');
     console.log(previewURL(positionals[0], previewTarget(values)).href);
     return 0;
   }
   if (command === 'service') {
-    if (positionals.length !== 1 || !['install', 'uninstall', 'status', 'logs', 'migrate'].includes(positionals[0]) || (values.port !== undefined && positionals[0] !== 'install')) throw new Error('Invalid arguments; run adg service --help');
     return (await import('./service.mjs')).service(positionals[0], values);
   }
   if (command === 'root') {
-    const [action, directory, ...extra] = positionals;
-    if (extra.length || !['add', 'remove', 'list', 'scan'].includes(action) || (['add', 'remove'].includes(action) && !directory) || (action === 'list' && directory) || (values.depth !== undefined && action !== 'add')) throw new Error('Invalid arguments; run adg root --help');
+    const [action, directory] = positionals;
     const registry = await import('./hub/registry.mjs');
     const state = values['state-dir'];
     const result = action === 'add' ? await registry.addRoot(directory, values.depth === undefined ? 2 : Number(values.depth), state)
@@ -79,7 +105,6 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd()) {
     console.log(JSON.stringify(result, null, 2)); return 0;
   }
   if (command === 'serve') {
-    if (positionals.length) throw new Error('Invalid arguments; run adg serve --help');
     if (values['print-key'] || values['rotate-key']) {
       const key = await (await import('./hub/auth.mjs')).hubKey(values['state-dir'], { rotate: !!values['rotate-key'] });
       console.log(values['print-key'] ? key : 'Hub key rotated.'); return 0;
@@ -96,10 +121,37 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd()) {
   if (command === 'compare') return (await import('./toolkit/compare.mjs')).compare(config, positionals, values);
   return (await import('./toolkit/commands.mjs'))[command](config, positionals, values);
 }
+export async function main(args = process.argv.slice(2), cwd = process.cwd(), {
+  stdout = text => { process.stdout.write(text); }, stderr = text => { process.stderr.write(text); },
+  exit = code => { process.exitCode = code; },
+} = {}) {
+  let command = errorCommand(args), parsed;
+  const json = jsonRequested(args);
+  let output = createOutput({ json, command, stdout, stderr });
+  let code;
+  try {
+    parsed = parseCli(args);
+    command = parsed.values.help ? 'help' : parsed.values.version ? 'version' : commandIdentity(parsed);
+    output = createOutput({ json, command, stdout, stderr });
+    if (command === 'help') {
+      const text = help(parsed.explicit ? parsed.command : undefined);
+      if (json) output.success({ subject: parsed.explicit ? commandIdentity(parsed) : null, usage: text.split('\n')[0], text });
+      else output.log(text);
+      code = 0;
+    } else if (command === 'version') {
+      if (json) output.success({ version: VERSION });
+      else output.log(VERSION);
+      code = 0;
+    } else code = await dispatch(parsed, cwd);
+  } catch (error) {
+    code = output.failure(error, {
+      ...(parsed ?? {}), command,
+      ...(parsed?.values['state-dir'] ? { stateDirectory: path.resolve(cwd, parsed.values['state-dir']) } : {}),
+    });
+  }
+  exit(code);
+  return code;
+}
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
-  main().then(code => { process.exitCode = code; }).catch(error => {
-    const message = String(error.message).replace(/\s+/g, ' ').trim();
-    console.error(`adg: ${message}`);
-    process.exitCode = 2;
-  });
+  await main();
 }

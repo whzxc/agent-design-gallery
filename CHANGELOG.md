@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0 (unreleased)
+
+- Accept global `--json` and return schema-versioned envelopes for help, version and CLI argument errors, with stable error codes and executable recovery arguments.
+- The 0.7.0 quality-gate contract uses exit 1 with `ok:false` and `data.complete:true` for completed checks or comparisons with findings, and exit 2 whenever evaluation could not complete. The exit distinction applies in human mode too.
+
 ## 0.6.0
 
 - Rename the toolkit to Agent Design Gallery. The package is `@whzxc/agent-design-gallery`, the CLI is `adg`, project configs are `adg.config.*`, the runtime import is `adg` and generated files live in `.adg/`. Run `adg migrate [project]` once per project and `adg service migrate` once per host. Legacy configs stop with a pointer to `adg migrate`.
