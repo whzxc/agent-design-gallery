@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { defaultStateDirectory } from './hub/registry.mjs';
+import { CliError } from './cli-output.mjs';
 
 export const SERVICE_LABEL = 'org.agent-design-gallery.hub';
 const execute = promisify(execFile);
@@ -50,14 +51,14 @@ async function migrateService(values, { home, run, nodePath, cliPath, uid, outpu
   const oldState = path.resolve(argument('--state-dir') ?? path.join(base, 'svg-design-gallery'));
   const newState = path.resolve(values['state-dir'] ?? path.join(base, 'agent-design-gallery'));
   const exists = async file => (await lstat(file).catch(error => { if (error.code !== 'ENOENT') throw error; return null; })) !== null;
-  if (await exists(newState)) throw Error(`Migration target already exists: ${newState}; move it aside before running adg service migrate.`);
-  if (await exists(newAgent)) throw Error(`LaunchAgent already exists: ${newAgent}; inspect it before running adg service migrate.`);
-  if (!(await lstat(oldState)).isDirectory()) throw Error(`Hub state is not a directory: ${oldState}`);
+  if (await exists(newState)) throw new CliError('MIGRATION_CONFLICT', `Migration target already exists: ${newState}; move it aside before running adg service migrate.`);
+  if (await exists(newAgent)) throw new CliError('MIGRATION_CONFLICT', `LaunchAgent already exists: ${newAgent}; inspect it before running adg service migrate.`);
+  if (!(await lstat(oldState)).isDirectory()) throw new CliError('DIRECTORY_NOT_FOUND', `Hub state is not a directory: ${oldState}`);
   const executable = await realpath(nodePath), entry = await realpath(cliPath);
   const port = Number(argument('--port') ?? 4310);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw Error('Invalid port in the old LaunchAgent; correct it before migration.');
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new CliError('STATE_INVALID', 'Invalid port in the old LaunchAgent; correct it before migration.');
   const oldKey = await readOptional(path.join(oldState, 'hub.key'));
-  if (oldKey !== null && !/^(?:sdg|adg)_[a-f0-9]{64}$/.test(oldKey.trim())) throw Error('Invalid hub key file; correct it before migration.');
+  if (oldKey !== null && !/^(?:sdg|adg)_[a-f0-9]{64}$/.test(oldKey.trim())) throw new CliError('STATE_INVALID', 'Invalid hub key file; correct it before migration.');
   const domain = `gui/${uid}`, oldTarget = `${domain}/${oldLabel}`;
   let loaded = false;
   try { await run('/bin/launchctl', ['print', oldTarget]); loaded = true; }

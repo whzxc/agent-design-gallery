@@ -3,6 +3,7 @@
 ## 0.7.0 (unreleased)
 
 - Accept global `--json` and return schema-versioned envelopes for help, version and CLI argument errors, with stable error codes and executable recovery arguments.
+- Return structured JSON for `link`, `init`, `migrate` and root actions, including completed file changes and scan warnings. Classify configuration, version, discovery, token, Git and browser-launch failures at their owning boundaries while retaining human diagnostics.
 - The 0.7.0 quality-gate contract uses exit 1 with `ok:false` and `data.complete:true` for completed checks or comparisons with findings, and exit 2 whenever evaluation could not complete. The exit distinction applies in human mode too.
 
 ## 0.6.0

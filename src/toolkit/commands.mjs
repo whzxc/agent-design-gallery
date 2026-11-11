@@ -5,6 +5,7 @@ import { buildSource } from './build.mjs';
 import { selectSources, relative, loadTokens, sourceDirectories, archFiles } from './project.mjs';
 import { importDirectionViolations } from './asset-rules.mjs';
 import { launch, loadFrame } from './browser.mjs';
+import { CliError } from '../cli-output.mjs';
 export function inspectFrame(tokenNames) {
   const frame = document.querySelector('[data-adg-frame]'), box = frame.getBoundingClientRect(), problems = new Set();
   if (frame.children.length !== 1 || [...frame.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) problems.add('Frame needs exactly one root element');
@@ -195,7 +196,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
       let built;
       try { built = await buildSource(config,file,{allowLegacy:false,write,browser}); }
       catch(e) {
-        const legacy = e.errors?.find(error => error.detail?.code === 'LEGACY_SVG');
+        const legacy = e.errors?.find(error => error.detail?.code === 'LEGACY_SOURCE');
         if (legacy) throw legacy.detail;
         for(const problem of e.message.split('\n')) problems.add(`${relative(config,file)}: ${architecture?'':'-: '}${problem.replace(/\s+/g,' ')}`); continue;
       }
@@ -246,7 +247,7 @@ export async function render(config, args = [], options = {}) {
         }
       }
     }
-    if (options.frame && !captures.length && !deleted.length) throw Error(`Unknown frame ${options.frame}; choose a declared frame`);
+    if (options.frame && !captures.length && !deleted.length) throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${options.frame}; choose a declared frame`);
     let next = 0;
     const workers = await Promise.allSettled(Array.from({length:Math.min(4,availableParallelism(),captures.length)},async () => {
       while (next < captures.length) {

@@ -180,7 +180,7 @@ test('classification uses typed boundaries and native causes without matching me
     [Object.assign(new Error('arbitrary'), { code: 'EADDRINUSE' }), { failureCode: 'COMPARE_ADAPTER_FAILED' }, 'PORT_IN_USE'],
     [Object.assign(new Error('arbitrary'), { code: 'EACCES' }), {}, 'IO_FAILED'],
     [Object.assign(new Error('arbitrary'), { code: 'ECONNREFUSED' }), {}, 'NETWORK_FAILED'],
-    [Object.assign(new Error('arbitrary'), { code: 'LEGACY_SVG' }), {}, 'LEGACY_SOURCE'],
+    [new CliError('LEGACY_SOURCE', 'arbitrary'), {}, 'LEGACY_SOURCE'],
     [new Error('import failed'), { failureCode: 'CONFIG_INVALID' }, 'CONFIG_INVALID'],
     [new Error('git failed'), { failureCode: 'GIT_BASE_INVALID' }, 'GIT_BASE_INVALID'],
     [null, {}, 'INTERNAL_ERROR'], ['unexpected thrown value', {}, 'INTERNAL_ERROR'],

@@ -6,10 +6,17 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { configFile, loadConfig, VERSION, requireMigration, legacyConfigFile } from '../toolkit/config.mjs';
 import { listSources, archFiles } from '../toolkit/project.mjs';
+import { CliError } from '../cli-output.mjs';
 
 const exec = promisify(execFile);
 export const defaultStateDirectory = path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local/state'), 'agent-design-gallery');
-const canonical = async directory => realpath(path.resolve(directory.replace(/^~(?=$|[\\/])/, os.homedir())));
+const canonical = async (directory, cwd = process.cwd()) => {
+  try { return await realpath(path.resolve(cwd, directory.replace(/^~(?=$|[\\/])/, os.homedir()))); }
+  catch (error) {
+    if (['ENOENT', 'ENOTDIR'].includes(error.code)) throw new CliError('DIRECTORY_NOT_FOUND', error.message, { cause: error });
+    throw error;
+  }
+};
 export function projectSlug(directory) {
   return path.basename(directory).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project';
 }
@@ -44,8 +51,16 @@ function assignSlugs(data, previousRoots) {
   data.slugVersion = 1;
 }
 async function registry(stateDirectory) {
-  try { return JSON.parse(await readFile(path.join(stateDirectory, 'registry.json'), 'utf8')); }
-  catch (error) { if (error.code === 'ENOENT') return { roots: [] }; throw new Error(`Cannot read registry: ${error.message}`); }
+  try {
+    const data = JSON.parse(await readFile(path.join(stateDirectory, 'registry.json'), 'utf8'));
+    if (!data || !Array.isArray(data.roots) || data.roots.some(root => !root || typeof root.path !== 'string' || !Number.isInteger(root.depth) || root.depth < 0 || root.depth > 3 || !Array.isArray(root.projects) || root.projects.some(project => !project || typeof project.path !== 'string'))) {
+      throw new CliError('STATE_INVALID', 'Expected roots with paths, depths and project lists.');
+    }
+    return data;
+  } catch (error) {
+    if (error.code === 'ENOENT') return { roots: [] };
+    throw new CliError(error instanceof SyntaxError || error.code === 'STATE_INVALID' ? 'STATE_INVALID' : 'IO_FAILED', `Cannot read registry: ${error.message}`, { cause: error });
+  }
 }
 async function save(data, stateDirectory) {
   await mkdir(stateDirectory, { recursive: true });
@@ -53,16 +68,24 @@ async function save(data, stateDirectory) {
   await writeFile(temporary, JSON.stringify(data, null, 2) + '\n');
   await rename(temporary, destination);
 }
-async function scan(root) {
+async function scan(root, stateDirectory, warnings, { error: logError = console.error, readDirectory = readdir } = {}) {
+  const warn = (code, message, human) => {
+    warnings.push({ code, message, next: [{ argv: ['adg', 'root', 'scan', root.path, '--state-dir', stateDirectory, '--json'], reason: 'Rescan after repairing the project inputs or directory access.' }] });
+    if (human) logError(human);
+  };
   const projects = [];
   async function visit(directory, depth) {
     if (path.basename(directory).startsWith('.') || path.basename(directory) === 'node_modules') return;
     let entries;
     try {
       if ((await stat(path.join(directory, '.git')).catch(() => null))?.isFile()) return;
-      entries = await readdir(directory, { withFileTypes: true });
+      entries = await readDirectory(directory, { withFileTypes: true });
     } catch (error) {
-      if (directory === root.path) throw error;
+      if (directory === root.path) {
+        if (['ENOENT', 'ENOTDIR'].includes(error.code)) throw new CliError('DIRECTORY_NOT_FOUND', error.message, { cause: error });
+        throw error;
+      }
+      warn('SCAN_DIRECTORY_SKIPPED', `${directory}: ${error.message.replace(/\s*\n\s*/g, ' ')}`);
       return;
     }
     if (configFile(directory) || legacyConfigFile(directory)) {
@@ -70,7 +93,8 @@ async function scan(root) {
       try {
         await loadConfig(directory, { checkVersion: false });
       } catch (error) {
-        console.error(`adg: ${directory}: ${error.message.replace(/\s*\n\s*/g, ' ')}; fix the project config and rescan.`);
+        const message = `${directory}: ${error.message.replace(/\s*\n\s*/g, ' ')}; fix the project config and rescan.`;
+        warn('PROJECT_CONFIG_INVALID', message, `adg: ${message}`);
       }
     }
     if (depth >= root.depth) return;
@@ -82,41 +106,51 @@ async function scan(root) {
   await visit(root.path, 0);
   return { ...root, projects, scannedAt: new Date().toISOString() };
 }
-export async function addRoot(directory, depth = 2, stateDirectory = defaultStateDirectory) {
-  if (!Number.isInteger(depth) || depth < 0 || depth > 3) throw new Error('Depth must be an integer from 0 to 3.');
-  const root = await canonical(directory);
-  if (!(await stat(root)).isDirectory()) throw new Error(`Not a directory: ${directory}`);
-  const data = await registry(stateDirectory), entry = await scan({ path: root, depth });
+function rootResult(stateDirectory, roots, affected, warnings = []) {
+  return { data: { stateDirectory: path.resolve(stateDirectory), roots, affected }, warnings };
+}
+export async function addRoot(directory, depth = 2, stateDirectory = defaultStateDirectory, options = {}) {
+  if (!Number.isInteger(depth) || depth < 0 || depth > 3) throw new CliError('USAGE_INVALID', 'Depth must be an integer from 0 to 3.');
+  stateDirectory = path.resolve(stateDirectory);
+  const root = await canonical(directory, options.cwd);
+  if (!(await stat(root)).isDirectory()) throw new CliError('DIRECTORY_NOT_FOUND', `Not a directory: ${directory}`);
+  const warnings = [];
+  const data = await registry(stateDirectory), entry = await scan({ path: root, depth }, stateDirectory, warnings, options);
   const previousRoots = data.roots;
   data.roots = [...data.roots.filter(item => item.path !== root), entry].sort((a, b) => a.path.localeCompare(b.path));
   assignSlugs(data, previousRoots);
   await save(data, stateDirectory);
-  return listRoots(stateDirectory);
+  return rootResult(stateDirectory, await listRoots(stateDirectory), [root], warnings);
 }
-export async function removeRoot(directory, stateDirectory = defaultStateDirectory) {
-  const root = await canonical(directory).catch(error => {
-    if (error.code === 'ENOENT') return path.resolve(directory.replace(/^~(?=$|[\\/])/, os.homedir()));
+export async function removeRoot(directory, stateDirectory = defaultStateDirectory, options = {}) {
+  const root = await canonical(directory, options.cwd).catch(error => {
+    if (error.code === 'DIRECTORY_NOT_FOUND' && error.cause?.code === 'ENOENT') return path.resolve(options.cwd ?? process.cwd(), directory.replace(/^~(?=$|[\\/])/, os.homedir()));
     throw error;
   });
   const data = await registry(stateDirectory);
-  if (!data.roots.some(item => item.path === root)) throw new Error(`Root is not registered: ${directory}`);
+  if (!data.roots.some(item => item.path === root)) throw new CliError('ROOT_NOT_REGISTERED', `Root is not registered: ${directory}`);
   data.roots = data.roots.filter(item => item.path !== root);
   await save(data, stateDirectory);
-  return listRoots(stateDirectory);
+  return rootResult(stateDirectory, await listRoots(stateDirectory), [root]);
 }
 export async function listRoots(stateDirectory = defaultStateDirectory) {
   return (await registry(stateDirectory)).roots.map(({ projects, ...root }) => ({ ...root, projectCount: projects.length }));
 }
-export async function scanRoots(directory, stateDirectory = defaultStateDirectory) {
-  const data = await registry(stateDirectory), selected = directory === undefined ? null : await canonical(directory);
-  if (selected && !data.roots.some(root => root.path === selected)) throw new Error(`Root is not registered: ${directory}`);
+export async function scanRoots(directory, stateDirectory = defaultStateDirectory, options = {}) {
+  stateDirectory = path.resolve(stateDirectory);
+  const data = await registry(stateDirectory), selected = directory === undefined ? null : await canonical(directory, options.cwd);
+  if (selected && !data.roots.some(root => root.path === selected)) throw new CliError('ROOT_NOT_REGISTERED', `Root is not registered: ${directory}`);
+  const warnings = [], affected = [];
   const previousRoots = [...data.roots];
   for (let index = 0; index < data.roots.length; index++) {
-    if (!selected || data.roots[index].path === selected) data.roots[index] = await scan(data.roots[index]);
+    if (!selected || data.roots[index].path === selected) {
+      data.roots[index] = await scan(data.roots[index], stateDirectory, warnings, options);
+      affected.push(data.roots[index].path);
+    }
   }
   assignSlugs(data, previousRoots);
   await save(data, stateDirectory);
-  return listRoots(stateDirectory);
+  return rootResult(stateDirectory, await listRoots(stateDirectory), affected.sort(), warnings);
 }
 const git = async (directory, args) => {
   try { return (await exec('git', ['-C', directory, ...args], { maxBuffer: 1024 * 1024 })).stdout.trim(); }

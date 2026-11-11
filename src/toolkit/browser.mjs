@@ -1,13 +1,14 @@
 import { UPDATE } from './config.mjs';
+import { CliError } from '../cli-output.mjs';
 
-export async function launch() {
+export async function launch({ importPlaywright = () => import('playwright') } = {}) {
   let chromium;
-  try { ({ chromium } = await import('playwright')); }
-  catch { throw new Error(`Playwright is missing; run ${UPDATE}`); }
+  try { ({ chromium } = await importPlaywright()); }
+  catch (error) { throw new CliError('PLAYWRIGHT_UNAVAILABLE', `Playwright is missing; run ${UPDATE}`, { cause: error }); }
   try { return await chromium.launch(); }
   catch (error) {
-    if (/Executable doesn't exist|playwright install/i.test(error.message)) throw new Error('Chromium is missing; run npx playwright@1.64.1 install chromium');
-    throw new Error(`Cannot launch Chromium: ${error.message.split('\n')[0]}; check your Playwright installation (npx playwright@1.64.1 install chromium)`);
+    if (/Executable doesn't exist|playwright install/i.test(error.message)) throw new CliError('CHROMIUM_UNAVAILABLE', 'Chromium is missing; run npx playwright@1.64.1 install chromium', { cause: error });
+    throw new CliError('BROWSER_FAILED', `Cannot launch Chromium: ${error.message.split('\n')[0]}; check your Playwright installation (npx playwright@1.64.1 install chromium)`, { cause: error });
   }
 }
 export async function loadFrame(page, frame, theme = 'light') {

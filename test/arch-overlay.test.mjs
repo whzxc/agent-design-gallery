@@ -164,11 +164,22 @@ test('Git failures name a next action and base blobs use the resolved repository
   const c=await fixture(t),base=await resolveBase(c,'HEAD');
   assert.match(base.sha,/^[a-f0-9]{40}$/);assert.match((await readBase(base,path.join(c.root,asset))).blob,/^[a-f0-9]{40}$/);
   assert.equal((await readBase(base,path.join(c.root,'arch/missing.mmd'))).text,null);
-  await assert.rejects(resolveBase(c,'missing-revision'),/Unknown Git revision.*fetch.*retry/);
+  await assert.rejects(resolveBase(c,'missing-revision'), error => {
+    assert.equal(error.code, 'GIT_BASE_INVALID'); assert.equal(error.context.gitCause, 'revision');
+    assert.match(error.message, /Unknown Git revision.*fetch.*retry/); return true;
+  });
   const bare=await mkdtemp(path.join(tmpdir(),'adg-no-git-'));t.after(()=>rm(bare,{recursive:true,force:true}));
-  await assert.rejects(resolveBase({root:bare},'HEAD'),/not in a Git repository.*initialize/);
+  await assert.rejects(resolveBase({root:bare},'HEAD'), error => {
+    assert.equal(error.code, 'GIT_BASE_INVALID'); assert.equal(error.context.gitCause, 'repository');
+    assert.match(error.message, /not in a Git repository.*initialize/); return true;
+  });
+  await assert.rejects(readBase({...base,sha:'0'.repeat(40)},path.join(c.root,asset)), error => {
+    assert.equal(error.code, 'GIT_BASE_INVALID'); assert.equal(error.context.gitCause, 'read'); return true;
+  });
   const previous=process.env.PATH;process.env.PATH=bare;
-  try {await assert.rejects(resolveBase(c,'HEAD'),/Git is unavailable; install Git/);}
+  try {await assert.rejects(resolveBase(c,'HEAD'), error => {
+    assert.equal(error.code, 'GIT_UNAVAILABLE'); assert.match(error.message, /Git is unavailable; install Git/); return true;
+  });}
   finally {process.env.PATH=previous;}
 });
 
@@ -206,7 +217,14 @@ test('CLI base JSON includes captures, added diagrams and deletions; absolute so
   await symlink(path.join(c.root,'adg.config.mjs'),file);
   const onlyDeleted=JSON.parse((await exec(process.execPath,[cli,'render',file,'--base=HEAD','--json'],{cwd:c.root,env:{...process.env,PLAYWRIGHT_BROWSERS_PATH:path.join(c.root,'missing-browser')}})).stdout);
   assert.deepEqual(onlyDeleted.captures,[]);assert.deepEqual(onlyDeleted.deleted,[asset]);
-  await assert.rejects(exec(process.execPath,[cli,'render',added,'--base=missing-revision','--json'],{cwd:c.root}),/Unknown Git revision/);
+  await assert.rejects(exec(process.execPath,[cli,'render',added,'--base=missing-revision','--json'],{cwd:c.root}), error => {
+    assert.equal(error.code, 2);
+    const failure = JSON.parse(error.stdout);
+    assert.equal(failure.ok, false);
+    assert.equal(failure.error.code, 'GIT_BASE_INVALID');
+    assert.match(failure.error.message, /Unknown Git revision missing-revision/);
+    return true;
+  });
   await mkdir(path.join(c.design,'components'));const tsx=path.join(c.design,'components/plain.tsx');
   await writeFile(tsx,"import {Frame} from 'adg';export default()=> <Frame name=\"default\"><div>Plain</div></Frame>");
   assert.deepEqual(selectSources(c,[tsx],{write:false}),[tsx]);

@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { stripVTControlCharacters } from 'node:util';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 /** @typedef {{argv: string[], reason: string}} NextAction */
 /** @typedef {{code: string, message: string, next: NextAction[]}} Diagnostic */
@@ -50,12 +51,14 @@ export const errorCatalog = {
 };
 
 export class CliError extends Error {
-  /** @param {ErrorCode} code @param {string} message @param {{data?: unknown, cause?: unknown}} [options] */
-  constructor(code, message, { data = null, cause } = {}) {
+  /** @param {ErrorCode} code @param {string} message @param {{data?: unknown, cause?: unknown, context?: ErrorContext, warnings?: Diagnostic[]}} [options] */
+  constructor(code, message, { data = null, cause, context = {}, warnings = [] } = {}) {
     super(message, { cause });
     this.name = 'CliError';
     this.code = code;
     this.data = data;
+    this.context = context;
+    this.warnings = warnings;
   }
 }
 
@@ -139,7 +142,7 @@ export function nextActions(code, context = {}) {
 const ioCodes = new Set(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR', 'EISDIR', 'ENOSPC', 'EROFS', 'EEXIST', 'EXDEV', 'EMFILE', 'ENFILE', 'EIO']);
 const networkCodes = new Set(['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT', 'ERR_TLS_CERT_ALTNAME_INVALID', 'CERT_HAS_EXPIRED']);
 
-/** @param {unknown} cause @param {ErrorContext} [context] @returns {{error: Diagnostic, exitCode: number, data: unknown}} */
+/** @param {unknown} cause @param {ErrorContext} [context] @returns {{error: Diagnostic & {code: ErrorCode}, exitCode: number, data: unknown, warnings: Diagnostic[]}} */
 export function classifyError(cause, context = {}) {
   const raw = cause instanceof Error ? cause : null;
   const rawCode = raw && 'code' in raw ? String(raw.code) : '';
@@ -147,15 +150,15 @@ export function classifyError(cause, context = {}) {
   let code = 'INTERNAL_ERROR';
   if (raw instanceof CliError && Object.hasOwn(errorCatalog, raw.code)) code = raw.code;
   else if (rawCode === 'EADDRINUSE') code = 'PORT_IN_USE';
-  else if (rawCode === 'LEGACY_SVG') code = 'LEGACY_SOURCE';
   else if (context.failureCode && Object.hasOwn(errorCatalog, context.failureCode)) code = context.failureCode;
   else if (ioCodes.has(rawCode)) code = 'IO_FAILED';
   else if (networkCodes.has(rawCode)) code = 'NETWORK_FAILED';
   const message = sanitize(raw?.message ?? (typeof cause === 'string' ? cause : 'Unexpected ADG error.')).replace(/\s+/g, ' ').trim();
   return {
-    error: { code, message, next: nextActions(code, context) },
+    error: { code, message, next: nextActions(code, { ...context, ...(raw instanceof CliError ? raw.context : {}) }) },
     exitCode: Number(errorCatalog[code][0]),
     data: raw instanceof CliError ? raw.data : null,
+    warnings: raw instanceof CliError ? raw.warnings : [],
   };
 }
 
@@ -165,6 +168,33 @@ function sanitizedValue(value) {
   if (Array.isArray(value)) return value.map(sanitizedValue);
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizedValue(item)]));
   return value;
+}
+
+/** @type {AsyncLocalStorage<(text: string) => void>} */
+const humanOutput = new AsyncLocalStorage();
+/**
+ * Route config/module writes in this invocation without capturing the caller's output.
+ * @template T
+ * @param {() => T | Promise<T>} work
+ * @param {(text: string) => void} stderr
+ * @returns {Promise<T>}
+ */
+export async function withHumanOutput(work, stderr) {
+  const originals = [process.stdout.write, process.stderr.write];
+  for (const [index, stream] of [process.stdout, process.stderr].entries()) {
+    /** @param {string | Uint8Array} chunk @param {BufferEncoding | ((error?: Error | null) => void)} [encoding] @param {(error?: Error | null) => void} [callback] */
+    function redirect(chunk, encoding, callback) {
+      const sink = humanOutput.getStore();
+      const done = typeof encoding === 'function' ? encoding : callback;
+      if (!sink) return originals[index].call(stream, chunk, typeof encoding === 'string' ? encoding : undefined, done);
+      sink(sanitize(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString(typeof encoding === 'string' ? encoding : 'utf8')));
+      done?.();
+      return true;
+    }
+    stream.write = redirect;
+  }
+  try { return await humanOutput.run(stderr, work); }
+  finally { [process.stdout.write, process.stderr.write] = originals; }
 }
 
 /** @param {OutputOptions} options */
@@ -182,7 +212,7 @@ export function createOutput({ json, command, stdout = text => { process.stdout.
     /** @param {unknown} cause @param {ErrorContext} [context] */
     failure(cause, context = {}) {
       const failure = classifyError(cause, { ...context, command });
-      if (json) emit({ schemaVersion: 1, command, ok: false, data: failure.data, warnings: [], error: failure.error });
+      if (json) emit({ schemaVersion: 1, command, ok: false, data: failure.data, warnings: failure.warnings, error: failure.error });
       else stderr(`adg: ${failure.error.message}\n`);
       return failure.exitCode;
     },

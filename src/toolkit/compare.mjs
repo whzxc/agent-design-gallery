@@ -7,6 +7,7 @@ import { matchTexts, textDelta } from './text.mjs';
 import { selectSources, relative } from './project.mjs';
 import { buildSource } from './build.mjs';
 import { viewport } from './config.mjs';
+import { CliError } from '../cli-output.mjs';
 
 export function compareReport(asset, frame, fixture, design, implementation) {
   const { pairs, missing, extra } = matchTexts(design.texts, implementation.texts);
@@ -65,7 +66,7 @@ export async function compare(config, args, options) {
   if ([options.region,options.selector,options.page].filter(Boolean).length > 1) throw Error('Choose --region, --selector or --page');
   const frame = options.frame;
   const built = await buildSource(config,file,{allowLegacy:false}), definition = built.frames.find(f=>f.name===frame);
-  if (!definition) throw Error(`Unknown frame ${frame}; choose a declared frame`);
+  if (!definition) throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${frame}; choose a declared frame`);
   const settings = {...definition.capture};
   if (options.region || options.selector || options.page) { delete settings.region; delete settings.selector; delete settings.page; }
   for (const key of ['region','selector','page','origin','viewport']) if (options[key] !== undefined) settings[key] = options[key];

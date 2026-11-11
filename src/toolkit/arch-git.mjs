@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import { realpath } from 'node:fs/promises';
+import { CliError } from '../cli-output.mjs';
 const exec = promisify(execFile);
 async function physicalPath(file) {
   try { return await realpath(file); }
@@ -14,24 +15,24 @@ async function physicalPath(file) {
 async function git(root, args) {
   try { return (await exec('git',['-C',root,...args],{maxBuffer:16*1024*1024})).stdout; }
   catch(error) {
-    if(error.code==='ENOENT')throw Error('Git is unavailable; install Git and retry --base.');
-    throw error;
+    if(error.code==='ENOENT')throw new CliError('GIT_UNAVAILABLE', 'Git is unavailable; install Git and retry --base.', { cause: error });
+    throw new CliError('GIT_BASE_INVALID', error.message, { cause: error, context: { project: root, gitCause: 'read' } });
   }
 }
 export async function resolveBase(config, rev) {
-  if(typeof rev!=='string'||!rev.trim())throw Error('Set --base to a Git revision, for example HEAD.');
+  if(typeof rev!=='string'||!rev.trim())throw new CliError('USAGE_INVALID', 'Set --base to a Git revision, for example HEAD.');
   let root;
   try { root=await realpath((await git(config.root,['rev-parse','--show-toplevel'])).trim()); }
   catch(error) {
-    if(error.message.startsWith('Git is unavailable'))throw error;
-    throw Error('This project is not in a Git repository; run from a repository or initialize one before using --base.');
+    if(error.code==='GIT_UNAVAILABLE')throw error;
+    throw new CliError('GIT_BASE_INVALID', 'This project is not in a Git repository; run from a repository or initialize one before using --base.', { cause: error, context: { project: config.root, gitCause: 'repository' } });
   }
   try {
     const sha=(await git(root,['rev-parse','--verify','--end-of-options',`${rev}^{commit}`])).trim();
     return {root,rev,sha};
   } catch(error) {
-    if(error.message.startsWith('Git is unavailable'))throw error;
-    throw Error(`Unknown Git revision ${rev}; choose an existing commit or fetch the revision and retry --base.`);
+    if(error.code==='GIT_UNAVAILABLE')throw error;
+    throw new CliError('GIT_BASE_INVALID', `Unknown Git revision ${rev}; choose an existing commit or fetch the revision and retry --base.`, { cause: error, context: { project: root, gitCause: 'revision' } });
   }
 }
 export async function readBase(base, file) {

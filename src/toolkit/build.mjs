@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadTokens, refreshTypes, rejectLegacy, relative, isSourcePath, sourceDirectories } from './project.mjs';
 import { themeCss, parseTokens } from './tokens.mjs';
 import { escape } from './runtime.mjs';
+import { CliError } from '../cli-output.mjs';
 const require = createRequire(import.meta.url);
 const runtime = fileURLToPath(new URL('./runtime.mjs', import.meta.url));
 const tailwind = path.dirname(require.resolve('tailwindcss/package.json'));
@@ -111,7 +112,12 @@ export async function buildSource(config, file, { write = true, allowLegacy = tr
       if (forbidden) { const before=source.slice(0,forbidden.index); return {errors:[{text:'Forbidden SVG markup; remove styles, scripts and event attributes',location:{file:args.path,line:before.split('\n').length,column:before.length-before.lastIndexOf('\n')-1}}]}; }
       return { contents: `import { artwork } from 'adg'; export default props => artwork(${JSON.stringify(source)}, props);`, loader:'js' };
     });
-  } }] });
+  } }] }).catch(error => {
+    const typed = error.errors?.find(item => item.detail instanceof CliError)?.detail;
+    if (!typed) throw error;
+    // Retain esbuild's human diagnostics and details while carrying the owning boundary's code.
+    throw Object.assign(new CliError(typed.code, error.message, { cause: error, context: typed.context }), { errors: error.errors });
+  });
   const mod = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}#${Date.now()}`);
   if (typeof mod.default !== 'function') throw Error(`${relative(config,file)}: export a default function returning Frames`);
   const value = mod.default(), frames = (Array.isArray(value) ? value.flat(Infinity) : [value]).filter(v => v != null && v !== false);

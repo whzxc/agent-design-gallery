@@ -4,7 +4,7 @@ import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
-import { CliError, createOutput } from './cli-output.mjs';
+import { CliError, createOutput, withHumanOutput } from './cli-output.mjs';
 
 export const commands = ['open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare'];
 const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
@@ -83,14 +83,15 @@ function errorCommand(args) {
   return args[0] && !args[0].startsWith('-') ? 'open' : 'adg';
 }
 
-// Temporary: legacy command success writers remain until their segment 2/3 adapters land.
-async function dispatch({ command, values, positionals }, cwd) {
-  if (command === 'migrate') return (await import('./toolkit/migrate.mjs')).migrate(positionals[0] === undefined ? cwd : path.resolve(cwd, positionals[0]));
+// Temporary: render/check/compare and service/lifecycle writers await their assigned adapters.
+async function dispatch({ command, values, positionals }, cwd, output) {
+  if (command === 'migrate') return { data: await (await import('./toolkit/migrate.mjs')).migrate(positionals[0] === undefined ? cwd : path.resolve(cwd, positionals[0]), output.log) };
   if (command === 'open') return (await import('./open.mjs')).open(positionals, values);
   if (command === 'link') {
     const { previewTarget, previewURL } = await import('./link.mjs');
-    console.log(previewURL(positionals[0], previewTarget(values)).href);
-    return 0;
+    const data = { url: previewURL(positionals[0], previewTarget(values)).href };
+    if (!values.json) output.log(data.url);
+    return { data };
   }
   if (command === 'service') {
     return (await import('./service.mjs')).service(positionals[0], values);
@@ -98,11 +99,14 @@ async function dispatch({ command, values, positionals }, cwd) {
   if (command === 'root') {
     const [action, directory] = positionals;
     const registry = await import('./hub/registry.mjs');
-    const state = values['state-dir'];
-    const result = action === 'add' ? await registry.addRoot(directory, values.depth === undefined ? 2 : Number(values.depth), state)
-      : action === 'remove' ? await registry.removeRoot(directory, state)
-      : action === 'scan' ? await registry.scanRoots(directory, state) : await registry.listRoots(state);
-    console.log(JSON.stringify(result, null, 2)); return 0;
+    const state = path.resolve(cwd, values['state-dir'] ?? registry.defaultStateDirectory);
+    const options = { cwd, error: output.progress };
+    const result = action === 'add' ? await registry.addRoot(directory, values.depth === undefined ? 2 : Number(values.depth), state, options)
+      : action === 'remove' ? await registry.removeRoot(directory, state, options)
+      : action === 'scan' ? await registry.scanRoots(directory, state, options)
+      : { data: { stateDirectory: state, roots: await registry.listRoots(state), affected: [] } };
+    if (!values.json) output.log(JSON.stringify(result.data.roots, null, 2));
+    return result;
   }
   if (command === 'serve') {
     if (values['print-key'] || values['rotate-key']) {
@@ -117,12 +121,12 @@ async function dispatch({ command, values, positionals }, cwd) {
     return 0;
   }
   const config = await loadConfig(cwd);
-  if (command === 'init') return (await import('./toolkit/project.mjs'))[command](config);
+  if (command === 'init') return { data: (await import('./toolkit/project.mjs')).init(config, output.log) };
   if (command === 'compare') return (await import('./toolkit/compare.mjs')).compare(config, positionals, values);
   return (await import('./toolkit/commands.mjs'))[command](config, positionals, values);
 }
 export async function main(args = process.argv.slice(2), cwd = process.cwd(), {
-  stdout = text => { process.stdout.write(text); }, stderr = text => { process.stderr.write(text); },
+  stdout = process.stdout.write.bind(process.stdout), stderr = process.stderr.write.bind(process.stderr),
   exit = code => { process.exitCode = code; },
 } = {}) {
   let command = errorCommand(args), parsed;
@@ -142,7 +146,11 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd(), {
       if (json) output.success({ version: VERSION });
       else output.log(VERSION);
       code = 0;
-    } else code = await dispatch(parsed, cwd);
+    } else if (['link', 'init', 'migrate', 'root'].includes(parsed.command)) {
+      const result = json ? await withHumanOutput(() => dispatch(parsed, cwd, output), stderr) : await dispatch(parsed, cwd, output);
+      if (json) output.success(result.data, result.warnings);
+      code = 0;
+    } else code = await dispatch(parsed, cwd, output);
   } catch (error) {
     code = output.failure(error, {
       ...(parsed ?? {}), command,

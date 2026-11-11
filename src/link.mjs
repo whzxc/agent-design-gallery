@@ -1,28 +1,29 @@
+import { CliError } from './cli-output.mjs';
 import { readViewRoute, viewURL, viewerBase } from '../public/view-route.js';
 
 export function previewTarget(options) {
   const { asset, frame, group, layer, tokens, base, mode = 'query' } = options;
-  if (!['path', 'query'].includes(mode)) throw Error('Choose --mode=path or --mode=query.');
+  if (!['path', 'query'].includes(mode)) throw new CliError('USAGE_INVALID', 'Choose --mode=path or --mode=query.');
   const targets = [asset, group, layer, tokens].filter(value => value !== undefined && value !== false);
   if (targets.length > 1 || (frame !== undefined && !asset) || targets.some(value => value === '') || frame === '')
-    throw Error('Choose one of --asset, --group, --layer, or --tokens. --frame needs --asset.');
+    throw new CliError('USAGE_INVALID', 'Choose one of --asset, --group, --layer, or --tokens. --frame needs --asset.');
   if (asset && (!/\.(tsx|svg|mmd)$/i.test(asset) || asset.includes('\\') || asset.split('/').some(part => !part || part === '.' || part === '..')))
-    throw Error('Use a design-relative .tsx/.svg or project-root-relative .mmd file path for --asset.');
-  if (tokens && mode === 'path') throw Error('Use --mode=query for --tokens.');
-  if(base!==undefined && !base.trim())throw Error('Set --base to a Git revision, for example HEAD.');
+    throw new CliError('USAGE_INVALID', 'Use a design-relative .tsx/.svg or project-root-relative .mmd file path for --asset.');
+  if (tokens && mode === 'path') throw new CliError('USAGE_INVALID', 'Use --mode=query for --tokens.');
+  if(base!==undefined && !base.trim())throw new CliError('USAGE_INVALID', 'Set --base to a Git revision, for example HEAD.');
   return { asset, frame, group, layer, tokens, mode, ...(base!==undefined?{base}:{}) };
 }
 
 export function previewURL(input, target) {
   let base;
   try { base = new URL(input); }
-  catch { throw Error('Enter an absolute ADG viewer URL.'); }
+  catch { throw new CliError('USAGE_INVALID', 'Enter an absolute ADG viewer URL.'); }
   if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password)
-    throw Error('Enter an HTTP or HTTPS viewer URL without credentials.');
+    throw new CliError('USAGE_INVALID', 'Enter an HTTP or HTTPS viewer URL without credentials.');
   const pathname = base.pathname.replace(/^(\/(?:p|i)\/[A-Za-z0-9_-]+)$/, '$1/');
   const root = viewerBase(pathname);
   if (pathname !== root && !pathname.startsWith(`${root}view/`) && pathname !== `${root}index.html`)
-    throw Error('Use a direct viewer, hub project, or live instance URL.');
+    throw new CliError('USAGE_INVALID', 'Use a direct viewer, hub project, or live instance URL.');
   const previous = target.asset || target.group || target.layer || target.tokens ? null : readViewRoute(base);
   const [kind, ...name] = (previous?.scope ?? '').split(':');
   const key = name.join(':');
@@ -37,7 +38,7 @@ export function previewURL(input, target) {
   const revision=target.base ?? base.searchParams.get('base');
   base.search = base.hash = '';
   if(revision!==null && revision!==undefined)base.searchParams.set('base',revision);
-  if (tokens && mode === 'path') throw Error('Use --mode=query for --tokens.');
+  if (tokens && mode === 'path') throw new CliError('USAGE_INVALID', 'Use --mode=query for --tokens.');
   if (tokens) return viewURL(base, 'tokens');
   if (mode === 'query') {
     if (asset) base.searchParams.set('asset', asset);

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { parseTokens } from './tokens.mjs';
+import { CliError, classifyError } from '../cli-output.mjs';
 export const starterTokens = `:root {
   --font-ui: system-ui, sans-serif;
   --font-mono: ui-monospace, monospace;
@@ -23,16 +24,18 @@ export function sourceDirectories(config = {}) {
     readdirSync(path.join(config.design, 'studies'), {withFileTypes:true}).some(entry => entry.isFile() && isSourcePath(`studies/${entry.name}`, ['studies']));
   const sources = config.sources === undefined ? [...defaultSources, ...(studies ? ['studies'] : [])] : config.sources;
   if (!Array.isArray(sources) || !sources.length || sources.some(name => typeof name !== 'string' || !/^[A-Za-z0-9_-]+$/.test(name))) {
-    throw Error('Set sources to a non-empty array of plain top-level directory names in adg.config.mjs; nesting is not allowed');
+    throw new CliError('CONFIG_INVALID', 'Set sources to a non-empty array of plain top-level directory names in adg.config.mjs; nesting is not allowed');
   }
   return [...new Set(sources)];
 }
 const sourceLocations = sources => sources.map(name => `${name}/`).join(', ');
-export function refreshTypes(config) {
+export function refreshTypes(config, changes) {
   mkdirSync(path.join(config.design, '.adg'), { recursive: true });
   const runtime = readFileSync(new URL('./runtime.d.ts', import.meta.url), 'utf8');
   writeFileSync(path.join(config.design, '.adg/runtime.d.ts'), runtime);
+  changes?.push({ action: 'regenerated', path: path.join(config.design, '.adg/runtime.d.ts'), from: null });
   writeFileSync(path.join(config.design, '.adg/assets.d.ts'), `declare module '*?url' { const url: string; export default url; }\ndeclare module '*.svg' { const Art: (props: Record<string, unknown>) => any; export default Art; }\n${['png','jpg','jpeg','webp'].map(ext => `declare module '*.${ext}' { const url: string; export default url; }`).join('\n')}\n`);
+  changes?.push({ action: 'regenerated', path: path.join(config.design, '.adg/assets.d.ts'), from: null });
 }
 export const tsconfig = { compilerOptions: { target: 'ESNext', module: 'ESNext', moduleResolution: 'Bundler', jsx: 'react-jsx', jsxImportSource: 'adg', noEmit: true, strict: true, paths: { adg: ['./.adg/runtime.d.ts'], 'adg/jsx-runtime': ['./.adg/runtime.d.ts'] } }, include: ['**/*.tsx', '**/*.ts', '.adg/*.d.ts'] };
 function starterSources(sources) {
@@ -61,31 +64,42 @@ export default () => <Frame name="default"${last ? ' width={640} height={360}' :
   });
 }
 export function init(config, log = console.log) {
-  config.design ??= path.join(config.root, 'design');
-  refreshTypes(config); rejectLegacy(config);
-  const sources=sourceDirectories(config), fresh=sources.some(name=>name!=='studies') &&
-    !listSources(config.design,sources).length && !existsSync(path.join(config.design,'fixtures/example.ts'));
-  for (const [file, content] of [
-    [path.join(config.root, 'adg.config.mjs'), "export default { requires: '>=0.5.0', design: 'design', output: 'output/design' };\n"],
-    [path.join(config.design, 'tokens.css'), starterTokens],
-    ...[...sources.filter(name=>name!=='studies'), 'fixtures', 'art'].map(name => [path.join(config.design, name), null]),
-    ...(fresh ? [
-      [path.join(config.design,'fixtures/example.ts'), "export const example = { title: 'Example', action: 'Continue' };\n"],
-      ...starterSources(sources).map(([name,content])=>[path.join(config.design,name),content]),
-    ] : []),
-    [path.join(config.design, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2) + '\n'],
-  ]) {
-    if (existsSync(file)) { log(`skipped ${relative(config, file)}`); continue; }
-    mkdirSync(content === null ? file : path.dirname(file), { recursive: true });
-    if (content !== null) writeFileSync(file, content);
-    log(`created ${relative(config, file)}`);
+  const data = { project: config.root, complete: false, changes: [] };
+  try {
+    config.design ??= path.join(config.root, 'design');
+    refreshTypes(config, data.changes); rejectLegacy(config);
+    const sources=sourceDirectories(config), fresh=sources.some(name=>name!=='studies') &&
+      !listSources(config.design,sources).length && !existsSync(path.join(config.design,'fixtures/example.ts'));
+    for (const [file, content] of [
+      [path.join(config.root, 'adg.config.mjs'), "export default { requires: '>=0.5.0', design: 'design', output: 'output/design' };\n"],
+      [path.join(config.design, 'tokens.css'), starterTokens],
+      ...[...sources.filter(name=>name!=='studies'), 'fixtures', 'art'].map(name => [path.join(config.design, name), null]),
+      ...(fresh ? [
+        [path.join(config.design,'fixtures/example.ts'), "export const example = { title: 'Example', action: 'Continue' };\n"],
+        ...starterSources(sources).map(([name,content])=>[path.join(config.design,name),content]),
+      ] : []),
+      [path.join(config.design, 'tsconfig.json'), JSON.stringify(tsconfig, null, 2) + '\n'],
+    ]) {
+      if (existsSync(file)) { data.changes.push({ action: 'skipped', path: file, from: null }); log(`skipped ${relative(config, file)}`); continue; }
+      mkdirSync(content === null ? file : path.dirname(file), { recursive: true });
+      if (content !== null) writeFileSync(file, content);
+      data.changes.push({ action: 'created', path: file, from: null });
+      log(`created ${relative(config, file)}`);
+    }
+    const ignore = path.join(config.root, '.gitignore');
+    const existed = existsSync(ignore), original = existed ? readFileSync(ignore, 'utf8') : '';
+    let text = original;
+    for (const entry of [`/${relative(config, config.design)}/.adg/`, `/${relative(config, config.output ?? path.join(config.root, 'output/design'))}/`]) if (!text.split('\n').includes(entry)) text += `\n${entry}\n`;
+    writeFileSync(ignore, text);
+    if (!existed || text !== original) data.changes.push({ action: existed ? 'updated' : 'created', path: ignore, from: null });
+    refreshTypes(config, data.changes);
+    data.complete = true;
+    return data;
+  } catch (error) {
+    if (!data.changes.length) throw error;
+    if (error instanceof CliError) { error.data = data; throw error; }
+    throw new CliError(classifyError(error).error.code, error.message, { cause: error, data });
   }
-  const ignore = path.join(config.root, '.gitignore');
-  let text = existsSync(ignore) ? readFileSync(ignore, 'utf8') : '';
-  for (const entry of [`/${relative(config, config.design)}/.adg/`, `/${relative(config, config.output ?? path.join(config.root, 'output/design'))}/`]) if (!text.split('\n').includes(entry)) text += `\n${entry}\n`;
-  writeFileSync(ignore, text);
-  refreshTypes(config);
-  return 0;
 }
 export function listSources(directory, sources = sourceDirectories({design:directory})) {
   return sources.flatMap(name => {
@@ -115,7 +129,7 @@ export function readGroups(directory, sources = sourceDirectories({design:direct
     return data.groups;
   } catch (error) {
     if (error.code === 'ENOENT') return [];
-    throw Error(`gallery.json: ${error.message}`);
+    throw new CliError('CONFIG_INVALID', `gallery.json: ${error.message}`, { cause: error });
   }
 }
 export function rejectLegacy(config, files) {
@@ -123,9 +137,7 @@ export function rejectLegacy(config, files) {
   files ??= directories.flatMap(base => existsSync(base) ? readdirSync(base).map(name => path.join(base, name)) : []);
   for (const file of files) {
     if (/\.svg$/i.test(file) && directories.includes(path.dirname(file))) {
-      const error = Error(`${relative(config, file)}: convert this SVG source to TSX; move artwork to design/art/`);
-      error.code = 'LEGACY_SVG';
-      throw error;
+      throw new CliError('LEGACY_SOURCE', `${relative(config, file)}: convert this SVG source to TSX; move artwork to design/art/`);
     }
   }
 }
@@ -141,7 +153,7 @@ export function selectSources(config, args = [], { write = true, additional = []
     if(path.isAbsolute(arg)) {
       const root=realpathSync(config.root),file=existsSync(arg)?realpathSync(arg):path.resolve(arg);
       const relative=path.relative(root,file);
-      if(relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw Error(`Source ${arg} is outside the project root; choose a source inside ${config.root}.`);
+      if(relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw new CliError('SOURCE_NOT_FOUND', `Source ${arg} is outside the project root; choose a source inside ${config.root}.`);
       const found=sources.find(source=>(existsSync(source)?realpathSync(source):path.resolve(source))===file);
       if(found)return found;
     }
@@ -149,12 +161,12 @@ export function selectSources(config, args = [], { write = true, additional = []
     let file = path.isAbsolute(arg) || fromRoot.startsWith(config.design + path.sep) ? fromRoot : path.resolve(config.design, arg);
     if (existsSync(file)) rejectLegacy(config, [file]);
     if (!file.endsWith('.tsx')) file += '.tsx';
-    if (!sources.includes(file)) throw Error(`Invalid source ${arg}; name a discovered .mmd file or a TSX file directly in ${directories.map(name => path.join(config.design, name) + '/').join(', ')}`);
+    if (!sources.includes(file)) throw new CliError('SOURCE_NOT_FOUND', `Invalid source ${arg}; name a discovered .mmd file or a TSX file directly in ${directories.map(name => path.join(config.design, name) + '/').join(', ')}`);
     return file;
   });
 }
 export const relative = (config, file) => path.relative(config.root, file).split(path.sep).join('/');
 export function loadTokens(config) {
   try { return parseTokens(readFileSync(path.join(config.design, 'tokens.css'), 'utf8')); }
-  catch (error) { throw Error(`${error.message}; fix design/tokens.css or run adg init`); }
+  catch (error) { throw new CliError('TOKENS_INVALID', `${error.message}; fix design/tokens.css or run adg init`, { cause: error }); }
 }

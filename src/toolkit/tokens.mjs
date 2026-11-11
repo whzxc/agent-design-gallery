@@ -1,23 +1,24 @@
+import { CliError } from '../cli-output.mjs';
 export function parseTokens(css) {
   const source = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const blocks = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
   if (blocks.length !== 2 || source.replace(/[^{}]+\{[^{}]*\}/g, '').trim() ||
       blocks[0][1].trim() !== ':root' || blocks[1][1].trim() !== ':root[data-theme="dark"]') {
-    throw new Error('tokens.css needs exactly :root and :root[data-theme="dark"] blocks; fix the token source');
+    throw new CliError('TOKENS_INVALID', 'tokens.css needs exactly :root and :root[data-theme="dark"] blocks; fix the token source');
   }
   const maps = blocks.map(([, , body]) => {
     const map = new Map();
     for (const line of body.split('\n').map(line => line.trim()).filter(Boolean)) {
       const match = line.match(/^(--[\w-]+)\s*:\s*([^;]+);$/);
-      if (!match || map.has(match[1])) throw new Error(`Invalid token declaration ${line}; put each unique token on its own line`);
+      if (!match || map.has(match[1])) throw new CliError('TOKENS_INVALID', `Invalid token declaration ${line}; put each unique token on its own line`);
       map.set(match[1], match[2].trim());
     }
     return map;
   });
   for (const key of ['--font-ui', '--font-mono', '--canvas', '--text']) {
-    if (!maps[0].has(key)) throw new Error(`tokens.css is missing ${key}; add it to :root`);
+    if (!maps[0].has(key)) throw new CliError('TOKENS_INVALID', `tokens.css is missing ${key}; add it to :root`);
   }
-  for (const key of maps[1].keys()) if (!maps[0].has(key)) throw new Error(`Dark token ${key} has no light value; add it to :root`);
+  for (const key of maps[1].keys()) if (!maps[0].has(key)) throw new CliError('TOKENS_INVALID', `Dark token ${key} has no light value; add it to :root`);
   return { light: maps[0], dark: maps[1] };
 }
 

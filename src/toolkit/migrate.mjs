@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync, readdirSync, renameSync, rmSyn
 import path from 'node:path';
 import { CONFIG_NAMES, LEGACY_CONFIG_NAMES, loadConfig } from './config.mjs';
 import { refreshTypes, relative } from './project.mjs';
+import { CliError, classifyError } from '../cli-output.mjs';
 
 function files(directory) {
   if (!existsSync(directory)) return [];
@@ -38,36 +39,47 @@ export async function migrate(project = process.cwd(), log = console.log) {
   const root = path.resolve(project);
   const oldConfigs = LEGACY_CONFIG_NAMES.filter(name => existsSync(path.join(root, name)));
   const newConfigs = CONFIG_NAMES.filter(name => existsSync(path.join(root, name)));
-  if (oldConfigs.length && newConfigs.length) throw Error(`Both old and new config names exist in ${root}; keep one configuration before running adg migrate.`);
-  for (const name of oldConfigs) {
-    const next = name.replace('sdg.', 'adg.');
-    renameSync(path.join(root, name), path.join(root, next));
-    log(`Renamed ${name} -> ${next}`);
-  }
-  const config = await loadConfig(root, { checkVersion: false });
-  if (config.root !== root) throw Error(`No project configuration in ${root}; run adg migrate from the project root.`);
-  const update = (file, next) => {
-    const original = readFileSync(file, 'utf8');
-    if (next === original) return;
-    writeFileSync(file, next);
-    log(`Updated ${relative(config, file)}`);
-  };
-  for (const file of files(config.design)) {
-    if (/\.[cm]?[jt]sx?$/.test(file)) update(file, rewriteImports(readFileSync(file, 'utf8')));
-    if (/^tsconfig(?:\.[^.]+)*\.json$/.test(path.basename(file))) {
-      update(file, readFileSync(file, 'utf8')
-        .replace(/(["'])sdg(?=["'/:])/g, '$1adg').replace(/\.sdg(?=[/\\])/g, '.adg'));
+  if (oldConfigs.length && newConfigs.length) throw new CliError('MIGRATION_CONFLICT', `Both old and new config names exist in ${root}; keep one configuration before running adg migrate.`, { context: { project: root } });
+  const data = { project: root, complete: false, changes: [] };
+  try {
+    for (const name of oldConfigs) {
+      const next = name.replace('sdg.', 'adg.');
+      renameSync(path.join(root, name), path.join(root, next));
+      data.changes.push({ action: 'renamed', path: path.join(root, next), from: path.join(root, name) });
+      log(`Renamed ${name} -> ${next}`);
     }
+    const config = await loadConfig(root, { checkVersion: false });
+    if (config.root !== root) throw new CliError('PROJECT_NOT_FOUND', `No project configuration in ${root}; run adg migrate from the project root.`);
+    const update = (file, next) => {
+      const original = readFileSync(file, 'utf8');
+      if (next === original) return;
+      writeFileSync(file, next);
+      data.changes.push({ action: 'updated', path: file, from: null });
+      log(`Updated ${relative(config, file)}`);
+    };
+    for (const file of files(config.design)) {
+      if (/\.[cm]?[jt]sx?$/.test(file)) update(file, rewriteImports(readFileSync(file, 'utf8')));
+      if (/^tsconfig(?:\.[^.]+)*\.json$/.test(path.basename(file))) {
+        update(file, readFileSync(file, 'utf8')
+          .replace(/(["'])sdg(?=["'/:])/g, '$1adg').replace(/\.sdg(?=[/\\])/g, '.adg'));
+      }
+    }
+    for (const file of files(root).filter(file => path.basename(file) === '.gitignore')) {
+      update(file, readFileSync(file, 'utf8').replace(/^(?!\s*#)(.*)$/gm, line => line.replace(/(^|\/)\.sdg(?=\/|\r?$)/g, '$1.adg')));
+    }
+    const oldGenerated = path.join(config.design, '.sdg');
+    if (existsSync(oldGenerated)) {
+      rmSync(oldGenerated, { recursive: true });
+      data.changes.push({ action: 'deleted', path: oldGenerated, from: null });
+      log(`Deleted ${relative(config, oldGenerated)}/`);
+    }
+    refreshTypes(config, data.changes);
+    log(`Regenerated ${relative(config, path.join(config.design, '.adg'))}/`);
+    data.complete = true;
+    return data;
+  } catch (error) {
+    if (!data.changes.length) throw error;
+    if (error instanceof CliError) { error.data = data; throw error; }
+    throw new CliError(classifyError(error).error.code, error.message, { cause: error, data });
   }
-  for (const file of files(root).filter(file => path.basename(file) === '.gitignore')) {
-    update(file, readFileSync(file, 'utf8').replace(/^(?!\s*#)(.*)$/gm, line => line.replace(/(^|\/)\.sdg(?=\/|\r?$)/g, '$1.adg')));
-  }
-  const oldGenerated = path.join(config.design, '.sdg');
-  if (existsSync(oldGenerated)) {
-    rmSync(oldGenerated, { recursive: true });
-    log(`Deleted ${relative(config, oldGenerated)}/`);
-  }
-  refreshTypes(config);
-  log(`Regenerated ${relative(config, path.join(config.design, '.adg'))}/`);
-  return 0;
 }

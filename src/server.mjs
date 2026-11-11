@@ -16,6 +16,7 @@ import os from "node:os";
 import { perfSpan } from './perf.mjs';
 
 import { createBuildStore } from './toolkit/build-store.mjs';
+import { CliError } from './cli-output.mjs';
 import { createViewerCache } from './viewer-cache.mjs';
 import { refreshTypes, archFiles, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
 import { loadConfig } from './toolkit/config.mjs';
@@ -48,7 +49,7 @@ export async function startServer({
     state = { ...state, ...JSON.parse(await readFile(statePath, "utf8")) };
   } catch (e) {
     if (e.code !== "ENOENT")
-      throw new Error(`Cannot read preferences: ${e.message}`);
+      throw new CliError(e instanceof SyntaxError ? 'STATE_INVALID' : 'IO_FAILED', `Cannot read preferences: ${e.message}`, { cause: e });
   }
   let root,
     tokenSource = null,
@@ -171,11 +172,11 @@ export async function startServer({
     let next;
     try { next = await realpath(path.resolve(input.replace(/^~(?=$|[\\/])/, os.homedir()))); }
     catch (error) {
-      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') throw new Error(`Directory not found: ${input}; choose an existing directory.`);
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') throw new CliError('DIRECTORY_NOT_FOUND', `Directory not found: ${input}; choose an existing directory.`, { cause: error });
       throw error;
     }
     if (!(await stat(next)).isDirectory())
-      throw new Error("Choose a directory containing SVG files.");
+      throw new CliError('DIRECTORY_NOT_FOUND', "Choose a directory containing SVG files.");
     const hasTokens = (await readdir(next)).includes(tokenFile);
     if (hasTokens && !readOnly) refreshTypes({design:next});
     const project = await loadConfig(next);
@@ -406,7 +407,7 @@ export async function startServer({
     if (/\.(tsx|mmd)$/.test(name)) {
       const built=base&&name.endsWith('.mmd')?await overlayBuild(name,base):await sourceBuild(name);
       const frames = onlyFrame ? built.frames.filter(frame => frame.name === onlyFrame) : built.frames;
-      if (!frames.length && onlyFrame) throw Error(`Frame ${onlyFrame} does not exist in ${name}.`);
+      if (!frames.length && onlyFrame) throw new CliError('FRAME_NOT_FOUND', `Frame ${onlyFrame} does not exist in ${name}.`);
       return {version:built.hash,imports:built.imports,dependencies:built.dependencies,
         body:JSON.stringify({format:'tsx',hash:built.hash,css:built.css,imports:built.imports,component:!onlyFrame && name.endsWith('.tsx') && !name.startsWith('surfaces/'),frames})};
     }
