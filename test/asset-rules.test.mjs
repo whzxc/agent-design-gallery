@@ -56,9 +56,9 @@ test('fresh init seeds a runnable downward composition and preserves it on rerun
     assert.ok(readFileSync(file,'utf8').split('\n').every(line=>line.length<=140));
   }
   assert.deepEqual(imports,['components/example.tsx','modules/example.tsx']);
-  assert.equal(await check(c,[],{'read-only':true},()=>{},line=>assert.fail(line)),0);
+  assert.equal((await check(c,[],{'read-only':true},()=>{},line=>assert.fail(line))).data.complete,true);
   assert.equal(existsSync(c.output),false);
-  assert.equal(await render(c,[],{scale:1}),0);
+  assert.equal((await render(c,[],{scale:1})).data.complete,true);
   for(const layer of layers)for(const theme of ['light','dark'])assert.ok(existsSync(path.join(c.output,layer,'example',`default-${theme}.png`)));
   const example=files[0],edited=readFileSync(example,'utf8')+'\n// Consumer edit.\n';writeFileSync(example,edited);
   const fixture=path.join(c.design,'fixtures/example.ts');writeFileSync(fixture,'consumer fixture');
@@ -73,7 +73,7 @@ test('init respects explicit names and avoids starter assets in existing librari
   assert.equal(readFileSync(path.join(root,'adg.config.mjs'),'utf8'),configuration);
   assert.deepEqual(listSources(c.design,c.sources).map(f=>path.relative(c.design,f)),['atoms/example.tsx','features/example.tsx','pages/example.tsx']);
   assert.equal(existsSync(path.join(c.design,'components')),false);
-  assert.equal(await check(c,[],{'read-only':true},()=>{},line=>assert.fail(line)),0);
+  assert.equal((await check(c,[],{'read-only':true},()=>{},line=>assert.fail(line))).data.complete,true);
   const existing=temporary(t);put(existing,'adg.config.mjs','export default {};');
   put(existing,'design/components/control.tsx',source);put(existing,'design/tokens.css',starterTokens);
   const old=await loadConfig(existing);init(old,()=>{});
@@ -103,17 +103,17 @@ test('read-only check reports resolved imports for all or selected files and opt
   put(root,'design/components/bad.tsx',bad);
   put(root,'design/modules/bad.tsx',`import {Part} from '../surfaces/index.tsx';import {Frame} from 'adg';export default()=> <Frame name="default"><Part/></Frame>;`);
   const c=await loadConfig(root),errors=[];
-  assert.equal(await check(c,[],{'read-only':true},()=>{},line=>errors.push(line)),1);
+  await assert.rejects(check(c,[],{'read-only':true},()=>{},line=>errors.push(line)), {code:'CHECK_FAILED'});
   assert.equal(errors.length,3);
   assert.ok(errors.some(line=>line.includes('design/components/bad.tsx: import modules/feature.tsx')));
   assert.ok(errors.some(line=>line.includes('design/modules/bad.tsx: import surfaces/index.tsx')));
-  const selected=[];assert.equal(await check(c,['components/bad'],{'read-only':true},()=>{},line=>selected.push(line)),1);
+  const selected=[];await assert.rejects(check(c,['components/bad'],{'read-only':true},()=>{},line=>selected.push(line)), {code:'CHECK_FAILED'});
   assert.equal(selected.length,2);
   assert.ok(selected.every(line=>line.startsWith('design/components/bad.tsx: import ')));
   c.check.importDirection=false;
-  assert.equal(await check(c,[],{'read-only':true},()=>{},line=>assert.fail(line)),0);
+  assert.equal((await check(c,[],{'read-only':true},()=>{},line=>assert.fail(line))).data.complete,true);
   put(root,'design/components/bad.tsx',bad.replace('<div>','<div class="text-[#ff0101]">'));
-  const paint=[];assert.equal(await check(c,['components/bad'],{'read-only':true},()=>{},line=>paint.push(line)),1);
+  const paint=[];await assert.rejects(check(c,['components/bad'],{'read-only':true},()=>{},line=>paint.push(line)), {code:'CHECK_FAILED'});
   assert.equal(paint.length,2);assert.ok(paint.every(line=>line.includes('Color')));
   assert.equal(existsSync(path.join(c.design,'.adg')),false);assert.equal(existsSync(c.output),false);
   assert.equal(parseCli(['check','--read-only']).values['read-only'],true);

@@ -64,20 +64,26 @@ test('each architecture check failure has an actionable problem and original lin
   ];
   for(const [text,expected] of cases) {
     await writeFile(file,text);const problems=[];
-    assert.equal(await check({...c,check:{archMaxEdges:1}},[asset],{'read-only':true},()=>{},p=>problems.push(p)),1);
+    await assert.rejects(check({...c,check:{archMaxEdges:1}},[asset],{'read-only':true},()=>{},p=>problems.push(p)), error => {
+      assert.equal(error.code,'CHECK_FAILED');assert.equal(error.data.complete,true);
+      assert.ok(error.data.findings.every(finding=>finding.code.startsWith('ARCH_') && finding.frame===null && finding.theme===null));
+      assert.equal(error.data.summary.evaluations,0);
+      if(text.startsWith('%% heading'))assert.equal(error.data.findings.find(finding=>finding.code==='ARCH_SYNTAX').line,3);
+      return true;
+    });
     assert.ok(problems.some(p=>expected.test(p)),problems.join('\n'));
     assert.ok(problems.every(p=>p.startsWith(asset+': ')));
   }
   assert.deepEqual(inspectArch('flowchart LR\nA["style is a label; classDef too"] --> B').problems,[]);
-  const bad=sidecar('---\nowner: []\n---\nReview.');assert.match(bad.problems.join('\n'),/Invalid sidecar frontmatter key/);
+  const bad=sidecar('---\nowner: []\n---\nReview.');assert.match(bad.problems.map(p=>p.message).join('\n'),/Invalid sidecar frontmatter key/);
   await writeFile(file,'flowchart LR\nA --> B');
   await writeFile(note,'---\nowners:\n  - missing/*.rs\ninvalid: value\n---\nReview.');
-  const problems=[];assert.equal(await check(c,[asset],{'read-only':true},()=>{},p=>problems.push(p)),1);
+  const problems=[];await assert.rejects(check(c,[asset],{'read-only':true},()=>{},p=>problems.push(p)), {code:'CHECK_FAILED'});
   assert.ok(problems.some(p=>p.includes('matches no file')));
   assert.ok(problems.some(p=>p.includes('Invalid sidecar frontmatter key')));
   assert.ok(sidecar('---\nowners:\n  - ../outside\n---\n').problems.length);
   assert.ok(sidecar('---\nstatus: Draft').problems.length);
-  assert.deepEqual(ownerProblems(c,sidecar(await readFile(path.join(c.root,asset.replace('.mmd','.md')),'utf8'))),['Owners entry missing/*.rs matches no file']);
+  assert.deepEqual(ownerProblems(c,sidecar(await readFile(path.join(c.root,asset.replace('.mmd','.md')),'utf8'))).map(p=>p.message),['Owners entry missing/*.rs matches no file']);
 });
 
 test('arch build carries tokens, semantics, legend, notes, font fit, and overflow checking in both themes',async t=>{
@@ -96,10 +102,10 @@ test('arch build carries tokens, semantics, legend, notes, font fit, and overflo
     colors.push(await page.locator('.pele-node.progress > rect').evaluate(el=>getComputedStyle(el).fill));
     assert.equal(await page.locator('.pele-node.experimental > rect').evaluate(el=>getComputedStyle(el).strokeDasharray),'6px, 4px');
     await page.locator('.pele-node text').first().evaluate(el=>el.textContent='A very long replacement label that overflows the node shape');
-    assert.ok((await page.evaluate(inspectArchLabels)).some(p=>p.includes('Label overflows node')));
+    assert.ok((await page.evaluate(inspectArchLabels)).some(p=>p.message.includes('Label overflows node')));
   }
   assert.notEqual(colors[0],colors[1]);
-  const problems=[];assert.equal(await check(c,[asset],{'read-only':true},()=>{},p=>problems.push(p)),0,problems.join('\n'));
+  const problems=[];assert.equal((await check(c,[asset],{'read-only':true},()=>{},p=>problems.push(p))).data.complete,true,problems.join('\n'));
   const raw=await readFile(path.join(c.root,asset),'utf8');
   await writeFile(path.join(c.root,asset),raw.replace(/\n  class[^\n]+/g,''));
   assert.doesNotMatch((await buildSource(c,path.join(c.root,asset),{write:false})).frames[0].html,/arch-legend/);
@@ -126,7 +132,7 @@ test('arch worker cache hashes optional sidecars, tokens and source bytes across
 test('CLI renders one arch frame per theme, with root-relative paths and isolated captures',async t=>{
   const c=await fixture(t),cli=new URL('../src/cli.mjs',import.meta.url).pathname;
   const {stdout}=await exec(process.execPath,[cli,'render',asset,'--json','--scale=1','--out-dir=output/png'],{cwd:c.root});
-  const captures=JSON.parse(stdout);
+  const result=JSON.parse(stdout);assert.equal(result.ok,true);const captures=result.data.captures;
   assert.deepEqual(captures.map(c=>[c.source,c.frame,c.theme]),[[asset,'default','light'],[asset,'default','dark']]);
   for(const capture of captures) {
     const bytes=await readFile(capture.path);assert.equal(bytes.subarray(1,4).toString(),'PNG');
@@ -192,7 +198,7 @@ test('class diagrams keep declarations, methods and relations out of the semanti
   const built=await buildSource(c,path.join(c.root,asset),{write:false});
   assert.match(built.frames[0].html,/Duck/);assert.match(built.frames[0].html,/swim/);
   const problems=[];
-  assert.equal(await check(c,[asset],{'read-only':true},()=>{},p=>problems.push(p)),0,problems.join('\n'));
+  assert.equal((await check(c,[asset],{'read-only':true},()=>{},p=>problems.push(p))).data.complete,true,problems.join('\n'));
   assert.deepEqual(inspectArch('flowchart LR\nA:::progress --> B\nclass B done').classes,['progress','done']);
   assert.deepEqual(inspectArch('flowchart LR\nA[host:::port] --> B').problems,[]);
   assert.deepEqual(inspectArch('stateDiagram-v2\nA:::progress --> B').classes,['progress']);
@@ -204,7 +210,7 @@ test('state edge budgets include transitions in composite and nested composite s
   const checked=inspectArch(source,2);
   assert.equal(checked.model.relations.length,1);
   assert.equal(checked.model.graph.edges.length,3);
-  assert.deepEqual(checked.problems,['3 edges/messages exceeds check.archMaxEdges (2)']);
+  assert.deepEqual(checked.problems.map(p=>p.message),['3 edges/messages exceeds check.archMaxEdges (2)']);
   assert.deepEqual(inspectArch(source,3).problems,[]);
 });
 
@@ -215,16 +221,16 @@ test('paint detection inspects config keys and leaves titles and quoted values a
     '%%{init: {"title":"Background work", "note":"theme: dark, stroke: red"}}%%\nflowchart LR\nA --> B',
   ]) assert.deepEqual(inspectArch(source).problems,[]);
   for(const config of ['"theme":"dark"',"'themeVariables': {'primaryColor':'red'}",'background: "white"']) {
-    assert.ok(inspectArch(`%%{init: {${config}}}%%\nflowchart LR\nA --> B`).problems.some(p=>p.startsWith('Painting directive/frontmatter key')));
+    assert.ok(inspectArch(`%%{init: {${config}}}%%\nflowchart LR\nA --> B`).problems.some(p=>p.message.startsWith('Painting directive/frontmatter key')));
   }
-  assert.ok(inspectArch('---\nconfig:\n  themeVariables:\n    primaryColor: red\n---\nflowchart LR\nA --> B').problems.some(p=>p.includes('key themeVariables')));
+  assert.ok(inspectArch('---\nconfig:\n  themeVariables:\n    primaryColor: red\n---\nflowchart LR\nA --> B').problems.some(p=>p.message.includes('key themeVariables')));
 });
 
 test('check and render each share their existing browser with architecture measurement',async t=>{
   const c=await fixture(t),{chromium}=await import('playwright');
   const original=chromium.launch.bind(chromium);let launches=0;
   t.mock.method(chromium,'launch',(...args)=>{launches++;return original(...args);});
-  assert.equal(await check(c,[asset],{'read-only':true},()=>{},()=>{}),0);
+  assert.equal((await check(c,[asset],{'read-only':true},()=>{},()=>{})).data.complete,true);
   assert.equal(launches,1);
   await render(c,[asset],{theme:'light',scale:1,'out-dir':'output/shared-browser'});
   assert.equal(launches,2);

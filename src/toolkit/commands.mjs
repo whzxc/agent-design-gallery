@@ -1,14 +1,16 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { availableParallelism } from 'node:os';
 import { buildSource } from './build.mjs';
 import { selectSources, relative, loadTokens, sourceDirectories, archFiles } from './project.mjs';
 import { importDirectionViolations } from './asset-rules.mjs';
-import { launch, loadFrame } from './browser.mjs';
-import { CliError } from '../cli-output.mjs';
+import { launch, loadFrame, browserTask } from './browser.mjs';
+import { CliError, classifyError } from '../cli-output.mjs';
+import { commandFailure, cleanup, emptySelection } from './results.mjs';
 export function inspectFrame(tokenNames) {
-  const frame = document.querySelector('[data-adg-frame]'), box = frame.getBoundingClientRect(), problems = new Set();
-  if (frame.children.length !== 1 || [...frame.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) problems.add('Frame needs exactly one root element');
+  const frame = document.querySelector('[data-adg-frame]'), box = frame.getBoundingClientRect(), problems = new Map();
+  const add = (code, message) => problems.set(message, {code, message, line:null, column:null});
+  if (frame.children.length !== 1 || [...frame.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) add('FRAME_ROOT_INVALID', 'Frame needs exactly one root element');
   const sample = document.createElement('i'); document.body.append(sample);
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
   const context = canvas.getContext('2d', { colorSpace: 'srgb', colorType: 'float16', willReadFrequently: true });
@@ -74,16 +76,16 @@ export function inspectFrame(tokenNames) {
   const lines = [], covers = [];
   for (const el of [frame, ...frame.querySelectorAll('*')]) {
     const s = style(el), r = rectFor(el);
-    if (['STYLE','SCRIPT'].includes(el.tagName.toUpperCase())) problems.add(`Forbidden <${el.tagName.toLowerCase()}> in output`);
-    for (const attr of el.attributes) if (/^on/i.test(attr.name) || attr.name === 'classname') problems.add(`Forbidden attribute ${attr.name} in output`);
+    if (['STYLE','SCRIPT'].includes(el.tagName.toUpperCase())) add('MARKUP_FORBIDDEN', `Forbidden <${el.tagName.toLowerCase()}> in output`);
+    for (const attr of el.attributes) if (/^on/i.test(attr.name) || attr.name === 'classname') add('MARKUP_FORBIDDEN', `Forbidden attribute ${attr.name} in output`);
     if (!el.closest('[data-free]')) {
       const authored = (el.getAttribute('class') ?? '') + ' ' + (el.getAttribute('style') ?? '');
-      if ([...authored.matchAll(/(-?(?:\d*\.)?\d+)px\b/g)].some(m => !Number.isInteger(Number(m[1])))) problems.add('Fractional pixel length outside data-free');
-      for (const [,property] of (el.getAttribute('style') ?? '').matchAll(/(?:^|;)\s*([-\w]+)\s*:/g)) if (!['width','height'].includes(property) && !property.startsWith('--')) problems.add(`Style ${property} outside data-free; use layout classes`);
+      if ([...authored.matchAll(/(-?(?:\d*\.)?\d+)px\b/g)].some(m => !Number.isInteger(Number(m[1])))) add('FRACTIONAL_LENGTH', 'Fractional pixel length outside data-free');
+      for (const [,property] of (el.getAttribute('style') ?? '').matchAll(/(?:^|;)\s*([-\w]+)\s*:/g)) if (!['width','height'].includes(property) && !property.startsWith('--')) add('STYLE_FORBIDDEN', `Style ${property} outside data-free; use layout classes`);
     }
     if (s.display === 'none' || s.visibility === 'hidden' || r.width === 0 || r.height === 0) continue;
     const visibleBox=clipped(r,el.parentElement);
-    if (nonempty(visibleBox) && outside(visibleBox)) problems.add('Content overflows the frame');
+    if (nonempty(visibleBox) && outside(visibleBox)) add('FRAME_OVERFLOW', 'Content overflows the frame');
     // A border-box background has the same rounded hit shape as its element.
     // Other background clips/masks cannot establish rectangular opaque coverage.
     if (el instanceof HTMLElement && s.backgroundClip==='border-box' && opaqueColor(s.backgroundColor) && opaqueEffects(el)) {
@@ -102,7 +104,7 @@ export function inspectFrame(tokenNames) {
         const matches = colors.some(color => alpha < 1
           ? paint.slice(0, 3).every((channel, i) => Math.abs(channel - color[i]) <= 2)
           : paint.every((channel, i) => channel === color[i]));
-        if (!matches) problems.add(`Color ${value} matches no token`);
+        if (!matches) add('TOKEN_COLOR_MISMATCH', `Color ${value} matches no token`);
       }
     }
     for (const node of el.childNodes) {
@@ -113,9 +115,9 @@ export function inspectFrame(tokenNames) {
         const label = node.textContent.trim().replace(/\s+/g, ' ');
         const visible=clipped(rect,el);
         if (!nonempty(visible)) continue;
-        if (outside(visible)) problems.add(`Text leaves frame: ${label}`);
+        if (outside(visible)) add('TEXT_OUTSIDE_FRAME', `Text leaves frame: ${label}`);
         if (visible.left < r.left - 1 || visible.right > r.right + 1 ||
-            (visible.top+visible.bottom)/2 < r.top - 1 || (visible.top+visible.bottom)/2 > r.bottom + 1) problems.add(`Text overflows its box: ${label}`);
+            (visible.top+visible.bottom)/2 < r.top - 1 || (visible.top+visible.bottom)/2 > r.bottom + 1) add('TEXT_OVERFLOW', `Text overflows its box: ${label}`);
         const inFrame=intersect(visible,box);
         if (nonempty(inFrame)) lines.push({rect:inFrame,label,el});
       }
@@ -164,7 +166,7 @@ export function inspectFrame(tokenNames) {
       if (a.el===b.el) continue;
       const overlap=intersect(a.rect,b.rect);
       if (overlap.right-overlap.left>1 && overlap.bottom-overlap.top>2 &&
-          !occluded(a.el,overlap) && !occluded(b.el,overlap)) problems.add(`Text overlaps: ${a.label} / ${b.label}`);
+          !occluded(a.el,overlap) && !occluded(b.el,overlap)) add('TEXT_OVERLAP', `Text overlaps: ${a.label} / ${b.label}`);
     }
   } finally {
     for (const [el,authored] of restored) {
@@ -175,100 +177,169 @@ export function inspectFrame(tokenNames) {
     }
     for (const [el,authored] of inert) el.setAttribute('inert',authored);
   }
-  return [...problems];
+  return [...problems.values()];
 }
-export async function check(config, args = [], options = {}, log = console.log, error = console.error) {
-  const write=!options['read-only'];
-  const files = selectSources(config,args,{write}), tokens = loadTokens(config), problems = new Set(), graph={};
-  const arch = files.some(file=>file.endsWith('.mmd')) ? await import('./arch.mjs') : null;
-  const browser = await launch();
+export async function check(config, args = [], options = {}, log = console.log, error = console.error, { launchBrowser = launch } = {}) {
+  const write = !options['read-only'];
+  /** @type {import('./results.mjs').CheckData} */
+  const data = { project: config.root, readOnly: !write, complete: false, sources: [], summary: { sources: 0, frames: 0, evaluations: 0, problems: 0 }, findings: [] };
+  const warnings = [], humanProblems = new Set(), findingKeys = new Set(), graph = {};
+  let browser, primary;
+  const add = (problem, file, frame = null, theme = null, source = relative(config, file)) => {
+    const finding = { ...problem, source, frame, theme };
+    const key = JSON.stringify(finding);
+    if (!findingKeys.has(key)) { findingKeys.add(key); data.findings.push(finding); }
+    humanProblems.add(`${relative(config, file)}: ${frame === null ? '' : `${frame}: ${theme}: `}${problem.message}`);
+    data.summary.problems = data.findings.length;
+  };
+  const failed = cause => {
+    const failure = cause instanceof CliError ? cause : new CliError('SOURCE_BUILD_FAILED', cause.message, { cause });
+    if (!primary) primary = failure;
+    else warnings.push(classifyError(failure).error);
+  };
   try {
-    const page = await browser.newPage();
+    const files = selectSources(config, args, { write });
+    data.sources = files.map(file => relative(config, file));
+    data.summary.sources = files.length;
+    const tokens = files.length ? loadTokens(config) : null;
+    const arch = files.some(file => file.endsWith('.mmd')) ? await import('./arch.mjs') : null;
+    let page;
     for (const file of files) {
-      const architecture=file.endsWith('.mmd');
-      if(architecture) {
-        const {readFileSync,existsSync}=await import('node:fs');
-        const text=readFileSync(file,'utf8'), side=file.replace(/\.mmd$/,'.md');
-        const metadata=arch.sidecar(existsSync(side)?readFileSync(side,'utf8'):'');
-        for(const problem of [...arch.inspectArch(text,config.check?.archMaxEdges??30).problems,...metadata.problems,...arch.ownerProblems(config,metadata)]) problems.add(`${relative(config,file)}: ${problem}`);
-        if([...problems].some(problem=>problem.startsWith(relative(config,file)+':'))) continue;
+      const architecture = file.endsWith('.mmd');
+      if (architecture) {
+        const side = file.replace(/\.mmd$/, '.md');
+        const metadata = arch.sidecar(existsSync(side) ? readFileSync(side, 'utf8') : '');
+        const validation = arch.inspectArch(readFileSync(file, 'utf8'), config.check?.archMaxEdges ?? 30).problems;
+        const sidecarProblems = [...metadata.problems, ...arch.ownerProblems(config, metadata)];
+        for (const problem of validation) add(problem, file);
+        for (const problem of sidecarProblems) add(problem, file, null, null, relative(config, side));
+        if (validation.length || sidecarProblems.length) continue;
       }
       let built;
-      try { built = await buildSource(config,file,{allowLegacy:false,write,browser}); }
-      catch(e) {
-        const legacy = e.errors?.find(error => error.detail?.code === 'LEGACY_SOURCE');
+      try {
+        // Static architecture rejection is a completed rule evaluation and needs no browser.
+        browser ??= await launchBrowser();
+        built = await buildSource(config, file, { allowLegacy: false, write, browser });
+      } catch (cause) {
+        const legacy = cause.errors?.find(item => item.detail?.code === 'LEGACY_SOURCE');
         if (legacy) throw legacy.detail;
-        for(const problem of e.message.split('\n')) problems.add(`${relative(config,file)}: ${architecture?'':'-: '}${problem.replace(/\s+/g,' ')}`); continue;
+        if (['PLAYWRIGHT_UNAVAILABLE', 'CHROMIUM_UNAVAILABLE', 'BROWSER_FAILED', 'LEGACY_SOURCE'].includes(cause.code)) throw cause;
+        failed(cause);
+        for (const message of cause.message.split('\n')) humanProblems.add(`${relative(config, file)}: ${architecture ? '' : '-: '}${message.replace(/\s+/g, ' ')}`);
+        continue;
       }
-      graph[path.relative(config.design,file).split(path.sep).join('/')]={uses:built.imports};
-      for (const frame of built.frames) for (const theme of ['light','dark']) {
+      data.summary.frames += built.frames.length;
+      graph[path.relative(config.design, file).split(path.sep).join('/')] = { uses: built.imports };
+      for (const frame of built.frames) for (const theme of ['light', 'dark']) {
         try {
-          await loadFrame(page,frame,theme);
-          for (const problem of await page.evaluate(architecture?arch.inspectArchLabels:inspectFrame,architecture?undefined:[...tokens.light.keys()])) problems.add(`${relative(config,file)}: ${frame.name}: ${theme}: ${problem}`);
-        } catch(e) { problems.add(`${relative(config,file)}: ${frame.name}: ${theme}: ${e.message.replace(/\s+/g,' ')}`); }
-      }
-    }
-  } finally { await browser.close(); }
-  if (config.check?.importDirection!==false) for (const {source,target,from,to} of importDirectionViolations(graph,sourceDirectories(config))) {
-    problems.add(`${relative(config,path.join(config.design,source))}: import ${target} violates import direction (${from} -> ${to}); import from the same or a lower layer in sources`);
-  }
-  for (const problem of problems) error(problem);
-  log(`Design check ${problems.size ? 'failed' : 'passed'} for ${files.length} sources${problems.size ? `: ${problems.size} problems` : ''}.`);
-  return problems.size ? 1 : 0;
-}
-export async function render(config, args = [], options = {}) {
-  const scale = Number(options.scale ?? 2);
-  if (!(Number.isFinite(scale) && scale > 0)) throw Error('Invalid --scale; use a positive number');
-  const themeOption = options.theme ?? 'both';
-  if (!['both', 'light', 'dark'].includes(themeOption)) throw Error('Choose --theme=both, light, or dark.');
-  if (options['out-dir'] === '') throw Error('Set --out-dir to a directory.');
-  const output = options['out-dir'] ? path.resolve(config.root, options['out-dir']) : config.output;
-  const themes = themeOption === 'both' ? ['light', 'dark'] : [themeOption];
-  let base,deleted=[],additional=[];
-  if(options.base!==undefined && (!args.length || args.some(arg=>arg.endsWith('.mmd')))) {
-    const git=await import('./arch-git.mjs');
-    base=await git.resolveBase(config,options.base);
-    additional=await git.baseArchFiles(config,base);
-  }
-  const selected=selectSources(config,args,{additional});
-  const {existsSync}=await import('node:fs');
-  const currentArchitecture=base?new Set(archFiles(config.arch)):null;
-  const files=selected.filter(file=>{if(!existsSync(file)||(base&&file.endsWith('.mmd')&&!currentArchitecture.has(file))){deleted.push(relative(config,file));return false;}return true;});
-  const browser = base && !files.length ? null : await launch();
-  try {
-    const captures = [];
-    for (const file of files) {
-      const built = base&&file.endsWith('.mmd') ? await (await import('./arch-overlay.mjs')).buildOverlay(config,file,{base,browser}) : await buildSource(config,file,{allowLegacy:false,browser});
-      for (const frame of built.frames.filter(f => !options.frame || f.name === options.frame)) {
-        for (const theme of themes) {
-          const source = file.endsWith('.mmd') ? relative(config,file) : path.relative(config.design, file);
-          const target = path.join(output, source.replace(/\.(?:tsx|mmd)$/, ''), `${encodeURIComponent(frame.name)}-${theme}.png`);
-          captures.push({source,frame,theme,target});
+          page ??= await browserTask(browser, () => browser.newPage());
+          await loadFrame(page, frame, theme);
+          const findings = await browserTask(browser, () => page.evaluate(architecture ? arch.inspectArchLabels : inspectFrame, architecture ? undefined : [...tokens.light.keys()]));
+          for (const finding of findings) add(finding, file, frame.name, theme);
+          data.summary.evaluations++;
+        } catch (cause) {
+          failed(cause);
+          humanProblems.add(`${relative(config, file)}: ${frame.name}: ${theme}: ${cause.message.replace(/\s+/g, ' ')}`);
         }
       }
     }
-    if (options.frame && !captures.length && !deleted.length) throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${options.frame}; choose a declared frame`);
+    await cleanup(() => browser?.close(), primary);
+    browser = null;
+    if (config.check?.importDirection !== false) for (const { source, target, from, to } of importDirectionViolations(graph, sourceDirectories(config))) {
+      add({ code: 'IMPORT_DIRECTION', message: `import ${target} violates import direction (${from} -> ${to}); import from the same or a lower layer in sources`, line: null, column: null }, path.join(config.design, source));
+    }
+    for (const problem of humanProblems) error(problem);
+    const message = `Design check ${humanProblems.size ? 'failed' : 'passed'} for ${files.length} sources${humanProblems.size ? `: ${humanProblems.size} problems` : ''}.`;
+    log(message);
+    if (!files.length) emptySelection(warnings);
+    if (primary) { primary.humanReported = true; throw primary; }
+    data.complete = true;
+    if (data.findings.length) throw new CliError('CHECK_FAILED', message, { data, warnings, humanReported: true });
+    return { data, warnings };
+  } catch (cause) {
+    primary = commandFailure(cause, data, warnings);
+    throw primary;
+  } finally { if (browser) await cleanup(() => browser.close(), primary); }
+}
+
+export async function render(config, args = [], options = {}, log = console.log, { launchBrowser = launch } = {}) {
+  const output = options['out-dir'] ? path.resolve(config.root, options['out-dir']) : config.output;
+  /** @type {import('./results.mjs').RenderData} */
+  const data = { project: config.root, outputDirectory: output, complete: false, base: null, captures: [], deleted: [] };
+  const warnings = [], completed = [], failures = [];
+  let browser, primary;
+  try {
+    const scale = Number(options.scale ?? 2);
+    if (!(Number.isFinite(scale) && scale > 0)) throw new CliError('USAGE_INVALID', 'Invalid --scale; use a positive number');
+    const themeOption = options.theme ?? 'both';
+    if (!['both', 'light', 'dark'].includes(themeOption)) throw new CliError('USAGE_INVALID', 'Choose --theme=both, light, or dark.');
+    if (options['out-dir'] === '') throw new CliError('USAGE_INVALID', 'Set --out-dir to a directory.');
+    const themes = themeOption === 'both' ? ['light', 'dark'] : [themeOption];
+    let base, additional = [];
+    if (options.base !== undefined && (!args.length || args.some(arg => arg.endsWith('.mmd')))) {
+      const git = await import('./arch-git.mjs');
+      base = await git.resolveBase(config, options.base);
+      additional = await git.baseArchFiles(config, base);
+      data.base = { rev: base.rev, sha: base.sha };
+    } else if (options.base !== undefined) warnings.push({ code: 'USAGE_INVALID', message: '--base applies only to architecture sources.', next: [] });
+    const selected = selectSources(config, args, { additional });
+    const currentArchitecture = base ? new Set(archFiles(config.arch)) : null;
+    const files = selected.filter(file => {
+      if (!existsSync(file) || (base && file.endsWith('.mmd') && !currentArchitecture.has(file))) { data.deleted.push(relative(config, file)); return false; }
+      return true;
+    });
+    if (!selected.length) emptySelection(warnings);
+    if (files.length) browser = await launchBrowser();
+    const captures = [];
+    for (const file of files) {
+      const built = base && file.endsWith('.mmd') ? await (await import('./arch-overlay.mjs')).buildOverlay(config, file, { base, browser }) : await buildSource(config, file, { allowLegacy: false, browser });
+      for (const frame of built.frames.filter(frame => !options.frame || frame.name === options.frame)) for (const theme of themes) {
+        const outputSource = file.endsWith('.mmd') ? relative(config, file) : path.relative(config.design, file);
+        const target = path.join(output, outputSource.replace(/\.(?:tsx|mmd)$/, ''), `${encodeURIComponent(frame.name)}-${theme}.png`);
+        captures.push({ source: relative(config, file), frame, theme, target });
+      }
+    }
+    if (options.frame && !captures.length && !data.deleted.length) throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${options.frame}; choose a declared frame`);
     let next = 0;
-    const workers = await Promise.allSettled(Array.from({length:Math.min(4,availableParallelism(),captures.length)},async () => {
+    await Promise.allSettled(Array.from({ length: Math.min(4, availableParallelism(), captures.length) }, async () => {
       while (next < captures.length) {
-        const {frame,theme,target} = captures[next++];
-        // Chromium reuses image resampling state across setContent calls.
-        // A fresh page/context per capture keeps PNG bytes independent of history.
-        const page = await browser.newPage({deviceScaleFactor:scale});
+        const index = next++, { source, frame, theme, target } = captures[index];
+        let page, failure;
         try {
-          await loadFrame(page,frame,theme);
-          mkdirSync(path.dirname(target),{recursive:true});
-          await page.locator('[data-adg-frame]').screenshot({path:target});
-        } finally { await page.close(); }
+          page = await browserTask(browser, () => browser.newPage({ deviceScaleFactor: scale }));
+          await loadFrame(page, frame, theme);
+          mkdirSync(path.dirname(target), { recursive: true });
+          const { box, png } = await browserTask(browser, async () => {
+            const element = page.locator('[data-adg-frame]');
+            const box = await element.boundingBox();
+            if (!box) throw Error('Frame has no visible bounds.');
+            return { box, png: await element.screenshot({ path: target }) };
+          });
+          completed[index] = { source, frame: frame.name, theme, path: target, scale, width: box.width, height: box.height, pixelWidth: png.readUInt32BE(16), pixelHeight: png.readUInt32BE(20) };
+        } catch (cause) {
+          failure = commandFailure(cause, data, warnings);
+          failures.push({ index, failure });
+          throw failure;
+        } finally {
+          if (page) try { await cleanup(() => page.close(), failure); }
+          catch (cause) { failures.push({ index, failure: commandFailure(cause, data, warnings) }); throw cause; }
+        }
       }
     }));
-    const failed = workers.find(worker => worker.status === 'rejected');
-    if (failed) throw failed.reason;
-    if (options.json) {
-      const output=captures.map(({source,frame,theme,target})=>({source:source.split(path.sep).join('/'),frame:frame.name,theme,path:target}));
-      console.log(JSON.stringify(base?{base:{rev:base.rev,sha:base.sha},captures:output,deleted}:output));
+    data.captures = completed.filter(Boolean);
+    failures.sort((a, b) => a.index - b.index);
+    if (failures.length) {
+      for (const { failure } of failures.slice(1)) warnings.push(classifyError(failure).error);
+      throw failures[0].failure;
     }
-    else for (const {target} of captures) console.log(relative(config,target));
-  } finally { await browser?.close(); }
-  return 0;
+    if (!options.json) for (const capture of data.captures) log(relative(config, capture.path));
+    await cleanup(() => browser?.close(), null);
+    browser = null;
+    data.complete = true;
+    return { data, warnings };
+  } catch (cause) {
+    data.captures = completed.filter(Boolean);
+    primary = commandFailure(cause, data, warnings);
+    throw primary;
+  } finally { if (browser) await cleanup(() => browser.close(), primary); }
 }

@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadTokens, refreshTypes, rejectLegacy, relative, isSourcePath, sourceDirectories } from './project.mjs';
 import { themeCss, parseTokens } from './tokens.mjs';
 import { escape } from './runtime.mjs';
-import { CliError } from '../cli-output.mjs';
+import { CliError, classifyError } from '../cli-output.mjs';
 const require = createRequire(import.meta.url);
 const runtime = fileURLToPath(new URL('./runtime.mjs', import.meta.url));
 const tailwind = path.dirname(require.resolve('tailwindcss/package.json'));
@@ -66,7 +66,15 @@ export function validateFrame(frame) {
     if (!c || typeof c !== 'object' || ['region','selector','page'].filter(k => c[k] !== undefined).length !== 1 || (c.page !== undefined && c.page !== true) || ['region','selector'].some(k => c[k] !== undefined && (typeof c[k] !== 'string' || !c[k].trim())) || (c.viewport !== undefined && !/^[1-9]\d*x[1-9]\d*$/.test(c.viewport)) || (c.origin !== undefined && (!c.page || !/^\d+(?:\.\d+)? \d+(?:\.\d+)?$/.test(c.origin))) || (c.clicks !== undefined && (!Array.isArray(c.clicks) || c.clicks.some(v => typeof v !== 'string' || !v)))) throw Error('Invalid capture; use region, selector or page with viewport, origin and clicks');
   }
 }
-export async function buildSource(config, file, { write = true, allowLegacy = true, snapshot, browser } = {}) {
+export async function buildSource(config, file, options = {}) {
+  try { return await buildDesignSource(config, file, options); }
+  catch (error) {
+    if (error instanceof CliError) throw error;
+    const code = classifyError(error).error.code;
+    throw new CliError(code === 'INTERNAL_ERROR' ? 'SOURCE_BUILD_FAILED' : code, error.message, { cause: error });
+  }
+}
+async function buildDesignSource(config, file, { write = true, allowLegacy = true, snapshot, browser } = {}) {
   if (file.endsWith('.mmd')) return (await import('./arch.mjs')).buildArch(config,file,{snapshot,browser});
   if (write) refreshTypes(config);
   const read = (name, encoding) => {

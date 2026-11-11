@@ -206,7 +206,7 @@ export async function buildOverlay(config,file,{base,browser,snapshot}={}) {
   const old=await readBase(base,file),bytes=readFileSync(file);snapshot.set(file,bytes);
   const text=bytes.toString('utf8');
   const checked=inspectArch(text,Infinity);
-  if(checked.problems.length)throw Error(checked.problems.join('\n'));
+  if(checked.problems.length)throw Error(checked.problems.map(problem=>problem.message).join('\n'));
   const overlay=overlayModels(checked.model,old.text===null?null:parse(old.text));
   const built=await buildArch(config,file,{model:overlay.model,browser,snapshot});
   const frame=built.frames[0],used=new Set(checked.classes);

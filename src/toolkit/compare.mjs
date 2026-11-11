@@ -7,7 +7,8 @@ import { matchTexts, textDelta } from './text.mjs';
 import { selectSources, relative } from './project.mjs';
 import { buildSource } from './build.mjs';
 import { viewport } from './config.mjs';
-import { CliError } from '../cli-output.mjs';
+import { CliError, classifyError } from '../cli-output.mjs';
+import { commandFailure, cleanup, emptySelection } from './results.mjs';
 
 export function compareReport(asset, frame, fixture, design, implementation) {
   const { pairs, missing, extra } = matchTexts(design.texts, implementation.texts);
@@ -46,58 +47,63 @@ async function overlay(page, target) {
   writeFileSync(path.join(target, 'overlay.png'), Buffer.from(data, 'base64'));
 }
 const safeName = value => encodeURIComponent(value).replace(/\./g, '%2E');
-async function settle(read) {
-  const started = performance.now();
+export async function settle(read, { now: monotonicNow = () => performance.now(), sleep = delay } = {}) {
+  const started = monotonicNow();
   let previous, changed = started;
   for (;;) {
     const implementation = await read();
     const state = JSON.stringify({ box: implementation.box, texts: implementation.texts.map(({ text, x, y, width, height }) => ({ text, x, y, width, height })) });
-    const now = performance.now();
+    const now = monotonicNow();
     if (state !== previous) { previous = state; changed = now; }
     if (now - changed >= 300) return { implementation, settled: true };
     if (now - started >= 5000) return { implementation, settled: false };
-    await delay(Math.min(50, 5000 - (now - started)));
+    await sleep(Math.min(50, 5000 - (now - started)));
   }
 }
-export async function compare(config, args, options) {
-  if (options.all) return compareAll(config);
-  const file = selectSources(config, args)[0], adapter = config.compare;
-  if (!adapter.fixture) throw new Error('Compare needs compare.fixture(name); add it to adg.config.mjs');
-  if ([options.region,options.selector,options.page].filter(Boolean).length > 1) throw Error('Choose --region, --selector or --page');
-  const frame = options.frame;
-  const built = await buildSource(config,file,{allowLegacy:false}), definition = built.frames.find(f=>f.name===frame);
-  if (!definition) throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${frame}; choose a declared frame`);
+async function adapterCall(adapter, method, ...args) {
+  try { return await adapter[method](...args); }
+  catch (cause) {
+    if (cause instanceof CliError) throw cause;
+    const code = classifyError(cause).error.code;
+    throw new CliError(code === 'INTERNAL_ERROR' ? 'COMPARE_ADAPTER_FAILED' : code, cause.message, { cause });
+  }
+}
+
+async function compareFrame(config, file, definition, options, data, { launchBrowser, clock, log }) {
+  const adapter = config.compare, frame = definition.name;
+  if (!adapter.fixture) throw new CliError('CONFIG_INVALID', 'Compare needs compare.fixture(name); add it to adg.config.mjs');
+  if ([options.region,options.selector,options.page].filter(Boolean).length > 1) throw new CliError('USAGE_INVALID', 'Choose --region, --selector or --page');
   const settings = {...definition.capture};
   if (options.region || options.selector || options.page) { delete settings.region; delete settings.selector; delete settings.page; }
   for (const key of ['region','selector','page','origin','viewport']) if (options[key] !== undefined) settings[key] = options[key];
   settings.clicks = options.click ?? settings.clicks ?? [];
-  const browser = await launch();
-  let stop;
+  const browser = await launchBrowser();
+  let stop, primary;
   try {
     const fixtureName = options.fixture ?? definition.fixture;
-    if (!fixtureName) throw Error('Frame needs a fixture; supply --fixture or Frame fixture');
-    const fixture = await adapter.fixture(fixtureName);
-    if (!fixture || typeof fixture.url !== 'string' || !['light', 'dark'].includes(fixture.theme) || typeof fixture.locale !== 'string' || !fixture.locale || !Number.isFinite(Date.parse(fixture.clock))) throw new Error('compare.fixture must return url, theme (light/dark), locale and a valid clock; fix adg.config.mjs');
+    if (!fixtureName) throw new CliError('CONFIG_INVALID', 'Frame needs a fixture; supply --fixture or Frame fixture');
+    const fixture = await adapterCall(adapter, 'fixture', fixtureName);
+    if (!fixture || typeof fixture.url !== 'string' || !['light', 'dark'].includes(fixture.theme) || typeof fixture.locale !== 'string' || !fixture.locale || !Number.isFinite(Date.parse(fixture.clock))) throw new CliError('CONFIG_INVALID', 'compare.fixture must return url, theme (light/dark), locale and a valid clock; fix adg.config.mjs');
     if (fixture.timezone !== undefined) {
       try {
         if (typeof fixture.timezone !== 'string' || !fixture.timezone || /^[+-]/.test(fixture.timezone)) throw new Error();
         new Intl.DateTimeFormat('en-US', { timeZone: fixture.timezone });
-      } catch { throw new Error('compare.fixture timezone must be a valid IANA time zone such as Asia/Shanghai; fix adg.config.mjs'); }
+      } catch { throw new CliError('CONFIG_INVALID', 'compare.fixture timezone must be a valid IANA time zone such as Asia/Shanghai; fix adg.config.mjs'); }
     }
     const sheet = await browser.newPage({colorScheme:fixture.theme,locale:fixture.locale,timezoneId:fixture.timezone,reducedMotion:'reduce'});
     const frameBox = await loadFrame(sheet,definition,fixture.theme);
     let design = await sheet.locator('[data-adg-frame] > :first-child').evaluate(implementationTexts);
     const size = viewport(settings.viewport ?? adapter.viewport);
     const origin = (settings.origin ?? '0 0').trim().split(/\s+/).map(Number);
-    if (settings.page && (origin.length !== 2 || !origin.every(Number.isFinite) || origin.some(n=>n<0) || origin[0]+frameBox.width>size.width || origin[1]+frameBox.height>size.height)) throw Error('Frame does not fit capture viewport; fix origin or viewport');
-    if (!settings.page && !settings.region && !settings.selector) throw Error('Frame needs capture; supply --page, --region or --selector');
+    if (settings.page && (origin.length !== 2 || !origin.every(Number.isFinite) || origin.some(n=>n<0) || origin[0]+frameBox.width>size.width || origin[1]+frameBox.height>size.height)) throw new CliError('CONFIG_INVALID', 'Frame does not fit capture viewport; fix origin or viewport');
+    if (!settings.page && !settings.region && !settings.selector) throw new CliError('CONFIG_INVALID', 'Frame needs capture; supply --page, --region or --selector');
     const absolute = /^https?:\/\//.test(fixture.url);
-    if (!adapter.start && !absolute) throw new Error('Relative fixture URL needs compare.start; add it or return an absolute URL');
+    if (!adapter.start && !absolute) throw new CliError('CONFIG_INVALID', 'Relative fixture URL needs compare.start; add it or return an absolute URL');
     const url = new URL(fixture.url, `http://127.0.0.1:${adapter.port}`).href;
-    if (!/^https?:/.test(url)) throw new Error('Fixture URL must use HTTP or HTTPS; fix compare.fixture');
+    if (!/^https?:/.test(url)) throw new CliError('CONFIG_INVALID', 'Fixture URL must use HTTP or HTTPS; fix compare.fixture');
     if (adapter.start) {
-      stop = await adapter.start({ port: adapter.port, root: config.root });
-      if (typeof stop !== 'function') throw new Error('compare.start must return a stop function; fix adg.config.mjs');
+      stop = await adapterCall(adapter, 'start', { port: adapter.port, root: config.root });
+      if (typeof stop !== 'function') throw new CliError('CONFIG_INVALID', 'compare.start must return a stop function; fix adg.config.mjs');
     }
     await sheet.emulateMedia({ colorScheme: fixture.theme, reducedMotion: 'reduce' });
     await sheet.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), fixture.theme);
@@ -120,8 +126,11 @@ export async function compare(config, args, options) {
       else { const observer = new MutationObserver(() => { if (document.documentElement) { apply(); observer.disconnect(); } }); observer.observe(document, { childList: true }); }
       document.addEventListener('DOMContentLoaded', apply, { once: true });
     }, { clock: fixture.clock, theme: fixture.theme });
-    await app.goto(url, { waitUntil: 'load' });
-    if (adapter.ready) await adapter.ready(app, fixtureName);
+    let response;
+    try { response = await app.goto(url, { waitUntil: 'load' }); }
+    catch (cause) { throw new CliError(browser.isConnected() ? 'NETWORK_FAILED' : 'BROWSER_FAILED', cause.message, { cause }); }
+    if ([401,403].includes(response?.status())) throw new CliError('AUTH_REQUIRED', `Fixture navigation was refused with HTTP ${response.status()}.`);
+    if (adapter.ready) await adapterCall(adapter, 'ready', app, fixtureName);
     for (const name of settings.clicks) {
       let control;
       for (const role of ['button', 'radio', 'tab', 'checkbox', 'switch', 'menuitem', 'menuitemradio', 'option', 'link']) {
@@ -129,48 +138,85 @@ export async function compare(config, args, options) {
         if (await candidate.count()) { control = candidate; break; }
       }
       if (!control) {
-        console.error(`adg: No visible control matches --click=${JSON.stringify(name)}`);
-        return 1;
+        throw new CliError('COMPARE_TARGET_NOT_FOUND', `No visible control matches --click=${JSON.stringify(name)}`);
       }
       await control.click();
     }
     await app.evaluate(() => document.fonts.ready);
     const capture = settings.page ? { x: origin[0], y: origin[1], width: frameBox.width, height: frameBox.height } : undefined;
     const panel = capture ? app.locator('html') : settings.selector ? app.locator(settings.selector).first() : app.getByRole('region', { name: settings.region, exact: true }).or(app.getByRole('dialog', { name: settings.region, exact: true })).first();
-    if (!capture) await panel.scrollIntoViewIfNeeded();
+    if (!capture) {
+      if (!await panel.count()) throw new CliError('COMPARE_TARGET_NOT_FOUND', 'Frame capture target does not exist.');
+      await panel.scrollIntoViewIfNeeded();
+    }
     const { implementation, settled } = await settle(async () => {
       const result = await panel.evaluate(implementationTexts, capture);
       if (adapter.texts) {
-        const additional = await adapter.texts(app), box = result.box;
-        if (!Array.isArray(additional) || additional.some(t => typeof t.text !== 'string' || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(t[key])))) throw new Error('compare.texts must return text boxes in page coordinates; fix adg.config.mjs');
+        const additional = await adapterCall(adapter, 'texts', app), box = result.box;
+        if (!Array.isArray(additional) || additional.some(t => typeof t.text !== 'string' || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(t[key])))) throw new CliError('CONFIG_INVALID', 'compare.texts must return text boxes in page coordinates; fix adg.config.mjs');
         result.texts.push(...additional.filter(t => t.x >= box.x && t.y >= box.y && t.x + t.width <= box.x + box.width && t.y + t.height <= box.y + box.height).map(t => ({ ...t, x: t.x - box.x, y: t.y - box.y })));
       }
       return result;
-    });
+    }, clock);
     const screenshot = { path: path.join(target, 'implementation.png') };
     if (capture) await app.screenshot({ ...screenshot, clip: capture });
     else await panel.screenshot(screenshot);
     const canvasPage = await browser.newPage();
     await overlay(canvasPage, target);
     const report = { ...compareReport(relative(config, file), frame, fixtureName, {...design,box:frameBox}, implementation), settled };
-    if (options.collect) options.collect.push({...report, report: path.relative(path.join(config.output,'compare'),path.join(target,'index.html'))});
     writeFileSync(path.join(target, 'report.json'), JSON.stringify(report, null, 2) + '\n');
     writeFileSync(path.join(target, 'index.html'), reportHtml(report));
-    console.log(`${relative(config, path.join(target, 'index.html'))}: matched ${report.matched}, ${report.offBy2px.length} off by >2px, ${report.missing.length} missing, ${report.extra.length} extra.`);
-    return report.offBy2px.length || report.missing.length || report.extra.length ? 1 : 0;
+    const paths = { design: path.join(target,'design.png'), implementation: path.join(target,'implementation.png'), overlay: path.join(target,'overlay.png'), report: path.join(target,'report.json'), html: path.join(target,'index.html') };
+    const {asset, ...measured} = report;
+    data.comparisons.push({source:asset, ...measured, theme:fixture.theme, paths});
+    data.summary.frames++;
+    data.summary.matched += report.matched;
+    data.summary.offsets += report.offBy2px.length;
+    data.summary.missing += report.missing.length;
+    data.summary.extra += report.extra.length;
+    if (!data.all) data.indexPath = paths.html;
+    log(`${relative(config, paths.html)}: matched ${report.matched}, ${report.offBy2px.length} off by >2px, ${report.missing.length} missing, ${report.extra.length} extra.`);
+    return {...report, report:path.relative(path.join(config.output,'compare'),paths.html)};
+  } catch (cause) {
+    primary = commandFailure(cause, data, [], browser.isConnected() ? 'RENDER_FAILED' : 'BROWSER_FAILED');
+    throw primary;
   } finally {
-    try { await browser.close(); } finally { if (typeof stop === 'function') await stop(); }
+    try { await cleanup(() => browser.close(), primary); }
+    catch (cause) { primary = commandFailure(cause, data, []); throw primary; }
+    finally { if (typeof stop === 'function') await cleanup(stop, primary); }
   }
 }
 
-async function compareAll(config) {
-  const files = selectSources(config), summary = []; let code = 0;
-  for (const file of files) {
-    const built = await buildSource(config,file,{allowLegacy:false});
-    for (const frame of built.frames.filter(f=>f.fixture)) code = Math.max(code,await compare(config,[file],{frame:frame.name,collect:summary}));
-  }
-  const target=path.join(config.output,'compare'); mkdirSync(target,{recursive:true});
-  writeFileSync(path.join(target,'summary.json'),JSON.stringify(summary,null,2)+'\n');
-  writeFileSync(path.join(target,'index.html'),`<!doctype html><meta charset="utf-8"><title>Design comparisons</title><table><tr><th>Source</th><th>Frame</th><th>Matched</th><th>Offsets</th><th>Missing</th><th>Extra</th></tr>${summary.map(r=>`<tr><td>${cell(r.asset)}</td><td><a href="${cell(r.report)}">${cell(r.frame)}</a></td><td>${r.matched}</td><td>${r.offBy2px.length}</td><td>${r.missing.length}</td><td>${r.extra.length}</td></tr>`).join('')}</table>`);
-  return code;
+export async function compare(config, args = [], options = {}, { launchBrowser = launch, clock, log = console.log } = {}) {
+  /** @type {import('./results.mjs').CompareData} */
+  const data = {project:config.root, complete:false, all:!!options.all, comparisons:[], skipped:[], summary:{frames:0,matched:0,offsets:0,missing:0,extra:0}, indexPath:null, summaryPath:null};
+  const warnings = [], reports = [];
+  try {
+    const files = selectSources(config, args);
+    for (const file of files) {
+      const built = await buildSource(config,file,{allowLegacy:false});
+      const frames = options.all ? built.frames : built.frames.filter(frame => frame.name === options.frame);
+      if (!options.all && !frames.length) throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${options.frame}; choose a declared frame`);
+      for (const frame of frames) {
+        if (options.all && !frame.fixture) {
+          data.skipped.push({source:relative(config,file),frame:frame.name,reason:'no_fixture'});
+          if (!warnings.length) warnings.push({code:'COMPARE_FRAMES_SKIPPED',message:'Frames without fixtures were skipped.',next:[]});
+          continue;
+        }
+        reports.push(await compareFrame(config,file,frame,options.all ? {frame:frame.name} : options,data,{launchBrowser,clock,log}));
+        if (!data.comparisons.at(-1).settled) throw new CliError('COMPARE_UNSETTLED', 'Comparison text boxes did not settle within 5 seconds.', {humanReported:true});
+      }
+    }
+    if (options.all) {
+      const target=path.join(config.output,'compare'); mkdirSync(target,{recursive:true});
+      writeFileSync(path.join(target,'summary.json'),JSON.stringify(reports,null,2)+'\n');
+      data.summaryPath = path.join(target,'summary.json');
+      writeFileSync(path.join(target,'index.html'),`<!doctype html><meta charset="utf-8"><title>Design comparisons</title><table><tr><th>Source</th><th>Frame</th><th>Matched</th><th>Offsets</th><th>Missing</th><th>Extra</th></tr>${reports.map(r=>`<tr><td>${cell(r.asset)}</td><td><a href="${cell(r.report)}">${cell(r.frame)}</a></td><td>${r.matched}</td><td>${r.offBy2px.length}</td><td>${r.missing.length}</td><td>${r.extra.length}</td></tr>`).join('')}</table>`);
+      data.indexPath = path.join(target,'index.html');
+    }
+    if (!data.comparisons.length) emptySelection(warnings);
+    data.complete = true;
+    if (data.summary.offsets || data.summary.missing || data.summary.extra) throw new CliError('COMPARE_FAILED', 'Comparison found text or position differences.', {data,warnings,humanReported:true});
+    return {data,warnings};
+  } catch (cause) { throw commandFailure(cause,data,warnings); }
 }

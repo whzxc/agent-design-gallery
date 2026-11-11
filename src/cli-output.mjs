@@ -51,14 +51,15 @@ export const errorCatalog = {
 };
 
 export class CliError extends Error {
-  /** @param {ErrorCode} code @param {string} message @param {{data?: unknown, cause?: unknown, context?: ErrorContext, warnings?: Diagnostic[]}} [options] */
-  constructor(code, message, { data = null, cause, context = {}, warnings = [] } = {}) {
+  /** @param {ErrorCode} code @param {string} message @param {{data?: unknown, cause?: unknown, context?: ErrorContext, warnings?: Diagnostic[], humanReported?: boolean}} [options] */
+  constructor(code, message, { data = null, cause, context = {}, warnings = [], humanReported = false } = {}) {
     super(message, { cause });
     this.name = 'CliError';
     this.code = code;
     this.data = data;
     this.context = context;
     this.warnings = warnings;
+    this.humanReported = humanReported;
   }
 }
 
@@ -213,7 +214,7 @@ export function createOutput({ json, command, stdout = text => { process.stdout.
     failure(cause, context = {}) {
       const failure = classifyError(cause, { ...context, command });
       if (json) emit({ schemaVersion: 1, command, ok: false, data: failure.data, warnings: failure.warnings, error: failure.error });
-      else stderr(`adg: ${failure.error.message}\n`);
+      else if (!(cause instanceof CliError && cause.humanReported)) stderr(`adg: ${failure.error.message}\n`);
       return failure.exitCode;
     },
   };

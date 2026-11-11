@@ -12,11 +12,22 @@ export async function launch({ importPlaywright = () => import('playwright') } =
   }
 }
 export async function loadFrame(page, frame, theme = 'light') {
-  await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
-  await page.setViewportSize({ width: Math.ceil(frame.width ?? 1600), height: Math.ceil(frame.height ?? 1200) });
-  await page.setContent(frame.document(theme));
-  await page.evaluate(() => document.fonts.ready);
-  const box = await page.locator('[data-adg-frame]').boundingBox();
-  await page.setViewportSize({ width: Math.max(1, Math.ceil(box.width)), height: Math.max(1, Math.ceil(box.height)) });
-  return box;
+  return browserTask(page.context().browser(), async () => {
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: Math.ceil(frame.width ?? 1600), height: Math.ceil(frame.height ?? 1200) });
+    await page.setContent(frame.document(theme));
+    await page.evaluate(() => document.fonts.ready);
+    const box = await page.locator('[data-adg-frame]').boundingBox();
+    await page.setViewportSize({ width: Math.max(1, Math.ceil(box.width)), height: Math.max(1, Math.ceil(box.height)) });
+    return box;
+  });
+}
+
+/** Classify Playwright execution failures where the browser's connection is observable. */
+export async function browserTask(browser, work) {
+  try { return await work(); }
+  catch (error) {
+    if (error instanceof CliError) throw error;
+    throw new CliError(browser?.isConnected() === false ? 'BROWSER_FAILED' : 'RENDER_FAILED', error.message, { cause: error });
+  }
 }

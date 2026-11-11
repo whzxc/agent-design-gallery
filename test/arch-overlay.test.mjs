@@ -157,7 +157,7 @@ test('base reads and discovery preserve source paths through a symlinked project
   assert.deepEqual(await readBase(base,file),original);
   assert.deepEqual(await baseArchFiles(linked,base),[file]);
   const {stdout}=await exec(process.execPath,[cli,'render',asset,'--base=HEAD','--json'],{cwd:link});
-  const result=JSON.parse(stdout);assert.deepEqual(result.deleted,[asset]);assert.deepEqual(result.captures,[]);
+  const envelope=JSON.parse(stdout);assert.equal(envelope.ok,true);const result=envelope.data;assert.deepEqual(result.deleted,[asset]);assert.deepEqual(result.captures,[]);
 });
 
 test('Git failures name a next action and base blobs use the resolved repository commit',async t=>{
@@ -209,13 +209,13 @@ test('CLI base JSON includes captures, added diagrams and deletions; absolute so
   const c=await fixture(t),file=path.join(c.root,asset),added='arch/new.mmd';
   await rm(file);await writeFile(path.join(c.root,added),'flowchart LR\nA --> B');
   const {stdout}=await exec(process.execPath,[cli,'render',file,path.join(c.root,added),'--base=HEAD','--json','--scale=1'],{cwd:c.root});
-  const result=JSON.parse(stdout);assert.deepEqual(result.deleted,[asset]);assert.equal(result.captures.length,2);
+  const envelope=JSON.parse(stdout);assert.equal(envelope.ok,true);const result=envelope.data;assert.deepEqual(result.deleted,[asset]);assert.equal(result.captures.length,2);
   assert.ok(result.captures.every(c=>c.source===added));for(const capture of result.captures)assert.equal((await readFile(capture.path)).subarray(1,4).toString(),'PNG');
-  const all=JSON.parse((await exec(process.execPath,[cli,'render','--base=HEAD','--json','--scale=1'],{cwd:c.root})).stdout);
+  const all=JSON.parse((await exec(process.execPath,[cli,'render','--base=HEAD','--json','--scale=1'],{cwd:c.root})).stdout).data;
   assert.deepEqual(all.deleted,[asset]);assert.equal(all.captures.length,2);
   await rm(path.join(c.root,added));
   await symlink(path.join(c.root,'adg.config.mjs'),file);
-  const onlyDeleted=JSON.parse((await exec(process.execPath,[cli,'render',file,'--base=HEAD','--json'],{cwd:c.root,env:{...process.env,PLAYWRIGHT_BROWSERS_PATH:path.join(c.root,'missing-browser')}})).stdout);
+  const onlyDeleted=JSON.parse((await exec(process.execPath,[cli,'render',file,'--base=HEAD','--json'],{cwd:c.root,env:{...process.env,PLAYWRIGHT_BROWSERS_PATH:path.join(c.root,'missing-browser')}})).stdout).data;
   assert.deepEqual(onlyDeleted.captures,[]);assert.deepEqual(onlyDeleted.deleted,[asset]);
   await assert.rejects(exec(process.execPath,[cli,'render',added,'--base=missing-revision','--json'],{cwd:c.root}), error => {
     assert.equal(error.code, 2);
@@ -231,7 +231,7 @@ test('CLI base JSON includes captures, added diagrams and deletions; absolute so
   const alias=path.join(c.root,'alias.tsx');await symlink(tsx,alias);assert.deepEqual(selectSources(c,[alias],{write:false}),[tsx]);
   assert.throws(()=>selectSources(c,['/tmp/outside.mmd'],{write:false}),/outside the project root/);
   const ignored=JSON.parse((await exec(process.execPath,[cli,'render',tsx,'--base=missing-revision','--json','--theme=light'],{cwd:c.root})).stdout);
-  assert.ok(Array.isArray(ignored));assert.equal(ignored[0].source,'components/plain.tsx');
+  assert.equal(ignored.ok,true);assert.equal(ignored.data.captures[0].source,'design/components/plain.tsx');assert.equal(ignored.data.base,null);assert.equal(ignored.warnings[0].code,'USAGE_INVALID');
 });
 
 test('open and link locators preserve the base through query, hierarchy navigation and the hub proxy',async t=>{

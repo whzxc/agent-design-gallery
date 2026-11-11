@@ -17,7 +17,7 @@ const stage=body=>`<!doctype html><style>
 </style><div data-adg-frame="visibility" data-brand><div class="stage" data-free data-brand>${body}</div></div>`;
 async function inspect(page,body) {
   await page.setContent(stage(body));
-  return page.evaluate(inspectFrame,[]);
+  return (await page.evaluate(inspectFrame,[])).map(finding=>finding.message);
 }
 const overlaps=problems=>problems.filter(p=>p.startsWith('Text overlaps:'));
 const snapshot=el=>[el.textContent,...[el,...el.querySelectorAll('*')].map(node=>
@@ -156,6 +156,6 @@ test('normal check and read-only check share the clipping and opaque-occlusion f
     </div></Frame>];`);
   const c=await loadConfig(root);
   for(const options of [{},{'read-only':true}]) {
-    const errors=[];assert.equal(await check(c,[],options,()=>{},line=>errors.push(line)),0,errors.join('\n'));
+    const errors=[];assert.equal((await check(c,[],options,()=>{},line=>errors.push(line))).data.complete,true,errors.join('\n'));
   }
 });

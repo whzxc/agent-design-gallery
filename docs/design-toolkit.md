@@ -157,7 +157,7 @@ A source describes structure, not coordinates. Write it the way the UI is built.
 - a fractional pixel length in a class or style outside `data-free`;
 - a `style` outside `data-free` that sets anything but width, height or custom properties.
 
-Each problem is one line, `<path>: <frame>: <problem>`. A nonzero exit means the source is not ready.
+Each problem is one line, `<path>: <frame>: <problem>`. Completed rule findings exit 1. Build or frame-execution failures exit 2; `--json` returns `complete: false` with the observed partial findings. A completed check uses `complete: true`, with `CHECK_FAILED` when findings remain.
 
 An import-direction problem is one line, `<path>: import <source> violates import direction (<lower> -> <higher>); ...`. It names the resolved source rather than a manual dependency annotation. Named-source checks lint those sources' outgoing imports, including targets outside the selected subset. Other imported helpers and erased type-only imports are outside the graph; review their ownership in the [read-only audit](asset-rules.md#2-run-a-read-only-audit).
 
@@ -229,7 +229,7 @@ After changing design assets, name the change and include an ADG link for each a
 
 `open` and `link` accept one target: `--asset` with an optional `--frame`, `--group`, `--layer`, or `--tokens`. Source paths are relative to the design directory and include the extension. Query mode is the default. To convert a URL copied from the viewer, pass it to `adg link` without target flags. `link` emits a single URL and strips unrelated query parameters, including access keys. Share a reachable hub project URL for remote review and verify that it serves the changed checkout. A direct preview uses loopback. A proxied instance link lasts until its viewer stops. Viewer links reflect the current source files and refresh after saves. Keep the PNG when the report needs a fixed snapshot.
 
-`render` exports TSX frames at their exact bounds. It defaults to both themes at 2×. `--theme` selects a theme, and a relative `--out-dir` resolves from the project root. `--json` emits an ordered array with `source`, `frame`, `theme`, and absolute PNG `path` fields. Keep the default text output for interactive use.
+`render` exports TSX frames at their exact bounds. It defaults to both themes at 2×. `--theme` selects a theme, and a relative `--out-dir` resolves from the project root. `--json` emits one versioned envelope. `data.captures` is ordered by selected source, frame, then light before dark; each capture contains project-root-relative `source` with `/` separators, `frame`, `theme`, absolute PNG `path`, `scale`, CSS `width`/`height` and actual PNG `pixelWidth`/`pixelHeight`. `data` always contains `project`, `outputDirectory`, `complete`, `base`, `captures` and `deleted`, including `base: null` and `deleted: []` without a base. Failed batches advertise completed PNGs only. Human logs go to stderr under `--json`; default text output remains available for interactive use.
 
 ## Architecture sources
 
@@ -343,7 +343,7 @@ the review platform defined in [ADG design](design.md).
 
 `render` uses a fresh page/context per frame and theme, defaults to both themes at
 2×, and writes `<out-dir>/arch/mechanisms/work/default-light.png` and
-`default-dark.png`. `--json` returns `source`, `frame`, `theme` and absolute `path`.
+`default-dark.png`. `--json` returns the same capture envelope used for TSX, with architecture sources relative to the project root in `data.captures`.
 A named architecture render writes no declarations or HTML into the source checkout;
 use an absolute output directory to keep a consumer checkout read-only.
 
@@ -407,16 +407,26 @@ plain-text changes, such as `+ state cancelled` or
 visuals stay inside artboards; the viewer chrome is unchanged.
 
 A file absent at base renders as entirely added. A deleted current diagram is not
-rendered. With an architecture base, `render --json` returns an envelope instead of
-the ordinary capture array:
+rendered. With an architecture base, `render --json` uses the same envelope and fills
+`data.base` with the requested revision and resolved commit, for example:
 
 ```json
 {
-  "base": { "rev": "HEAD", "sha": "<commit-sha>" },
-  "captures": [
-    { "source": "arch/mechanisms/work.mmd", "frame": "default", "theme": "light", "path": "/absolute/output/default-light.png" }
-  ],
-  "deleted": ["arch/retired.mmd"]
+  "schemaVersion": 1,
+  "command": "render",
+  "ok": true,
+  "data": {
+    "project": "/project",
+    "outputDirectory": "/project/output/design",
+    "complete": true,
+    "base": { "rev": "HEAD", "sha": "0123456789abcdef0123456789abcdef01234567" },
+    "captures": [
+      { "source": "arch/mechanisms/work.mmd", "frame": "default", "theme": "light", "path": "/project/output/design/arch/mechanisms/work/default-light.png", "scale": 2, "width": 640, "height": 360, "pixelWidth": 1280, "pixelHeight": 720 }
+    ],
+    "deleted": ["arch/removed.mmd"]
+  },
+  "warnings": [],
+  "error": null
 }
 ```
 
@@ -435,7 +445,7 @@ entries. Saving the working tree refreshes both paths through the existing watch
 
 Both sides are read the same way. The reader takes one text per rendered line, including the placeholders of empty fields, and skips text clipped outside the captured element. Adjacent texts on one line with less than one space between them read as one text. `aria-hidden` on the capture target and its ancestors is ignored; `aria-hidden` subtrees inside it are skipped. Texts pair by content, and repeated texts pair with the nearest position first. Positions are relative to the frame's shell and to the captured element. It reports anchored-edge, vertical-center and width differences above 2px, plus texts missing from either side. It does not compare shapes, so review the overlay as well.
 
-`output/design/compare/<source>-<frame>-<fixture>/` receives `design.png`, `implementation.png`, `overlay.png`, `report.json` and `index.html`. `report.json` records `settled: false` when the texts did not settle. A nonzero exit means it found differences. Treat them as a review list, not a zero gate. Missing or extra texts, wrong order or grouping, and one offset shared by many texts point to real defects, such as a lost font rule or a leftover border. An isolated offset of a few pixels can stay.
+`output/design/compare/<source>-<frame>-<fixture>/` receives `design.png`, `implementation.png`, `overlay.png`, `report.json` and `index.html`. `report.json` records `settled: false` when the texts did not settle; that is an incomplete evaluation and exits 2. Completed text/position differences exit 1. Missing targets and adapter, browser or capture failures exit 2. Under `--json`, both single and all modes return `data.comparisons`, `skipped`, aggregate `summary`, completed artifact paths and `complete`; a failed batch retains observed results with `complete: false`. Empty selections exit 0 with `EMPTY_SELECTION`. Treat them as a review list, not a zero gate. Missing or extra texts, wrong order or grouping, and one offset shared by many texts point to real defects, such as a lost font rule or a leftover border. An isolated offset of a few pixels can stay.
 
 The project describes how to run its implementation in `adg.config.mjs`:
 

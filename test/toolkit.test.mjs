@@ -64,18 +64,18 @@ test('check rejects fractional pixel lengths in classes and styles outside data-
   const c=await project(t);
   for(const [name,body] of [['class','<div class="w-[10.5px] h-4"/>'],['style','<div style={{width:10.5,height:16}}/>']])put(c,`surfaces/${name}.tsx`,source(body));
   put(c,'surfaces/frame.tsx',source('<div/>').replace('width={200}','width={200.5}'));
-  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),1);
+  const problems=[];await assert.rejects(check(c,[],{},()=>{},s=>problems.push(s)), {code:'CHECK_FAILED'});
   assert.equal(problems.length,6);
   assert.ok(problems.every(p=>p.endsWith('Fractional pixel length outside data-free')));
 });
 test('check rejects layout style properties outside data-free',async t=>{
   const c=await project(t);put(c,'surfaces/style.tsx',source('<div style={{padding:4}}>Label</div>'));
-  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),1);
+  const problems=[];await assert.rejects(check(c,[],{},()=>{},s=>problems.push(s)), {code:'CHECK_FAILED'});
   assert.equal(problems.length,2);assert.ok(problems.every(p=>p.endsWith('Style padding outside data-free; use layout classes')));
 });
 test('check permits whole-pixel dimensions, custom properties and inherited free-form geometry',async t=>{
   const c=await project(t);put(c,'surfaces/free.tsx',source('<div style={{width:100,height:60,"--gap":"4px"}}><div data-free class="relative"><div class="absolute left-[1.5px]" style={{top:2.5}}>Free</div></div></div>'));
-  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),0,problems.join('\n'));
+  const problems=[];assert.equal((await check(c,[],{},()=>{},s=>problems.push(s))).data.complete,true,problems.join('\n'));
 });
 test('frames without dimensions follow their content, including a changed button label',async t=>{
   const c=await project(t);put(c,'components/button.tsx',readFileSync(new URL('../design/components/button.tsx',import.meta.url),'utf8'));
@@ -106,7 +106,9 @@ test('render produces identical PNG bytes in either frame order',async t=>{
   const images=()=>files.flatMap(file=>['light','dark'].map(theme=>readFileSync(path.join(c.output,'surfaces',path.basename(file,'.tsx'),`sample-${theme}.png`))));
   const logs=[],expected=order=>order.flatMap(file=>['light','dark'].map(theme=>path.relative(c.root,path.join(c.output,'surfaces',path.basename(file,'.tsx'),`sample-${theme}.png`))));
   t.mock.method(console,'log',line=>logs.push(line));
-  await render(c,files);const first=images();
+  const rendered=await render(c,files);const first=images();
+  assert.deepEqual(rendered.data.captures.map(capture=>[capture.source,capture.theme]),files.flatMap(file=>['light','dark'].map(theme=>[path.relative(c.root,file).split(path.sep).join('/'),theme])));
+  for(const capture of rendered.data.captures){assert.equal(capture.width,96);assert.equal(capture.height,96);assert.equal(capture.pixelWidth,192);assert.equal(capture.pixelHeight,192);assert.equal(capture.scale,2);assert.ok(path.isAbsolute(capture.path));}
   await render(c,[...files].reverse());const second=images();
   assert.deepEqual(logs,[...expected(files),...expected([...files].reverse())]);
   for(let i=0;i<first.length;i++)assert.ok(first[i].equals(second[i]),`${path.basename(files[Math.floor(i/2)])}: ${['light','dark'][i%2]}`);
@@ -129,14 +131,14 @@ test('check has a failing source for every contract rule, including both themes 
     style:source('<style/>'),script:source('<script/>'),event:source('<div onclick="x"/>'),className:source('<div className="x"/>'),dark:source('<div class="dark:bg-[#ff0101]">Dark</div>')
   };
   for(const [name,value]of Object.entries(samples))put(c,`surfaces/${name}.tsx`,value);
-  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),1);
+  const problems=[];await assert.rejects(check(c,[],{},()=>{},s=>problems.push(s)), {code:'SOURCE_BUILD_FAILED'});
   for(const name of Object.keys(samples))assert.ok(problems.some(p=>p.startsWith(`design/surfaces/${name}.tsx:`)),name);
   assert.ok(problems.some(p=>/dark.tsx: sample: dark:/.test(p)));assert.ok(!problems.some(p=>/dark.tsx: sample: light:/.test(p)));
   for(const p of problems)assert.equal(p.split('\n').length,1);
 });
 test('check permits token paint, brand art, clipped content and intentional ellipses',async t=>{
   const c=await project(t);put(c,'surfaces/a.tsx',source('<div class="w-[200px] h-[100px] overflow-hidden"><span data-brand class="text-[#ff0101]">Brand</span><div class="w-4 truncate">Clipped text</div></div>'));
-  const p=[];assert.equal(await check(c,[],{},()=>{},s=>p.push(s)),0,p.join('\n'));
+  const p=[];assert.equal((await check(c,[],{},()=>{},s=>p.push(s))).data.complete,true,p.join('\n'));
 });
 test('check, render and the canvas discover configured top-level TSX source directories',async t=>{
   assert.deepEqual(sourceDirectories(),['components','modules','surfaces']);
@@ -167,9 +169,9 @@ test('check, render and the canvas discover configured top-level TSX source dire
     if(directories.includes('modules'))assert.deepEqual(selectSources(c,['modules/a']),[module]);
     else assert.throws(()=>selectSources(c,['modules/a']),/Invalid source.*directly/);
     const logs=[],problems=[];
-    assert.equal(await check(c,[],{},s=>logs.push(s),s=>problems.push(s)),0,problems.join('\n'));
+    assert.equal((await check(c,[],{},s=>logs.push(s),s=>problems.push(s))).data.complete,true,problems.join('\n'));
     assert.deepEqual(logs,[`Design check passed for ${expected.length} sources.`]);
-    assert.equal(await render(c),0);
+    assert.equal((await render(c)).data.complete,true);
     assert.deepEqual(readdirSync(c.output).sort(),[...directories].sort());
     for(const directory of directories)for(const theme of ['light','dark']) {
       assert.ok(readFileSync(path.join(c.output,directory,`a/sample-${theme}.png`)).length);
@@ -198,11 +200,11 @@ test('check permits token opacity modifiers in both themes across paint channels
   const c=await project(t);
   writeFileSync(path.join(c.design,'tokens.css'),starterTokens.replace('--canvas: #ffffff;','--canvas: #ffffff;\n  --warning: #eab308;').replace('--canvas: #171717;','--canvas: #171717;\n  --warning: #d8b45c;'));
   put(c,'surfaces/opacity.tsx',source('<div class="bg-warning/10 text-warning/10 border border-warning/10 outline outline-warning/10 shadow-[0_1px_3px_var(--warning)]/10"><span class="text-warning/1">Warning</span><svg width="20" height="20"><rect width="20" height="20" class="fill-warning/10 stroke-warning/10"/></svg><div class="h-4 bg-linear-to-r from-warning/10 to-warning/1"/><span data-brand class="text-[#ff0101]/10">Brand</span></div>'));
-  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),0,problems.join('\n'));
+  const problems=[];assert.equal((await check(c,[],{},()=>{},s=>problems.push(s))).data.complete,true,problems.join('\n'));
 });
 test('check rejects literal translucent colors outside data-brand in both themes',async t=>{
   const c=await project(t);put(c,'surfaces/translucent.tsx',source('<div class="bg-[#ff0101]/10">Literal</div>'));
-  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),1);
+  const problems=[];await assert.rejects(check(c,[],{},()=>{},s=>problems.push(s)), {code:'CHECK_FAILED'});
   assert.equal(problems.length,2);
   for(const theme of ['light','dark'])assert.ok(problems.some(p=>p.includes(`: ${theme}: Color `)&&p.endsWith('matches no token')));
 });
@@ -210,7 +212,7 @@ test('check applies RGB tolerance only to translucent paints',async t=>{
   const c=await project(t);
   writeFileSync(path.join(c.design,'tokens.css'),starterTokens.replace('--canvas: #ffffff;','--canvas: #ffffff;\n  --warning: #646464;'));
   for(const [name,color] of [['within','rgb(102 98 100 / 10%)'],['outside','rgb(103 100 100 / 10%)'],['opaque','rgb(101 100 100)']])put(c,`surfaces/${name}.tsx`,source(`<div class="bg-[${color.replaceAll(' ','_')}]">Color</div>`));
-  const problems=[];assert.equal(await check(c,[],{},()=>{},s=>problems.push(s)),1);
+  const problems=[];await assert.rejects(check(c,[],{},()=>{},s=>problems.push(s)), {code:'CHECK_FAILED'});
   assert.equal(problems.length,4);
   for(const name of ['outside','opaque'])for(const theme of ['light','dark'])assert.ok(problems.some(p=>p.startsWith(`design/surfaces/${name}.tsx: sample: ${theme}: Color `)));
 });
@@ -353,15 +355,37 @@ test('compare uses Frame capture, flags override it, both sides share a reader, 
   const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end(`<!doctype html><style>body{margin:0;font:16px/24px system-ui}.panel{width:200px;height:100px}button{margin-top:20px}</style><div class="panel" role="region" aria-label="Panel"><span>A</span><span>B</span></div><button onclick="setTimeout(()=>document.querySelector('.panel').innerHTML='<span>A</span><span>B</span>',100)">Go</button>`)});
   await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
   let environment;
-  c.compare.fixture=name=>{assert.ok(['sample','override'].includes(name));return{url:`http://127.0.0.1:${server.address().port}`,theme:'dark',locale:'fr-FR',timezone:'Asia/Shanghai',clock:'2026-01-01T00:00:00Z'}};
+  c.compare.fixture=function(name){assert.equal(this,c.compare);assert.ok(['sample','override'].includes(name));return{url:`http://127.0.0.1:${server.address().port}`,theme:'dark',locale:'fr-FR',timezone:'Asia/Shanghai',clock:'2026-01-01T00:00:00Z'}};
   c.compare.ready=async p=>{environment=await p.evaluate(()=>[document.documentElement.dataset.theme,navigator.language,new Date().getHours(),matchMedia('(prefers-reduced-motion: reduce)').matches]);};
   const f=put(c,'surfaces/demo.tsx',source('<div class="w-[200px] h-[100px]"><span>A</span><span>B</span></div>','fixture="sample" capture={{region:"Wrong",viewport:"300x200",clicks:["Go"]}}'));
-  const collected=[];assert.equal(await compare(c,[f],{frame:'sample',selector:'.panel',fixture:'override',collect:collected}),0);assert.deepEqual(environment,['dark','fr-FR',8,true]);assert.equal(collected[0].matched,1);assert.equal(collected[0].settled,true);
+  const single=await compare(c,[f],{frame:'sample',selector:'.panel',fixture:'override'});const collected=single.data.comparisons;assert.equal(single.data.complete,true);assert.equal(single.data.all,false);assert.equal(collected[0].source,'design/surfaces/demo.tsx');assert.equal(collected[0].theme,'dark');assert.ok(path.isAbsolute(collected[0].paths.report));assert.deepEqual(environment,['dark','fr-FR',8,true]);assert.equal(collected[0].matched,1);assert.equal(collected[0].settled,true);
   for(const name of ['design.png','implementation.png','overlay.png','report.json','index.html'])assert.ok(readFileSync(path.join(c.output,'compare/surfaces-demo-sample-override',name)).length);
   put(c,'surfaces/demo.tsx',source('<div class="w-[200px] h-[100px]"><span>A</span><span>B</span></div>','fixture="sample" capture={{page:true,origin:"0 0",viewport:"300x200"}}'));
-  assert.equal(await compare(c,[],{all:true}),0);const summary=JSON.parse(readFileSync(path.join(c.output,'compare/summary.json')));assert.equal(summary.length,1);assert.match(readFileSync(path.join(c.output,'compare/index.html'),'utf8'),/surfaces-demo-sample-sample\/index.html/);
+  put(c,'components/fixtureless.tsx',source('<div/>'));
+  const all=await compare(c,[],{all:true});assert.equal(all.data.complete,true);assert.equal(all.data.skipped.length,1);assert.equal(all.warnings[0].code,'COMPARE_FRAMES_SKIPPED');assert.ok(path.isAbsolute(all.data.summaryPath));const summary=JSON.parse(readFileSync(path.join(c.output,'compare/summary.json')));assert.equal(summary.length,1);assert.match(readFileSync(path.join(c.output,'compare/index.html'),'utf8'),/surfaces-demo-sample-sample\/index.html/);
   put(c,'surfaces/demo.tsx',source('<div class="w-[100px] h-[50px]"><span>A</span><span>B</span></div>','fixture="sample" capture={{page:true,viewport:"300x200"}}').replace('name="sample"','name="frame-sample"'));
-  const sizes=[];await compare(c,[f],{frame:'frame-sample',collect:sizes});assert.deepEqual(sizes[0].size.implementation,[200,100]);assert.match(sizes[0].report,/frame-sample/);
+  const sized=await compare(c,[f],{frame:'frame-sample'});assert.deepEqual(sized.data.comparisons[0].size.implementation,[200,100]);assert.match(sized.data.comparisons[0].paths.html,/frame-sample/);
+  await assert.rejects(compare(c,[f],{frame:'frame-sample',click:['Missing control']}), error => {
+    assert.equal(error.code,'COMPARE_TARGET_NOT_FOUND');assert.equal(error.data.complete,false);assert.equal(error.data.comparisons.length,0);return true;
+  });
+  const ready=c.compare.ready;
+  c.compare.ready=()=>{throw Error('Fixture readiness failed');};
+  await assert.rejects(compare(c,[f],{frame:'frame-sample'}), error => {assert.equal(error.code,'COMPARE_ADAPTER_FAILED');assert.equal(error.data.complete,false);return true;});
+  c.compare.ready=ready;
+  c.compare.texts=()=>[{text:'Extra',x:0,y:0,width:10,height:10}];
+  await assert.rejects(compare(c,[f],{frame:'frame-sample'}), error => {
+    assert.equal(error.code,'COMPARE_FAILED');assert.equal(error.data.complete,true);assert.ok(error.data.summary.extra>0);assert.equal(error.data.comparisons.length,1);return true;
+  });
+  delete c.compare.texts;
+  let now=0;
+  await assert.rejects(compare(c,[f],{frame:'frame-sample'},{clock:{now:()=>now+=5000,sleep:async()=>assert.fail('timeout must not sleep')}}), error => {
+    assert.equal(error.code,'COMPARE_UNSETTLED');assert.equal(error.data.complete,false);assert.equal(error.data.comparisons[0].settled,false);return true;
+  });
+  put(c,'surfaces/z-broken.tsx','export default()=> <');
+  await assert.rejects(compare(c,[],{all:true}), error => {
+    assert.equal(error.code,'SOURCE_BUILD_FAILED');assert.equal(error.data.complete,false);assert.equal(error.data.comparisons.length,1);assert.equal(error.data.indexPath,null);assert.equal(error.data.summaryPath,null);return true;
+  });
+  rmSync(path.join(c.design,'surfaces/z-broken.tsx'));
   c.compare.fixture=()=>({url:'http://localhost',theme:'dark',locale:'en',timezone:'Invalid/Zone',clock:'2026-01-01'});await assert.rejects(compare(c,[f],{frame:'frame-sample'}),/timezone/);
 });
 

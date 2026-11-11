@@ -24,7 +24,7 @@ const details = {
   root: 'Manage registered scan roots. add scans immediately. scan rescans registered roots only; depth is 0 through 3. Hidden directories, node_modules and Git worktrees are skipped.',
   open: 'Browse TSX, Mermaid architecture sources and legacy SVG designs on an independent random-port server.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
   link: 'Print a clean ADG preview URL. Query mode isolates a target. Path mode locates it in the design hierarchy.',
-  check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render selected frames as PNG. Defaults to both themes at 2×. --json prints a list of captures with absolute paths.',
+  check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render selected frames as PNG. Defaults to both themes at 2×. --json prints a versioned result with capture geometry and absolute paths.',
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
 };
 export function help(command) {
@@ -83,7 +83,7 @@ function errorCommand(args) {
   return args[0] && !args[0].startsWith('-') ? 'open' : 'adg';
 }
 
-// Temporary: render/check/compare and service/lifecycle writers await their assigned adapters.
+// Temporary: service/lifecycle writers await their assigned adapters.
 async function dispatch({ command, values, positionals }, cwd, output) {
   if (command === 'migrate') return { data: await (await import('./toolkit/migrate.mjs')).migrate(positionals[0] === undefined ? cwd : path.resolve(cwd, positionals[0]), output.log) };
   if (command === 'open') return (await import('./open.mjs')).open(positionals, values);
@@ -122,8 +122,9 @@ async function dispatch({ command, values, positionals }, cwd, output) {
   }
   const config = await loadConfig(cwd);
   if (command === 'init') return { data: (await import('./toolkit/project.mjs')).init(config, output.log) };
-  if (command === 'compare') return (await import('./toolkit/compare.mjs')).compare(config, positionals, values);
-  return (await import('./toolkit/commands.mjs'))[command](config, positionals, values);
+  if (command === 'compare') return (await import('./toolkit/compare.mjs')).compare(config, positionals, values, {log:output.log});
+  const toolkit = await import('./toolkit/commands.mjs');
+  return command === 'check' ? toolkit.check(config, positionals, values, output.log, output.progress) : toolkit.render(config, positionals, values, output.log);
 }
 export async function main(args = process.argv.slice(2), cwd = process.cwd(), {
   stdout = process.stdout.write.bind(process.stdout), stderr = process.stderr.write.bind(process.stderr),
@@ -146,7 +147,7 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd(), {
       if (json) output.success({ version: VERSION });
       else output.log(VERSION);
       code = 0;
-    } else if (['link', 'init', 'migrate', 'root'].includes(parsed.command)) {
+    } else if (['link', 'init', 'migrate', 'root', 'render', 'check', 'compare'].includes(parsed.command)) {
       const result = json ? await withHumanOutput(() => dispatch(parsed, cwd, output), stderr) : await dispatch(parsed, cwd, output);
       if (json) output.success(result.data, result.warnings);
       code = 0;
