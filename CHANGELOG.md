@@ -1,13 +1,14 @@
 # Changelog
 
-## 0.7.0 (unreleased)
+## 0.7.0
 
-- Accept global `--json` and return schema-versioned envelopes for help, version and CLI argument errors, with stable error codes and executable recovery arguments.
-- Return structured JSON for `link`, `init`, `migrate` and root actions, including completed file changes and scan warnings. Classify configuration, version, discovery, token, Git and browser-launch failures at their owning boundaries while retaining human diagnostics.
-- Return structured capture geometry, coded check findings and comparison results under `--json`, including observed partial results on execution failure. `check` build and frame-execution failures now exit 2 instead of 1 in human mode too; completed rule findings still exit 1. Comparison target, adapter and unsettled-measurement failures exit 2, while completed text/position differences exit 1.
-- The 0.7.0 quality-gate contract uses exit 1 with `ok:false` and `data.complete:true` for completed checks or comparisons with findings, and exit 2 whenever evaluation could not complete. The exit distinction applies in human mode too.
-- Return structured service status, bounded logs and completed migration changes under `--json`. Foreground `open` and `serve` stream readiness, recoverable diagnostics and one terminal event as NDJSON; readiness confirms serving only. Clean SIGINT/SIGTERM shuts down owned resources and exits 0, while terminal failures exit 2.
-- Reveal the hub key only in the explicit `serve --print-key --json` result field. Rotation returns `rotated:true`; conflicting key flags and `--port` with either key flag now fail with a usage error in both output modes.
+- Every CLI command and subcommand accepts global `--json`. Finite commands, help, version and argument errors return one envelope with `schemaVersion:1`, canonical `command`, `ok`, `data`, `warnings` and `error`. See the [agent CLI interface](docs/agent-interface.md) for the complete contract.
+- Add stable UPPER_SNAKE error codes with executable `next` argv arrays and short reasons. Classify configuration, version requirements, migration, discovery, tokens, Git, browser, hub/service, network and I/O failures at their owning boundaries.
+- Change `render --json` from the unversioned capture array or base-result object to one envelope whose `data` always has `project`, `outputDirectory`, `complete`, `base`, `captures` and `deleted`. Captures use project-root-relative source paths, measured CSS dimensions and actual PNG pixel dimensions, and advertise only completed PNGs. Consumers must read `data.captures`.
+- Return coded check findings and structured single/all comparison results, including observed partial data on execution failure. Completed failing gates exit 1 with `ok:false` and `data.complete:true`. `check` build and frame-execution failures now exit 2 instead of 1, with `complete:false`; this exit distinction applies in human mode too. Comparison target, adapter and unsettled-measurement failures exit 2, while completed text/position differences exit 1. Empty selections succeed with a warning.
+- Return structured link, init, project migration and root results, including completed file changes and scan warnings. Service actions return observed status, two bounded log rows with missing-file state, and completed migration changes even on later failure.
+- Foreground `open` and `serve` emit NDJSON readiness, recoverable diagnostic and terminal events. Readiness confirms listener/startup readiness only. Clean SIGINT/SIGTERM closes owned resources and exits 0; terminal failures exit 2. Human readiness retains the `ADG: <url>` line.
+- Keep human logs, configuration-hook output and build-worker output on stderr under JSON mode. Sanitize data, diagnostics, recovery arguments and service log lines. Only explicit `serve --print-key --json` may expose the key in `data.key`; rotation returns `rotated:true`. Conflicting key flags and `--port` with either key flag now fail with a usage error in both modes.
 
 ## 0.6.0
 
