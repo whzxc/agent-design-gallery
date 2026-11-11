@@ -1,3 +1,9 @@
+// Phase mode uses an already frozen project snapshot and isolated direct/hub state.
+if (process.argv.includes('--phases')) {
+  const { phaseComparison } = await import('./perf-compare.mjs');
+  await phaseComparison(process.argv.slice(2));
+  process.exit(0);
+}
 import { execFileSync, spawn } from "node:child_process";
 import { mkdir, readFile, writeFile, symlink, cp } from "node:fs/promises";
 import path from "node:path";

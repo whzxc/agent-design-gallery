@@ -122,6 +122,7 @@ export function compactPreparedSource(asset) {
 }
 
 export function imageURL(asset, crop, onSource) {
+  const endPreview = globalThis.__adgTiming?.span('preview-generation', asset.path, {crop:crop?.id});
   if (!crop)
     return URL.createObjectURL(
       new Blob([asset.source], { type: "image/svg+xml" }),
@@ -169,7 +170,9 @@ export function imageURL(asset, crop, onSource) {
   root.setAttribute("height", crop.height);
   const rendered=new XMLSerializer().serializeToString(doc);
   onSource?.(rendered);
-  return URL.createObjectURL(new Blob([rendered], {type:"image/svg+xml"}));
+  const url = URL.createObjectURL(new Blob([rendered], {type:"image/svg+xml"}));
+  endPreview?.();
+  return url;
 }
 
 // Keep current visible previews and a small LRU of offscreen previews. Identity
@@ -272,6 +275,7 @@ function formDocument(form,css,theme) {
   return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="${escape(form.name)}" style="${form.width ? `width:${form.width}px;` : 'width:max-content;'}${form.height ? `height:${form.height}px;` : ''}">${form.html}</div></body></html>`;
 }
 async function prepareSource(asset, built, theme, signal) {
+  const endMeasurement = globalThis.__adgTiming?.span('measurement', asset.path, {frames:built.frames.length});
   const parts = [];
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox','allow-same-origin');
@@ -280,6 +284,7 @@ async function prepareSource(asset, built, theme, signal) {
   try {
     let sliceStart=performance.now();
     for (const [index, form] of built.frames.entries()) {
+      const endFrame = globalThis.__adgTiming?.span('measurement-frame', asset.path, {frame:form.name});
       signal?.throwIfAborted();
       if(performance.now()-sliceStart>8) {
         await (globalThis.scheduler?.yield?.()??new Promise(resolve=>setTimeout(resolve,0)));
@@ -320,6 +325,7 @@ async function prepareSource(asset, built, theme, signal) {
       content.setAttribute('style','font:16px/1.5 var(--font-ui);color:var(--text);');
       content.append(frame.contentDocument.querySelector('style').cloneNode(true),shell.cloneNode(true));
       parts.push({id:String(index),name:form.name,note:form.note,width:box.width,height:box.height,elements,markup:new XMLSerializer().serializeToString(content)});
+      endFrame?.();
     }
     const wrapWidth = built.component ? componentWrapWidth(parts) : Infinity;
     let x=0,y=0,rowHeight=0;
@@ -340,5 +346,5 @@ async function prepareSource(asset, built, theme, signal) {
     });
     const source=header+markup.join('')+'</svg>';
     return {...asset,imports:built.imports,format:'tsx',source,frameRanges,full:{x:0,y:0,width,height},parts:parts.map(({markup,...p})=>p),component:built.component,background:frame.contentWindow.getComputedStyle(frame.contentDocument.documentElement).getPropertyValue('--canvas').trim()};
-  } finally { frame.remove(); }
+  } finally { frame.remove(); endMeasurement?.(); }
 }

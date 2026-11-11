@@ -1,3 +1,11 @@
+// --phases records navigation only, with opt-in runtime timing hooks.
+if (process.argv.includes('--phases')) {
+  const { phaseBenchmark } = await import('./perf-browser.mjs');
+  await phaseBenchmark(process.argv[2], process.argv[3], {
+    reload: process.argv.includes('--reload'), trace: process.argv.includes('--trace'),
+  });
+  process.exit(0);
+}
 import { chromium } from "playwright";
 import { mkdir, writeFile, readFile, access } from "node:fs/promises";
 import os from "node:os";

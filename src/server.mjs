@@ -13,6 +13,7 @@ import {
 import { watch, existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { perfSpan } from './perf.mjs';
 
 import { createBuildStore } from './toolkit/build-store.mjs';
 import { createViewerCache } from './viewer-cache.mjs';
@@ -40,6 +41,7 @@ export async function startServer({
   readOnly = false,
   instanceId = randomUUID(),
 } = {}) {
+  const endStartup = perfSpan('viewer-startup');
   let state = { recent: [], views: {}, selections: {}, theme: "system" };
   const statePath = path.join(stateDirectory, "state.json");
   try {
@@ -385,8 +387,10 @@ export async function startServer({
     return applyFixtureManifest(data,url.searchParams.get('fixture'));
   }
   async function sourceBuild(name) {
+    const endBuild = perfSpan('build', name);
     let built;
     try{built=await buildStore.get(name);}catch(error){if(error.name!=='AbortError')failedSources.add(name);throw error;}
+    finally {endBuild?.();}
     knownBuilds.set(name,describe(built));dirtyBuilds.delete(name);failedSources.delete(name);frameCounts.set(name,built.frames.length);
     if(files.has(name))Object.assign(files.get(name),{hash:built.hash,version:built.hash});
     return built;
@@ -633,6 +637,7 @@ export async function startServer({
     await writes;
     await buildStore?.close();await closeOverlays();await viewerCache?.close();
   };
+  endStartup?.();
   return { id: instanceId, directory: root, url: `http://127.0.0.1:${server.address().port}/`, port: server.address().port, close,
     cacheStats:()=>({builds:buildStore?.stats(),viewer:viewerCache?.stats()}),
     stats: () => {

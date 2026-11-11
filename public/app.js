@@ -336,6 +336,7 @@ function save() {
 window.addEventListener('pagehide', () => void persistPreferences(true));
 document.addEventListener('visibilitychange', () => {if (document.hidden) void persistPreferences(true)});
 function layout(data, preserve = false) {
+  const endArrangement = globalThis.__adgTiming?.span('arrangement', undefined, {sources:data.assets.length});
   const previous = assets,
     previousGroups = groups,
     result = arrange(onlyFrame ? { ...data, assets: data.assets.map(asset => ({ ...asset, component: false, parts: asset.parts.filter(part => part.name === onlyFrame) })) } : data);
@@ -419,6 +420,8 @@ function layout(data, preserve = false) {
   );
   $("#empty").hidden = !!assets.length || !data.directory;
   if (!assets.length) $("#empty").textContent = scopedUI(data) ? 'No assets in this scope.' : 'No SVG files in this directory.';
+  endArrangement?.({items:assets.length});
+  if (assets.length) globalThis.__adgTiming?.mark('first-layout');
 }
 function makeRow(name, label, count, className = 'tree-row') {
   const button = document.createElement('button'); button.className = className;
@@ -781,6 +784,7 @@ function pump() {
   }
 }
 async function loadPreview(e) {
+  const endPreview = globalThis.__adgTiming?.span('preview', e.asset.path, {crop:e.part.id});
   let url,local=false;
   const theme=e.theme??effectiveTheme;
   const generated=async restore=>{
@@ -806,7 +810,8 @@ async function loadPreview(e) {
     if(cache.get(e.key)!==e)return;
     while(moving)await new Promise(resolve=>setTimeout(resolve,16));
     const img=new Image();e.image=img;img.decoding='async';img.src=source;
-    await img.decode();e.state='ready';
+    const endDecode = globalThis.__adgTiming?.span('decode', e.asset.path, {crop:e.part.id});
+    try { await img.decode();e.state='ready'; } finally {endDecode?.();}
   };
   try {
     const cached=e.asset.hash&&e.asset.previewIds?.[theme]?.includes(e.part.id);
@@ -829,6 +834,7 @@ async function loadPreview(e) {
     if(failure.name!=='AbortError'&&cache.get(e.key)===e&&theme===effectiveTheme&&manifest?.assets.some(a=>a.path===e.asset.path&&a.version===e.asset.version))
       error(`Cannot render ${e.asset.path}: ${failure.message}`);
   } finally {
+    endPreview?.({state:e.state});
     if(local&&url)URL.revokeObjectURL(url);
     loading--;requestDraw(false);pump();
   }
@@ -871,12 +877,13 @@ function drawBackground() {
   }
 }
 function draw() {
+  const endDrawing = globalThis.__adgTiming?.span('drawing');
   raf = 0;
   drawBackground();
   if (tokenManifest) {
     window.__adg.ready = true;
     if (fixtureState) document.documentElement.dataset.fixtureReady = fixtureState.name;
-    return;
+    endDrawing?.(); return;
   }
   if (!labelObstacles) readChromeBounds();
   const displayed = manifest?.renderTheme === effectiveTheme ? inspection ? [inspection] : assets : [];
@@ -927,6 +934,7 @@ function draw() {
           const sx = source.width / pos.part.width, sy = source.height / pos.part.height;
           ctx.drawImage(source, (left-pos.x)*sx, (top-pos.y)*sy, (right-left)*sx, (bottom-top)*sy, left, top, right-left, bottom-top);
         } else ctx.drawImage(source, pos.x, pos.y, pos.part.width, pos.part.height);
+        if (inViewport) globalThis.__adgTiming?.paint('first-content', {source:a.path,crop:pos.part.id});
       }
       ctx.restore();
       const chosen = selected === a.path && selectedForm === null;
@@ -947,6 +955,7 @@ function draw() {
   if(fixtureState && fixtureApplied && window.__adg.ready) document.documentElement.dataset.fixtureReady=fixtureState.name;
   window.__adg.revision = manifest?.revision;
   window.__adg.visibleReady = drawingReady; window.__adg.visibleCount = drawingCount;
+  if (window.__adg.ready && drawingCount > 0) globalThis.__adgTiming?.paint('visible-ready', {count:drawingCount});
   drawMap();
   if(!moving&&queued.length)pump();
   if (cache.size > 100) {
@@ -954,6 +963,7 @@ function draw() {
       .flatMap(a => placements(a).map(({part}) => assetURL(a, part))));
     evictPreviews(cache, activeKeys);
   }
+  endDrawing?.();
 }
 function backgroundColor() { return backgroundChoice === 'theme' ? palette.canvas : backgroundColors[backgroundChoice]; }
 

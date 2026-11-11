@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { mkdir, readFile, writeFile, rename, readdir, stat, unlink, realpath } from 'node:fs/promises';
 import path from 'node:path';
+import { perfSpan } from '../perf.mjs';
 
 const digest = value => createHash('sha256').update(value).digest('hex');
 const aborted = () => Object.assign(new Error('Build superseded'), { name: 'AbortError' });
@@ -33,6 +34,7 @@ class BuildPool {
   finish(job, error, result) {
     if (job.done) return;
     job.done = true; job.signal.removeEventListener('abort', job.abort);
+    job.perfEnd?.({ error: error?.message, frames: result?.frames?.length });
     error ? job.reject(error) : job.resolve(result);
   }
   retire(slot) {
@@ -86,6 +88,7 @@ class BuildPool {
       if (!slot && this.slots.size < workerLimit) slot = this.create();
       if (!slot) return;
       const job = this.queue.shift(); if (job.done) continue;
+      job.perfEnd = perfSpan('build-worker', job.payload.name);
       slot.job = job; slot.attempts++; this.counters.attempts++; slot.worker.ref(); slot.worker.postMessage({ id: job.id, ...job.payload });
     }
   }
@@ -228,7 +231,9 @@ export async function createBuildStore({ config, cacheDirectory }) {
           if (controller.signal.aborted || generation !== (generations.get(name) ?? 0)) throw aborted();
           if (payload) return { ...old, ...payload };
         }
+        const endQueue = perfSpan('build-request', name);
         const built = await pool.run({ config: workerConfig, name }, controller.signal); counters.builds++;
+        endQueue?.({frames: built.frames.length});
         if (controller.signal.aborted || generation !== (generations.get(name) ?? 0)) throw aborted();
         const payload = { frames: built.frames, css: built.css };
         const hash = digest(JSON.stringify({ path: name, component: !name.startsWith('surfaces/'), ...payload, ...(config.overlay?{base:config.overlay.sha,baseBlob:built.baseBlob}:{}), imports: built.imports }));
