@@ -10,7 +10,7 @@ import {
   stat,
   realpath,
 } from "node:fs/promises";
-import { watch } from "node:fs";
+import { watch, existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -122,10 +122,11 @@ export async function startServer({
   }
   function watchArch(project,base) {
     archWatcher?.close();archWatcher=null;
-    if(project.design!==base || !project.arch) return;
-    archWatcher=watch(project.arch,{recursive:true},(_event,filename)=>{
+    const directory=project.archDirectory;
+    if(project.design!==base || !directory || !existsSync(directory)) return;
+    archWatcher=watch(directory,{recursive:true},(_event,filename)=>{
       if(!filename || !/\.(mmd|md)$/.test(String(filename)))return;
-      const file=path.join(project.arch,String(filename));
+      const file=path.join(directory,String(filename));
       const dependency=path.relative(base,file).split(path.sep).join('/');
       const name=path.relative(project.root,file).split(path.sep).join('/');
       touched.add(dependency);touched.add(name);buildStore?.invalidate([dependency,name]);

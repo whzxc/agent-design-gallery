@@ -165,6 +165,13 @@ test('viewer browses arch scope, uses cache on reload, and refreshes sidecars an
   await page.getByRole('button',{name:'Contents',exact:true}).click();
   await page.getByRole('button',{name:'Render only this asset: work',exact:true}).click();
   await page.waitForFunction(()=>window.__sdg.ready&&window.__sdg.scope.startsWith('asset:'));
+  const lastRevision=await page.evaluate(()=>window.__sdg.revision);
+  await rm(path.join(c.root,asset));
+  await page.waitForFunction(revision=>window.__sdg.ready&&window.__sdg.revision>revision,lastRevision);
+  const emptyRevision=await page.evaluate(()=>window.__sdg.revision);
+  await writeFile(path.join(c.root,asset),'flowchart LR\nA --> B');
+  await page.waitForFunction(revision=>window.__sdg.ready&&window.__sdg.revision>revision,emptyRevision);
+  assert.deepEqual((await (await fetch(server.url+'manifest?scope=layer:arch')).json()).assets.map(a=>a.path),[asset]);
 });
 
 test('resident project discovery counts arch sources and proxies their frames',async t=>{

@@ -118,5 +118,5 @@ export async function loadConfig(cwd = process.cwd(), { checkVersion = true } = 
   if (typeof config.arch === 'string' && (path.isAbsolute(config.arch) || path.relative(root,path.resolve(root,config.arch)).startsWith('..'))) throw Error('Set arch to a project-root-relative directory in sdg.config.mjs');
   const arch = config.arch === false ? false : path.resolve(root,config.arch ?? 'arch');
   const design=path.resolve(root,config.design??'design');
-  return { root, name: config.name ?? path.basename(root), requires: config.requires ?? null, compatible, arch: arch && (config.arch !== undefined || archFiles(arch).length) ? arch : false, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{archMaxEdges:30,importDirection:true,...config.check}, compare };
+  return { root, name: config.name ?? path.basename(root), requires: config.requires ?? null, compatible, archDirectory: arch, arch: arch && (config.arch !== undefined || archFiles(arch).length) ? arch : false, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{archMaxEdges:30,importDirection:true,...config.check}, compare };
 }
