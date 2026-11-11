@@ -44,6 +44,7 @@ function browserDouble({ failRead = false, failClose = false, onRead = () => {} 
   const page = { context: () => ({ browser: () => browser }), emulateMedia: async () => {}, setViewportSize: async () => {},
     setContent: async value => { counts.loads++; html = value; documents.push(value); }, locator: () => ({ boundingBox: async () => ({ width: 100, height: 40 }) }),
     evaluate: async (fn, args) => {
+      if (fn.name === 'collectOwnerPalette') return args.tokens.map(token => ({ name: token.name, resolved: '#171717', rgba: [23,23,23,255] }));
       if (fn.name !== 'collectOwnerObservation') return undefined;
       counts.reads++; await onRead(); if (failRead) throw Error('observation failed');
       const owners = frameOwners(html), box = { x: 0, y: 0, width: 100, height: 40 };
@@ -57,16 +58,10 @@ function browserDouble({ failRead = false, failClose = false, onRead = () => {} 
 const options = (f, file, extra = {}) => ({ file, 'state-dir': f.state, json: true, ...extra });
 const deps = double => ({ launchBrowser: double.launch, environment: async () => 'deterministic-test-environment' });
 
-test('owner parsing, JSON identities, deferred modes, help and recovery preserve argv', async () => {
+test('owner parsing, JSON identities, help and recovery preserve argv', async () => {
   for (const mode of ['file', 'text', 'color', 'token']) assert.equal(parseCli(['owner', `--${mode}=value`]).command, 'owner');
   for (const argv of [[], ['--file=a', '--text=b'], ['--file=a', '--file=b'], ['--file='], ['--file=a', '--line=0'], ['--file=a', '--line=1.5'], ['--text=a', '--symbol=B'], ['--color=red', '--contains'], ['--file=a', 'extra'], ['--file=a', '--theme=no']]) assert.throws(() => parseCli(['owner', ...argv]), { code: 'USAGE_INVALID' });
   assert.match(help('owner'), /preceding export/); assert.equal(parseCli(['owner', '--help']).values.help, true);
-  for (const mode of ['text', 'color', 'token']) {
-    let stdout = ''; const exits = [];
-    await main(['owner', `--${mode}=value`, '--json'], '/does/not/exist', { stdout: text => { stdout += text; }, stderr: () => {}, exit: code => exits.push(code) });
-    const envelope = JSON.parse(stdout); assert.equal(envelope.command, 'owner'); assert.equal(envelope.error.code, 'USAGE_INVALID'); assert.match(envelope.error.message, /not implemented until segment 3/); assert.deepEqual(exits, [2]);
-    assert.deepEqual(envelope.error.next[0].argv, ['adg', 'owner', '--help', '--json']);
-  }
   const argv = nextActions('OWNER_UNSETTLED', { command: 'owner', values: { file: 'ui/control.ts', line: '4', symbol: 'Button', theme: 'dark', 'state-dir': '/tmp/state with spaces' } })[0].argv;
   assert.deepEqual(argv, ['adg', 'owner', '--file=ui/control.ts', '--line=4', '--symbol=Button', '--theme=dark', '--state-dir=/tmp/state with spaces', '--json']);
   assert.equal(parseCli(argv.slice(1)).values.line, '4');
@@ -84,7 +79,7 @@ test('file ownership observes only bound frames, returns provenance/tokens, pres
   const result = await owner(f.config, options(f, 'ui/control.ts', { symbol: 'Button' }), deps(double));
   const data = result.data;
   assert.equal(data.complete, true); assert.equal(data.coverage.builtSources, 2, 'only refined owner and file fallback sources are built');
-  assert.equal(data.coverage.requestedObservations, 6); assert.equal(double.counts.loads, 6);
+  assert.equal(data.coverage.requestedObservations, 6); assert.equal(double.documents.filter(html => html.includes('data-adg-frame=')).length, 6);
   assert.ok(!double.documents.some(html => html.includes('data-adg-frame="unbound"')));
   assert.equal(data.owners[0].part, 'Button'); assert.equal(data.owners[0].matchKind, 'mapping_symbol');
   assert.deepEqual(data.owners[0].frames.map(frame => [frame.frame, frame.theme]), [['primary', 'light'], ['primary', 'dark'], ['secondary', 'light'], ['secondary', 'dark']]);
@@ -106,11 +101,13 @@ test('regions select mapped exports and helpers, with fallback at unmapped and p
     assert.equal(data.owners[0].part, 'Button'); assert.equal(data.owners[0].matchKind, 'mapping_symbol_region');
     const mapping = data.owners[0].evidence.find(evidence => evidence.detail.kind === 'mapping');
     assert.equal(mapping.detail.anchorLine, 3); assert.equal(mapping.detail.nextBoundaryLine, 5);
+    assert.deepEqual(data.region, { boundaryLine: 3, symbol: 'Button', mapped: true, nextBoundaryLine: 5 });
   }
   for (const line of ['1', '5']) {
     const { data, warnings } = await owner(f.config, options(f, 'ui/control.ts', { line }), deps(double));
     assert.equal(data.owners.length, 1); assert.equal(data.owners[0].part, null); assert.equal(data.coverage.builtSources, 1);
     assert.equal(warnings[0].code, 'OWNER_LOCATOR_UNMAPPED'); assert.equal(data.owners[0].evidence[0].detail.locatorMatched, false);
+    if (line === '5') assert.deepEqual(data.region, { boundaryLine: 5, symbol: 'Unmapped', mapped: false, nextBoundaryLine: 6 });
   }
   const contradictory = await owner(f.config, options(f, 'ui/control.ts', { line: '6', symbol: 'Button' }), deps(double));
   assert.equal(contradictory.data.owners[0].part, null); assert.ok(contradictory.warnings.some(w => w.code === 'OWNER_LOCATOR_UNMAPPED'));

@@ -14,7 +14,7 @@ import { defaultStateDirectory } from '../hub/registry.mjs';
 import { sourceRelationships } from '../../public/relationships.js';
 export { sourceFacts } from './source-facts.mjs';
 
-const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'tokens.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
+const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'owner-colors.mjs', 'tokens.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
 
 export function discoverProject(config) {
   const tsx = listSources(config.design, sourceDirectories(config)).map(file => relative(config, file));
@@ -78,6 +78,20 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
       if (environment === null) return collect();
       const build = built.inputHash ?? indexDigest(JSON.stringify({ css: built.css, frame }));
       return cached('owner-observation', { source, build, frame: frame.name, theme, environment }, collect);
+    },
+    async palette(tokens, theme, environment, collect) {
+      assertOpen();
+      return environment === null ? collect() : cached('owner-palette', { tokens, theme, environment }, collect);
+    },
+    async color(input, environment, collect) {
+      assertOpen();
+      if (environment === null) return collect();
+      const key = JSON.stringify({ version: 1, collectorIdentity, projection: 'query-colors', environment });
+      const entries = new Map(await shards.get(key) ?? []);
+      if (entries.has(input)) return entries.get(input);
+      const value = await collect(); entries.set(input, value);
+      while (entries.size > 128) entries.delete(entries.keys().next().value);
+      await shards.put(key, [...entries]); return value;
     },
     async verifyInputs() {
       for (const [name, hash] of observedInputs) {

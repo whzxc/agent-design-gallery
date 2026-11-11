@@ -4,6 +4,7 @@ import { CliError } from '../cli-output.mjs';
 import { portablePath, globPattern, resolveLocator, symbolRegions, selectorMatches } from './owner-locators.mjs';
 import { indexDigest } from './index-store.mjs';
 import { mappingFacts } from './source-facts.mjs';
+import { jsonLocations } from './json-locations.mjs';
 
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const keys = (value, allowed) => object(value) && Object.keys(value).every(key => allowed.includes(key));
@@ -40,7 +41,7 @@ export async function loadImplementationMap(config) {
   let text;
   try { text = await readFile(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return { file, source: rel(config, file), present: false, mappings: [] }; throw error; }
   if (!inside(await realpath(config.root), await realpath(file))) invalid('implementation.json resolves outside the project.');
-  return { ...parseImplementationMap(text), file, source: rel(config, file), present: true, inputHash: indexDigest(text) };
+  return { ...parseImplementationMap(text), file, source: rel(config, file), present: true, inputHash: indexDigest(text), locations: jsonLocations(text) };
 }
 
 /** Expands only the selector prefix; escaping symlinks are rejected, not followed. */
@@ -85,7 +86,7 @@ export async function validateImplementationMap(config, map, { sources, selected
   const sourceSet = new Set(sources), scope = selected && new Set(selected);
   const report = (code, pointer, selector, target, message, candidates = [], frame = null) => {
     const finding = { code, source: map.source, pointer, implementation: selector.file ?? selector.directory ?? selector.glob,
-      target, line: null, column: null, frame, theme: null, message: `${pointer}: ${message}`, observedAnchorLines: candidates };
+      target, line: map.locations?.[pointer]?.line ?? null, column: map.locations?.[pointer]?.column ?? null, frame, theme: null, message: `${pointer}: ${message}`, observedAnchorLines: candidates };
     findings.push(finding); onFinding(finding);
   };
   for (const [index, mapping] of map.mappings.entries()) {

@@ -16,6 +16,7 @@ export const errorCatalog = {
   CONFIG_INVALID: [2, 'check', 'Recheck after fixing configuration.'],
   TOKENS_INVALID: [2, 'check', 'Recheck after repairing tokens.css.'],
   OWNER_MAP_INVALID: [2, 'check', 'Recheck after repairing implementation.json.'],
+  OWNER_COLOR_INVALID: [2, 'owner-help', 'Supply an absolute supported CSS color or query a token name.'],
   OWNER_INPUT_NOT_FOUND: [2, 'owner-help', 'Choose an existing in-project file or directory.'],
   OWNER_UNSETTLED: [2, 'owner', 'Stabilize the named frame and resources before repeating the query.'],
   OWNER_INDEX_CHANGED: [2, 'owner', 'Finish concurrent input edits before repeating the query.'],

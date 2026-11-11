@@ -29,7 +29,7 @@ const details = {
   check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files.', render: 'Render selected frames as PNG. Defaults to both themes at 2×. --json prints a versioned result with capture geometry and absolute paths.',
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
   diff: 'Compare the Git base and working-tree source/frame union. Existing frames require exact pixels and CSS/device size; added Frame parent declarations enable structural part evidence under diff.thresholds. Defaults to both themes at 2× and <configured output>/diff. Writes before, after and difference PNGs plus report.json. A structural batch requires all existing frames in both themes; source/frame/theme restrictions report partial coverage. Exit 0 identical/structural, 1 changed, 2 incomplete.',
-  owner: 'Find owning design sources, parts, frames and token references from an implementation file, directory or quoted glob. Paths resolve from the project root. --symbol uses an exact mapping label; --line uses the preceding export/anchor region, including unmapped exports. Non-exported helpers belong to the preceding export region. Defaults to both themes. Empty, stale and ambiguous observations exit 0; invalid/incomplete requests exit 2. Text, color and token queries are parsed but not implemented until segment 3; they currently return USAGE_INVALID with file-query guidance.',
+  owner: 'Find owning design sources, parts, frames and tokens from an implementation path, rendered text, absolute CSS color or token name. Paths resolve from the project root; quote globs. --line returns the containing export/anchor region, including unmapped exports; non-exported helpers belong to the preceding export. Text is NFC/whitespace normalized and exact unless --contains; --locale filters exact Frame locale annotations without translation. Colors use 8-bit sRGB RGBA equality. Token references are authored declarations, separate from observed color values. Defaults to both themes. Empty, stale and ambiguous results exit 0; invalid/incomplete requests exit 2.',
 };
 export function help(command) {
   if (command) return `Usage: adg ${command} ${usage[command]}\n\n${details[command]}\n\n-h, --help  Show help\nExit codes: 0 success, 1 check/compare/diff problems, 2 usage/configuration/environment error.`;
@@ -104,7 +104,6 @@ function errorCommand(args) {
 }
 
 async function dispatch({ command, values, positionals }, cwd, output, serviceOptions) {
-  if (command === 'owner' && values.file === undefined) throw new CliError('USAGE_INVALID', 'Text, color and token ownership queries are not implemented until segment 3. Use --file with an implementation path, directory or quoted glob; run adg owner --help.');
   if (command === 'migrate') return { data: await (await import('./toolkit/migrate.mjs')).migrate(positionals[0] === undefined ? cwd : path.resolve(cwd, positionals[0]), output.log) };
   if (command === 'link') {
     const { previewTarget, previewURL } = await import('./link.mjs');

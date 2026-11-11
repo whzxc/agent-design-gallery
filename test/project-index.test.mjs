@@ -75,11 +75,12 @@ test('persistent projections invalidate dependencies, tokens, mappings and sidec
 });
 
 test('index shards are atomic, bounded, disposable and safe across concurrent writers', async t => {
-  const directory = await mkdtemp(path.join(tmpdir(), 'adg-shards-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  const directory = await mkdtemp(path.join(tmpdir(), 'adg-shards-')); let store;
+  t.after(async () => { await store?.close(); await rm(directory, { recursive: true, force: true }); });
   const options = { directory, memoryLimit: 160, diskLimit: 250 };
-  let store = await createIndexStore(options); const other = await createIndexStore(options);
+  store = await createIndexStore(options); const other = await createIndexStore(options);
   await Promise.all([store.put('first', { value: 'a'.repeat(70) }), other.put('second', { value: 'b'.repeat(70) })]);
-  await other.close(); await store.close(); store = await createIndexStore(options); t.after(() => store.close());
+  await other.close(); await store.close(); store = await createIndexStore(options);
   const blobs = (await readdir(directory)).filter(name => /^[a-f0-9]{64}\.json$/.test(name));
   const bytes = await Promise.all(blobs.map(name => readFile(path.join(directory, name)))); assert.ok(bytes.reduce((n, b) => n + b.length, 0) <= 250);
   assert.ok(!(await readdir(directory)).some(name => name.endsWith('.tmp')));
@@ -88,4 +89,27 @@ test('index shards are atomic, bounded, disposable and safe across concurrent wr
   await writeFile(path.join(directory, indexDigest('broken') + '.json'), '{'); assert.equal(await store.get('broken'), null);
   await store.put('broken', { repaired: true }); assert.deepEqual(await store.get('broken'), { repaired: true });
   assert.ok(store.stats().memoryBytes <= 160);
+});
+
+test('cold shard batches inventory the directory once and publish one manifest at close', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'adg-batch-'));
+  const store = await createIndexStore({ directory });
+  t.after(async () => { await store.close(); await rm(directory, { recursive: true, force: true }); });
+  for (let i = 0; i < 100; i++) await store.put(`key-${i}`, { i });
+  assert.equal(store.stats().directoryScans, 1); assert.equal(store.stats().manifestWrites, 0);
+  await store.close(); assert.equal(store.stats().directoryScans, 2); assert.equal(store.stats().manifestWrites, 1);
+});
+
+test('palette queries reuse their environment and bound standalone color entries to 128', async t => {
+  const f = await fixture(t), index = await openProjectIndex(f.config, { persist: false, stateDirectory: f.stateDirectory });
+  t.after(() => index.close()); let collected = 0;
+  const read = async () => { collected++; return [1,2,3,255]; };
+  await index.color('first','font-a',read); await index.color('first','font-a',read); assert.equal(collected,1);
+  await index.color('first','font-b',read); assert.equal(collected,2);
+  for(let i=0;i<128;i++)await index.color(`color-${i}`,'font-a',read);
+  await index.color('first','font-a',read); assert.equal(collected,131,'oldest expression was evicted');
+  let palettes=0;const tokens=index.tokens();
+  await index.palette(tokens,'light','font-a',async()=>{palettes++;return[];});
+  await index.palette(tokens,'light','font-a',async()=>assert.fail('palette cache missed'));
+  await index.palette(tokens,'dark','font-a',async()=>{palettes++;return[];});assert.equal(palettes,2);
 });

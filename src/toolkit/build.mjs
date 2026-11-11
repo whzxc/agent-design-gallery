@@ -61,6 +61,10 @@ function trimTransforms() {
 export function validateFrame(frame) {
   if (!frame?.frame || typeof frame.name !== 'string' || !frame.name.trim()) throw Error('Default export must return named Frames');
   for (const key of ['width', 'height']) if (frame[key] !== undefined && !(Number.isFinite(frame[key]) && frame[key] > 0)) throw Error(`Invalid Frame ${key}; use positive CSS pixels`);
+  if (frame.locale !== undefined) {
+    try { if (typeof frame.locale !== 'string' || !frame.locale.trim()) throw Error(); frame.locale = Intl.getCanonicalLocales(frame.locale)[0]; }
+    catch { throw Error('Invalid Frame locale; use a BCP 47 language tag.'); }
+  }
   const parent = frame.parent;
   if (parent !== undefined) {
     if (!parent || typeof parent !== 'object' || Array.isArray(parent) ||

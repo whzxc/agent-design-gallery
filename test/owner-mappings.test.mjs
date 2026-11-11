@@ -112,6 +112,7 @@ test('semantic mapping validation distinguishes missing bindings, part coverage 
   assert.deepEqual(result.bindings.at(-1).frames, []);
   assert.equal(result.bindings.at(-1).active, true);
   assert.equal(result.findings.every(f => f.source === 'design/implementation.json' && f.message.includes(f.pointer)), true);
+  assert.ok(result.findings.every(f => f.line === 1 && f.column > 0), 'loaded JSON findings identify their value tokens');
   assert.equal(existsSync(path.join(config.design, '.adg')), false);
 });
 

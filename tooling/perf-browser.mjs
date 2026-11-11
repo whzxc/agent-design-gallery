@@ -102,7 +102,7 @@ export async function measureNavigation(page, {url, reload=false, traceFile, scr
     await cdp.detach();
   }
 }
-export async function phaseBenchmark(url,destination,{reload=false,trace=false}={}) {
+export async function phaseBenchmark(url,destination,{reload=false,trace=false,screenshots=true}={}) {
   await mkdir(path.dirname(destination),{recursive:true});
   const browser=await chromium.launch({headless:true,args:['--enable-precise-memory-info']});
   try {
@@ -111,7 +111,7 @@ export async function phaseBenchmark(url,destination,{reload=false,trace=false}=
     const page=await context.newPage();
     const environment={platform:os.platform(),release:os.release(),arch:os.arch(),cpu:os.cpus()[0].model,cores:os.cpus().length,
       memoryBytes:os.totalmem(),node:process.version,chromium:browser.version(),viewport:{width:1440,height:900,dpr:2},headless:true};
-    const cold=await measureNavigation(page,{url,traceFile:trace?destination.replace(/\.json$/,'.trace.json'):undefined,screenshotFile:destination.replace(/\.json$/,'.png')});
+    const cold=await measureNavigation(page,{url,traceFile:trace?destination.replace(/\.json$/,'.trace.json'):undefined,screenshotFile:screenshots?destination.replace(/\.json$/,'.png'):undefined});
     const warm=reload?await measureNavigation(page,{reload:true}):undefined;
     const result={environment,cold,warm};await writeFile(destination,JSON.stringify(result,null,2));return result;
   } finally {await browser.close();}

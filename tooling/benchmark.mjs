@@ -2,7 +2,7 @@
 if (process.argv.includes('--phases')) {
   const { phaseBenchmark } = await import('./perf-browser.mjs');
   await phaseBenchmark(process.argv[2], process.argv[3], {
-    reload: process.argv.includes('--reload'), trace: process.argv.includes('--trace'),
+    reload: process.argv.includes('--reload'), trace: process.argv.includes('--trace'), screenshots: !process.argv.includes('--no-screenshots'),
   });
   process.exit(0);
 }
@@ -321,7 +321,7 @@ if (fixtureRoot) {
 await mkdir(destination.substring(0, destination.lastIndexOf("/")), {
   recursive: true,
 });
-await page.screenshot({ path: destination.replace(".json", ".png") });
+if (!process.argv.includes('--no-screenshots')) await page.screenshot({ path: destination.replace(".json", ".png") });
 const result = {
   time: new Date().toISOString(),
   environment: {

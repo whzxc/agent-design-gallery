@@ -53,7 +53,7 @@ export async function phaseComparison(args) {
     const record={implementation,runtime,route,run,project,scope,launch:launchArgs,started:server.started,startupMs:server.startupMs};
     try {
       const file=path.join(out,`${prefix}.json`);
-      await benchmark(viewerURL(server),file,[...(args.includes('--cold-only')?[]:['--reload']),...(run===1&&args.includes('--trace')?['--trace']:[])]);
+      await benchmark(viewerURL(server),file,[...(args.includes('--cold-only')?[]:['--reload']),...(run===1&&args.includes('--trace')?['--trace']:[]),...(args.includes('--no-screenshots')?['--no-screenshots']:[])]);
       record.result=path.basename(file);
     } finally {await server.close();}
     if(!args.includes('--cold-only')) {
@@ -61,7 +61,7 @@ export async function phaseComparison(args) {
       record.restartStarted=server.started;record.restartStartupMs=server.startupMs;
       try {
         const file=path.join(out,`${prefix}-restart.json`);
-        await benchmark(viewerURL(server),file,[]);record.restartResult=path.basename(file);
+        await benchmark(viewerURL(server),file,args.includes('--no-screenshots')?['--no-screenshots']:[]);record.restartResult=path.basename(file);
       } finally {await server.close();}
     }
     records.push(record);

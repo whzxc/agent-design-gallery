@@ -5,7 +5,7 @@ import { openProjectIndex } from './project-index.mjs';
 import { loadImplementationMap, implementationFiles } from './implementation-map.mjs';
 import { portablePath, selectorMatches, resolveLocator, symbolRegions, regionAt, sourceLineCount } from './owner-locators.mjs';
 import { launch, loadFrame, readyResources, browserTask } from './browser.mjs';
-import { collectOwnerObservation, settleOwnerObservation, observationEnvironment } from './owner-observation.mjs';
+import { observeOwnerFrame, observeOwnerPalette, occurrenceContext, observationEnvironment } from './owner-observation.mjs';
 import { commandFailure, cleanup } from './results.mjs';
 import { escape } from './runtime.mjs';
 import { indexDigest } from './index-store.mjs';
@@ -56,8 +56,9 @@ function bindingKind(selector, query) {
 }
 
 export async function owner(config, values, { log = console.log, openIndex = openProjectIndex, launchBrowser = launch, environment = observationEnvironment } = {}) {
+  if (values.file === undefined) return (await import('./owner-search.mjs')).searchOwner(config, values, { log, openIndex, launchBrowser, environment });
   const { query, text } = await normalizeFileQuery(config, values);
-  const data = { project: config.root, complete: false, query, owners: [], tokens: [], ambiguous: false, tokenAmbiguous: false, matchedImplementationFiles: [], mappingFindings: [],
+  const data = { project: config.root, complete: false, query, region: null, owners: [], tokens: [], ambiguous: false, tokenAmbiguous: false, matchedImplementationFiles: [], mappingFindings: [],
     coverage: { discoveredSources: 0, builtSources: 0, requestedObservations: 0, completedObservations: 0, mappingState: 'absent', activeBindings: 0, excludedBindings: 0, domain: 'tsx' } };
   const warnings = [], context = { command: 'owner', values }, warned = new Set();
   const warn = (code, message, retry = false) => {
@@ -74,6 +75,7 @@ export async function owner(config, values, { log = console.log, openIndex = ope
     index = await openIndex(config, { stateDirectory: values['state-dir'] }); data.coverage.discoveredSources = index.inventory.tsx.length;
     const mapSelectors = map.mappings.map(mapping => mapping.implementation).filter(s => s.file === query.normalized && s.symbol);
     const queryRegion = text === null ? null : regionAt(symbolRegions(text, query.normalized, mapSelectors), query.line ?? 1);
+    if (query.line !== null && queryRegion) data.region = { boundaryLine: queryRegion.line, symbol: queryRegion.symbol, mapped: queryRegion.mapped.length > 0, nextBoundaryLine: queryRegion.nextBoundaryLine };
     const mappingIndices = new Set();
     map.mappings.forEach((mapping, i) => {
       const s = mapping.implementation;
@@ -117,6 +119,8 @@ export async function owner(config, values, { log = console.log, openIndex = ope
     const definitions = tasks.size ? index.tokens() : [], byName = new Map(definitions.map(token => [token.name, token]));
     data.coverage.requestedObservations = tasks.size;
     const env = tasks.size ? await environment() : null;
+    const getPage = async () => { browser ??= await launchBrowser(); page ??= await browserTask(browser, () => browser.newPage({ locale: 'en-US', timezoneId: 'UTC' })); return page; };
+    const palettes = new Map(), tokenSource = tasks.size ? await readFile(path.join(config.design, 'tokens.css'), 'utf8') : '';
     function tokenVia(name, theme, seen = new Set([name])) {
       const result = [];
       for (const ref of byName.get(name)?.values.find(value => value.theme === theme)?.references ?? []) if (!seen.has(ref)) { seen.add(ref); result.push(ref, ...tokenVia(ref, theme, seen)); }
@@ -125,22 +129,16 @@ export async function owner(config, values, { log = console.log, openIndex = ope
     for (const task of tasks.values()) {
       const built = await index.getBuild(task.source), frame = built.frames.find(frame => frame.name === task.frame);
       frameOrder.set(task.source, built.frames.map(frame => frame.name));
-      const observation = await index.observation(task.source, built, frame, task.theme, env, async () => {
-        browser ??= await launchBrowser(); page ??= await browserTask(browser, () => browser.newPage({ locale: 'en-US', timezoneId: 'UTC' }));
-        const rendered = { ...frame, document: theme => `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${built.css.replace(/<\/style/gi, '<\\/style')}</style></head><body><div data-adg-frame="${escape(frame.name)}" style="${frame.width ? `width:${frame.width}px;` : 'width:max-content;'}${frame.height ? `height:${frame.height}px;` : ''}">${frame.html}</div></body></html>` };
-        await loadFrame(page, rendered, task.theme);
-        return browserTask(browser, async () => {
-          await page.evaluate(readyResources);
-          return settleOwnerObservation(() => page.evaluate(collectOwnerObservation, { tokens: definitions, theme: task.theme }), () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve))));
-        });
-      });
-      const ref = { source: task.source, frame: task.frame }, palette = new Map(observation.palette.map(value => [value.name, value]));
+      const observation = await observeOwnerFrame(index, task.source, built, frame, task.theme, env, getPage, definitions);
+      if (!palettes.has(task.theme)) palettes.set(task.theme, await observeOwnerPalette(index, definitions, task.theme, env, getPage, tokenSource));
+      const ref = { source: task.source, frame: task.frame }, palette = new Map(palettes.get(task.theme).map(value => [value.name, value]));
       for (const { row, binding } of task.bindings) {
-        const roots = binding.design.part ? observation.nodes.filter(node => node.owners.some(owner => projectOwners([owner]).some(part => part.source === row.source && part.part === row.part))) : observation.nodes.filter(node => node.path === '0');
+        const roots = binding.design.part ? observation.nodes.filter(node => node.box && node.owners.some(owner => projectOwners([owner]).some(part => part.source === row.source && part.part === row.part))) : observation.nodes.filter(node => node.path === '0' && node.box);
         if (row.part && !roots.length) warn('OWNER_PART_UNOBSERVED', 'The declared part has no painted occurrence in a bound frame; inspect its authored coverage.');
         if (!row.frames.some(frame => frame.source === ref.source && frame.frame === ref.frame && frame.theme === task.theme)) row.frames.push({ ...ref, theme: task.theme, locale: frame.locale ?? null });
         addMapping(row, binding, ref, task.theme, roots);
-        for (const reference of observation.references) {
+        for (const rawReference of observation.references) {
+          const reference = occurrenceContext(observation, rawReference);
           if (row.part && !roots.some(root => reference.ancestors.includes(root.path))) continue;
           if (!row.tokens.includes(reference.token)) row.tokens.push(reference.token);
           row.evidence.push({ matchKind: reference.matchKind, frame: ref, theme: task.theme, elementPath: reference.path, boxes: [reference.box], owners: projectOwners(reference.owners),
