@@ -19,7 +19,7 @@ import { CliError, classifyError } from '../cli-output.mjs';
 export function commandFailure(error, data, warnings, fallback = 'INTERNAL_ERROR') {
   const classified = classifyError(error);
   const failure = error instanceof CliError ? error : new CliError(classified.error.code === 'INTERNAL_ERROR' ? fallback : classified.error.code, classified.error.message, { cause: error });
-  if (!['CHECK_FAILED', 'COMPARE_FAILED'].includes(failure.code)) data.complete = false;
+  if (!['CHECK_FAILED', 'COMPARE_FAILED', 'DIFF_FAILED'].includes(failure.code)) data.complete = false;
   failure.data = data;
   failure.warnings = [...new Set([...warnings, ...failure.warnings])];
   return failure;

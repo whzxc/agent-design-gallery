@@ -27,7 +27,8 @@ export const errorCatalog = {
   SOURCE_BUILD_FAILED: [2, 'check', 'Read source diagnostics after repairing the source.'],
   GIT_UNAVAILABLE: [2, 'git-version', 'Verify Git after installing it.'],
   GIT_BASE_INVALID: [2, 'git', 'Inspect the project repository and base revision.'],
-  DIFF_BASE_DEPENDENCIES_UNAVAILABLE: [2, 'help', 'Restore the reported historical import or its installed dependency before retrying.'],
+  DIFF_BASE_DEPENDENCIES_UNAVAILABLE: [2, 'diff', 'Restore the reported historical import or its installed dependency before retrying.'],
+  DIFF_FAILED: [1, 'diff', 'Review the reported artifacts, then repeat the comparison after resolving the differences.'],
   CHECK_FAILED: [1, 'check', 'Recheck after fixing findings.'],
   COMPARE_FAILED: [1, 'compare', 'Compare again after reviewing the reports.'],
   PLAYWRIGHT_UNAVAILABLE: [2, 'install', 'Restore the packaged browser dependency.'],
@@ -65,7 +66,7 @@ export class CliError extends Error {
 }
 
 const canonicalCommands = new Set([
-  'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare',
+  'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff',
   'root add', 'root remove', 'root list', 'root scan',
   'service install', 'service uninstall', 'service status', 'service logs', 'service migrate',
   'help', 'version', 'adg',
@@ -113,6 +114,17 @@ export function nextActions(code, context = {}) {
       break;
     }
     case 'chromium': argv = ['npx', `playwright@${playwrightVersion}`, 'install', 'chromium']; break;
+    case 'diff': {
+      const values = context.values ?? {};
+      if (context.command !== 'diff' || typeof values.base !== 'string' || !values.base.trim()) { argv = helpArgv('diff'); break; }
+      argv = ['adg', 'diff'];
+      for (const key of ['base', 'frame', 'theme', 'scale', 'out-dir']) {
+        if (typeof values[key] === 'string') argv.push(`--${key}=${values[key]}`);
+      }
+      argv.push('--json');
+      if (context.positionals?.length) argv.push('--', ...context.positionals);
+      break;
+    }
     case 'compare': {
       const values = context.values ?? {}, sources = context.positionals ?? [];
       if (context.command !== 'compare' || (!values.all && (sources.length !== 1 || typeof values.frame !== 'string' || !values.frame))) {
@@ -204,6 +216,12 @@ export async function withHumanOutput(work, stderr) {
   }
   try { return await humanOutput.run(stderr, work); }
   finally { [process.stdout.write, process.stderr.write] = originals; }
+}
+
+/** Preserve the active output sink while translating revision-local diagnostics. */
+export async function withHumanOutputMapping(work, transform) {
+  const sink = humanOutput.getStore() ?? process.stderr.write.bind(process.stderr);
+  return withHumanOutput(work, text => sink(transform(text)));
 }
 
 /** @param {OutputOptions} options */

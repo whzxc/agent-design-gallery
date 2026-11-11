@@ -1,11 +1,28 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
-import { realpath, mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises';
+import { realpath, mkdtemp, mkdir, open, symlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { CliError } from '../cli-output.mjs';
+import { pathToFileURL } from 'node:url';
+import { CliError, asCliError } from '../cli-output.mjs';
 import { cleanup } from './results.mjs';
 const exec = promisify(execFile);
+
+export function revisionValue(value, directory, root) {
+  if (typeof value === 'string') return value.replaceAll(pathToFileURL(directory).href, pathToFileURL(root).href).replaceAll(directory, root);
+  if (Array.isArray(value)) return value.map(item => revisionValue(item, directory, root));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, revisionValue(item, directory, root)]));
+  return value;
+}
+
+export function revisionError(error, directory, base) {
+  const failure = asCliError(error);
+  failure.message = `Base ${base.sha.slice(0, 7)}: ${revisionValue(failure.message, directory, base.root)}`;
+  failure.context = revisionValue(failure.context, directory, base.root);
+  failure.warnings = revisionValue(failure.warnings, directory, base.root);
+  failure.data = null;
+  return failure;
+}
 async function physicalPath(file) {
   try { return await realpath(file); }
   catch(error) {
@@ -14,10 +31,10 @@ async function physicalPath(file) {
     return path.join(await physicalPath(path.dirname(file)),path.basename(file));
   }
 }
-async function git(root, args, { input, encoding = 'utf8', maxBuffer = 16 * 1024 * 1024 } = {}) {
+async function git(root, args) {
   try {
-    const task = exec('git', ['-C', root, ...args], { encoding, maxBuffer });
-    task.child.stdin.end(input);
+    const task = exec('git', ['-C', root, ...args], { maxBuffer: 16 * 1024 * 1024 });
+    task.child.stdin.end();
     return (await task).stdout;
   }
   catch(error) {
@@ -26,50 +43,102 @@ async function git(root, args, { input, encoding = 'utf8', maxBuffer = 16 * 1024
   }
 }
 
+async function writeBaseBlobs(base, directory, entries) {
+  const child = spawn('git', ['-C', base.root, 'cat-file', '--batch']);
+  let stderr = '', spawnError;
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', text => { stderr = (stderr + text).slice(-16384); });
+  child.stdin.on('error', () => {});
+  const done = new Promise((resolve, reject) => {
+    child.once('error', error => { spawnError = error; reject(error); });
+    child.once('close', code => code === 0 ? resolve() : reject(new Error(stderr || `Git cat-file exited ${code}.`)));
+  });
+  done.catch(() => {});
+  const chunks = child.stdout[Symbol.asyncIterator]();
+  let pending = Buffer.alloc(0);
+  const refill = async () => {
+    const next = await chunks.next();
+    if (next.done) throw new Error(stderr || 'Git blob stream ended early.');
+    pending = next.value;
+  };
+  try {
+    for (const entry of entries) {
+      if (entry.type !== 'blob') continue;
+      const target = path.join(directory, entry.name);
+      await mkdir(path.dirname(target), { recursive: true });
+      child.stdin.write(`${entry.blob}\n`);
+      let header = '';
+      for (;;) {
+        if (!pending.length) await refill();
+        const end = pending.indexOf(10);
+        if (end >= 0) {
+          header += pending.subarray(0, end).toString('ascii');
+          pending = pending.subarray(end + 1);
+          break;
+        }
+        header += pending.toString('ascii'); pending = Buffer.alloc(0);
+      }
+      const [id, type, length] = header.split(' ');
+      if (id !== entry.blob || type !== 'blob' || !/^\d+$/.test(length)) throw new Error(`Cannot read Git blob ${entry.blob}.`);
+      const linkChunks = [];
+      const file = entry.mode === '120000' ? null : await open(target, 'w', entry.mode === '100755' ? 0o755 : 0o644);
+      try {
+        let remaining = Number(length);
+        while (remaining > 0) {
+          if (!pending.length) await refill();
+          const count = Math.min(remaining, pending.length), bytes = pending.subarray(0, count);
+          if (file) await file.writeFile(bytes);
+          else linkChunks.push(bytes);
+          pending = pending.subarray(count); remaining -= count;
+        }
+      } finally { await file?.close(); }
+      if (!pending.length) await refill();
+      if (pending[0] !== 10) throw new Error('Invalid Git blob separator.');
+      pending = pending.subarray(1);
+      if (!file) {
+        const link = Buffer.concat(linkChunks).toString('utf8');
+        const relative = path.relative(directory, path.resolve(path.dirname(target), link));
+        if (!path.isAbsolute(link) && relative !== '..' && !relative.startsWith(`..${path.sep}`)) await symlink(link, target);
+      }
+    }
+    child.stdin.end();
+    await done;
+  } catch (error) {
+    if (spawnError?.code === 'ENOENT') throw new CliError('GIT_UNAVAILABLE', 'Git is unavailable; install Git and retry --base.', { cause: spawnError });
+    if (error.code) throw error;
+    throw new CliError('GIT_BASE_INVALID', error.message, { cause: error, context: { project: base.root, gitCause: 'read' } });
+  } finally {
+    if (child.exitCode === null) child.kill();
+    await done.catch(() => {});
+  }
+}
+
 /** Materialize tracked bytes without export attributes or a Git worktree. */
 export async function materializeBase(base) {
-  const directory = await mkdtemp(path.join(tmpdir(), 'adg-diff-'));
-  const close = () => cleanup(() => rm(directory, { recursive: true, force: true }));
+  const directory = await realpath(await mkdtemp(path.join(tmpdir(), 'adg-diff-')));
+  const close = async () => {
+    try { await cleanup(() => rm(directory, { recursive: true, force: true })); }
+    catch (error) { throw revisionError(error, directory, base); }
+  };
   try {
     const tree = await git(base.root, ['ls-tree', '-r', '-z', base.sha]);
     const entries = tree.split('\0').filter(Boolean).map(entry => {
       const [, mode, type, blob, name] = /^(\d{6}) (blob|commit) ([a-f0-9]+)\t([\s\S]+)$/.exec(entry);
       return { mode, type, blob, name };
     });
-    const ids = [...new Set(entries.filter(entry => entry.type === 'blob').map(entry => entry.blob))];
-    const bytes = await git(base.root, ['cat-file', '--batch'], {
-      input: ids.map(id => `${id}\n`).join(''), encoding: 'buffer', maxBuffer: 256 * 1024 * 1024,
-    });
-    const blobs = new Map();
-    let offset = 0;
-    for (const id of ids) {
-      const end = bytes.indexOf(10, offset);
-      const [actual, type, size] = bytes.subarray(offset, end).toString('ascii').split(' ');
-      if (actual !== id || type !== 'blob') throw new CliError('GIT_BASE_INVALID', `Cannot read Git blob ${id}.`);
-      offset = end + 1;
-      blobs.set(id, bytes.subarray(offset, offset + Number(size)));
-      offset += Number(size) + 1;
-    }
-    for (const entry of entries) {
-      const target = path.join(directory, entry.name);
-      if (entry.type === 'commit') continue;
-      const content = blobs.get(entry.blob);
-      await mkdir(path.dirname(target), { recursive: true });
-      if (entry.mode === '120000') {
-        const link = content.toString('utf8');
-        const resolved = path.resolve(path.dirname(target), link);
-        const relative = path.relative(directory, resolved);
-        if (path.isAbsolute(link) || relative === '..' || relative.startsWith(`..${path.sep}`)) {
-          continue;
-        }
-        await symlink(link, target);
-      } else await writeFile(target, content, { mode: entry.mode === '100755' ? 0o755 : 0o644 });
-    }
+    await writeBaseBlobs(base, directory, entries);
     return { directory, close };
   } catch (error) {
-    await cleanup(() => rm(directory, { recursive: true, force: true }), error);
-    throw error;
+    const failure = revisionError(error, directory, base);
+    await cleanup(() => rm(directory, { recursive: true, force: true }), failure);
+    failure.warnings = revisionValue(failure.warnings, directory, base.root);
+    throw failure;
   }
+}
+
+export async function currentHead(base) {
+  try { return (await git(base.root, ['rev-parse', '--verify', 'HEAD'])).trim(); }
+  catch (error) { if (error.code === 'GIT_UNAVAILABLE') throw error; return null; }
 }
 
 /** Rename hints include staged and unstaged tracked changes against the base. */

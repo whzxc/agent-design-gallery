@@ -1,12 +1,12 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, realpath, rm, symlink } from 'node:fs/promises';
-import { resolveBase, materializeBase, sourceRenames } from './arch-git.mjs';
-import { loadConfig } from './config.mjs';
+import { resolveBase, materializeBase, sourceRenames, revisionValue, revisionError } from './arch-git.mjs';
+import { loadConfig, legacyConfigFile } from './config.mjs';
 import { selectSources, relative } from './project.mjs';
 import { buildSource } from './build.mjs';
 import { cleanup } from './results.mjs';
-import { CliError } from '../cli-output.mjs';
+import { CliError, withHumanOutputMapping } from '../cli-output.mjs';
 
 const environmentFiles = ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb'];
 const slash = value => value.split(path.sep).join('/');
@@ -148,9 +148,24 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
       message: `Base config uses current node_modules; environment files differ: ${configDependencies.changedFiles.join(', ')}.`, next: [],
     });
     const beforeRoot = path.join(tree.directory, path.relative(base.root, root));
+    const baseMigration = { applied: false, changes: [] };
+    const translate = value => revisionValue(value, tree.directory, base.root);
     let beforeConfig;
-    try { beforeConfig = await loadConfig(beforeRoot, { discover: false }); }
-    catch (error) { throw historicalFailure(error); }
+    try {
+      beforeConfig = await withHumanOutputMapping(async () => {
+        if (legacyConfigFile(beforeRoot)) {
+          const { migrate } = await import('./migrate.mjs');
+          const migrated = await migrate(beforeRoot, () => {});
+          baseMigration.applied = true;
+          baseMigration.changes = migrated.changes.map(change => ({
+            ...change, path: relative({ root: beforeRoot }, change.path),
+            from: change.from === null ? null : relative({ root: beforeRoot }, change.from),
+          }));
+          warnings.push({ code: 'DIFF_BASE_MIGRATED', message: `Migrated the disposable base ${base.sha.slice(0, 7)} to ADG.`, next: [] });
+        }
+        return loadConfig(beforeRoot, { discover: false });
+      }, translate);
+    } catch (error) { throw revisionError(historicalFailure(error), tree.directory, base); }
     const before = { config: beforeConfig, sources: inventory(beforeConfig, tree.directory) };
     // Resolve symlinked project roots consistently with the Git base identity.
     const currentConfig = { ...config, root };
@@ -167,7 +182,7 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
     });
     let closed = false;
     return {
-      base, before, after, sources, warnings, environment: { configDependencies },
+      base, before, after, sources, warnings, environment: { configDependencies, baseMigration },
       async buildFrames({ browser } = {}) {
         if (closed) throw new CliError('SOURCE_BUILD_FAILED', 'Diff inputs are closed; prepare a new comparison.');
         const built = [];
@@ -176,9 +191,12 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
           for (const source of sources) {
             const file = side.sources.get(source);
             if (!file) continue;
-            try { builds.set(source, await buildSource(side.config, file, { write: false, allowLegacy: false, snapshot, browser })); }
+            try {
+              const work = () => buildSource(side.config, file, { write: false, allowLegacy: false, snapshot, browser });
+              builds.set(source, await (side === before ? withHumanOutputMapping(work, translate) : work()));
+            }
             catch (error) {
-              const failure = side === before ? historicalFailure(error) : error;
+              const failure = side === before ? revisionError(historicalFailure(error), tree.directory, base) : error;
               if (failure instanceof CliError) failure.warnings.push(...warnings);
               throw failure;
             }
@@ -196,8 +214,12 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
       async close() { closed = true; await tree.close(); },
     };
   } catch (error) {
-    if (error instanceof CliError) error.warnings.push(...warnings);
-    await cleanup(tree.close, error);
-    throw error;
+    const failure = error instanceof CliError ? error : revisionError(error, tree.directory, base);
+    failure.message = revisionValue(failure.message, tree.directory, base.root);
+    failure.context = revisionValue(failure.context, tree.directory, base.root);
+    failure.warnings.push(...warnings);
+    await cleanup(tree.close, failure);
+    failure.warnings = revisionValue(failure.warnings, tree.directory, base.root);
+    throw failure;
   }
 }

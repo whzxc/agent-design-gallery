@@ -38,6 +38,7 @@ const invocations = [
   ['root', 'add', '/tmp/project'], ['root', 'remove', '/tmp/project'], ['root', 'list'], ['root', 'scan'],
   ...['install', 'uninstall', 'status', 'logs', 'migrate'].map(action => ['service', action]),
   ['migrate'], ['init'], ['check'], ['render'], ['compare', 'surfaces/demo', '--frame=default'],
+  ['diff', '--base=HEAD'],
 ];
 
 test('global JSON parsing and canonical identities cover every command/action without executing it', () => {
@@ -88,6 +89,7 @@ test('parse and dispatch-usage failures produce JSON before loading any command 
     [['init', 'extra'], 'init'], [['check', '--unknown'], 'check'], [['render', '--unknown'], 'render'],
     [['compare', 'surfaces/demo'], 'compare'], [['root', 'invalid', '--help'], 'root'],
     [['render', '--scale'], 'render'],
+    [['diff'], 'diff'], [['diff', '--base='], 'diff'], [['diff', '--base=HEAD', '--unknown'], 'diff'],
   ];
   for (const [args, command] of failures) {
     const result = capture();
@@ -144,17 +146,17 @@ function parseAction(action) {
 }
 
 test('all catalog codes have stable exits, exact recovery argv and parser-valid ADG actions', () => {
-  assert.equal(Object.keys(errorCatalog).length, 37);
+  assert.equal(Object.keys(errorCatalog).length, 38);
   for (const removed of ['CONFIG_LOAD_FAILED', 'GIT_REPOSITORY_REQUIRED', 'GIT_BASE_NOT_FOUND', 'GIT_READ_FAILED']) assert.equal(Object.hasOwn(errorCatalog, removed), false);
   for (const code of Object.keys(errorCatalog)) {
     assert.match(code, /^[A-Z][A-Z_]+$/);
-    const data = { complete: code === 'CHECK_FAILED' || code === 'COMPARE_FAILED' };
+    const data = { complete: ['CHECK_FAILED', 'COMPARE_FAILED', 'DIFF_FAILED'].includes(code) };
     const failure = classifyError(new CliError(code, `Message for ${code}`, { data }), {
       command: 'compare', project: '/tmp/project', stateDirectory: '/tmp/state with spaces',
       positionals: ['surfaces/demo'], values: { frame: 'default', click: ['Open panel', 'Continue'], viewport: '800x600' },
     });
     assert.equal(failure.error.code, code);
-    assert.equal(failure.exitCode, ['CHECK_FAILED', 'COMPARE_FAILED'].includes(code) ? 1 : 2);
+    assert.equal(failure.exitCode, ['CHECK_FAILED', 'COMPARE_FAILED', 'DIFF_FAILED'].includes(code) ? 1 : 2);
     assert.equal(failure.data, data);
     assert.ok(failure.error.next.length > 0);
     failure.error.next.forEach(parseAction);
