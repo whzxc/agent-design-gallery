@@ -34,12 +34,25 @@ function unbalancedVar(value) {
 
 /** Conservative names/declarations (including absence), shared by candidates and later proofs. */
 export function tokenReachability(document, tokenSource, theme) {
-  const roots = identifiers(document).sort();
+  return reachability(identifiers(document).sort(), tokenSource, theme);
+}
+
+export function entryTokenReachability(css, tokenSource) {
+  const shared = identifiers(css);
+  let parsed;
+  try { parsed = parseTokens(tokenSource); } catch {}
+  return markup => {
+    const roots = [...new Set([...shared, ...identifiers(markup)])].sort();
+    return theme => reachability(roots, tokenSource, theme, parsed);
+  };
+}
+
+function reachability(roots, tokenSource, theme, parsed) {
   let tokens, definitions;
   const result = (mode, names, via, fallbackReasons) => ({ mode, names, via,
     declarations: definitions ? Object.fromEntries(names.map(name => [name, definitions.get(name) ?? null])) : {}, fallbackReasons });
   const fallback = reason => result('full_sheet', [...new Set([...roots, ...identifiers(tokenSource)])].sort(), {}, [reason]);
-  try { tokens = parseTokens(tokenSource); } catch { return fallback('tokens_parse_failed'); }
+  try { tokens = parsed ?? parseTokens(tokenSource); } catch { return fallback('tokens_parse_failed'); }
   definitions = new Map(tokens.light);
   if (theme === 'dark') for (const [name, value] of tokens.dark) definitions.set(name, value);
   const via = {}, queue = roots.map(name => ({ name, route: [] }));

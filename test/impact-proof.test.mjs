@@ -5,11 +5,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { frameDocument } from '../src/toolkit/frame-document.mjs';
-import { materializedProjection, architectureProjection, canonicalBytes, capturePolicy } from '../src/toolkit/impact-proof.mjs';
+import { materializedProjection, architectureProjection, canonicalBytes, capturePolicy, entryProjection, equalEntryProof, equalProof } from '../src/toolkit/impact-proof.mjs';
 import { createEligibilityChecker } from '../src/toolkit/impact-eligibility.mjs';
 import { loadConfig } from '../src/toolkit/config.mjs';
 import { openProjectIndex } from '../src/toolkit/project-index.mjs';
 import { starterTokens } from '../src/toolkit/project.mjs';
+import { tokenReachability, entryTokenReachability } from '../src/toolkit/token-reachability.mjs';
 import { impact } from '../src/toolkit/impact.mjs';
 
 const tokens = starterTokens.replace('--text: #171717;', '--text: #171717;\n  --used: var(--missing, #123456);\n  --unused: 5px;');
@@ -165,4 +166,31 @@ test('generation validation rejects config-result, token and resolution changes,
     });
     delete globalThis.adgProofFixtureName;
   }
+});
+
+
+test('entry-level scans and segmented comparison preserve the original fixture proof bytes', async t => {
+  const f = await fixture(t, `import {Frame} from 'adg';export default()=> ['a','b'].map(name=><Frame name={name}><div class="gap-(--used)" style={{color:'var(--used)'}}>{name}</div></Frame>);`);
+  const index = await openProjectIndex(f.config, { persist: false, fresh: true });
+  try {
+    const build = await index.materialize('design/components/a.tsx'), checker = createEligibilityChecker();
+    const fast = entryProjection(build, capturePolicy(f.config));
+    const css = (build.cssBeforeTokens + build.cssAfterTokens).replace(/<\/style/gi, '<\\/style');
+    const check = checker.withCss(build.css.replace(/<\/style/gi, '<\\/style'));
+    for (const theme of ['light', 'dark']) {
+      const scan = entryTokenReachability(css, build.tokenCss);
+      for (const frame of build.frames) {
+        const markup = frameDocument(frame, theme, '');
+        const oldReach = tokenReachability(frameDocument(frame, theme, build.cssBeforeTokens + build.cssAfterTokens), build.tokenCss, theme);
+        const reach = scan(markup)(theme);
+        assert.deepEqual(reach, oldReach);
+        assert.deepEqual(check(markup), checker(frame.document(theme)));
+        assert.deepEqual(check(frame.html), checker(frame.document(theme)));
+        const old = materializedProjection(build, frame, theme, capturePolicy(f.config), oldReach);
+        const next = fast(frame, theme, reach);
+        assert.equal(next.canonical(), old.bytes);
+        assert.deepEqual(equalEntryProof(next, next, true), equalProof(old.bytes, old.bytes, 'materialized_inputs_equal', old.tokenMode, true));
+      }
+    }
+  } finally { await index.close(); }
 });

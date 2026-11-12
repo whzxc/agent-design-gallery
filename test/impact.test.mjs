@@ -58,7 +58,11 @@ const reasons = (data, kind) => expand(data).filter(frame => frame.themes.some(t
 test('impact CLI families, repeatable seeds, strict flags and safe recovery', async () => {
   for (const argv of [['--source=a', '--source=b'], ['--source=a', '--part=B'], ['--token=--accent'], ['--file=a', '--line=2', '--symbol=B'], ['--base=HEAD'], ['--base=A', '--head=B']]) assert.equal(parseCli(['impact', ...argv]).command, 'impact');
   for (const argv of [[], ['--source='], ['--source=a', '--token=b'], ['--source=a', '--source=b', '--part=B'], ['--token=a', '--part=B'], ['--file=a', '--head=B'], ['--head=B'], ['--file=a', '--line=0'], ['--token=a', '--line=2'], ['--base=A', '--base=B'], ['--token=a', '--theme=no'], ['--token=a', 'extra'], ['--token=a', '--observe'], ['--token=a', '--scale=2']]) assert.throws(() => parseCli(['impact', ...argv]), { code: 'USAGE_INVALID' });
-  for (const command of ['render', 'check', 'diff']) assert.throws(() => parseCli([command, '--impacted', '--base=HEAD']), { code: 'USAGE_INVALID' }, 'segment 1 has no consuming flags');
+  for (const command of ['render', 'check', 'diff']) {
+    assert.equal(parseCli([command, '--impacted', '--base=HEAD']).values.impacted, true);
+    assert.throws(() => parseCli([command, '--impacted']), { code: 'USAGE_INVALID' });
+    assert.throws(() => parseCli([command, '--impacted', '--base=HEAD', '--token=--canvas']), { code: 'USAGE_INVALID' });
+  }
   const values = { source: ['design/a.tsx', 'design/b.tsx'], theme: 'dark', 'state-dir': '/tmp/a b', explain: true };
   const argv = nextActions('IMPACT_INPUT_CHANGED', { command: 'impact', values })[0].argv;
   assert.deepEqual(argv, ['adg', 'impact', '--source=design/a.tsx', '--source=design/b.tsx', '--theme=dark', '--state-dir=/tmp/a b', '--explain', '--json']);

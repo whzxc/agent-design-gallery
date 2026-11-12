@@ -7,7 +7,7 @@ import { cleanup } from './results.mjs';
 import { CliError } from '../cli-output.mjs';
 
 const slash = name => name.split(path.sep).join('/');
-const within = (name, directory) => name === directory || name.startsWith(directory + '/');
+const within = (name, directory) => !directory || name === directory || name.startsWith(directory + '/');
 
 /** Literal local config imports supply path roles; opaque inputs retain unknown classification. */
 export async function configInputFiles(config) {
@@ -39,9 +39,11 @@ export async function prepareImpactInputs(config, values) {
     const before = base.before, after = head ? head.before : base.after;
     const projectPrefix = slash(path.relative(base.base.root, await realpath(config.root)));
     const outputs = [before, after].map(side => slash(path.join(projectPrefix, path.relative(side.config.root, side.config.output))));
-    const excluded = name => name.split('/').some(part => ['.git', 'node_modules', '.adg'].includes(part)) || outputs.some(output => within(name, output));
+    const artifacts = values['out-dir'] === undefined ? null : slash(path.relative(base.base.root, path.resolve(await realpath(config.root), values['out-dir'])));
+    const excluded = name => name.split('/').some(part => ['.git', 'node_modules', '.adg'].includes(part)) || outputs.some(output => within(name, output)) || artifacts !== null && within(name, artifacts) && /\.(?:png|json)$/.test(name);
     const changes = (await revisionChanges(base.base, head?.base)).filter(change => [change.before, change.after].some(name => name !== null && !excluded(name)));
     return {
+      session: base,
       before: { config: before.config, revision: base.base },
       after: { config: after.config, revision: head?.base ?? null },
       query: { kind: 'git', base: { rev: base.base.rev, sha: base.base.sha }, head: head ? { rev: head.base.rev, sha: head.base.sha } : null },

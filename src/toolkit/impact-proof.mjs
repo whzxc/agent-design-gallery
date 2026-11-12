@@ -43,3 +43,25 @@ export function equalProof(before, after, kind, tokenMode, explain) {
   if (before !== after) return null;
   return { kind, version: 1, tokenMode, ...(explain ? { projection: indexDigest(before) } : {}) };
 }
+
+/** Compare an exact document as its shared style bytes and remaining document bytes.
+ * The fixed builder boundary makes this equivalent to whole-document equality.
+ * Keep large style strings out of per-frame JSON serialization. */
+export function entryProjection(built, policy) {
+  const styles = new Map(), policyBytes = canonicalBytes(policy);
+  return (frame, theme, reach) => {
+    const replacement = reach.mode === 'full_sheet' ? built.tokenCss : canonicalBytes(reach.declarations);
+    if (!styles.has(replacement)) styles.set(replacement, (built.cssBeforeTokens + replacement + built.cssAfterTokens).replace(/<\/style/gi, '<\\/style'));
+    return { css: styles.get(replacement), markup: frameDocument(frame, theme, ''),
+      metadata: canonicalBytes({ parent: frame.parent ?? null, width: frame.width ?? null, height: frame.height ?? null }),
+      policy: policyBytes, tokenMode: reach.mode,
+      canonical: () => materializedProjection(built, frame, theme, policy, reach).bytes };
+  };
+}
+
+export function equalEntryProof(before, after, explain) {
+  if (before.css !== after.css || before.markup !== after.markup || before.metadata !== after.metadata || before.policy !== after.policy) return null;
+  return { kind: 'materialized_inputs_equal', version: 1,
+    tokenMode: before.tokenMode === 'full_sheet' || after.tokenMode === 'full_sheet' ? 'full_sheet' : 'reachable_declarations',
+    ...(explain ? { projection: indexDigest(before.canonical()) } : {}) };
+}

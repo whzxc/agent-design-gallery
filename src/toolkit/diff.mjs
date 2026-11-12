@@ -9,6 +9,7 @@ import { pixelComparator, imageDifference } from './pixel-diff.mjs';
 import { partContext, captureEvidence, capturePart, isolateParent, frameIdentity, comparisonIdentity } from './part-diff.mjs';
 import { commandFailure, cleanup, emptySelection } from './results.mjs';
 import { CliError, classifyError, asCliError, nextActions } from '../cli-output.mjs';
+import { withImpacted } from './impact-selection.mjs';
 import { resolveDiffPolicy } from './diff-policy.mjs';
 
 const metadata = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
@@ -125,7 +126,9 @@ async function writePair(output, pair, thresholds) {
 }
 
 /** Exact ordinary frames and evidence-backed structural part comparisons. */
-export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock } = {}) {
+export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock, session } = {}) {
+  if (options.impacted && !session) return withImpacted(config, args, options, 'diff', selected =>
+    diff(config, args, options, { launchBrowser, prepareInputs, log, clock, session: selected }));
   const started = performance.now(), scale = Number(options.scale ?? 2), themeOption = options.theme ?? 'both';
   if (!Number.isFinite(scale) || scale <= 0) throw new CliError('USAGE_INVALID', 'Invalid --scale; use a positive number.');
   if (!['both', 'light', 'dark'].includes(themeOption)) throw new CliError('USAGE_INVALID', 'Choose --theme=both, light, or dark.');
@@ -143,7 +146,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
   };
   try {
     const head = await timed('prepareMs', async () => {
-      inputs = await prepareInputs(config, args, options);
+      inputs = session ? session.diffInputs : await prepareInputs(config, args, options);
       return currentHead(inputs.base);
     });
     warnings.push(...inputs.warnings);
@@ -154,26 +157,27 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
         existingCoverage: !inputs.sources.length ? 'empty' : args.length || options.frame !== undefined || themes.length !== 2 ? 'partial' : 'full' },
       environment: { adg: metadata.version, node: process.version, platform: process.platform, arch: process.arch, chromium: null,
         ...metadata.dependencies, locale: 'en-US', timezone: 'UTC', ...inputs.environment, baseThresholds: inputs.before.config.diff.thresholds },
-      classifierVersion: 1, thresholds, comparisons: [], support: [], verdict: null, reasons: [],
+      impact: session?.selection ?? null, classifierVersion: 1, thresholds, comparisons: [], support: [], verdict: null, reasons: [],
       summary: { sources: inputs.sources.length, frames: 0, comparisons: 0, supportComparisons: 0, isolationCaptures: 0,
         added: 0, removed: 0, matched: 0, identical: 0, structural: 0, changed: 0,
         classPixels: Object.fromEntries(classNames.map(name => [name, 0])) },
       differencePalette: { equal: '#00000000', imperceptible: '#64748b', antialiasing: '#f59e0b', boundary_bleed: '#0ea5e9', bitmap_resampling: '#a855f7', other: '#ff00ff' }, reportPath: null, timings,
     };
-    if (inputs.sources.length) browser = await launchBrowser();
+    if (session ? session.chosen.some(row => row.source.endsWith('.mmd') && session.themes.some(theme => session.scheduled(row, theme))) : inputs.sources.length) browser = await launchBrowser();
     const built = await timed('buildMs', () => inputs.buildFrames({ browser }));
+    if (session) built.frames = built.frames.filter(row => themes.some(theme => session.scheduled(row, theme)));
     context = partContext(built, inputs, scale, themes, clock);
     for (const warning of inputs.warnings) if (!warnings.includes(warning)) warnings.push(warning);
     data.summary.frames = built.frames.length;
     for (const row of built.frames) data.summary[row.status]++;
-    if (!built.frames.length) emptySelection(warnings);
-    else browser ??= await launchBrowser();
+    if (!built.frames.length && (!session || !session.selection.coverage.expectedRows)) emptySelection(warnings);
+    else if (built.frames.length) browser ??= await launchBrowser();
     if (browser) data.environment.chromium = browser.version();
     const selectedOrder = new Map(built.frames.flatMap(row => themes.map(theme => comparisonIdentity(row, theme))).map((key, index) => [key, index]));
     const supportKeys = new Set(built.support.map(frameIdentity));
     const ordinary = [...built.frames.filter(row => !row.parentRow), ...built.support.map(row => ({ ...row, support: true }))];
-    const ordinaryJobs = ordinary.flatMap(row => themes.map(theme => ({ row, theme })));
-    const partJobs = built.frames.filter(row => row.parentRow).flatMap(row => themes.map(theme => ({ row, theme })));
+    const ordinaryJobs = ordinary.flatMap(row => themes.filter(theme => !session || row.support || session.scheduled(row, theme)).map(theme => ({ row, theme })));
+    const partJobs = built.frames.filter(row => row.parentRow).flatMap(row => themes.filter(theme => !session || session.scheduled(row, theme)).map(theme => ({ row, theme })));
     const concurrency = Math.min(4, availableParallelism());
     for (const jobs of [ordinaryJobs, partJobs]) for (let start = 0; start < jobs.length; start += concurrency) {
       const failures = [], openPairs = [];
@@ -244,8 +248,8 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
   timings.totalMs = performance.now() - started;
   data.reportPath = path.join(output, 'report.json');
   try {
-    await mkdir(output, { recursive: true });
-    await writeFile(data.reportPath, JSON.stringify(data, null, 2) + '\n');
+    if (!session) await mkdir(output, { recursive: true });
+    if (!session) await writeFile(data.reportPath, JSON.stringify(data, null, 2) + '\n');
   } catch (error) {
     data.reportPath = null; data.complete = false; data.verdict = null;
     if (primary) primary.warnings.push(classifyError(error).error);

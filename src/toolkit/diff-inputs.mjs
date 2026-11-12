@@ -64,7 +64,7 @@ function inventory(config, repository) {
   }));
 }
 
-async function selectedSources(config, beforeConfig, root, union, args) {
+export async function selectedSources(config, beforeConfig, root, union, args) {
   if (!args.length) return [...union].sort();
   const previousDesign = path.resolve(root, path.relative(beforeConfig.root, beforeConfig.design));
   const selected = [];
@@ -183,9 +183,9 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
     let closed = false;
     return {
       base, before, after, sources, warnings, translateDiagnostic: translate, environment: { configDependencies, baseMigration },
-      async buildFrames({ browser } = {}) {
+      async buildFrames({ browser, materialized, sources: requestedSources = sources, frame: requestedFrame = options.frame } = {}) {
         if (closed) throw new CliError('SOURCE_BUILD_FAILED', 'Diff inputs are closed; prepare a new comparison.');
-        const built = [new Map(), new Map()], snapshots = [new Map(), new Map()];
+        const built = materialized ? materialized.map(values => new Map(values)) : [new Map(), new Map()], snapshots = [new Map(), new Map()];
         const build = async (side, index, source) => {
           if (built[index].has(source) || !side.sources.has(source)) return;
           try {
@@ -197,11 +197,11 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
             throw failure;
           }
         };
-        for (const source of sources) {
+        for (const source of requestedSources) {
           await build(before, 0, source);
           await build(after, 1, source);
         }
-        const frames = matchDiffFrames(sources, built[0], built[1], renames, options.frame);
+        const frames = matchDiffFrames(requestedSources, built[0], built[1], renames, requestedFrame);
         const support = [], parents = new Map();
         const selected = new Map(frames.map(row => [frameKey(row), row]));
         for (const row of frames.filter(row => row.status === 'added' && row.after.parent)) {

@@ -12,7 +12,7 @@ import { loadImplementationMap, validateImplementationMap } from './implementati
 import { createIndexStore, indexDigest } from './index-store.mjs';
 import { defaultStateDirectory } from '../hub/registry.mjs';
 import { sourceRelationships } from '../../public/relationships.js';
-import { tokenReachability } from './token-reachability.mjs';
+import { entryTokenReachability } from './token-reachability.mjs';
 import { frameDocument } from './frame-document.mjs';
 export { sourceFacts } from './source-facts.mjs';
 
@@ -31,7 +31,7 @@ export function tokenFacts(config) {
       .map(item => ({ ...item, line: (item.theme === 'dark' && !item.inherited ? locations.dark : locations.light).get(name), references: [...item.declaration.matchAll(/var\(\s*(--[\w-]+)/g)].map(match => match[1]) })) }));
 }
 
-async function resolutionFiles(config) {
+async function resolutionFiles(config, artifactDirectory) {
   const files = [];
   async function visit(directory) {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -39,14 +39,14 @@ async function resolutionFiles(config) {
       const file = path.join(directory, entry.name);
       if (file === config.output) continue;
       if (entry.isDirectory()) await visit(file);
-      else files.push(path.relative(config.design, file));
+      else if (!(artifactDirectory && !path.relative(artifactDirectory, file).startsWith('..') && !path.isAbsolute(path.relative(artifactDirectory, file)) && /\.(?:png|json)$/.test(file))) files.push(path.relative(config.design, file));
     }
   }
   try { await visit(config.design); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   return files.sort();
 }
 
-export async function openProjectIndex(config, { stateDirectory = defaultStateDirectory, persist = true, fresh = false } = {}) {
+export async function openProjectIndex(config, { stateDirectory = defaultStateDirectory, persist = true, fresh = false, artifactDirectory } = {}) {
   const inventory = discoverProject(config), root = await realpath(config.root), buildPromises = new Map();
   const directory = path.join(stateDirectory, 'cache', indexDigest(root), 'index-v1');
   const shards = await createIndexStore({ directory, persist });
@@ -54,7 +54,7 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
   let storePromise, closed = false;
   let freshPool;
   const materializations = new Map();
-  const resolution = fresh ? await resolutionFiles(config) : null;
+  const resolution = fresh ? await resolutionFiles(config, artifactDirectory) : null;
   const physicalDesign = inventory.tsx.length ? await realpath(config.design) : null;
   const observedInputs = new Map(), requestedSources = new Set();
   const assertOpen = () => { if (closed) throw Error('Project index is closed.'); };
@@ -113,8 +113,13 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
       const inputs = fresh ? null : { source, build: built.inputHash ?? indexDigest(JSON.stringify({ ...built, frames: built.frames.map(({ document, ...frame }) => frame) })) };
       const facts = fresh ? sourceFacts(config, source, built) : await cached('source', inputs, () => sourceFacts(config, source, built));
       if (!tokens) return facts;
-      const collect = () => built.frames.map(frame => ({ frame: frame.name,
-        themes: ['light', 'dark'].map(theme => ({ theme, ...tokenReachability(frameDocument(frame, theme, built.cssBeforeTokens + built.cssAfterTokens), built.tokenCss, theme) })) }));
+      const collect = () => {
+        const scan = entryTokenReachability((built.cssBeforeTokens + built.cssAfterTokens).replace(/<\/style/gi, '<\\/style'), built.tokenCss);
+        return built.frames.map(frame => {
+          const reach = scan(frameDocument(frame, 'light', ''));
+          return { frame: frame.name, themes: ['light', 'dark'].map(theme => ({ theme, ...reach(theme) })) };
+        });
+      };
       const tokenDependencies = fresh ? collect() : await cached('token-dependencies', inputs, collect);
       return { ...facts, tokenDependencies };
     },
@@ -147,7 +152,7 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
     },
     async verifyInputs() {
       if (JSON.stringify(discoverProject(config)) !== JSON.stringify(inventory)) throw new CliError('OWNER_INDEX_CHANGED', 'Design source inventory changed during query.');
-      if (resolution && JSON.stringify(await resolutionFiles(config)) !== JSON.stringify(resolution)) throw new CliError('OWNER_INDEX_CHANGED', 'Design resolution inventory changed during query.');
+      if (resolution && JSON.stringify(await resolutionFiles(config, artifactDirectory)) !== JSON.stringify(resolution)) throw new CliError('OWNER_INDEX_CHANGED', 'Design resolution inventory changed during query.');
       for (const [name, hash] of observedInputs) {
         let value;
         try { value = indexDigest(Buffer.concat([Buffer.from('present\0'), await readFile(path.join(config.design, name))])); }

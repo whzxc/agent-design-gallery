@@ -114,6 +114,15 @@ export function nextActions(code, context = {}) {
     case 'owner-help': argv = helpArgv('owner'); break;
     case 'impact-help': argv = helpArgv('impact'); break;
     case 'impact': {
+      if (['render', 'check', 'diff'].includes(context.command) && context.values?.impacted && typeof context.values.base === 'string') {
+        argv = ['adg', context.command, '--impacted'];
+        for (const key of ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir']) if (typeof context.values[key] === 'string') argv.push(`--${key}=${context.values[key]}`);
+        if (context.values['read-only']) argv.push('--read-only');
+        if (context.values.explain) argv.push('--explain');
+        argv.push('--json');
+        if (context.positionals?.length) argv.push('--', ...context.positionals);
+        break;
+      }
       if (context.command !== 'impact') { argv = helpArgv('impact'); break; }
       const values = context.values ?? {};
       argv = ['adg', 'impact'];
@@ -153,6 +162,7 @@ export function nextActions(code, context = {}) {
       for (const key of ['base', 'frame', 'theme', 'scale', 'out-dir']) {
         if (typeof values[key] === 'string') argv.push(`--${key}=${values[key]}`);
       }
+      if (values.impacted) argv.push('--impacted');
       argv.push('--json');
       if (context.positionals?.length) argv.push('--', ...context.positionals);
       break;

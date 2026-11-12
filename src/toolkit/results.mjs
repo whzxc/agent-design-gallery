@@ -3,9 +3,9 @@ import { CliError, classifyError } from '../cli-output.mjs';
 /** @typedef {'light' | 'dark'} Theme */
 /** @typedef {{source: string | null, frame: string | null, theme: Theme | null, line: number | null, column: number | null}} Location */
 /** @typedef {Location & {code: string, message: string}} Finding */
-/** @typedef {{project: string, readOnly: boolean, complete: boolean, sources: string[], summary: {sources: number, frames: number, evaluations: number, problems: number}, findings: Finding[]}} CheckData */
+/** @typedef {{project: string, readOnly: boolean, complete: boolean, impact: object | null, sources: string[], summary: {sources: number, frames: number, evaluations: number, problems: number}, findings: Finding[]}} CheckData */
 /** @typedef {{source: string, frame: string, theme: Theme, path: string, scale: number, width: number, height: number, pixelWidth: number, pixelHeight: number}} Capture */
-/** @typedef {{project: string, outputDirectory: string, complete: boolean, base: {rev: string, sha: string} | null, captures: Capture[], deleted: string[]}} RenderData */
+/** @typedef {{project: string, outputDirectory: string, complete: boolean, impact: object | null, base: {rev: string, sha: string} | null, captures: Capture[], deleted: string[]}} RenderData */
 /** @typedef {{source: string, frame: string, fixture: string, theme: Theme, settled: boolean, size: {design: [number, number], implementation: [number, number]}, matched: number, offBy2px: {text: string, dx: number, dy: number, dw: number, off: number}[], missing: string[], extra: string[], paths: {design: string, implementation: string, overlay: string, report: string, html: string}}} Comparison */
 /** @typedef {{project: string, complete: boolean, all: boolean, comparisons: Comparison[], skipped: {source: string, frame: string, reason: 'no_fixture'}[], summary: {frames: number, matched: number, offsets: number, missing: number, extra: number}, indexPath: string | null, summaryPath: string | null}} CompareData */
 

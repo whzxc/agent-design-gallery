@@ -149,8 +149,11 @@ and derived source shards. The builder and proof share frame-document constructi
 token-block boundaries. parse5 HTML parsing and css-tree tokenization inspect script/resource
 eligibility without a browser. Canonical input bytes establish equality; optional explanation
 digests are not equality evidence. Architecture uses exact raw inputs. Final generation checks
-run after worker shutdown. Proofs are never persisted. Render/check/diff scheduling remains a later
-segment, without changes to owner output or `/relationships` responses.
+run after worker shutdown. Proof computations are never cached or reused; reports retain descriptive metadata. Selective render/check/diff consume that
+operation before final generation validation. Check proofs
+remain uncovered rule evaluations; unqualified both-theme diff can count proofs toward coverage.
+Shared CSS scans and eligibility are per entry; exact segmented document comparison retains the
+canonical whole-projection explanation digest. Owner output and `/relationships` remain unchanged.
 
 ## Git frame diff pipeline
 

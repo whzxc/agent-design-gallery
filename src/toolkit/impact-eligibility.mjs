@@ -32,7 +32,7 @@ function srcsetUrls(value) {
 
 /** Two parsed-document checks only; no browser, rendering, or environment certificate. */
 export function createEligibilityChecker() {
-  const resources = new Map(), stylesheets = new Map();
+  const resources = new Map(), stylesheets = new Map(), documents = new Map();
   function cssReasons(css) {
     if (stylesheets.has(css)) return stylesheets.get(css);
     const reasons = new Set(), stack = [];
@@ -90,6 +90,7 @@ export function createEligibilityChecker() {
     resources.set(value, result); return result;
   }
   function htmlReasons(document) {
+    if (documents.has(document)) return documents.get(document);
     const reasons = new Set();
     try {
       const tree = parse(document);
@@ -125,7 +126,11 @@ export function createEligibilityChecker() {
       }
       visit(tree);
     } catch { reasons.add('incomplete_identity'); }
-    return [...reasons].sort();
+    const result = [...reasons].sort(); documents.set(document, result); return result;
   }
+  htmlReasons.withCss = css => {
+    const shared = cssReasons(css);
+    return markup => [...new Set([...shared, ...htmlReasons(markup)])].sort();
+  };
   return htmlReasons;
 }

@@ -1,0 +1,85 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { loadConfig } from '../src/toolkit/config.mjs';
+import { starterTokens } from '../src/toolkit/project.mjs';
+import { render, check } from '../src/toolkit/commands.mjs';
+import { diff } from '../src/toolkit/diff.mjs';
+
+// The milestone's one Chromium fixture: scheduling and structural parent evidence.
+test('impacted commands capture/evaluate literal jobs, retain static checks, and cover structural parts', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-impact-commands-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const put = async (name, text) => { const file = path.join(root, name); await mkdir(path.dirname(file), { recursive: true }); await writeFile(file, text); };
+  const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
+  const source = `import {Frame} from 'adg';export default()=> <Frame name="parent"><div id="part" class="bg-canvas" style={{width:80,height:40}}/></Frame>;`;
+  await put('adg.config.mjs', 'export default {};'); await put('.gitignore', 'output/\nstate/\ndesign/.adg/\n');
+  await put('design/tokens.css', starterTokens); await put('design/components/parent.tsx', source);
+  await put('design/components/bad.tsx', `import {Frame} from 'adg';export default()=> <Frame name="bad"><div style={{width:80,height:40}}/><div style={{width:80,height:40}}/></Frame>;`);
+  git('init', '-q'); git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.invalid'); git('add', '.'); git('commit', '-qm', 'fixture base');
+  const config = await loadConfig(root), options = { json: true, impacted: true, base: 'HEAD', 'read-only': true, 'state-dir': path.join(root, 'state') };
+  const silent = () => {};
+  await put('design/components/parent.tsx', source + '\n// comment\n');
+  const noBrowser = { launchBrowser: () => { throw Error('No jobs should launch Chromium'); } };
+  await put('output/stale/old-light.png', 'stale output');
+  const emptyRender = await render(config, [], options, silent, noBrowser);
+  assert.equal(emptyRender.data.captures.length, 0); assert.equal(emptyRender.data.impact.coverage.provenRows, 4);
+  assert.ok(emptyRender.warnings.some(w => w.code === 'IMPACT_NO_CHANGES' && w.next[0].argv[0] === 'adg'));
+  await put('design/components/parent.tsx', source);
+  const [lightTokens, darkTokens] = starterTokens.split(':root[data-theme="dark"]');
+  await put('design/tokens.css', lightTokens + ':root[data-theme="dark"]' + darkTokens.replace(/(--canvas:)[^;]+;/, '$1 #111111;'));
+  const lightOnly = await render(config, [], { ...options, theme: 'light' }, silent, noBrowser);
+  assert.deepEqual(lightOnly.data.impact.frames, []);
+  await put('design/tokens.css', starterTokens);
+  const badFile = path.join(root, 'design/components/bad.tsx'), badSource = await readFile(badFile, 'utf8');
+  await rm(badFile);
+  const deletion = await render(config, [], options, silent, noBrowser);
+  assert.equal(deletion.data.captures.length, 0);
+  assert.deepEqual(deletion.data.deleted, ['design/components/bad.tsx']);
+  assert.equal(deletion.data.impact.coverage.deletedRows, 2);
+  await put('design/components/bad.tsx', badSource);
+  const emptyCheck = await check(config, [], options, silent, silent, noBrowser);
+  assert.equal(emptyCheck.data.summary.evaluations, 0); assert.equal(emptyCheck.data.impact.coverage.exclusions.not_checked, 4);
+  assert.equal(emptyCheck.data.impact.coverage.scope, 'partial');
+  const emptyDiff = await diff(config, [], options, { ...noBrowser, log: silent });
+  assert.equal(emptyDiff.data.summary.comparisons, 0); assert.equal(emptyDiff.data.verdict, 'identical');
+  assert.equal(emptyDiff.data.impact.coverage.basis, 'proven');
+  assert.equal(JSON.parse(await readFile(emptyDiff.data.reportPath)).impact.coverage.proofComplete, true);
+  await assert.rejects(check(config, [], { json: true, 'read-only': true }, silent, silent), e => e.code === 'CHECK_FAILED' && e.data.findings.some(f => f.code === 'FRAME_ROOT_INVALID'));
+  await put('design/components/parent.tsx', source.replace('id="part"', 'id="part" data-probe="changed"'));
+  const rendered = await render(config, [], { ...options, 'out-dir': 'design/art/captures' }, silent);
+  assert.equal(rendered.data.captures.length, 2); assert.ok(rendered.data.captures.every(c => c.source.endsWith('parent.tsx')));
+  await rm(path.join(root, 'design/art/captures'), { recursive: true });
+  const checked = await check(config, [], options, silent, silent);
+  assert.equal(checked.data.summary.evaluations, 2); assert.equal(checked.data.findings.length, 0);
+  assert.equal(checked.data.impact.coverage.exclusions.not_checked, 2);
+  const compared = await diff(config, [], options, { log: silent });
+  assert.equal(compared.data.summary.comparisons, 2); assert.equal(compared.data.impact.coverage.basis, 'rendered_and_proven');
+  await assert.rejects(render(config, [], options, silent, { launchBrowser: async () => {
+    const browser = await (await import('../src/toolkit/browser.mjs')).launch(), close = browser.close.bind(browser);
+    browser.close = async () => { await close(); await put('design/tokens.css', starterTokens + '\n'); };
+    return browser;
+  } }), e => e.code === 'IMPACT_INPUT_CHANGED' && !e.data.complete && !e.data.impact.coverage.proofComplete && e.data.captures.length === 2 && e.data.impact.coverage.provenRows === 0);
+  await put('design/tokens.css', starterTokens);
+  await put('design/components/parent.tsx', source);
+  await put('design/components/part.tsx', `import {Frame} from 'adg';export default()=> <Frame name="part" parent={{source:'design/components/parent.tsx',frame:'parent',selector:'#part'}}><div class="bg-canvas" style={{width:80,height:40}}/></Frame>;`);
+  const structural = await diff(config, [], options, { log: silent });
+  assert.equal(structural.data.verdict, 'structural'); assert.equal(structural.data.selection.existingCoverage, 'full');
+  assert.equal(structural.data.impact.coverage.scope, 'full'); assert.equal(structural.data.summary.comparisons, 4);
+  const full = await diff(config, [], { ...options, impacted: false }, { log: silent });
+  assert.equal(full.data.verdict, structural.data.verdict);
+  for (const [args, extra] of [[['components/part'], {}], [[], { theme: 'light' }]]) {
+    await assert.rejects(diff(config, args, { ...options, ...extra }, { log: silent }), e => e.code === 'DIFF_FAILED' && e.data.reasons.some(reason => ['existing_coverage_incomplete', 'theme_coverage_incomplete'].includes(reason)));
+  }
+  const inline = source.replace('()=> <Frame', '()=> [<Frame').replace('</Frame>;', `</Frame>,<Frame name="inline" parent={{source:'design/components/parent.tsx',frame:'parent',selector:'#part'}}><div class="bg-canvas" style={{width:80,height:40}}/></Frame>];`);
+  await put('design/components/parent.tsx', inline);
+  await assert.rejects(diff(config, ['components/parent'], { ...options, frame: 'inline' }, { log: silent }), e =>
+    e.code === 'DIFF_FAILED' && e.data.support.length === 2 && e.data.summary.comparisons === 2 && e.data.impact.coverage.renderedRows === 4 && e.data.impact.coverage.scope === 'partial');
+  for (const file of ['parent', 'bad', 'part']) await rm(path.join(root, `design/components/${file}.tsx`));
+  const deletedOnly = await render(config, [], options, silent, noBrowser);
+  assert.equal(deletedOnly.data.captures.length, 0); assert.equal(deletedOnly.data.impact.coverage.provenRows, 0);
+  assert.equal(deletedOnly.data.impact.coverage.deletedRows, 4); assert.equal(deletedOnly.data.impact.coverage.basis, 'selected');
+});

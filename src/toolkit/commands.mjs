@@ -8,6 +8,7 @@ import { launch, loadFrame, browserTask } from './browser.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
 import { commandFailure, cleanup, emptySelection } from './results.mjs';
 import { loadImplementationMap, validateImplementationMap } from './implementation-map.mjs';
+import { withImpacted } from './impact-selection.mjs';
 import { mappingFacts } from './source-facts.mjs';
 export function inspectFrame(tokenNames) {
   const frame = document.querySelector('[data-adg-frame]'), box = frame.getBoundingClientRect(), problems = new Map();
@@ -181,10 +182,12 @@ export function inspectFrame(tokenNames) {
   }
   return [...problems.values()];
 }
-export async function check(config, args = [], options = {}, log = console.log, error = console.error, { launchBrowser = launch } = {}) {
+export async function check(config, args = [], options = {}, log = console.log, error = console.error, { launchBrowser = launch, session } = {}) {
+  if (options.impacted && !session) return withImpacted(config, args, options, 'check', selected =>
+    check(config, args, options, log, error, { launchBrowser, session: selected }));
   const write = !options['read-only'];
   /** @type {import('./results.mjs').CheckData} */
-  const data = { project: config.root, readOnly: !write, complete: false, sources: [], summary: { sources: 0, frames: 0, evaluations: 0, problems: 0 }, findings: [] };
+  const data = { project: config.root, readOnly: !write, complete: false, impact: session?.selection ?? null, sources: [], summary: { sources: 0, frames: 0, evaluations: 0, problems: 0 }, findings: [] };
   const warnings = [], humanProblems = new Set(), findingKeys = new Set(), graph = {};
   let browser, primary;
   const add = (problem, file, frame = null, theme = null, source = relative(config, file)) => {
@@ -201,7 +204,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
   };
   try {
     const mapping = await loadImplementationMap(config);
-    const files = selectSources(config, args, { write });
+    const files = session ? session.sources.map(source => path.join(config.root, source)).filter(existsSync) : selectSources(config, args, { write });
     data.sources = files.map(file => relative(config, file));
     data.summary.sources = files.length;
     const tokens = files.length ? loadTokens(config) : null;
@@ -222,8 +225,9 @@ export async function check(config, args = [], options = {}, log = console.log, 
       let built;
       try {
         // Static architecture rejection is a completed rule evaluation and needs no browser.
-        browser ??= await launchBrowser();
-        built = await buildSource(config, file, { allowLegacy: false, write, browser });
+        if (session && !architecture) built = session.views[1].built.get(relative(config, file));
+        else if (session && !session.chosen.some(row => row.source === relative(config, file) && session.themes.some(theme => session.scheduled(row, theme)))) continue;
+        else { browser ??= await launchBrowser(); built = await buildSource(config, file, { allowLegacy: false, write: session ? false : write, browser }); }
       } catch (cause) {
         const legacy = cause.errors?.find(item => item.detail?.code === 'LEGACY_SOURCE');
         if (legacy) throw legacy.detail;
@@ -236,7 +240,9 @@ export async function check(config, args = [], options = {}, log = console.log, 
       data.summary.frames += built.frames.length;
       if (mapping.present && !architecture) builtSources.set(relative(config, file), mappingFacts(built));
       graph[path.relative(config.design, file).split(path.sep).join('/')] = { uses: built.imports };
-      for (const frame of built.frames) for (const theme of ['light', 'dark']) {
+      for (const frame of built.frames) for (const theme of session?.themes ?? ['light', 'dark']) {
+        if (session && !session.scheduled({ source: relative(config, file), frame: frame.name }, theme)) continue;
+        browser ??= await launchBrowser();
         try {
           page ??= await browserTask(browser, () => browser.newPage());
           await loadFrame(page, frame, theme);
@@ -256,7 +262,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
         selected: args.length ? data.sources : undefined,
         getBuild: source => {
           if (failedSources.has(source)) throw failedSources.get(source);
-          if (!builtSources.has(source)) builtSources.set(source, buildSource(config, path.join(config.root, source), { write: false, allowLegacy: false }));
+          if (!builtSources.has(source)) builtSources.set(source, session?.views[1].built.get(source) ?? buildSource(config, path.join(config.root, source), { write: false, allowLegacy: false }));
           return builtSources.get(source);
         },
         onFinding: ({ code, message, line, column, frame }) => add({ code, message, line, column }, mapping.file, frame),
@@ -281,10 +287,12 @@ export async function check(config, args = [], options = {}, log = console.log, 
   } finally { if (browser) await cleanup(() => browser.close(), primary); }
 }
 
-export async function render(config, args = [], options = {}, log = console.log, { launchBrowser = launch } = {}) {
+export async function render(config, args = [], options = {}, log = console.log, { launchBrowser = launch, session } = {}) {
+  if (options.impacted && !session) return withImpacted(config, args, options, 'render', selected =>
+    render(config, args, options, log, { launchBrowser, session: selected }));
   const output = options['out-dir'] ? path.resolve(config.root, options['out-dir']) : config.output;
   /** @type {import('./results.mjs').RenderData} */
-  const data = { project: config.root, outputDirectory: output, complete: false, base: null, captures: [], deleted: [] };
+  const data = { project: config.root, outputDirectory: output, complete: false, impact: session?.selection ?? null, base: null, captures: [], deleted: [] };
   const warnings = [], completed = [], failures = [];
   let browser, primary;
   try {
@@ -295,30 +303,33 @@ export async function render(config, args = [], options = {}, log = console.log,
     if (options['out-dir'] === '') throw new CliError('USAGE_INVALID', 'Set --out-dir to a directory.');
     const themes = themeOption === 'both' ? ['light', 'dark'] : [themeOption];
     let base, additional = [];
-    if (options.base !== undefined && (!args.length || args.some(arg => arg.endsWith('.mmd')))) {
+    if (!session && options.base !== undefined && (!args.length || args.some(arg => arg.endsWith('.mmd')))) {
       const git = await import('./arch-git.mjs');
       base = await git.resolveBase(config, options.base);
       additional = await git.baseArchFiles(config, base);
       data.base = { rev: base.rev, sha: base.sha };
-    } else if (options.base !== undefined) warnings.push({ code: 'USAGE_INVALID', message: '--base applies only to architecture sources.', next: [] });
-    const selected = selectSources(config, args, { additional });
+    } else if (!session && options.base !== undefined) warnings.push({ code: 'USAGE_INVALID', message: '--base applies only to architecture sources.', next: [] });
+    if (session) data.base = { rev: session.selection.query.base.rev, sha: session.selection.query.base.sha };
+    if (session) data.deleted = [...new Set(session.chosen.filter(row => row.status === 'removed').map(row => row.source))];
+    const selected = session ? [...new Set(session.chosen.filter(row => row.after && themes.some(theme => session.scheduled(row, theme))).map(row => path.join(config.root, row.source)))] : selectSources(config, args, { additional });
     const currentArchitecture = base ? new Set(archFiles(config.arch)) : null;
     const files = selected.filter(file => {
       if (!existsSync(file) || (base && file.endsWith('.mmd') && !currentArchitecture.has(file))) { data.deleted.push(relative(config, file)); return false; }
       return true;
     });
-    if (!selected.length) emptySelection(warnings);
+    if (!selected.length && (!session || !session.selection.coverage.expectedRows)) emptySelection(warnings);
     if (files.length) browser = await launchBrowser();
     const captures = [];
     for (const file of files) {
-      const built = base && file.endsWith('.mmd') ? await (await import('./arch-overlay.mjs')).buildOverlay(config, file, { base, browser }) : await buildSource(config, file, { allowLegacy: false, browser });
+      const built = session?.views[1].built.get(relative(config, file)) ?? (base && file.endsWith('.mmd') ? await (await import('./arch-overlay.mjs')).buildOverlay(config, file, { base, browser }) : await buildSource(config, file, { allowLegacy: false, write: !session, browser }));
       for (const frame of built.frames.filter(frame => !options.frame || frame.name === options.frame)) for (const theme of themes) {
+        if (session && !session.scheduled({ source: relative(config, file), frame: frame.name }, theme)) continue;
         const outputSource = file.endsWith('.mmd') ? relative(config, file) : path.relative(config.design, file);
         const target = path.join(output, outputSource.replace(/\.(?:tsx|mmd)$/, ''), `${encodeURIComponent(frame.name)}-${theme}.png`);
         captures.push({ source: relative(config, file), frame, theme, target });
       }
     }
-    if (options.frame && !captures.length && !data.deleted.length) throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${options.frame}; choose a declared frame`);
+    if (!session && options.frame && !captures.length && !data.deleted.length) throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${options.frame}; choose a declared frame`);
     let next = 0;
     await Promise.allSettled(Array.from({ length: Math.min(4, availableParallelism(), captures.length) }, async () => {
       while (next < captures.length) {

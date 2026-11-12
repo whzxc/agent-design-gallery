@@ -13,7 +13,7 @@ import { commandFailure, cleanup } from './results.mjs';
 import { indexDigest } from './index-store.mjs';
 import { groupImpactFrames, impactFrameCount } from './impact-output.mjs';
 import { loadConfig } from './config.mjs';
-import { canonicalBytes, capturePolicy, materializedProjection, architectureProjection, equalProof } from './impact-proof.mjs';
+import { canonicalBytes, capturePolicy, entryProjection, equalEntryProof, architectureProjection, equalProof } from './impact-proof.mjs';
 import { createEligibilityChecker } from './impact-eligibility.mjs';
 
 const slash = name => name.split(path.sep).join('/');
@@ -46,7 +46,7 @@ function mappingBuild(facts) {
 }
 
 /** Candidate queries and operation-local fresh-input proofs for exact Git endpoints. */
-export async function impact(config, values, { log = console.log, openIndex = openProjectIndex, prepareInputs = prepareImpactInputs } = {}) {
+export async function impact(config, values, { log = console.log, openIndex = openProjectIndex, prepareInputs = prepareImpactInputs, consume } = {}) {
   const started = performance.now(), themes = themesFor(values);
   const timings = { prepareMs: 0, indexMs: 0, materializeMs: 0, proofMs: 0, queryMs: 0, totalMs: 0 };
   const timed = async (name, work) => { const start = performance.now(); try { return await work(); } finally { timings[name] += performance.now() - start; } };
@@ -99,7 +99,8 @@ export async function impact(config, values, { log = console.log, openIndex = op
     for (const [side, endpoint] of inputs ? [['before', inputs.before], ['after', inputs.after]] : [['after', { config, revision: null }]]) {
       const view = await timed('indexMs', async () => {
         const current = endpoint.config;
-        const index = await openIndex(current, { stateDirectory: values['state-dir'], persist: !inputs && !endpoint.revision, fresh: !!inputs });
+        const index = await openIndex(current, { stateDirectory: values['state-dir'], persist: !inputs && !endpoint.revision, fresh: !!inputs,
+          artifactDirectory: side === 'after' && values['out-dir'] !== undefined ? path.resolve(current.root, values['out-dir']) : undefined });
         const view = { side, config: current, index, facts: new Map(), built: new Map(), architecture: new Map(),
           graph: null, routes: new Map(), tokens: null, map: null, configInputs: new Set(), resolved: canonicalBytes(current) };
         views.push(view);
@@ -150,7 +151,17 @@ export async function impact(config, values, { log = console.log, openIndex = op
       rows = matchDiffFrames(allSources, previous.facts, current.facts, renames);
     } else rows = allSources.flatMap(source => current.facts.get(source).frames.map(frame => ({ source, frame: frame.name, status: 'current', matchKind: null, matchCandidates: [], before: null, after: frame })));
     data.coverage.expectedRows = rows.length * themes.length;
-    const eligible = createEligibilityChecker();
+    const eligibility = createEligibilityChecker();
+    const entryChecks = new Map(), projections = new Map();
+    const projection = (view, built, frame, theme, reach) => {
+      if (!projections.has(built)) projections.set(built, entryProjection(built, capturePolicy(view.config)));
+      return projections.get(built)(frame, theme, reach);
+    };
+    const eligible = (built, frame, theme) => {
+      if (!entryChecks.has(built)) entryChecks.set(built, eligibility.withCss(built.css.replace(/<\/style/gi, '<\\/style')));
+      return entryChecks.get(built)(frame.html);
+    };
+    const assessments = new Map();
     const requiredParents = new Set(rows.filter(row => row.status === 'added' && row.after.parent).map(row => JSON.stringify([row.after.parent.source, row.after.parent.frame])));
     const seeds = [], factKeys = new Map();
     function seed(view, kind, source, { part = null, token = null, selectedThemes = themes, pathIndexes = [], pointer = null, frames = null } = {}) {
@@ -320,13 +331,12 @@ export async function impact(config, values, { log = console.log, openIndex = op
             } else {
               const builtBefore = previous.built.get(row.source), builtAfter = current.built.get(row.source);
               const before = builtBefore.frames.find(frame => frame.name === row.frame), after = builtAfter.frames.find(frame => frame.name === row.frame);
-              const beforeDoc = before.document(theme), afterDoc = after.document(theme);
-              result.unassessedReasons = [...new Set([...eligible(beforeDoc), ...eligible(afterDoc)])].sort(compare);
+              result.unassessedReasons = [...new Set([...eligible(builtBefore, before, theme), ...eligible(builtAfter, after, theme)])].sort(compare);
               if (!result.unassessedReasons.length) {
                 const reach = (view, frame) => view.facts.get(row.source).tokenDependencies.find(item => item.frame === frame.name).themes.find(item => item.theme === theme);
-                const left = materializedProjection(builtBefore, before, theme, capturePolicy(previous.config), reach(previous, before));
-                const right = materializedProjection(builtAfter, after, theme, capturePolicy(current.config), reach(current, after));
-                result.proof = equalProof(left.bytes, right.bytes, 'materialized_inputs_equal', left.tokenMode === 'full_sheet' || right.tokenMode === 'full_sheet' ? 'full_sheet' : 'reachable_declarations', values.explain);
+                const left = projection(previous, builtBefore, before, theme, reach(previous, before));
+                const right = projection(current, builtAfter, after, theme, reach(current, after));
+                result.proof = equalEntryProof(left, right, values.explain);
               }
             }
             if (result.proof && !requiredParents.has(JSON.stringify([row.source, row.frame]))) result.disposition = 'proven_unaffected';
@@ -337,6 +347,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
             else data.coverage.renderRows++;
           } else if (reasons.size) data.coverage.renderRows++;
           else { result.disposition = 'unassessed'; data.coverage.unassessedRows++; }
+          assessments.set(JSON.stringify([row.source, row.frame, theme]), result);
           if (result.candidate || result.disposition === 'render') frame.themes.push(result);
         }
         if (frame.themes.length) data.frames.push(frame);
@@ -351,6 +362,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
         query.kind === 'git' ? [] : observed ? nextActions('OWNER_UNSETTLED', { command: 'owner', values: observed }) : checkNext('Inspect design inputs and emitted part coverage.'));
     }
 
+    if (consume) await consume({ views, rows, assessments, inputs, data });
   } catch (cause) {
     if (inputs) { try { await verifyGeneration(); } catch (changed) { cause = changed; } }
     if (cause.code === 'OWNER_INDEX_CHANGED') cause = new CliError('IMPACT_INPUT_CHANGED', cause.message, { cause });
