@@ -18,7 +18,7 @@ are not machine interfaces.
 
 | Invocation | Stdout framing |
 | --- | --- |
-| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, `owner`, `impact`, every `root` and `service` action | One envelope, then exit |
+| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, `owner`, `impact`, `inspect`, every `root` and `service` action | One envelope, then exit |
 | `serve --print-key`, `serve --rotate-key` | One envelope, then exit |
 | `--help`, `--version`, including command-specific forms | One envelope, then exit |
 | Foreground `open`, ordinary `serve` | NDJSON: one envelope per line until termination |
@@ -50,7 +50,7 @@ result or `null` when no result has been assembled. A failure need not undo comp
 file changes. Consumers must examine `ok` and process termination, even when data exists.
 
 Canonical command identities are `open`, `link`, `serve`, `init`, `migrate`, `check`,
-`render`, `compare`, `diff`, `owner`, `impact`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
+`render`, `compare`, `diff`, `owner`, `impact`, `inspect`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
 `service uninstall`, `service status`, `service logs` and `service migrate`. Help and
 version use `help` and `version`. Parse failures use the recognized command/action when
 available, or the group identity `root`/`service` or global identity `adg`. An implicit
@@ -1374,3 +1374,52 @@ Next actions remain structured argv arrays governed by the construction rules ab
 While ADG is 0.x, a breaking schema change increments both `schemaVersion` and the
 package minor version. Consumers must reject unsupported schema versions. Schema version
 and package version are separate: compatible package releases retain `schemaVersion:1`.
+
+## Inspect (M4.5 segment 2)
+
+`adg inspect [source] --frame=<name> --json` returns design structure without starting a viewer or the consumer
+application. With no frame restriction it returns a catalog, unless exactly one frame is selected. Frame names
+are exact and source-scoped; a globally ambiguous name returns source-specific recovery argv. Default detail is
+both themes, all fields and full depth. Select one subtree with `--part=<defining-source>#<Export>`,
+`--element=<e1_id>`, or `--text=<raw normalized text> [--contains]`. Text matching also spans adjacent inline runs.
+`--depth=<nonnegative integer|all>`, `--fields=structure,layout,typography,color,text`, `--wrappers=semantic|all` and
+`--state-dir` are supported. There is no public audit option. Exit 0 means completed observation (including no
+text/part matches), and exit 2 means invalid/incomplete execution; inspect never exits 1.
+
+The finite schema-version-1 envelope contains `inspectVersion:1`, `identityVersion:1`, `complete`, `mode`, selection,
+catalog/frame metadata, shared `tables`, `partInstances`, matches, limitations, coverage and phase timings.
+The exact data types are in [inspect.d.ts](../src/toolkit/inspect.d.ts). Segment 2 uses `encoding:"expanded"`:
+`baselineTheme` and `baseline` hold the first requested theme; `additionalThemes` holds each other complete scene.
+`delta` is null. This explicitly represents a second scene, not an assertion that the themes are equal. Every DOM
+node is retained; `collapsedElements` is zero even when semantic wrappers are requested. Wrapper folding, repeated
+subtrees/icons and the dark delta follow in segment 3. Expanded output can exceed the milestone's compact budgets;
+`INSPECT_OUTPUT_LARGE` reports this without truncation.
+
+A scene has roots, external ancestor context, elements, text runs and measured frame size. Element identities are
+assigned before selection, depth or field projection; `data-adg-id` and JSX keys are authored anchors, unique
+semantic signatures are automatic, and indistinguishable unkeyed groups are positional. Persist the source/frame,
+element ID, identity version and guard together when a later feature needs an anchor. Owner's numeric element
+paths remain transient and separate. Positional identities require authored keys/anchors for durable targets.
+
+Boxes are frame-relative CSS pixels, including negative coordinates. They are post-transform border AABBs, not ink
+bounds. Computed style entries refer to shared value records; omitted raw values expand through the fixed
+[inspectVersion 1 defaults](../src/toolkit/inspect-styles.mjs). Requested inherited values are resolved per element.
+Values retain computed CSS and scoped direct/alias/fallback reference evidence; `authored_reference` does not claim
+an effective cascade winner or taken fallback. Token definitions retain source locations and dark differences.
+Resource records retain logical artwork sources, dimensions and SVG geometry without embedding image bytes.
+Text contains `raw` and NFC/Unicode-whitespace `normalized`, logical ranges and measured fragments; CSS whitespace
+and transforms remain styles. Pseudo-elements retain generated content/styles with null boxes and explicit
+limitations. No used-font observation or rendered-string approximation is included.
+
+Recoverable observations use `INSPECT_NO_MATCH`, `INSPECT_IDENTITY_POSITIONAL`, `INSPECT_RENDER_LIMITATIONS`,
+`INSPECT_TOKEN_UNRESOLVED`, `INSPECT_CACHE_BYPASSED` and `INSPECT_OUTPUT_LARGE`. Typed execution errors include
+`INSPECT_FRAME_AMBIGUOUS`, `INSPECT_ELEMENT_NOT_FOUND`, `INSPECT_PART_NOT_FOUND`, `INSPECT_SOURCE_UNSUPPORTED`,
+`INSPECT_IDENTITY_CONFLICT`, `INSPECT_UNSETTLED` and `INSPECT_INPUT_CHANGED`. Other source/config/browser/I/O/cleanup
+errors retain existing codes. Every error includes executable recovery argv. Explicit missing identities fail;
+missing text and known-but-unobserved parts complete with zero matches. Generation verification and owned-resource
+cleanup must finish before `complete:true`. Detailed inspection freshly executes only the selected entry, then
+reuses exact-document/environment observations when eligible. Dynamic/external resources bypass observation reuse.
+
+The internal [live verification harness](../tooling/inspect-audit.mjs) compares expanded public scenes with fresh
+DOM/style/Range and AX reads. It is used by tests and acceptance, including box, inherited-style, token-scope and
+missing-theme corruption cases; its findings and counters are not part of inspect's public schema or exits.

@@ -148,7 +148,7 @@ function parseAction(action) {
 }
 
 test('all catalog codes have stable exits, exact recovery argv and parser-valid ADG actions', () => {
-  assert.equal(Object.keys(errorCatalog).length, 49);
+  assert.equal(Object.keys(errorCatalog).length, 55);
   for (const removed of ['CONFIG_LOAD_FAILED', 'GIT_REPOSITORY_REQUIRED', 'GIT_BASE_NOT_FOUND', 'GIT_READ_FAILED']) assert.equal(Object.hasOwn(errorCatalog, removed), false);
   for (const code of Object.keys(errorCatalog)) {
     assert.match(code, /^[A-Z][A-Z_]+$/);

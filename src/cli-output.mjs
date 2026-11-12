@@ -6,7 +6,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 /** @typedef {{code: string, message: string, next: NextAction[]}} Diagnostic */
 /** @typedef {keyof typeof errorCatalog} ErrorCode */
 /** @typedef {{schemaVersion: 1, command: string, ok: boolean, data: unknown, warnings: Diagnostic[], error: Diagnostic | null}} Envelope */
-/** @typedef {{command?: string, project?: string, stateDirectory?: string, gitCause?: 'repository' | 'revision' | 'read', positionals?: string[], values?: Record<string, string | string[] | boolean>, failureCode?: ErrorCode}} ErrorContext */
+/** @typedef {{command?: string, project?: string, stateDirectory?: string, gitCause?: 'repository' | 'revision' | 'read', inspectCatalog?: boolean, inspectSources?: string[], positionals?: string[], values?: Record<string, string | string[] | boolean>, failureCode?: ErrorCode}} ErrorContext */
 /** @typedef {{json: boolean, command: string, revealKey?: boolean, stdout?: (text: string) => void, stderr?: (text: string) => void}} OutputOptions */
 
 // Recovery kinds keep the catalog declarative; actions are constructed from known operands.
@@ -20,6 +20,12 @@ export const errorCatalog = {
   OWNER_INPUT_NOT_FOUND: [2, 'owner-help', 'Choose an existing in-project file or directory.'],
   OWNER_UNSETTLED: [2, 'owner', 'Stabilize the named frame and resources before repeating the query.'],
   INSPECT_IDENTITY_CONFLICT: [2, 'owner', 'Give repeated instances unique keys or anchors, then repeat the query.'],
+  INSPECT_FRAME_AMBIGUOUS: [2, 'inspect', 'Select one of the reported source/frame candidates.'],
+  INSPECT_ELEMENT_NOT_FOUND: [2, 'inspect-full', 'Read the current full frame and choose an observed element identity.'],
+  INSPECT_PART_NOT_FOUND: [2, 'inspect-full', 'Read the current frame and choose an observed defining part.'],
+  INSPECT_SOURCE_UNSUPPORTED: [2, 'inspect-help', 'Choose a discovered TSX design source.'],
+  INSPECT_UNSETTLED: [2, 'inspect', 'Stabilize the named frame and resources before retrying.'],
+  INSPECT_INPUT_CHANGED: [2, 'inspect', 'Finish concurrent input edits before retrying.'],
   OWNER_INDEX_CHANGED: [2, 'owner', 'Finish concurrent input edits before repeating the query.'],
   IMPACT_INPUT_NOT_FOUND: [2, 'impact-help', 'Choose an existing design input, registered part or declared token.'],
   IMPACT_INPUT_CHANGED: [2, 'impact', 'Finish concurrent input edits before repeating the query.'],
@@ -77,7 +83,7 @@ export class CliError extends Error {
 }
 
 const canonicalCommands = new Set([
-  'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact',
+  'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect',
   'root add', 'root remove', 'root list', 'root scan',
   'service install', 'service uninstall', 'service status', 'service logs', 'service migrate',
   'help', 'version', 'adg',
@@ -102,6 +108,10 @@ function helpArgv(command = 'adg') {
 /** @param {ErrorCode} code @param {ErrorContext} [context] @returns {NextAction[]} */
 export function nextActions(code, context = {}) {
   const [, recovery, reason] = errorCatalog[code];
+  if(context.inspectCatalog)return nextActions('INSPECT_UNSETTLED',{...context,inspectCatalog:false,command:'inspect',values:context.values?.['state-dir']?{'state-dir':context.values['state-dir']}:{}});
+  if(code==='INSPECT_FRAME_AMBIGUOUS'&&context.inspectSources?.length){
+    return context.inspectSources.map(source=>nextActions('INSPECT_UNSETTLED',{...context,inspectSources:undefined,positionals:[source]})[0]);
+  }
   const state = context.stateDirectory ? ['--state-dir', context.stateDirectory] : [];
   let argv;
   switch (recovery) {
@@ -112,6 +122,17 @@ export function nextActions(code, context = {}) {
     case 'migrate-help': argv = helpArgv('migrate'); break;
     case 'check-help': argv = helpArgv('check'); break;
     case 'render-help': argv = helpArgv('render'); break;
+    case 'inspect-help': argv = helpArgv('inspect'); break;
+    case 'inspect':
+    case 'inspect-full': {
+      if(context.inspectCatalog){argv=['adg','inspect','--json',...(context.positionals?.length?['--',...context.positionals]:[])];break;}
+      if(context.command!=='inspect'){argv=helpArgv('inspect');break;}
+      const values=context.values??{};argv=['adg','inspect'];
+      for(const key of ['frame','theme','part','element','text','depth','fields','wrappers'])if(typeof values[key]==='string' && !(recovery==='inspect-full'&&['part','element','text','depth'].includes(key)))argv.push(`--${key}=${values[key]}`);
+      if(values.contains&&recovery!=='inspect-full')argv.push('--contains');
+      if(values['state-dir'])argv.push(`--state-dir=${values['state-dir']}`);
+      argv.push('--json');if(context.positionals?.length)argv.push('--',...context.positionals);break;
+    }
     case 'owner-help': argv = helpArgv('owner'); break;
     case 'impact-help': argv = helpArgv('impact'); break;
     case 'impact': {
@@ -135,6 +156,7 @@ export function nextActions(code, context = {}) {
       argv.push('--json'); break;
     }
     case 'owner': {
+      if(context.command==='inspect')return nextActions('INSPECT_UNSETTLED',context);
       const values = context.values ?? {};
       if (context.command !== 'owner' || !['file', 'text', 'color', 'token'].some(key => typeof values[key] === 'string' && values[key].trim())) { argv = helpArgv('owner'); break; }
       argv = ['adg', 'owner'];

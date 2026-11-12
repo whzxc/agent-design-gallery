@@ -199,15 +199,16 @@ export async function collectPartSnapshot({ selector, tokens, scale, ref, theme 
     frameAligned: selector !== null || cssCrop.x === 0 && cssCrop.y === 0 && origin.width === frameBox.width && origin.height === frameBox.height };
 }
 
-export function normalizeSnapshot(snapshot) {
-  for (const resource of snapshot.resources) {
-    let content = resource.contentIdentity;
-    if (content.startsWith('data:')) {
-      const comma = content.indexOf(',');
-      content = content.slice(0, comma).includes(';base64') ? Buffer.from(content.slice(comma + 1), 'base64') : Buffer.from(decodeURIComponent(content.slice(comma + 1)));
-    }
-    resource.contentIdentity = createHash('sha256').update(content).digest('hex');
+export function resourceContentIdentity(content) {
+  if (content.startsWith('data:')) {
+    const comma=content.indexOf(',');
+    content=content.slice(0,comma).includes(';base64') ? Buffer.from(content.slice(comma+1),'base64') : Buffer.from(decodeURIComponent(content.slice(comma+1)));
   }
+  return createHash('sha256').update(content).digest('hex');
+}
+
+export function normalizeSnapshot(snapshot) {
+  for(const resource of snapshot.resources)resource.contentIdentity=resourceContentIdentity(resource.contentIdentity);
   return snapshot;
 }
 

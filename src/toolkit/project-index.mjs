@@ -18,7 +18,7 @@ import { inspectVersion } from './inspect-styles.mjs';
 import { frameDocument } from './frame-document.mjs';
 export { sourceFacts } from './source-facts.mjs';
 
-const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'frame-observation.mjs', 'frame-primitives.mjs', 'frame-identity.mjs', 'inspect-styles.mjs', 'owner-colors.mjs', 'tokens.mjs', 'token-reachability.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
+const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'frame-observation.mjs', 'frame-facets.mjs', 'frame-primitives.mjs', 'frame-identity.mjs', 'inspect-styles.mjs', 'owner-colors.mjs', 'tokens.mjs', 'token-reachability.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
 
 export function discoverProject(config) {
   const tsx = listSources(config.design, sourceDirectories(config)).map(file => relative(config, file));

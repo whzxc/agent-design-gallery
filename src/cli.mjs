@@ -6,7 +6,7 @@ import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 import { CliError, createOutput, withHumanOutput } from './cli-output.mjs';
 
-export const commands = ['open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact'];
+export const commands = ['open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect'];
 const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
 const usage = {
   open: `[directory] [--port=<n>] [--no-open] [--state-dir=<path>] ${targetOptions}`,
@@ -18,6 +18,7 @@ const usage = {
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
   diff: '[source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json] [--impacted [--state-dir=<path>] [--explain]]',
   owner: '(--file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --text=<text> [--contains] [--locale=<tag>] | --color=<css> | --token=<name>) [--theme=both|light|dark] [--state-dir=<path>] [--json]',
+  inspect: '[source] [--frame=<name>] [--theme=both|light|dark] [--part=<source>#<Export> | --element=<id> | --text=<text> [--contains]] [--depth=<n|all>] [--fields=<groups>] [--wrappers=semantic|all] [--state-dir=<path>] [--json]',
   impact: '(--source=<path>... [--part=<name>] | --token=<name>... | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --base=<rev> [--head=<rev>]) [--theme=both|light|dark] [--explain] [--state-dir=<path>] [--json]',
 };
 const details = {
@@ -31,6 +32,7 @@ const details = {
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
   diff: 'Compare the Git base and working-tree source/frame union. Existing frames require exact pixels and CSS/device size; added Frame parent declarations enable structural part evidence under diff.thresholds. Defaults to both themes at 2× and <configured output>/diff. Writes before, after and difference PNGs plus report.json. --impacted captures only scheduled rows; unqualified both-theme runs count fresh proofs toward full coverage. Required parents/support always capture. A structural batch requires all existing frames in both themes; source/frame/theme restrictions report partial coverage. Exit 0 identical/structural, 1 changed, 2 incomplete.',
   owner: 'Find owning design sources, parts, frames and tokens from an implementation path, rendered text, absolute CSS color or token name. Paths resolve from the project root; quote globs. --line returns the containing export/anchor region, including unmapped exports; non-exported helpers belong to the preceding export. Text is NFC/whitespace normalized and exact unless --contains; --locale filters exact Frame locale annotations without translation. Colors use 8-bit sRGB RGBA equality. Owner evidence is scoped to the query: mappings for files, text runs for text, computed paint for colors and authored references for tokens. Text authoredIn lists literal-search copy candidates; escaped or concatenated strings may be missed. Color evidence may include compact same-element/property references. Defaults to both themes. Broad color/token JSON can be around 100 KB; read owners first and narrow with --theme. Empty, stale and ambiguous results exit 0; invalid/incomplete requests exit 2.',
+  inspect: 'Read TSX frame structure, text, CSS-pixel boxes, computed styles and token-reference evidence. Without a unique frame, return a catalog. Default: both themes, all fields, full depth. Field groups: structure,layout,typography,color,text. Segment 2 emits expanded nodes and additionalThemes; wrapper folding and theme deltas follow in segment 3. No consumer application or viewer is started. Exit 0 completed observation, 2 invalid/incomplete.',
   impact: 'Query direct/transitive candidates from sources, named parts, tokens or implementation mappings, or compare exact Git endpoints. --base includes staged, unstaged and untracked working files; --head selects another exact commit. Hypothetical selectors cannot prove skips; token candidates assume unchanged Tailwind classification. Git mode freshly executes both endpoint source sets and compares eligible materialized inputs. Closure or occurrence absence never proves safety. Groups merge equal theme and same-source frame records; noncandidate proofs remain counts. --explain samples witnesses/digests without splitting groups. No browser launch. Render/check/diff --impacted compute their own operation-local proofs. Exit 0 completed, including empty/stale mappings; 2 invalid/incomplete.',
 };
 const helpExamples = {
@@ -49,14 +51,14 @@ export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' } };
   const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
-  const strings = { open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'] };
+  const strings = { open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
   if (command === 'open' || command === 'link') options.tokens = { type: 'boolean' };
   if (command === 'check') options['read-only'] = { type: 'boolean' };
   if (['render', 'check', 'diff'].includes(command)) { options.impacted = { type: 'boolean' }; options.explain = { type: 'boolean' }; }
-  if (command === 'owner') options.contains = { type: 'boolean' };
+  if (command === 'owner' || command === 'inspect') options.contains = { type: 'boolean' };
   if (command === 'impact') {
     options.explain = { type: 'boolean' };
     for (const name of ['source', 'token']) options[name].multiple = true;
@@ -64,7 +66,7 @@ export function parseCli(args) {
   if (command === 'compare') { options.all = { type: 'boolean' }; options.page = { type: 'boolean' }; }
   if (command === 'compare') options.click = { type: 'string', multiple: true };
   let parsed;
-  try { parsed = parseArgs({ args: explicit ? args.slice(1) : args, options, allowPositionals: true, tokens: command === 'owner' || command === 'impact' }); }
+  try { parsed = parseArgs({ args: explicit ? args.slice(1) : args, options, allowPositionals: true, tokens: ['owner','impact','inspect'].includes(command) }); }
   catch (error) { throw new CliError('USAGE_INVALID', `${error.message}; run adg ${command} --help`); }
   const { values, positionals } = parsed;
   if (globalJson) values.json = true;
@@ -73,6 +75,18 @@ export function parseCli(args) {
       if (!values.impacted && (values.explain !== undefined || values['state-dir'] !== undefined)) throw new CliError('USAGE_INVALID', '--explain and --state-dir require --impacted --base=<rev>.');
       if (values.impacted && (typeof values.base !== 'string' || !values.base.trim())) throw new CliError('USAGE_INVALID', '--impacted requires --base=<rev>.');
       if (command === 'check' && !values.impacted && ['base', 'frame', 'theme', 'state-dir', 'explain'].some(key => values[key] !== undefined)) throw new CliError('USAGE_INVALID', 'Check selection flags require --impacted --base=<rev>.');
+    }
+    if (command === 'inspect') {
+      const seen=new Set();
+      for(const token of parsed.tokens)if(token.kind==='option'&&!['json','help','version'].includes(token.name)){
+        if(seen.has(token.name))throw new CliError('USAGE_INVALID',`Do not repeat --${token.name}; run adg inspect --help.`);seen.add(token.name);
+      }
+      if(positionals.length>1 || strings.inspect.some(k=>values[k]!==undefined&&!values[k].trim()) ||
+        ['part','element','text'].filter(k=>values[k]!==undefined).length>1 || values.contains!==undefined&&values.text===undefined ||
+        values.theme!==undefined&&!['both','light','dark'].includes(values.theme) ||
+        values.wrappers!==undefined&&!['semantic','all'].includes(values.wrappers) ||
+        values.depth!==undefined&&values.depth!=='all'&&(!/^(0|[1-9]\d*)$/.test(values.depth)||!Number.isSafeInteger(Number(values.depth))) ||
+        values.fields!==undefined&&values.fields.split(',').some(k=>!['structure','layout','typography','color','text'].includes(k)))throw new CliError('USAGE_INVALID','Choose compatible inspect selectors and field groups; run adg inspect --help.');
     }
     if (command === 'impact') {
       const kinds = ['source', 'token', 'file', 'base'].filter(key => values[key] !== undefined), seen = new Set();
@@ -167,6 +181,7 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
     return {data:values['print-key'] ? {action:'print-key',stateDirectory,key} : {action:'rotate-key',stateDirectory,rotated:true}};
   }
   const config = await loadConfig(cwd);
+  if (command === 'inspect') return (await import('./toolkit/inspect.mjs')).inspect(config, positionals, { ...values, ...(values['state-dir'] !== undefined ? { 'state-dir': path.resolve(cwd, values['state-dir']) } : {}) }, { log: output.log });
   if (command === 'impact') return (await import('./toolkit/impact.mjs')).impact(config, { ...values, ...(values['state-dir'] !== undefined ? { 'state-dir': path.resolve(cwd, values['state-dir']) } : {}) }, { log: output.log });
   if (command === 'owner') return (await import('./toolkit/owner.mjs')).owner(config, { ...values, ...(values['state-dir'] !== undefined ? { 'state-dir': path.resolve(cwd, values['state-dir']) } : {}) }, { log: output.log });
   if (command === 'init') return { data: (await import('./toolkit/project.mjs')).init(config, output.log) };

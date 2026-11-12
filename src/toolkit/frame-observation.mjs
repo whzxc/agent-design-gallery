@@ -2,7 +2,7 @@ import { installFramePrimitives } from './frame-primitives.mjs';
 export { installFramePrimitives };
 
 /** Browser-side projection: provenance roots and authored references, no raster work. */
-export function collectOwnerObservation({ tokens, theme }) {
+export function collectOwnerObservation({ tokens, theme, rich = false, properties = [] }) {
   const frame = document.querySelector('[data-adg-frame]'), root = frame?.firstElementChild;
   if (!root || frame.children.length !== 1) throw Error('Ownership observation requires exactly one frame root.');
   const { inventory, relativeBox, variables, selectors, reads, identityNode, styleRules, textRects } = globalThis.__adgFramePrimitives;
@@ -22,7 +22,7 @@ export function collectOwnerObservation({ tokens, theme }) {
     }
     return right > left && bottom > top ? box({ left, right, top, bottom }) : null;
   }
-  const rules=styleRules({referencesOnly:true,resolveNesting:true});
+  const rules=styleRules({referencesOnly:!rich,resolveNesting:true});
   const probe = document.createElement('style'); document.head.append(probe);
   function containerActive(node, conditions) {
     if (!conditions.length) return true;
@@ -48,6 +48,7 @@ export function collectOwnerObservation({ tokens, theme }) {
     if (!pseudo) for (const property of node.style) result.push({ property, declaration: node.style.getPropertyValue(property) });
     declarations.set(key, result); return result;
   }
+  const details = rich ? globalThis.__adgInspectFacets.create({elements,paths,style,rect,origin,declarationsFor,tokens,theme,properties}) : null;
   const inherited = /^(?:color|font(?:-.+)?|line-height|letter-spacing|word-spacing|text-align|text-indent|text-transform|visibility|cursor|fill|stroke(?:-.+)?)$/;
   const nodes = [], references = [], paints = [], texts = [], groups = [];
   const normalize = value => value.normalize('NFC').replace(/\p{White_Space}+/gu, ' ').trim();
@@ -88,6 +89,7 @@ export function collectOwnerObservation({ tokens, theme }) {
   }
   try {
     for (const node of elements) {
+      details?.node(node);
       const bounds = clipped(node);
       const own = JSON.parse(node.getAttribute('data-adg-owners') ?? '[]');
       identities.push(identityNode(node,paths.get(node),paths.get(node.parentElement)??null,own,style(node),neutralCandidates.has(node)));
@@ -139,6 +141,6 @@ export function collectOwnerObservation({ tokens, theme }) {
       while (common && !fragments.every(f => common.contains(f.parent))) common = common.parentElement;
       texts.push({ path: `${paths.get(group)}/run-${texts.length}`, ownerPath: paths.get(common ?? group), raw, normalized, fragments: fragments.map(({ elementPath, text, boxes }) => ({ elementPath, text, boxes })) });
     }
-    return { identities, nodes, references: [...new Map(references.map(ref => [JSON.stringify(ref), ref])).values()], texts, paints };
+    return { ...(rich?{rich:details.finish()}:{}), identities, nodes, references: [...new Map(references.map(ref => [JSON.stringify(ref), ref])).values()], texts, paints };
   } finally { probe.remove(); }
 }
