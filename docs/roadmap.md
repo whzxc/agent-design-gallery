@@ -55,15 +55,9 @@ Agents are first-class users. In priority order:
 3. Ownership lookup: `adg owner` resolves implementation files/regions/symbols, rendered text, colors and token names
    to design sources, parts and frames with scoped evidence (done, 0.9.0). See the
    [owner contract](agent-interface.md#owner) and [machine-readable mappings](design-toolkit.md#implementation-mappings).
-4. Impact: frames affected directly and transitively by a component or token change, and rendering only those frames.
+4. Impact: frames affected directly and transitively by a component or token change, and rendering only those frames
+   (in progress).
 5. Frames as data: element tree, text, boxes and tokens, for Agents that need structure rather than pixels.
-6. Architecture owners: from a code path to the diagrams whose sidecar owners match it, so a review can tell whether a
-   change needs a diagram update.
-7. Review sheets: one composite image per change (frames, both themes, before and after), so a remote reviewer reads
-   one image instead of many.
-8. Annotation inbox: list, read and resolve user annotations from milestone 5.
-
-Later, expose the stable commands as an MCP server through ARC's MCP hub.
 
 ## 5. Annotation collaboration
 
@@ -76,3 +70,15 @@ Later, expose the stable commands as an MCP server through ARC's MCP hub.
   is the project's control source session, which decides whether a design source changes first and dispatches the
   implementation.
 - A node context menu offers related actions.
+- Annotation inbox: Agents list, read and resolve annotations through the CLI under the same JSON contracts.
+
+Afterwards, expose the stable commands, including the annotation inbox, as an MCP server through ARC's MCP hub.
+
+## 6. Review and architecture
+
+UI-side capabilities come first; these items follow milestone 5.
+
+- Review sheets: one composite image per change (frames, both themes, before and after), so a remote reviewer reads
+  one image instead of many.
+- Architecture owners: from a code path to the diagrams whose sidecar owners match it, so a review can tell whether a
+  change needs a diagram update.
