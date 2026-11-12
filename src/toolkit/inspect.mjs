@@ -6,6 +6,7 @@ import { observationEnvironment } from './owner-observation.mjs';
 import { launch, browserTask } from './browser.mjs';
 import { observeInspectFrame } from './inspect-observation.mjs';
 import { outputTables, projectInspection, pruneTables, fieldGroups } from './inspect-output.mjs';
+import { compactInspection, expandInspection } from './inspect-encoding.mjs';
 import { createEligibilityChecker } from './impact-eligibility.mjs';
 import { canonicalBytes, capturePolicy } from './impact-proof.mjs';
 import { frameDocument } from './frame-document.mjs';
@@ -17,13 +18,13 @@ export function inspectSelection(values) {
   return {source:null,frame:values.frame??null,themes:values.theme&&values.theme!=='both'?[values.theme]:['light','dark'],
     subtree:subtree?{kind:subtree,input:values[subtree],contains:!!values.contains}:null,
     depth:values.depth===undefined||values.depth==='all'?null:Number(values.depth),
-    fields:values.fields?fieldGroups.filter(k=>values.fields.split(',').includes(k)):[...fieldGroups],wrappers:values.wrappers??'semantic',expand:true};
+    fields:values.fields?fieldGroups.filter(k=>values.fields.split(',').includes(k)):[...fieldGroups],wrappers:values.wrappers??'semantic',expand:!!values.expand};
 }
 
 export async function inspect(config, args=[], values={}, {log=console.log, openIndex=openProjectIndex, launchBrowser=launch, environment=observationEnvironment}={}) {
   const resolvedConfig=canonicalBytes(config);
   const start=performance.now(),selection=inspectSelection(values),warnings=[],tracked=new Map();
-  const data={inspectVersion:1,identityVersion:1,project:config.root,complete:false,mode:'catalog',encoding:'expanded',selection,catalog:[],frame:null,
+  let data={inspectVersion:1,identityVersion:1,project:config.root,complete:false,mode:'catalog',encoding:'expanded',selection,catalog:[],frame:null,
     baselineTheme:null,baseline:null,delta:null,additionalThemes:{},tables:{values:{},styles:{},tokens:{},references:{},parts:{},templates:{},resources:{}},partInstances:[],matches:[],limitations:[],
     coverage:{domain:'tsx',discoveredSources:0,listedFrames:0,requestedObservations:0,completedObservations:0,rawElements:0,retainedElements:0,collapsedElements:0,cutOffElements:0,logicalElements:0,runs:0,cacheHits:0,frameLoads:0,materializedSources:0},
     timings:{prepareMs:0,materializeMs:0,observeMs:0,projectMs:0,totalMs:0}};
@@ -44,15 +45,16 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
         if(selected.length!==1||!selected[0].endsWith('.tsx'))throw new CliError('INSPECT_SOURCE_UNSUPPORTED','Choose one TSX entry, not a source directory.');
         sources=[relative(config,selected[0])];selection.source=sources[0];
       }
-      const facts=await Promise.all(sources.map(async source=>{try{return await index.source(source);}catch(cause){throw cause instanceof CliError?cause:new CliError('SOURCE_BUILD_FAILED',cause.message,{cause});}}));
+      const facts=await Promise.all(sources.map(async source=>{try{return args.length?await timed('materializeMs',()=>index.source(source,{fresh:true})):await index.source(source);}catch(cause){throw cause instanceof CliError?cause:new CliError('SOURCE_BUILD_FAILED',cause.message,{cause});}}));
       data.catalog=facts.map(f=>({source:f.source,frames:f.frames.map(f=>({name:f.name,locale:f.locale??null,width:f.width??null,height:f.height??null}))}));
       data.coverage.listedFrames=data.catalog.reduce((n,s)=>n+s.frames.length,0);
     });
+    if(args.length)data.timings.prepareMs-=data.timings.materializeMs;
     const candidates=data.catalog.flatMap(s=>s.frames.filter(f=>!values.frame||f.name===values.frame).map(f=>({source:s.source,frame:f.name})));
     if(values.frame && !candidates.length)throw new CliError('FRAME_NOT_FOUND',`Unknown frame ${values.frame}.`);
     if(values.frame && candidates.length>1)throw new CliError('INSPECT_FRAME_AMBIGUOUS',`Frame ${values.frame} occurs in ${candidates.length} sources: ${candidates.map(c=>c.source).join(', ')}.`,{context:{inspectSources:candidates.map(c=>c.source)}});
     if(!values.frame && candidates.length!==1){
-      if(['theme','part','element','text','contains','depth','fields','wrappers'].some(k=>values[k]!==undefined))throw new CliError('USAGE_INVALID','Choose a unique frame before setting frame-only options.',{context:{inspectCatalog:true}});
+      if(['theme','part','element','text','contains','depth','fields','wrappers','expand'].some(k=>values[k]!==undefined))throw new CliError('USAGE_INVALID','Choose a unique frame before setting frame-only options.',{context:{inspectCatalog:true}});
       if(!candidates.length)warn('EMPTY_SELECTION','No TSX frames were discovered.');
     } else {
       const chosen=candidates[0];selection.source=chosen.source;selection.frame=chosen.frame;
@@ -85,7 +87,7 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
         for(const match of projected.matches){const existing=data.matches.find(m=>m.element===match.element);if(existing)existing.themes.push(theme);else data.matches.push(match);}
         for(const row of projected.instanceRows)if(!data.partInstances.some(i=>i.id===row.id))data.partInstances.push(row);
         for(const l of projected.limitations){let entry=data.limitations.find(e=>e.code===l.code&&e.accuracy===l.accuracy);if(!entry){entry={code:l.code,count:0,elements:[],properties:[],themes:[],accuracy:l.accuracy};data.limitations.push(entry);}entry.count++;if(!entry.elements.includes(l.element))entry.elements.push(l.element);if(l.property&&!entry.properties.includes(l.property))entry.properties.push(l.property);if(!entry.themes.includes(theme))entry.themes.push(theme);}
-        const c=projected.counts;data.coverage.rawElements+=c.raw;data.coverage.retainedElements+=c.retained;data.coverage.logicalElements+=c.logical;data.coverage.cutOffElements+=c.cutOff;data.coverage.runs+=c.runs;
+        const c=projected.counts;data.coverage.rawElements+=c.raw;data.coverage.retainedElements+=c.retained;data.coverage.collapsedElements+=c.collapsed;data.coverage.logicalElements+=c.logical;data.coverage.cutOffElements+=c.cutOff;data.coverage.runs+=c.runs;
       }
       if(selection.subtree?.kind==='element'&&!data.matches.length)throw new CliError('INSPECT_ELEMENT_NOT_FOUND','The selected identity is absent from the requested frame/themes.');
       if(!data.matches.length)warn('INSPECT_NO_MATCH','No selected text/part occurrences matched.',retry('Read the full frame to choose a current selector.',true));
@@ -98,7 +100,7 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
       if([data.baseline,...Object.values(data.additionalThemes)].some(s=>s.elements.some(n=>n.identity.stability==='positional')))warn('INSPECT_IDENTITY_POSITIONAL','Some elements have unkeyed repeated identities; use anchors/keys for durable targets.',retry('Add instance keys or anchors before persisting positional targets.'));
       if(data.limitations.length)warn('INSPECT_RENDER_LIMITATIONS','Read the reported precision limitations.');
       if(Object.values(data.tables.values).some(v=>v.attribution==='unresolved'))warn('INSPECT_TOKEN_UNRESOLVED','Some authored variable references are unresolved; computed CSS values are retained.',[{argv:['adg','check','--read-only','--json'],reason:'Repair the named variable chains before retrying.'}]);
-      if(Buffer.byteLength(JSON.stringify(data))>256*1024)warn('INSPECT_OUTPUT_LARGE','Expanded data exceeds 256 KiB; no facts were truncated.',retry('Choose narrower fields, depth or an observed subtree.'));
+
     }
     await index.close();
     await verifyInputGeneration({tracked,views:[{index,config,resolved:resolvedConfig,configInputs}],verifyConfig:true,code:'INSPECT_INPUT_CHANGED'});
@@ -107,11 +109,15 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
   data.timings.totalMs=performance.now()-start;
   if(primary)throw primary;
   data.complete=true;
+  const projectStart=performance.now();data=compactInspection(data);if(values.expand)data=expandInspection(data);
+  data.timings.projectMs+=performance.now()-projectStart;data.timings.totalMs=performance.now()-start;
+  if(data.mode==='frame'&&Buffer.byteLength(JSON.stringify(data))>256*1024)warn('INSPECT_OUTPUT_LARGE','Inspection data exceeds 256 KiB; no facts were truncated.',retry('Choose narrower fields, depth or an observed subtree.'));
   if(!values.json){log(inspectText(data));for(const warning of warnings)log(warning.code+': '+warning.message);}
   return {data,warnings};
 }
 
 export function inspectText(data) {
+  data=expandInspection(data);
   if(data.mode==='catalog')return data.catalog.map(s=>`${s.source}\n${s.frames.map(f=>'  '+f.name).join('\n')}`).join('\n')||'No TSX frames.';
   return [data.frame.source+'#'+data.frame.name,...[data.baseline,...Object.values(data.additionalThemes)].map((scene,i)=>{
     const nodes=new Map(scene.elements.map(e=>[e.id,e]));const lines=[data.selection.themes[i]];

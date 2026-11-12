@@ -1375,7 +1375,7 @@ While ADG is 0.x, a breaking schema change increments both `schemaVersion` and t
 package minor version. Consumers must reject unsupported schema versions. Schema version
 and package version are separate: compatible package releases retain `schemaVersion:1`.
 
-## Inspect (M4.5 segment 2)
+## Inspect (M4.5)
 
 `adg inspect [source] --frame=<name> --json` returns design structure without starting a viewer or the consumer
 application. With no frame restriction it returns a catalog, unless exactly one frame is selected. Frame names
@@ -1383,27 +1383,67 @@ are exact and source-scoped; a globally ambiguous name returns source-specific r
 both themes, all fields and full depth. Select one subtree with `--part=<defining-source>#<Export>`,
 `--element=<e1_id>`, or `--text=<raw normalized text> [--contains]`. Text matching also spans adjacent inline runs.
 `--depth=<nonnegative integer|all>`, `--fields=structure,layout,typography,color,text`, `--wrappers=semantic|all` and
-`--state-dir` are supported. There is no public audit option. Exit 0 means completed observation (including no
+`--expand` and `--state-dir` are supported. There is no public audit option. Exit 0 means completed observation (including no
 text/part matches), and exit 2 means invalid/incomplete execution; inspect never exits 1.
 
 The finite schema-version-1 envelope contains `inspectVersion:1`, `identityVersion:1`, `complete`, `mode`, selection,
 catalog/frame metadata, shared `tables`, `partInstances`, matches, limitations, coverage and phase timings.
-The exact data types are in [inspect.d.ts](../src/toolkit/inspect.d.ts). Segment 2 uses `encoding:"expanded"`:
-`baselineTheme` and `baseline` hold the first requested theme; `additionalThemes` holds each other complete scene.
-`delta` is null. This explicitly represents a second scene, not an assertion that the themes are equal. Every DOM
-node is retained; `collapsedElements` is zero even when semantic wrappers are requested. Wrapper folding, repeated
-subtrees/icons and the dark delta follow in segment 3. Expanded output can exceed the milestone's compact budgets;
-`INSPECT_OUTPUT_LARGE` reports this without truncation.
+The exact data types are in [inspect.d.ts](../src/toolkit/inspect.d.ts). Default detail uses `encoding:"compact"`:
+`baselineTheme` and `baseline` hold the first requested theme; `delta` contains only observed second-theme changes.
+`--expand` reconstructs ordinary element objects and complete `additionalThemes`, with `delta:null`. Human output
+uses the same expansion. Shared group styles, values, tokens, references and resources remain tables in expanded
+mode. Semantic wrapper folding applies in either mode; use `--wrappers=all` to retain the raw hierarchy.
+
+Compact table keys are numeric array indices. `tables.identities` carries stable IDs and guards once; the numeric
+indices are response-local. Element rows use `[identity, elementType, children, styles, geometry, extra?]`.
+`elementTypes` holds `[tag, a11yIndex|null, namespace?]`; `a11y` holds `[role, name, exposure]`. A geometry array is
+`[x,y,width,height]`; a geometry object carries exceptional clip, visibility, layout-size and scroll facts. Missing
+visible box equals the border box, missing HTML layout size equals its size, and missing clip inherits the nearest
+ancestor clip (or the frame). Null remains an explicit empty box. Parent links derive from child order. Owner
+indices inherit; null explicitly clears ownership. Part markers and text links derive from `partInstances` and runs.
+Namespaces follow HTML/SVG nesting, including foreignObject. Resource SVG geometry supplies matching element
+attributes; explicit element attributes override it.
+
+`tables.properties` lists CSS property names. A style group is a flat `[propertyIndex,valueIndex,...]` list or
+`[[baseStyleIndex], replacements, removedPropertyIndices?]`. These are exact dictionary differences, with no cascade
+inference. `$width`/`$height` mean raw pixels from that element's measured HTML layout size; authored token evidence
+is retained instead when present. A raw value is a CSS string; an attributed value is `[css, referenceIndices, reason?]`.
+References use `[token, propertyIndex, flags, extra?]`, where flags are inherited=1, alias=2, fallback=4; direct has no
+kind bit. Expression defaults to `var(token)`, basis to `authored_reference`. Empty routes are omitted. References
+share declaration/route evidence; their scope comes from the element, property and theme using the value.
+
+Compact token records are `[line,declaration,extra?]`, with common `tokenSource` and resolved=declaration defaults;
+extra carries different resolution/source and dark facts. SVG geometry rows are `[tag,attributes,children]`, with
+`g<index>` IDs; definitions are the defs/gradient/mask/clipPath subset. Stable identity rows are
+`[e1_id,base64urlGuard,stabilityCode,extra?]`, with semantic/authored/positional/resource codes 0/1/2/3. Duplicate
+extra is `[group,ordinal]`; the duplicate table stores `[base64urlGroupDigest,count,sharedGuard?]`. A null guard uses
+the shared group guard. Resource slot identities use `[resourceRootIndex,slot]` and derive their ID/guard from that
+root, slot, tag and namespace. Expanded guards/digests are hexadecimal. Identity variants remain explicit per theme.
+
+Part instances are `[partIndex,rootIdentity,parentInstance|null]`; their array indices are the short owner keys.
+Runs retain authored raw text, slot and boxes; normalized text, IDs, full ranges, range accuracy and owner styles
+are reconstructed when omitted. Literal attribute strings that could resemble local addresses use `{literal:...}`;
+ordinary HTML IDs and text never become element addresses. Templates retain exact local-slot subtrees and text,
+with instance preorder IDs, origin, parent and owner. They are used only when smaller. Dark patches apply after
+baseline template expansion; they include additions/removals, field replacements/unsets, group-style replacements,
+ordering and theme membership. No data is discarded to meet size targets. `INSPECT_OUTPUT_LARGE` reports oversized
+responses and offers narrower selectors, fields or depth.
 
 A scene has roots, external ancestor context, elements, text runs and measured frame size. Element identities are
 assigned before selection, depth or field projection; `data-adg-id` and JSX keys are authored anchors, unique
-semantic signatures are automatic, and indistinguishable unkeyed groups are positional. Persist the source/frame,
+semantic signatures are automatic, and indistinguishable unkeyed groups are positional. Unique authored IDs,
+part/owner markers and semantic role/name signatures open descendant scopes. Duplicate ranking stays within the
+nearest such scope; neutral wrappers do not open scopes. Automatic descendant signatures retain the nearest defining owner stack without its unkeyed instance ordinal. Repeated unkeyed owner roots do not impose frame-wide
+positional ranks on distinguishable descendants. An explicit part-local anchor still inherits its instance's
+positional ambiguity. A semantic scope signature change re-identifies its descendants. Icon/decorative SVG
+internals are resource-local slots and are excluded from frame-level positional counts. Persist the source/frame,
 element ID, identity version and guard together when a later feature needs an anchor. Owner's numeric element
-paths remain transient and separate. Positional identities require authored keys/anchors for durable targets.
+paths remain transient and separate. The reserved frame-root address stays fixed, with its guard exposing root replacement; wrapper guarantees apply below that root. Positional identities require authored keys/anchors for durable targets.
 
 Boxes are frame-relative CSS pixels, including negative coordinates. They are post-transform border AABBs, not ink
-bounds. Computed style entries refer to shared value records; omitted raw values expand through the fixed
+bounds. Computed layout, typography and color style groups refer to shared value records; omitted raw values expand through the fixed
 [inspectVersion 1 defaults](../src/toolkit/inspect-styles.mjs). Requested inherited values are resolved per element.
+Inactive static-position offsets and untransformed transform origins are outside the emitted style subset.
 Values retain computed CSS and scoped direct/alias/fallback reference evidence; `authored_reference` does not claim
 an effective cascade winner or taken fallback. Token definitions retain source locations and dark differences.
 Resource records retain logical artwork sources, dimensions and SVG geometry without embedding image bytes.

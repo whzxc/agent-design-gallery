@@ -34,23 +34,32 @@ export function projectInspection(data, observation, theme, config, intern, defi
   const normalizeURLs=css=>css.replace(/url\(["']?(data:[^)'"\s]+)["']?\)/g,(_,url)=>{
     const resource=intern('resources',{kind:/^data:image\/svg/i.test(url)?'svg':'raster',source:null,mime:url.match(/^data:([^;,]+)/)?.[1]??null,intrinsic:null,contentIdentity:resourceContentIdentity(url)});return 'url('+resource+')';
   });
-  const styles=(values,id)=>{
-    const properties={};
+  const styles=(values,geometry)=>{
+    const groups={layout:{},typography:{},color:{}};
+    const inactive=values.position?.css==='static',untransformed=['transform','rotate','scale','translate'].every(p=>!values[p]||values[p].css==='none');
     for(const [property,value]of Object.entries(values)){
+      if(inactive&&['top','right','bottom','left'].includes(property)||untransformed&&property==='transform-origin')continue;
       if(!selected.has(propertyGroup(property)) && !(selected.has('layout')&&/^border-.+-width$/.test(property)))continue;
-      const refs=value.refs.map(ref=>{defineToken(ref.token);return intern('references',{...ref,element:id,theme,property});});
+      const refs=value.refs.map(ref=>{defineToken(ref.token);const record={...ref,property:ref.shorthand??property};delete record.shorthand;
+        if(!record.via.length)delete record.via;if(!record.inherited)delete record.inherited;
+        if(!record.localOverrides?.length)delete record.localOverrides;
+        return intern('references',record);});
       const css=normalizeURLs(value.css);
       const result={css,attribution:value.unresolved.length?'unresolved':refs.length?'references':'raw',...(refs.length?{refs}:{}),...(value.unresolved.length?{reason:value.unresolved.join(',')}:{})};
       // Raw concrete defaults are reconstructible; token evidence is never elided.
-      if(value.css!==styleDefaults[property]||result.attribution!=='raw')properties[property]=intern('values',result);
+      if(value.css!==styleDefaults[property]||result.attribution!=='raw'){
+        const size=geometry?.layoutSize;
+        const measured=selected.has('layout')&&['width','height'].includes(property)&&size&&value.css===size[property]+'px'&&result.attribution==='raw';
+        groups[propertyGroup(property)][property]=measured?'$'+property:intern('values',result);
+      }
     }
-    return Object.keys(properties).length?intern('styles',properties):undefined;
+    const keys=Object.values(groups).filter(g=>Object.keys(g).length).map(g=>intern('styles',g));return keys.length?keys:undefined;
   };
   const parts=new Map(), instanceRows=[];
   const projectPart=owner=>({source:path.posix.join(path.relative(config.root,config.design).split(path.sep).join('/'),owner.source),export:owner.export});
   for(const n of observation.identities){
     const inherited=parts.get(n.parentPath)??null;let current=inherited;
-    for(const owner of n.owners){const part=intern('parts',projectPart(owner)),id='i_'+ids.get(n.path).id+'_'+part;
+    for(const owner of n.owners){const part=intern('parts',projectPart(owner)),id=data.partInstances.find(i=>i.root===ids.get(n.path).id&&i.part===part)?.id??'i'+(data.partInstances.length+instanceRows.length);
       const instance={id,part,root:ids.get(n.path).id,parent:current};instanceRows.push(instance);current=id;}
     parts.set(n.path,current);
   }
@@ -67,10 +76,10 @@ export function projectInspection(data, observation, theme, config, intern, defi
     const row=ids.get(n.path),input=observation.identities.find(i=>i.path===n.path);
     const element={id:row.id,identity:row.identity,tag:n.tag,namespace:n.namespace==='http://www.w3.org/1999/xhtml'?'html':n.namespace==='http://www.w3.org/2000/svg'?'svg':n.namespace,parent:ids.get(parent.get(n.path))?.id??null,children:children.get(n.path).map(p=>ids.get(p).id)};
     if(selected.has('structure'))Object.assign(element,{role:n.role,name:n.name,a11y:n.a11y,attributes:resolveAttributes({...n.attributes,...Object.fromEntries(Object.entries(n.svgAttributes??{}).filter(([,v])=>!rawURL(v)))}),...(parts.get(n.path)?{owner:parts.get(n.path)}:{}),...(input.owners.length?{markers:input.owners.map(o=>intern('parts',projectPart(o)))}:{})});
-    const style=styles(n.values,element.id);if(style)element.style=style;
+    const style=styles(n.values,n.geometry);if(style)element.style=style;
     if(selected.has('layout'))element.geometry=n.geometry;
     if(Object.keys(n.effects).length)element.effects=n.effects;
-    if(n.pseudo.length)element.pseudo=n.pseudo.map(p=>({id:element.id+'::'+p.kind,kind:p.kind,content:normalizeURLs(p.content),...(selected.has('layout')?{geometry:p.geometry}:{}),...(styles(p.values,element.id+'::'+p.kind)?{style:styles(p.values,element.id+'::'+p.kind)}:{})}));
+    if(n.pseudo.length)element.pseudo=n.pseudo.map(p=>({id:element.id+'::'+p.kind,kind:p.kind,content:normalizeURLs(p.content),...(selected.has('layout')?{geometry:p.geometry}:{}),...(styles(p.values)?{style:styles(p.values)}:{})}));
     if(n.resource){const r=n.resource;
       const mime=r.url?.match(/^data:([^;,]+)/)?.[1]??(r.kind==='svg'||r.kind==='icon'?'image/svg+xml':null);
       const resource={kind:mime==='image/svg+xml'&&r.kind==='raster'?'svg':r.kind,source:r.source?path.posix.join(path.relative(config.root,config.design).split(path.sep).join('/'),r.source):null,mime,intrinsic:r.intrinsic};
@@ -122,7 +131,7 @@ export function projectInspection(data, observation, theme, config, intern, defi
   const scope=new Set(), included=new Set(), context=new Set();
   const descend=(id,depth)=>{scope.add(id);if(data.selection.depth===null||depth<=data.selection.depth)included.add(id);for(const child of byId.get(id).children)descend(child,depth+1);};
   for(const id of roots){descend(id,0);for(let n=byId.get(id)?.parent;n;n=byId.get(n)?.parent)context.add(n);}
-  const emitted=elements.filter(e=>included.has(e.id)).map(e=>{
+  let emitted=elements.filter(e=>included.has(e.id)).map(e=>{
     const children=e.children.filter(id=>included.has(id));const result={...e,children};
     if(children.length!==e.children.length){let count=0;const countAll=id=>{count++;byId.get(id).children.forEach(countAll);};e.children.forEach(countAll);result.cutoff={descendants:count};}
     return result;
@@ -130,13 +139,22 @@ export function projectInspection(data, observation, theme, config, intern, defi
   const emittedRuns=selected.has('text')?runs.filter((r,i)=>included.has(r.element.replace(/::(?:before|after|marker|placeholder)$/, '')) && (query?.kind==='element'||raw.get(rich.runs[i].path)?.geometry.visibility!=='not_laid_out')):[];
   for(const run of emittedRuns){const owner=emitted.find(e=>e.id===run.element);const target=owner??emitted.flatMap(e=>e.pseudo??[]).find(p=>p.id===run.element);if(target)(target.text??=[]).push(run.id);}
   const limitations=rich.limitations.filter(l=>included.has(ids.get(l.path)?.id)).map(l=>({...l,element:ids.get(l.path)?.id,theme}));
+  let collapsed=0;
+  if(data.selection.wrappers==='semantic'){
+    for(const e of [...emitted].reverse()){
+      const input=observation.identities[idRows.findIndex(r=>r.id===e.id)],child=emitted.find(n=>n.id===e.children[0]);
+      if(!input?.neutral||roots.includes(e.id)||!child||e.children.length!==1||e.role||e.name||Object.keys(e.attributes??{}).length||e.owner!==child.owner||e.pseudo||e.resource||e.effects||e.geometry?.scroll||JSON.stringify(e.geometry?.box)!==JSON.stringify(child.geometry?.box))continue;
+      const above=emitted.find(n=>n.id===e.parent);if(!above)continue;
+      above.children=above.children.flatMap(id=>id===e.id?e.children:[id]);child.parent=e.parent;emitted=emitted.filter(n=>n!==e);collapsed++;
+    }
+  }
   const scene={roots,context:elements.filter(e=>context.has(e.id)).map(e=>({...e,children:e.children.filter(id=>context.has(id)||included.has(id))})),elements:emitted,instances:[],runs:emittedRuns,size:rich.size};
-  return {scene,matches,limitations,instanceRows:instanceRows.filter(i=>included.has(i.root)||[...context].some(id=>id===i.root)),counts:{raw:scope.size,retained:scope.size,logical:included.size,cutOff:scope.size-included.size,runs:emittedRuns.length}};
+  return {scene,matches,limitations,instanceRows:instanceRows.filter(i=>included.has(i.root)||[...context].some(id=>id===i.root)),counts:{raw:scope.size,retained:scope.size-collapsed,collapsed,logical:included.size-collapsed,cutOff:scope.size-included.size,runs:emittedRuns.length}};
 }
 
 export function pruneTables(data) {
   const used=Object.fromEntries(Object.keys(data.tables).map(k=>[k,new Set()]));
-  const useStyle=key=>{if(!key||used.styles.has(key))return;used.styles.add(key);for(const value of Object.values(data.tables.styles[key])){used.values.add(value);for(const m of data.tables.values[value].css.matchAll(/url\((r\d+)\)/g))used.resources.add(m[1]);for(const r of data.tables.values[value].refs??[]){used.references.add(r);used.tokens.add(data.tables.references[r].token);}}};
+  const useStyle=keys=>{for(const key of keys??[]){if(used.styles.has(key))continue;used.styles.add(key);for(const value of Object.values(data.tables.styles[key])){if(value.startsWith('$'))continue;used.values.add(value);for(const m of data.tables.values[value].css.matchAll(/url\((r\d+)\)/g))used.resources.add(m[1]);for(const r of data.tables.values[value].refs??[]){used.references.add(r);used.tokens.add(data.tables.references[r].token);}}}};
   for(const scene of [data.baseline,...Object.values(data.additionalThemes)].filter(Boolean))for(const e of [...scene.context,...scene.elements]){
     useStyle(e.style);for(const p of e.pseudo??[]){useStyle(p.style);for(const m of p.content.matchAll(/url\((r\d+)\)/g))used.resources.add(m[1]);}if(e.resource)used.resources.add(e.resource);for(const r of e.backgrounds??[])used.resources.add(r);for(const p of e.markers??[])used.parts.add(p);
   }

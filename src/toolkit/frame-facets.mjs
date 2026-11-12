@@ -4,7 +4,8 @@ export function installInspectFacets() {
   globalThis.__adgInspectFacets = {
     create({ elements, paths, style, rect, origin, declarationsFor, tokens, theme, properties }) {
       const p = globalThis.__adgFramePrimitives, facts = [], runs = [], limitations = [], orderKeys=new Map();
-      const customCache = new Map(), variableDeclarations = new Map();
+      const customCache = new Map(), variableDeclarations = new Map(),referenceCache=new Map(),customKeys=new Map();
+      const projectDeclarations=new Map(tokens.map(t=>[t.name,new Set(t.values.map(v=>v.declaration))]));
       const definitions = new Map(tokens.map(t => [t.name, t.values.find(v => v.theme === theme)?.declaration]));
       const round = n => Math.round(n * 100) / 100 || 0;
       const box = r => Object.fromEntries(Object.entries(p.relativeBox(r, origin)).map(([k,v]) => [k,round(v)]));
@@ -27,25 +28,29 @@ export function installInspectFacets() {
         if(!candidates.length)return {refs:[],unresolved:[]};
         if(!customCache.has(node)){
           const custom=new Map();
-          for(let parent=node;parent;parent=parent.parentElement)for(const d of declarationsFor(parent))if(d.property.startsWith('--')&&!custom.has(d.property))custom.set(d.property,d.declaration);
-          customCache.set(node,custom);
+          for(let parent=node;parent;parent=parent.parentElement)for(const d of declarationsFor(parent)){
+            if(parent===document.documentElement&&projectDeclarations.get(d.property)?.has(d.declaration))continue;
+            if(d.property.startsWith('--')&&!custom.has(d.property))custom.set(d.property,d.declaration);
+          }
+          customCache.set(node,custom);customKeys.set(node,JSON.stringify([...custom].sort(([a],[b])=>a.localeCompare(b))));
         }
-        const custom=customCache.get(node);
+        const custom=customCache.get(node),cacheKey=JSON.stringify([candidates,customKeys.get(node)]);
+        if(referenceCache.has(cacheKey))return referenceCache.get(cacheKey);
         const refs=[], unresolved=[];
         for (const d of candidates) {
           function expand(name, via=[], fallback=false) {
             if (via.includes(name)) { unresolved.push('token_cycle:'+name);return; }
-            const project=definitions.has(name), local=custom.has(name);
+            const project=definitions.has(name), local=custom.has(name)&&custom.get(name)!==definitions.get(name);
             if (project) refs.push({token:name,kind:fallback?'fallback':via.length?'alias':'direct',expression:d.declaration,via,inherited:d.inherited,basis:'authored_reference',
               ...(d.property!==property?{shorthand:d.property}:{}),
-              ...(via.some(n=>custom.has(n)) || local ? {localOverrides:[...new Set([...via,name])].filter(n=>custom.has(n)).map(name=>({name,declaration:custom.get(name)}))}: {})});
+              ...(via.some(n=>custom.has(n)&&custom.get(n)!==definitions.get(n)) || local ? {localOverrides:[...new Set([...via,name])].filter(n=>custom.has(n)&&custom.get(n)!==definitions.get(n)).map(name=>({name,declaration:custom.get(name)}))}: {})});
             const expression = local ? custom.get(name) : definitions.get(name);
             if (expression===undefined) { unresolved.push('missing_variable:'+name);return; }
             for (const v of p.variables(expression)) expand(v.name,[...via,name],fallback||v.fallback);
           }
           for (const v of p.variables(d.declaration)) expand(v.name,[],v.fallback);
         }
-        return {refs:[...new Map(refs.map(r=>[JSON.stringify(r),r])).values()],unresolved:[...new Set(unresolved)]};
+        const result={refs:[...new Map(refs.map(r=>[JSON.stringify(r),r])).values()],unresolved:[...new Set(unresolved)]};referenceCache.set(cacheKey,result);return result;
       }
       function styles(node, pseudo='') {
         const s=pseudo?getComputedStyle(node,pseudo):style(node), values={};

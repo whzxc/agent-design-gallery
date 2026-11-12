@@ -2,7 +2,7 @@ import { installFramePrimitives } from './frame-primitives.mjs';
 export { installFramePrimitives };
 
 /** Browser-side projection: provenance roots and authored references, no raster work. */
-export function collectOwnerObservation({ tokens, theme, rich = false, properties = [] }) {
+export function collectOwnerObservation({ tokens, theme, rich = false, properties = [], serialized = false }) {
   const frame = document.querySelector('[data-adg-frame]'), root = frame?.firstElementChild;
   if (!root || frame.children.length !== 1) throw Error('Ownership observation requires exactly one frame root.');
   const { inventory, relativeBox, variables, selectors, reads, identityNode, styleRules, textRects } = globalThis.__adgFramePrimitives;
@@ -22,7 +22,7 @@ export function collectOwnerObservation({ tokens, theme, rich = false, propertie
     }
     return right > left && bottom > top ? box({ left, right, top, bottom }) : null;
   }
-  const rules=styleRules({referencesOnly:!rich,resolveNesting:true});
+  const rules=styleRules({referencesOnly:true,includeCustom:rich,resolveNesting:true});
   const probe = document.createElement('style'); document.head.append(probe);
   function containerActive(node, conditions) {
     if (!conditions.length) return true;
@@ -141,6 +141,7 @@ export function collectOwnerObservation({ tokens, theme, rich = false, propertie
       while (common && !fragments.every(f => common.contains(f.parent))) common = common.parentElement;
       texts.push({ path: `${paths.get(group)}/run-${texts.length}`, ownerPath: paths.get(common ?? group), raw, normalized, fragments: fragments.map(({ elementPath, text, boxes }) => ({ elementPath, text, boxes })) });
     }
-    return { ...(rich?{rich:details.finish()}:{}), identities, nodes, references: [...new Map(references.map(ref => [JSON.stringify(ref), ref])).values()], texts, paints };
+    const result={ ...(rich?{rich:details.finish()}:{}), identities, nodes, references: [...new Map(references.map(ref => [JSON.stringify(ref), ref])).values()], texts, paints };
+    return serialized?JSON.stringify(result):result;
   } finally { probe.remove(); }
 }

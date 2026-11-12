@@ -8,6 +8,7 @@ import {starterTokens} from '../src/toolkit/project.mjs';
 import {loadConfig} from '../src/toolkit/config.mjs';
 import {launch,loadFrame} from '../src/toolkit/browser.mjs';
 import {observeOwnerFrame} from '../src/toolkit/owner-observation.mjs';
+import {elementIdentities} from '../src/toolkit/frame-identity.mjs';
 import {collectPartSnapshot} from '../src/toolkit/part-snapshot.mjs';
 import {installFramePrimitives} from '../src/toolkit/frame-observation.mjs';
 import {canonicalBytes} from '../src/toolkit/impact-proof.mjs';
@@ -39,6 +40,14 @@ test('shared index keys exact documents, environment, policy and facet coverage,
   await read(built,'rich',{facets:full});await read(built,'rich');assert.equal(reads,6);
   await read(built,null);await read(built,null);assert.equal(reads,8);
   const again=await index.materialize('design/components/demo.tsx');assert.equal(again,built,'one execution per index operation');
+});
+
+test('owner projects optional element IDs from rich shared hits without removing inspect inputs',async()=>{
+  const identities=[{path:'0',parentPath:null,tag:'main',namespace:'html',owners:[],attributes:{},directText:''}];
+  const saved={identities,nodes:[{path:'0'}],rich:{nodes:[]}},index={observation:async()=>saved};
+  const result=await observeOwnerFrame(index,'design/demo.tsx',{}, {name:'ready'},'light','host',()=>assert.fail('rich hit loaded a frame'),[]);
+  assert.equal(result.nodes[0].elementId,elementIdentities(identities,{source:'design/demo.tsx',frame:'ready'})[0].id);
+  assert.equal(result.identities,identities);
 });
 
 test('shared core preserves owner observations and strict part snapshots while exposing inert identity/art metadata',async t=>{

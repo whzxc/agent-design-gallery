@@ -28,7 +28,7 @@ export function occurrenceContext(observation, occurrence) {
 }
 
 export async function observeOwnerFrame(index, source, built, frame, theme, environment, getPage, tokens) {
-  return index.observation(source, built, frame, theme, environment, async () => {
+  const observed=await index.observation(source, built, frame, theme, environment, async () => {
     const page = await getPage();
     const rendered = { ...frame, document: value => frameDocument(frame,value,built.css) };
     await loadFrame(page, rendered, theme);
@@ -47,6 +47,9 @@ export async function observeOwnerFrame(index, source, built, frame, theme, envi
       return observation;
     });
   });
+  // A rich shared hit retains raw identity inputs for inspect; owner projects the same addresses.
+  if(observed.identities){const ids=new Map(elementIdentities(observed.identities,{source,frame:frame.name},{metadata:false}).map(n=>[n.path,n.id]));for(const node of observed.nodes)node.elementId=ids.get(node.path);}
+  return observed;
 }
 
 export function collectOwnerPalette({ tokens }) {

@@ -35,7 +35,7 @@ export async function observeInspectFrame(index, source, built, frame, theme, en
     return browserTask(page.context().browser(),async()=>{
       await page.evaluate(readyResources);await page.evaluate(installColorResolver);await page.evaluate(installFramePrimitives);await page.evaluate(installInspectFacets);
       let observed;
-      try {observed=await settleOwnerObservation(()=>page.evaluate(collectOwnerObservation,{tokens,theme,rich:true,properties:Object.keys(styleDefaults)}),()=>page.evaluate(()=>new Promise(requestAnimationFrame)));}
+      try {observed=await settleOwnerObservation(async()=>JSON.parse(await page.evaluate(collectOwnerObservation,{tokens,theme,rich:true,serialized:true,properties:Object.keys(styleDefaults)})),()=>page.evaluate(()=>new Promise(requestAnimationFrame)));}
       catch(error){if(error.code==='OWNER_UNSETTLED')throw new CliError('INSPECT_UNSETTLED',error.message,{cause:error});throw error;}
       try {
         const a11y=await observeAccessibility(page);

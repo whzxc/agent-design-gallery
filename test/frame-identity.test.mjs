@@ -116,3 +116,36 @@ test('identity conflicts retain a typed actionable diagnostic before inspect is 
   assert.equal(result.exitCode,2);assert.equal(result.error.code,'INSPECT_IDENTITY_CONFLICT');
   assert.deepEqual(result.error.next[0].argv,['adg','owner','--text=Save','--json']);
 });
+
+test('unique semantic scopes isolate duplicate ranks and signature edits re-identify descendants',()=>{
+  const a=node('a','0','section',{attributes:{'data-part':'a'}}),b=node('b','0','section',{semantic:{role:'region',name:'B'}});
+  const one=node('one','a'),two=node('two','b'),before=ids([root,a,one,b,two]);
+  const inserted=node('new','a');const after=ids([root,a,inserted,one,b,two]);
+  assert.equal(before[4].id,after[5].id);assert.equal(before[4].identity.stability,'semantic');
+  assert.notEqual(before[2].id,after[3].id);assert.equal(after[3].identity.duplicate.count,2);
+  const renamed=ids([root,a,one,{...b,semantic:{role:'region',name:'Changed'}},two]);
+  assert.notEqual(before[3].id,renamed[3].id);assert.notEqual(before[4].id,renamed[4].id);
+  const wrapped=ids([root,a,one,node('w','0','div',{neutral:true}),{...b,parentPath:'w'},two]);
+  assert.equal(before[4].id,wrapped[5].id);
+});
+
+test('resource-local slots do not perturb frame-level duplicate rankings',()=>{
+  const art=node('art','0','svg',{resource:true}),p=node('p','art','path'),other=node('other','0','path');
+  const before=ids([root,art,p,other]);
+  const after=ids([root,art,node('new','art','path'),p,other]);
+  assert.equal(before[3].id,after[4].id);assert.equal(before[3].identity.stability,'semantic');
+  assert.equal(before[2].identity.stability,'resource');assert.equal(before[2].identity.slot,0);
+  assert.notEqual(before[2].id,after[3].id);
+});
+
+test('automatic descendants retain defining-part namespaces without inheriting unkeyed instance ordinals',()=>{
+  const owner={source:'row.tsx',export:'Row'},a=node('a','0','section',{owners:[owner]}),b={...a,path:'b'};
+  const inner=node('inner','a'),other=node('other','b');
+  const before=ids([root,a,inner,b,other]),after=ids([root,node('new','0'),a,inner,b,other]);
+  assert.equal(before[2].id,after[3].id);assert.equal(before[4].id,after[5].id);
+});
+
+test('keys inherit ambiguity when their sibling-list parent is positional',()=>{
+  const a=node('a','0'),b=node('b','0'),child=node('child','a','button',{keys:[{key:'save'}]});
+  const rows=ids([root,a,child,b]);assert.equal(rows[2].identity.stability,'positional');
+});
