@@ -98,7 +98,7 @@ export async function searchOwner(config, values, { log = console.log, openIndex
             const detail = query.kind === 'text' ? { kind: 'text', raw: match.raw, normalized: match.normalized, fragments: match.fragments }
               : query.kind === 'color' ? { kind: 'paint', property: match.property, computed: match.computed, rgba: match.rgba, usage: 'computed_value' }
               : { kind: 'reference', token: match.token, property: match.property, declaration: match.declaration, via: match.via, usage: 'authored_reference' };
-            const evidence = { matchKind: kind, frame: ref, theme, elementPath: match.path, boxes: query.kind === 'text' ? match.fragments.flatMap(f => f.boxes) : ctx.box ? [ctx.box] : [], owners, detail };
+            const evidence = { matchKind: kind, frame: ref, theme, elementPath: match.path, ...(ctx.elementId ? {elementId:ctx.elementId} : {}), boxes: query.kind === 'text' ? match.fragments.flatMap(f => f.boxes) : ctx.box ? [ctx.box] : [], owners, detail };
             const scope = new Set(ctx.ancestors);
             for (const fragment of match.fragments ?? []) for (const ancestor of occurrenceContext(observation, { path: fragment.elementPath }).ancestors) scope.add(ancestor);
             const references = query.kind === 'token' ? [match] : query.kind === 'color'

@@ -1,6 +1,5 @@
 import path from 'node:path';
-import { readFile, realpath, stat } from 'node:fs/promises';
-import { configFile } from './config.mjs';
+import { realpath } from 'node:fs/promises';
 import { prepareDiffInputs } from './diff-inputs.mjs';
 import { revisionChanges, currentHead } from './arch-git.mjs';
 import { cleanup } from './results.mjs';
@@ -9,25 +8,7 @@ import { CliError } from '../cli-output.mjs';
 const slash = name => name.split(path.sep).join('/');
 const within = (name, directory) => !directory || name === directory || name.startsWith(directory + '/');
 
-/** Literal local config imports supply path roles; opaque inputs retain unknown classification. */
-export async function configInputFiles(config) {
-  const found = new Set(), entry = configFile(config.root);
-  async function visit(file) {
-    file = await realpath(file);
-    if (found.has(file)) return;
-    found.add(file);
-    const text = await readFile(file, 'utf8');
-    for (const [, specifier] of text.matchAll(/\b(?:from\s*|import\s*(?:\(\s*)?|require\(\s*)['"](\.[^'"]+)['"]/g)) {
-      const requested = path.resolve(path.dirname(file), specifier);
-      for (const candidate of [requested, ...['.ts', '.js', '.mjs', '/index.ts', '/index.js'].map(extension => requested + extension)]) {
-        try { if ((await stat(candidate)).isFile()) { await visit(candidate); break; } }
-        catch (error) { if (!['ENOENT', 'ENOTDIR'].includes(error.code)) throw error; }
-      }
-    }
-  }
-  if (entry) await visit(entry);
-  return [...found];
-}
+export { configInputFiles } from './input-generation.mjs';
 
 /** Reuse diff's historical config, dependency environment and disposable-tree lifecycle. */
 export async function prepareImpactInputs(config, values) {

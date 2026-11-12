@@ -74,7 +74,7 @@ export async function owner(config, values, { log = console.log, openIndex = ope
       for (const implementation of binding.files) {
         const boundary = binding.anchorLine === null ? null : regionAt(validated.regions[implementation] ?? [], binding.anchorLine);
         const matches = roots.length ? roots : [null];
-        for (const node of matches) row.evidence.push({ matchKind: kind, frame: ref, theme, elementPath: node?.path ?? null, boxes: node ? [node.box] : [], owners: node ? projectOwners(node.owners) : [],
+        for (const node of matches) row.evidence.push({ matchKind: kind, frame: ref, theme, elementPath: node?.path ?? null, ...(node?.elementId ? {elementId:node.elementId} : {}), boxes: node ? [node.box] : [], owners: node ? projectOwners(node.owners) : [],
           detail: { kind: 'mapping', file: map.source, pointer: binding.pointer, implementation, selector: binding.implementation, locatorMatched: query.line === null && query.symbol === null ? null : !!binding.implementation.symbol,
             anchorLine: binding.anchorLine, nextBoundaryLine: boundary?.nextBoundaryLine ?? null } });
       }

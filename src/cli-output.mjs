@@ -19,6 +19,7 @@ export const errorCatalog = {
   OWNER_COLOR_INVALID: [2, 'owner-help', 'Supply an absolute supported CSS color or query a token name.'],
   OWNER_INPUT_NOT_FOUND: [2, 'owner-help', 'Choose an existing in-project file or directory.'],
   OWNER_UNSETTLED: [2, 'owner', 'Stabilize the named frame and resources before repeating the query.'],
+  INSPECT_IDENTITY_CONFLICT: [2, 'owner', 'Give repeated instances unique keys or anchors, then repeat the query.'],
   OWNER_INDEX_CHANGED: [2, 'owner', 'Finish concurrent input edits before repeating the query.'],
   IMPACT_INPUT_NOT_FOUND: [2, 'impact-help', 'Choose an existing design input, registered part or declared token.'],
   IMPACT_INPUT_CHANGED: [2, 'impact', 'Finish concurrent input edits before repeating the query.'],

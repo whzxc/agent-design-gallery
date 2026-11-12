@@ -10,13 +10,13 @@ export async function collectPartSnapshot({ selector, tokens, scale, ref, theme 
   if (roots.length !== 1) return { referenceError: `Expected one target for ${selector ?? 'the part root'}, found ${roots.length}.` };
   const root = roots[0], origin = root.getBoundingClientRect(), frameBox = frame.getBoundingClientRect();
   if (!origin.width || !origin.height || getComputedStyle(root).visibility !== 'visible') return { referenceError: 'The parent/part target must be visible.' };
-  const clean = number => number === 0 ? 0 : number;
-  const box = rect => ({ x: clean(rect.x - origin.x), y: clean(rect.y - origin.y), width: rect.width, height: rect.height });
+  const { inventory,relativeBox,reads,styleRules,textRects }=globalThis.__adgFramePrimitives;
+  const box = rect => relativeBox(rect,origin);
   const cssCrop = { x: origin.x - frameBox.x, y: origin.y - frameBox.y, width: origin.width, height: origin.height };
   const left = Math.floor(cssCrop.x * scale), top = Math.floor(cssCrop.y * scale);
   const deviceCrop = { x: left, y: top, width: Math.ceil((cssCrop.x + origin.width) * scale) - left, height: Math.ceil((cssCrop.y + origin.height) * scale) - top };
   const fractionalOrigin = { x: cssCrop.x * scale - left, y: cssCrop.y * scale - top };
-  const nodes = [root, ...root.querySelectorAll('*')], paths = new Map(nodes.map((node, index) => [node, String(index)]));
+  const {elements:nodes,paths}=inventory(root), {style:styleFor,rect:rectFor}=reads();
   const ids = new Map(nodes.filter(node => node.id).map(node => [node.id, `node-${paths.get(node)}`]));
   const unsupported = [], resources = [], resourceCache = new Map(), decoded = new Map();
   const internalIds = value => value.replace(/url\(["']?#([^)'"\s]+)["']?\)/g, (_, id) => `url(#${ids.get(id) ?? id})`);
@@ -67,18 +67,10 @@ export async function collectPartSnapshot({ selector, tokens, scale, ref, theme 
   };
   const paintProperty = property => /color|background|fill|stroke|shadow|opacity|filter|blend|mask|clip-path/.test(property);
   const ignored = /^(?:--|animation|transition|cursor$|pointer-events$|user-select$|touch-action$|scroll-behavior$|caret-color$)/;
-  const tokenRules = [];
-  const visitRules = rules => {
-    for (const rule of rules) {
-      if (rule instanceof CSSMediaRule && !matchMedia(rule.conditionText).matches || rule instanceof CSSSupportsRule && !CSS.supports(rule.conditionText)) continue;
-      if (rule.selectorText && rule.style) tokenRules.push(rule);
-      if (rule.cssRules) visitRules(rule.cssRules);
-    }
-  };
-  for (const sheet of document.styleSheets) visitRules(sheet.cssRules);
+  const tokenRules=styleRules().map(item=>item.rule);
   const elements = [], texts = [], rasters = [], edgeBoxes = [];
   for (const node of nodes) {
-    const path = paths.get(node), style = getComputedStyle(node), rect = node.getBoundingClientRect();
+    const path = paths.get(node), style = styleFor(node), rect = rectFor(node);
     inspectPaint(style, path);
     if (node.matches('canvas,video,object,embed,foreignObject')) unsupported.push({ path, property: 'paint', value: node.localName });
     const computedStyle = await normalizeStyle(style), layout = {}, paint = {};
@@ -118,8 +110,7 @@ export async function collectPartSnapshot({ selector, tokens, scale, ref, theme 
       owners: JSON.parse(node.getAttribute('data-adg-owners') ?? '[]') });
     for (const [index, child] of [...node.childNodes].entries()) {
       if (child.nodeType !== 3 || !child.textContent.trim()) continue;
-      const range = document.createRange(); range.selectNodeContents(child);
-      const lines = [...range.getClientRects()].map(rect => ({ text: child.textContent, box: box(rect) }));
+      const lines = textRects(child).rects.map(rect => ({ text: child.textContent, box: box(rect) }));
       texts.push({ path: `${path}/text-${index}`, parentPath: path, text: child.textContent, lines });
       edgeBoxes.push(...lines.map(line => line.box));
     }

@@ -13,10 +13,12 @@ import { createIndexStore, indexDigest } from './index-store.mjs';
 import { defaultStateDirectory } from '../hub/registry.mjs';
 import { sourceRelationships } from '../../public/relationships.js';
 import { entryTokenReachability } from './token-reachability.mjs';
+import { identityVersion } from './frame-identity.mjs';
+import { inspectVersion } from './inspect-styles.mjs';
 import { frameDocument } from './frame-document.mjs';
 export { sourceFacts } from './source-facts.mjs';
 
-const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'owner-colors.mjs', 'tokens.mjs', 'token-reachability.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
+const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'frame-observation.mjs', 'frame-primitives.mjs', 'frame-identity.mjs', 'inspect-styles.mjs', 'owner-colors.mjs', 'tokens.mjs', 'token-reachability.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
 
 export function discoverProject(config) {
   const tsx = listSources(config.design, sourceDirectories(config)).map(file => relative(config, file));
@@ -130,11 +132,22 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
       const map = supplied ?? await loadImplementationMap(config);
       return { map, ...await validateImplementationMap(config, map, { sources: inventory.tsx, selected, getBuild, ...selection }) };
     },
-    async observation(source, built, frame, theme, environment, collect) {
+    async observation(source, built, frame, theme, environment, collect, { facets = ['owner','identity'], policy = null } = {}) {
       assertOpen();
       if (environment === null) return collect();
-      const build = built.inputHash ?? indexDigest(JSON.stringify({ css: built.css, frame }));
-      return cached('owner-observation', { source, build, frame: frame.name, theme, environment }, collect);
+      const coverage=[...new Set(facets)].sort();
+      const inputs={source,document:indexDigest(frameDocument(frame,theme,built.css)),
+        metadata:{width:frame.width??null,height:frame.height??null,parent:frame.parent??null},
+        theme,environment,policy,identityVersion,inspectVersion};
+      const keyFor=facets=>JSON.stringify({version:1,collectorIdentity,projection:'frame-observation',inputs,facets});
+      const key=keyFor(coverage), saved=await shards.get(key);
+      if(Array.isArray(saved?.facets) && Object.hasOwn(saved,'value') && saved.facets.every(f=>coverage.includes(f)) && coverage.every(f=>saved.facets.includes(f)))return saved.value;
+      const full=['a11y','color','identity','layout','owner','structure','text','typography'];
+      if(coverage.every(f=>full.includes(f)) && coverage.length<full.length){
+        const richer=await shards.get(keyFor(full));
+        if(Array.isArray(richer?.facets) && Object.hasOwn(richer,'value') && coverage.every(f=>richer.facets.includes(f)))return richer.value;
+      }
+      const value=await collect();await shards.put(key,{facets:coverage,value});return value;
     },
     async palette(tokens, theme, environment, collect) {
       assertOpen();

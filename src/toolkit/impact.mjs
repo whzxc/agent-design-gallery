@@ -12,8 +12,8 @@ import { relatedSources } from '../../public/relationships.js';
 import { commandFailure, cleanup } from './results.mjs';
 import { indexDigest } from './index-store.mjs';
 import { groupImpactFrames, impactFrameCount } from './impact-output.mjs';
-import { loadConfig } from './config.mjs';
 import { canonicalBytes, capturePolicy, entryProjection, equalEntryProof, architectureProjection, equalProof } from './impact-proof.mjs';
+import { trackedHash, inputBytes as bytes, verifyInputGeneration } from './input-generation.mjs';
 import { createEligibilityChecker } from './impact-eligibility.mjs';
 
 const slash = name => name.split(path.sep).join('/');
@@ -21,10 +21,6 @@ const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 const outside = name => name === '..' || name.startsWith('../') || path.isAbsolute(name);
 const array = value => value === undefined ? [] : Array.isArray(value) ? value : [value];
 const themesFor = values => values.theme && values.theme !== 'both' ? [values.theme] : ['light', 'dark'];
-const trackedHash = contents => indexDigest(contents === null ? 'missing\0' : Buffer.concat([Buffer.from('present\0'), contents]));
-async function bytes(file) {
-  try { return await readFile(file); } catch (error) { if (['ENOENT', 'ENOTDIR'].includes(error.code)) return null; throw error; }
-}
 
 async function sourceInput(config, input, inventory) {
   try { return relative(config, selectSources(config, [input], { write: false })[0]); }
@@ -55,25 +51,8 @@ export async function impact(config, values, { log = console.log, openIndex = op
   async function track(file) { if (!tracked.has(file)) tracked.set(file, trackedHash(await bytes(file))); }
   const warn = (code, message, next = []) => { if (!warnings.some(warning => warning.code === code)) warnings.push({ code, message, next }); };
   const checkNext = reason => [{ argv: ['adg', 'check', '--read-only', '--json'], reason }];
-  async function verifyGeneration() {
-    // Detect edits before re-evaluating potentially broken configuration, then
-    // check again after evaluation so a config hook cannot mutate a tracked input.
-    for (const [file, expected] of tracked) if (trackedHash(await bytes(file)) !== expected) throw new CliError('IMPACT_INPUT_CHANGED', `Input changed during impact query: ${file}.`);
-    for (const view of views) {
-      await view.index.verifyInputs();
-      if (inputs) {
-        let resolved;
-        try { resolved = await loadConfig(view.config.root, { discover: false, fresh: true }); }
-        catch (cause) { throw new CliError('IMPACT_INPUT_CHANGED', `Configuration could not be revalidated: ${view.config.root}. ${cause.message}`, { cause }); }
-        if (canonicalBytes(resolved) !== view.resolved) throw new CliError('IMPACT_INPUT_CHANGED', `Resolved configuration changed during query: ${view.config.root}.`);
-        const files = await configInputFiles(resolved);
-        const names = files.map(file => slash(path.relative(resolved.root, file))).sort(compare);
-        if (canonicalBytes(names) !== canonicalBytes([...view.configInputs].sort(compare))) throw new CliError('IMPACT_INPUT_CHANGED', 'Configuration dependency inventory changed during query.');
-      }
-    }
-    for (const [file, expected] of tracked) if (trackedHash(await bytes(file)) !== expected) throw new CliError('IMPACT_INPUT_CHANGED', `Input changed during impact query: ${file}.`);
-    await inputs?.verifyChanges();
-  }
+  const verifyGeneration=()=>verifyInputGeneration({tracked,views,inputs});
+
   try {
     let query, fileInput;
     await timed('prepareMs', async () => {

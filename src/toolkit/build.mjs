@@ -105,6 +105,7 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
   const result = await build({ entryPoints: [file], bundle: true, write: false, format: 'esm', platform: 'node', jsx: 'automatic', jsxImportSource: 'adg', jsxDev: true, metafile: true, logLevel: 'silent', plugins: [{ name: 'adg-sources', setup(api) {
     api.onResolve({ filter: /.*/ }, args => {
       if (args.path === 'adg:self') return {path:args.importer};
+      if (args.path.startsWith('adg:art-bytes:')) return {path:args.path.slice('adg:art-bytes:'.length),namespace:'art-bytes'};
       if (['adg','adg/jsx-runtime','adg/jsx-dev-runtime'].includes(args.path)) return { path: pathToFileURL(runtime).href, external: true };
       if (args.kind !== 'entry-point' && !args.path.startsWith('.')) return { errors: [{ text: `Bare import ${args.path} is unavailable; import adg or a relative file inside design/` }] };
       const url = args.path.endsWith('?url');
@@ -121,7 +122,12 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
       if (url && !resolved.startsWith(path.join(base,'art')+path.sep)) return {errors:[{text:'?url imports must be under design/art/'}]};
       return { path: resolved, ...(url ? {namespace:'art-url'} : {}) };
     });
-    api.onLoad({filter:/.*/,namespace:'art-url'}, args => ({contents:read(args.path),loader:'dataurl'}));
+    api.onLoad({filter:/.*/,namespace:'art-bytes'}, args => ({contents:read(args.path),loader:'dataurl'}));
+    const artModule = file => {
+      const source=path.relative(base,file).split(path.sep).join('/');
+      return {contents:`import data from ${JSON.stringify('adg:art-bytes:'+file)};import {registerArtwork} from 'adg';export default registerArtwork(data,${JSON.stringify(source)});`,loader:'js'};
+    };
+    api.onLoad({filter:/.*/,namespace:'art-url'}, args => artModule(args.path));
     api.onLoad({filter:/\.tsx$/}, async args => {
       const sourcePath = path.relative(base, args.path).split(path.sep).join('/');
       if (!isSourcePath(sourcePath, sources)) return snapshot ? {contents:read(args.path,'utf8'),loader:'tsx'} : undefined;
@@ -129,12 +135,12 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
       return registeredSource(args.path, sourcePath, original);
     });
     if (snapshot) api.onLoad({filter:/\.(?:[cm]?js|jsx|ts|json)$/}, args => ({contents:read(args.path,'utf8'),loader:args.path.endsWith('.ts')?'ts':args.path.endsWith('.jsx')?'jsx':args.path.endsWith('.json')?'json':'js'}));
-    api.onLoad({ filter: /\.(png|jpe?g|webp)$/i }, args => ({ contents: read(args.path), loader: 'dataurl' }));
+    api.onLoad({ filter: /\.(png|jpe?g|webp)$/i }, args => artModule(args.path));
     api.onLoad({ filter: /\.svg$/i }, args => {
       const source = read(args.path,'utf8');
       const forbidden = /<(?:style|script)\b|\s(?:on[\w-]+|className)\s*=/i.exec(source);
       if (forbidden) { const before=source.slice(0,forbidden.index); return {errors:[{text:'Forbidden SVG markup; remove styles, scripts and event attributes',location:{file:args.path,line:before.split('\n').length,column:before.length-before.lastIndexOf('\n')-1}}]}; }
-      return { contents: `import { artwork } from 'adg'; export default props => artwork(${JSON.stringify(source)}, props);`, loader:'js' };
+      return { contents: `import { artwork } from 'adg'; export default props => artwork(${JSON.stringify(source)}, props, ${JSON.stringify(path.relative(base,args.path).split(path.sep).join('/'))});`, loader:'js' };
     });
   } }] }).catch(error => {
     const typed = error.errors?.find(item => item.detail instanceof CliError)?.detail;

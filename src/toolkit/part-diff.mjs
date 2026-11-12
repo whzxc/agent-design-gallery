@@ -1,3 +1,4 @@
+import { installFramePrimitives } from './frame-observation.mjs';
 import { loadTokens } from './project.mjs';
 import { loadFrame, readyResources } from './browser.mjs';
 import { collectPartSnapshot, normalizeSnapshot, snapshotFindings, settlePart } from './part-snapshot.mjs';
@@ -25,6 +26,7 @@ export function partContext(built, inputs, scale, themes, clock) {
 }
 
 async function readSnapshot(page, args) {
+  await page.evaluate(installFramePrimitives);
   const snapshot = await page.evaluate(collectPartSnapshot, args);
   if (snapshot.referenceError) throw new CliError('DIFF_REFERENCE_INVALID', snapshot.referenceError);
   if (snapshot.unsupported.length) {
