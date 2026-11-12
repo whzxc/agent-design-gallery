@@ -52,7 +52,7 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
       if (url.pathname === '/api/roots' && request.method === 'GET') return json(response, 200, await listRoots(stateDirectory));
       if (url.pathname === '/api/rescan' && request.method === 'POST') return json(response, 200, (await scanRoots(undefined, stateDirectory)).data.roots);
       if (route) {
-        if (!read && !(request.method === 'POST' && (route[2] === '/preferences' || route[2] === '/catalog' || /^\/(metadata|preview)\/[a-f0-9]{64}$/.test(route[2]??'')))) return json(response, 405, { error: 'Only viewer preferences and derived cache data may be changed.' });
+        if (!read && !(request.method === 'POST' && (route[2] === '/api/annotations' || route[2] === '/preferences' || route[2] === '/catalog' || /^\/(metadata|preview)\/[a-f0-9]{64}$/.test(route[2]??'')))) return json(response, 405, { error: 'Only annotations, viewer preferences and derived cache data may be changed.' });
         if (instanceRoute) {
           const instance = (await listInstances(stateDirectory)).find(item => item.id === instanceRoute[1]);
           if (!instance) return json(response, 404, { error: 'Instance is no longer live.' });
@@ -71,7 +71,7 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
             const project = (await listProjects(stateDirectory)).find(item => item.slug === slug);
             if (!project) throw new CliError('PROJECT_NOT_FOUND','Unknown project; run adg root scan.');
             if (project.error) { await loadConfig(project.path); throw new CliError('CONFIG_INVALID',project.error); }
-            entry.viewer = await startViewer({ directory: project.design, stateDirectory: path.join(stateDirectory, 'projects', slug), onDiagnostic, onFatal });
+            entry.viewer = await startViewer({ directory: project.design, annotationStateDirectory: stateDirectory, stateDirectory: path.join(stateDirectory, 'projects', slug), onDiagnostic, onFatal });
             return entry.viewer;
           })();
           viewers.set(slug, entry);

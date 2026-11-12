@@ -83,7 +83,7 @@ export class CliError extends Error {
 }
 
 const canonicalCommands = new Set([
-  'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect',
+  'annotations', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect',
   'root add', 'root remove', 'root list', 'root scan',
   'service install', 'service uninstall', 'service status', 'service logs', 'service migrate',
   'help', 'version', 'adg',

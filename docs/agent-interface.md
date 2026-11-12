@@ -1463,3 +1463,24 @@ reuses exact-document/environment observations when eligible. Dynamic/external r
 The internal [live verification harness](../tooling/inspect-audit.mjs) compares expanded public scenes with fresh
 DOM/style/Range and AX reads. It is used by tests and acceptance, including box, inherited-style, token-scope and
 missing-theme corruption cases; its findings and counters are not part of inspect's public schema or exits.
+
+## Annotations
+
+Run from the consumer project directory. `adg annotations --json` (or `annotations list`)
+returns the project's annotations, including resolved notes. `adg annotations read <id> --json`
+returns the full record; `adg annotations resolve <id> --json` marks it resolved. All three
+use the standard JSON envelope. `--state-dir` selects the same external state root used
+by `open` or `serve`.
+
+Records contain an ID, display number, source, frame name, normalized frame `x`/`y`,
+Git `revision` (null outside Git), note, status and timestamps. `element` is optional;
+round 1 uses coordinate anchors. The creation revision remains attached when edited.
+The viewer shows open notes for the selected source/frame. Click Annotations, then the
+frame to add a note; click a point or note to edit. Move places the point on the next
+frame click. Resolve hides the callout; Delete removes the record.
+
+The existing viewer server provides `GET api/annotations`, `GET api/annotations?id=<id>`,
+and `POST api/annotations` with `action` (`create`, `update`, `delete`, `resolve`) and record
+fields. The hub proxies these routes with its existing authentication. Data lives under
+`<state-dir>/annotations/`, keyed by the absolute project root, shared by hub and standalone
+viewers using that state root. Consumer design repositories are never used for storage.

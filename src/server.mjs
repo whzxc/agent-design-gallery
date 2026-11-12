@@ -1,4 +1,5 @@
 // Adapted from ARC's MIT-licensed tooling/design-server.mjs.
+import { annotations } from './annotations.mjs';
 import { randomUUID, createHash } from 'node:crypto';
 import { directLocal, viewerFile, shell, json } from './http.mjs';
 import { createServer } from "node:http";
@@ -39,6 +40,7 @@ export async function startServer({
   directory,
   port = 0,
   stateDirectory = defaultState,
+  annotationStateDirectory = stateDirectory,
   fixtures = null,
   readOnly = false,
   instanceId = randomUUID(),
@@ -498,6 +500,14 @@ export async function startServer({
       const file = ['GET', 'HEAD'].includes(request.method) && viewerFile(url.pathname);
       if (file) return await shell(request, response, file, request.headers['x-adg-viewer-base']);
       if (!directLocal(request)) return json(response, 401, { error: 'Unauthorized' });
+      if (url.pathname === '/api/annotations') {
+        if (request.method !== 'GET' && request.method !== 'POST') return json(response,405,{error:'Use GET or POST.'});
+        if (request.method === 'POST' && request.headers.origin && ![`http://${host}`,`https://${host}`].includes(request.headers.origin)) return json(response,403,{error:'Cross-origin request refused.'});
+        const config = await loadConfig(root);
+        const input = request.method === 'POST' ? await body(request) : {};
+        const action = request.method === 'GET' ? (url.searchParams.has('id') ? 'read' : 'list') : input.action;
+        return json(response,200,await annotations(config.root,annotationStateDirectory,action,request.method === 'GET' ? {id:url.searchParams.get('id')} : input));
+      }
       if(url.pathname==='/api/cache-stats'&&request.method==='GET')return json(response,200,{process:process.memoryUsage(),builds:buildStore?.stats(),viewer:viewerCache?.stats()});
       if (url.pathname === '/api/health' && request.method === 'GET') return json(response, 200, { id: instanceId, capabilities: { keyAuth: 1 } });
       if (request.method === "POST") {

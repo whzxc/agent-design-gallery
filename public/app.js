@@ -1,3 +1,4 @@
+import { createAnnotations } from './annotations.js';
 import { initSwitcher, updateSwitcherLabels } from './switcher.js';
 import { dataFetch, keyURL, isUnauthorized } from './auth.js';
 import { Labels } from "./labels.js";
@@ -674,7 +675,14 @@ function selectedBox() {
   const box=frameBox(a,p);
   return selectedElement?{...selectedElement,x:box.x+selectedElement.x,y:box.y+selectedElement.y}:box;
 }
+const annotationUI = createAnnotations(viewport, () => {
+  const a=currentItem(),p=a?.parts.find(p=>p.id===selectedForm);
+  if(!p)return null;
+  const world=frameBox(a,p);
+  return {source:a.path,frame:p.name,world,box:{x:view.x+world.x*view.scale,y:view.y+world.y*view.scale,width:world.width*view.scale,height:world.height*view.scale}};
+}, e=>error(e.message));
 function updateOutlines() {
+  annotationUI.render();
   const hover=hoveredElement,origin=hover?.part?frameBox(hover.asset,hover.part):null;
   const hoverBox=hover?.element?{...hover.element,x:origin.x+hover.element.x,y:origin.y+hover.element.y}:null;
   for (const [id,box] of [['selection-outline',selectedBox()],['hover-outline',hoverBox]]) {
@@ -1106,6 +1114,7 @@ viewport.addEventListener(
 );
 viewport.addEventListener("pointerdown", (e) => {
   if (e.button !== 0 && e.button !== 1) return;
+  if(e.target.closest('.annotation-layer'))return;
   e.preventDefault();
   viewport.focus({ preventScroll: true });
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1158,6 +1167,7 @@ function up(e) {
       x = (e.clientX - rect.left - view.x) / view.scale,
       y = (e.clientY - rect.top - view.y) / view.scale;
     const hit=hitSelection(inspection?[inspection]:assets,x,y);
+    if(annotationUI.active()) { annotationUI.click(x,y); return; }
     if(hit?.part) selectFrame(hit.asset,hit.part,hit.element);
     else if(hit) selectSource(hit.asset);
     else clearSelection();

@@ -13,6 +13,7 @@ export const viewerFiles = {
   '/arrangement.js': 'arrangement.js', '/arrangement-worker.js': 'arrangement-worker.js',
   '/relationships.js': 'relationships.js', '/selection.js': 'selection.js', '/style.css': 'style.css', '/tokens.css': 'tokens.css',
   '/token-catalog.js': 'token-catalog.js',
+  '/annotations.js': 'annotations.js',
   '/view-route.js': 'view-route.js',
 };
 export const viewerFile = pathname => isViewPath(pathname) ? 'index.html' : viewerFiles[pathname];

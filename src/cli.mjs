@@ -6,9 +6,10 @@ import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 import { CliError, createOutput, withHumanOutput } from './cli-output.mjs';
 
-export const commands = ['open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect'];
+export const commands = ['annotations', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect'];
 const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
 const usage = {
+  annotations: '[list | read <id> | resolve <id>] [--state-dir=<path>] [--json]',
   open: `[directory] [--port=<n>] [--no-open] [--state-dir=<path>] ${targetOptions}`,
   link: `<viewer-url> ${targetOptions}`,
   serve: '[--port=4310] [--state-dir=<path>] [--print-key | --rotate-key]',
@@ -22,6 +23,7 @@ const usage = {
   impact: '(--source=<path>... [--part=<name>] | --token=<name>... | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --base=<rev> [--head=<rev>]) [--theme=both|light|dark] [--explain] [--state-dir=<path>] [--json]',
 };
 const details = {
+  annotations: 'List, read or resolve project annotations stored outside the repository. Run from the project directory.',
   migrate: 'Rename a project configuration and runtime imports, update editor paths and ignore entries, remove old generated files and regenerate declarations. Refuses mixed config names; safe to run again.',
   serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes. --print-key prints the key and exits; --rotate-key rotates the running hub key and exits. Forwarded data requests require a header or query key; direct-local requests are exempt.',
   service: 'Manage the macOS resident hub LaunchAgent. install starts it with RunAtLoad and KeepAlive, recording absolute Node/CLI paths. --port applies only to install. status prints JSON; logs prints the last 200 lines per log. Uninstall retains state and logs. migrate moves old hub state and replaces its LaunchAgent, then lists other agents referencing the old state path. --state-dir selects the migration destination. Other platforms are unsupported.',
@@ -51,7 +53,7 @@ export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' } };
   const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
-  const strings = { open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
+  const strings = { annotations: ['state-dir'], open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
@@ -182,6 +184,13 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
     return {data:values['print-key'] ? {action:'print-key',stateDirectory,key} : {action:'rotate-key',stateDirectory,rotated:true}};
   }
   const config = await loadConfig(cwd);
+  if (command === 'annotations') {
+    const [action = 'list', id, ...extra] = positionals;
+    if (!['list','read','resolve'].includes(action) || extra.length || (action === 'list' ? id !== undefined : !id)) throw new CliError('USAGE_INVALID','Use annotations list, read <id>, or resolve <id>.');
+    const data = await (await import('./annotations.mjs')).annotations(config.root, values['state-dir'] ? path.resolve(cwd,values['state-dir']) : undefined,action,{id});
+    if (!values.json) output.log(JSON.stringify(data,null,2));
+    return {data};
+  }
   if (command === 'inspect') return (await import('./toolkit/inspect.mjs')).inspect(config, positionals, { ...values, ...(values['state-dir'] !== undefined ? { 'state-dir': path.resolve(cwd, values['state-dir']) } : {}) }, { log: output.log });
   if (command === 'impact') return (await import('./toolkit/impact.mjs')).impact(config, { ...values, ...(values['state-dir'] !== undefined ? { 'state-dir': path.resolve(cwd, values['state-dir']) } : {}) }, { log: output.log });
   if (command === 'owner') return (await import('./toolkit/owner.mjs')).owner(config, { ...values, ...(values['state-dir'] !== undefined ? { 'state-dir': path.resolve(cwd, values['state-dir']) } : {}) }, { log: output.log });
