@@ -1,5 +1,6 @@
 import { icons } from 'lucide';
-export const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+import { escape } from './html.mjs';
+export { escape };
 const voids = new Set('area base br col embed hr img input link meta param source track wbr'.split(' '));
 export const markup = html => ({ html, toString() { return this.html; } });
 export function children(value) {

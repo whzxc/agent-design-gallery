@@ -8,7 +8,7 @@ import { normalizeFileQuery, implementationScope } from './implementation-query.
 import { launch, loadFrame, readyResources, browserTask } from './browser.mjs';
 import { observeOwnerFrame, observeOwnerPalette, occurrenceContext, observationEnvironment } from './owner-observation.mjs';
 import { commandFailure, cleanup } from './results.mjs';
-import { escape } from './runtime.mjs';
+import { escape } from './html.mjs';
 import { indexDigest } from './index-store.mjs';
 
 export const compareRanks = (a, b) => { for (let i = 0; i < Math.max(a.length, b.length); i++) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) - (b[i] ?? 0); return 0; };

@@ -64,7 +64,7 @@ export function installFramePrimitives() {
     for(const name of ['id','data-part','data-adg-id','role','aria-label','aria-labelledby','aria-describedby'])if(node.hasAttribute(name))attributes[name]=node.getAttribute(name);
     const password=node.matches('input[type=password]');
     const neutral = checkNeutral && !owners.length && !node.hasAttribute('data-adg-id') && !node.hasAttribute('data-adg-keys') &&
-      !Object.keys(attributes).length && /^(div|span)$/.test(node.localName) && node.children.length===1 &&
+      !Object.keys(attributes).length && /^(div|span)$/.test(node.localName) && (node.children.length===1 || style?.display==='contents') &&
       ![...node.childNodes].some(n=>n.nodeType===3 && n.data.trim()) && style &&
       ['block','inline','contents'].includes(style.display) && style.position==='static' &&
       style.transform==='none' && style.overflowX==='visible' && style.overflowY==='visible' &&

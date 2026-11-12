@@ -1458,7 +1458,7 @@ Recoverable observations use `INSPECT_NO_MATCH`, `INSPECT_IDENTITY_POSITIONAL`, 
 errors retain existing codes. Every error includes executable recovery argv. Explicit missing identities fail;
 missing text and known-but-unobserved parts complete with zero matches. Generation verification and owned-resource
 cleanup must finish before `complete:true`. Detailed inspection freshly executes only the selected entry, then
-reuses exact-document/environment observations when eligible. Dynamic/external resources bypass observation reuse.
+reuses exact-document/environment observations when eligible. Dynamic/external resources bypass observation reuse. The selected entry bundle is also checked conservatively for Date/Math.random calls, including helpers; these bypass reuse even when their rendered output is constant.
 
 The internal [live verification harness](../tooling/inspect-audit.mjs) compares expanded public scenes with fresh
 DOM/style/Range and AX reads. It is used by tests and acceptance, including box, inherited-style, token-scope and

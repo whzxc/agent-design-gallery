@@ -34,24 +34,29 @@ export function projectInspection(data, observation, theme, config, intern, defi
   const normalizeURLs=css=>css.replace(/url\(["']?(data:[^)'"\s]+)["']?\)/g,(_,url)=>{
     const resource=intern('resources',{kind:/^data:image\/svg/i.test(url)?'svg':'raster',source:null,mime:url.match(/^data:([^;,]+)/)?.[1]??null,intrinsic:null,contentIdentity:resourceContentIdentity(url)});return 'url('+resource+')';
   });
+  const propertyIndexes=new Map(rich.properties.map((p,i)=>[p,i])),projectedValues=new Map();
   const styles=(values,geometry)=>{
     const groups={layout:{},typography:{},color:{}};
-    const inactive=values.position?.css==='static',untransformed=['transform','rotate','scale','translate'].every(p=>!values[p]||values[p].css==='none');
-    for(const [property,value]of Object.entries(values)){
+    const cssFor=p=>rich.valueFacts[values[propertyIndexes.get(p)]]?.css;
+    const inactive=cssFor('position')==='static',untransformed=['transform','rotate','scale','translate'].every(p=>!cssFor(p)||cssFor(p)==='none');
+    for(const [position,fact]of values.entries()){
+      const property=rich.properties[position],group=propertyGroup(property);
       if(inactive&&['top','right','bottom','left'].includes(property)||untransformed&&property==='transform-origin')continue;
-      if(!selected.has(propertyGroup(property)) && !(selected.has('layout')&&/^border-.+-width$/.test(property)))continue;
-      const refs=value.refs.map(ref=>{defineToken(ref.token);const record={...ref,property:ref.shorthand??property};delete record.shorthand;
-        if(!record.via.length)delete record.via;if(!record.inherited)delete record.inherited;
-        if(!record.localOverrides?.length)delete record.localOverrides;
-        return intern('references',record);});
-      const css=normalizeURLs(value.css);
-      const result={css,attribution:value.unresolved.length?'unresolved':refs.length?'references':'raw',...(refs.length?{refs}:{}),...(value.unresolved.length?{reason:value.unresolved.join(',')}:{})};
-      // Raw concrete defaults are reconstructible; token evidence is never elided.
-      if(value.css!==styleDefaults[property]||result.attribution!=='raw'){
-        const size=geometry?.layoutSize;
-        const measured=selected.has('layout')&&['width','height'].includes(property)&&size&&value.css===size[property]+'px'&&result.attribution==='raw';
-        groups[propertyGroup(property)][property]=measured?'$'+property:intern('values',result);
+      if(!selected.has(group) && !(selected.has('layout')&&/^border-.+-width$/.test(property)))continue;
+      const cacheKey=position+':'+fact;
+      if(!projectedValues.has(cacheKey)){
+        const value=rich.valueFacts[fact];
+        const refs=value.refs.map(ref=>{defineToken(ref.token);const record={...ref,property:ref.shorthand??property};delete record.shorthand;
+          if(!record.via.length)delete record.via;if(!record.inherited)delete record.inherited;
+          if(!record.localOverrides?.length)delete record.localOverrides;
+          return intern('references',record);});
+        const css=normalizeURLs(value.css),attribution=value.unresolved.length?'unresolved':refs.length?'references':'raw';
+        const result={css,attribution,...(refs.length?{refs}:{}),...(value.unresolved.length?{reason:value.unresolved.join(',')}:{})};
+        projectedValues.set(cacheKey,value.css===styleDefaults[property]&&attribution==='raw'?null:{key:intern('values',result),css:value.css,raw:attribution==='raw'});
       }
+      const value=projectedValues.get(cacheKey);if(!value)continue;
+      const size=geometry?.layoutSize,measured=selected.has('layout')&&['width','height'].includes(property)&&size&&value.css===size[property]+'px'&&value.raw;
+      groups[group][property]=measured?'$'+property:value.key;
     }
     const keys=Object.values(groups).filter(g=>Object.keys(g).length).map(g=>intern('styles',g));return keys.length?keys:undefined;
   };

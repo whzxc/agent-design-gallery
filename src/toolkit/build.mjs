@@ -148,7 +148,10 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     // Retain esbuild's human diagnostics and details while carrying the owning boundary's code.
     throw Object.assign(new CliError(typed.code, error.message, { cause: error, context: typed.context }), { errors: error.errors });
   });
-  const mod = await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}#${++evaluation}`);
+  const executable=result.outputFiles[0].text;
+  // Conservative cache eligibility hint from this entry's bundled helpers; quoted copy is not code.
+  const observationDynamic=/\b(?:(?:Date\s*\.\s*now|Math\s*\.\s*random)\s*\(|(?:new\s+)?Date\s*\()/.test(executable.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g,'""'));
+  const mod = await import(`data:text/javascript;base64,${Buffer.from(executable).toString('base64')}#${++evaluation}`);
   if (typeof mod.default !== 'function') throw Error(`${relative(config,file)}: export a default function returning Frames`);
   const value = mod.default(), frames = (Array.isArray(value) ? value.flat(Infinity) : [value]).filter(v => v != null && v !== false);
   if (!frames.length) throw Error(`${relative(config,file)}: default export must return at least one Frame`);
@@ -172,7 +175,7 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     const owner = typeof mod[name] === 'function' && componentOwner(mod[name]);
     return owner && owner.source === sourceName && owner.export === name;
   }).sort();
-  return { frames, parts, dependencies: [...dependencies], imports: [...imports].sort(), css,
+  return { ...(observationDynamic?{observationDynamic:true}:{}), frames, parts, dependencies: [...dependencies], imports: [...imports].sort(), css,
     tokenCss: tokenSource, cssWithoutTokens: `${utilities}\n${defaults}`,
     cssBeforeTokens: `${utilities}\n`, cssAfterTokens: `\n${defaults}` };
 }

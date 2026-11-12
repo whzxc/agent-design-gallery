@@ -1,4 +1,5 @@
 import { resourceSlotIdentity } from './frame-identity.mjs';
+import { propertyGroup } from './inspect-output.mjs';
 import { styleDefaults } from './inspect-styles.mjs';
 
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -24,7 +25,8 @@ function geometryScene(scene,encode) {
   const nodes=new Map([...scene.context,...scene.elements].map(e=>[e.id,e]));
   const done=new Set();
   function visit(e){if(done.has(e.id))return;done.add(e.id);const parent=nodes.get(e.parent);if(parent)visit(parent);
-    const g=e.geometry;if(!g)return;
+    const inheritedClip=parent?clips.get(parent.id):{x:0,y:0,...scene.size};
+    const g=e.geometry;if(!g){clips.set(e.id,inheritedClip);return;}
     if(encode){
       // Parent geometry has already been encoded: keep its original effective clip separately.
       const clip=g.clip;const above=parent?clips.get(parent.id):{x:0,y:0,...scene.size};
@@ -46,8 +48,9 @@ function geometryScene(scene,encode) {
       if(g.box){
         g.visibility??='visible';if(!('visibleBox'in g))g.visibleBox=clone(g.box);
         if(e.namespace==='html')g.layoutSize??={width:g.box.width,height:g.box.height};
-        g.clip??=clone(parent?.geometry?.clip??{x:0,y:0,...scene.size});g.clipAccuracy??='rect';
+        g.clip??=clone(inheritedClip);g.clipAccuracy??='rect';
       }
+      clips.set(e.id,g.clip??inheritedClip);
     }
   }
   const clips=new Map();for(const e of nodes.values())visit(e);
@@ -185,17 +188,19 @@ function elementTypes(scene,tables){
 }
 
 function packStyles(styles,dictionary){
-  const previous=new Map();
+  const previous=new Map(),indices=new Map(dictionary.map((p,i)=>[p,i]));
+  const scalar=v=>typeof v==='number'?String(v).length:v.length+2;
+  const size=pairs=>2+pairs.reduce((n,v)=>n+scalar(v),0)+Math.max(0,pairs.length-1);
   for(const [key,style]of Object.entries(styles)){
-    const pairs=Object.entries(style).flatMap(([p,v])=>[dictionary.indexOf(p),v]);let packed=pairs;
-    for(const [base,other]of previous){
-      // Exact dictionary differences; source records already partition the property groups.
-      const diff=Object.entries(style).filter(([p,v])=>other[p]!==v).flatMap(([p,v])=>[dictionary.indexOf(p),v]);
-      const removed=Object.keys(other).filter(p=>!(p in style)).map(p=>dictionary.indexOf(p));
-      const candidate=[base,diff,...(removed.length?[removed]:[])];
-      if(JSON.stringify(candidate).length<JSON.stringify(packed).length)packed=candidate;
+    const entries=Object.entries(style).map(([p,v])=>[p,v,indices.get(p)]),group=propertyGroup(entries[0][0]);
+    let packed=entries.flatMap(([,v,p])=>[p,v]),length=size(packed);
+    for(const other of previous.get(group)??[]){
+      const diff=entries.filter(([p,v])=>other.style[p]!==v).flatMap(([,v,p])=>[p,v]);
+      const removed=other.entries.filter(([p])=>!(p in style)).map(([, ,p])=>p);
+      const candidateLength=2+scalar(other.key)+1+size(diff)+(removed.length?1+size(removed):0);
+      if(candidateLength<length){packed=[other.key,diff,...(removed.length?[removed]:[])];length=candidateLength;}
     }
-    previous.set(key,style);styles[key]=packed;
+    const peers=previous.get(group)??[];peers.push({key,style,entries});previous.set(group,peers);styles[key]=packed;
   }
 }
 function unpackStyles(styles,dictionary){
@@ -225,8 +230,14 @@ function localAddresses(value,map,key=''){
 }
 /** Exact subtree sharing, only when the definition plus every instance is smaller. */
 function templateScene(scene,tables){
-  const nodes=new Map(scene.elements.map(e=>[e.id,e])),groups=new Map();
+  const nodes=new Map(scene.elements.map(e=>[e.id,e])),groups=new Map(),ownText=new Map(),textKeys=new Map();
+  for(const r of scene.runs){const id=r.element.replace(/::.+$/,''),rows=ownText.get(id)??[];rows.push([r.kind,r.raw,r.normalized,r.style]);ownText.set(id,rows);}
+  function textKey(e){if(!textKeys.has(e.id))textKeys.set(e.id,JSON.stringify([ownText.get(e.id)??[],...(e.children??[]).filter(id=>nodes.has(id)).map(id=>textKey(nodes.get(id)))]));return textKeys.get(e.id);}
+  const probes=new Map(),counts=new Map();
+  for(const e of scene.elements)if(e.children?.length&&e.geometry?.box){const key=JSON.stringify([e.tag,e.namespace,e.style,e.role,e.name,e.resource,textKey(e)]);probes.set(e.id,key);counts.set(key,(counts.get(key)??0)+1);}
   for(const root of scene.elements){
+    // Exact repeats need equal root semantics/styles and authored subtree text. Avoid cloning unique rows.
+    if((counts.get(probes.get(root.id))??0)<2)continue;
     if(!root.children?.length||!root.geometry?.box)continue;
     const subtree=[];function visit(e){subtree.push(e);for(const id of e.children??[])if(nodes.has(id))visit(nodes.get(id));}visit(root);
     const ids=subtree.map(e=>e.id),mapping=new Map(ids.map((id,i)=>[id,'@'+i])),origin=root.geometry.box.slice(0,2);
@@ -278,8 +289,8 @@ function addresses(value,map,encode,key=''){
     return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,links.has(k)?link(v):v]));
   }
   if(typeof value==='string')return addressFields.has(key)?value.replace(encode?/e1_[a-f0-9]{24}/g:/(?:^|(?<=#))e[0-9a-z]+(?=::|\/text-|$)/g,id=>map.get(id)??id):value;
-  if(Array.isArray(value))return value.map(v=>addresses(v,map,encode,key));
-  if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,addresses(v,map,encode,k)]));
+  if(Array.isArray(value)){for(let i=0;i<value.length;i++)value[i]=addresses(value[i],map,encode,key);return value;}
+  if(value&&typeof value==='object'){for(const k of Object.keys(value))value[k]=addresses(value[k],map,encode,k);return value;}
   return value;
 }
 
@@ -396,12 +407,12 @@ function compact(input,templates) {
   for(const ref of Object.values(data.tables.references))if(ref.basis==='authored_reference')delete ref.basis;
   for(const resource of Object.values(data.tables.resources))if(resource.svg)delete resource.svg.definitions;
   // Delta compares full logical rows; template instances never cause a second dark tree.
-  const baselineBefore=clone(data.baseline);
+  const baselineBefore=templates?{...data.baseline,instances:[]}:null;
   for(const scene of [data.baseline,...Object.values(data.additionalThemes)]){packScene(scene,data);elementTypes(scene,data.tables);}
   data.delta=Object.keys(data.additionalThemes).length?{theme:Object.keys(data.additionalThemes)[0],...sceneDelta(data.baseline,Object.values(data.additionalThemes)[0])}:null;
   delete data.additionalThemes;
-  baselineBefore.runOrder=baselineBefore.runs.map(r=>r.id);if(templates)templateScene(baselineBefore,data.tables);
-  if(baselineBefore.instances.length){
+  if(baselineBefore){baselineBefore.runOrder=baselineBefore.runs.map(r=>r.id);templateScene(baselineBefore,data.tables);}
+  if(baselineBefore?.instances.length){
     packScene(baselineBefore,data);elementTypes(baselineBefore,data.tables);data.baseline=baselineBefore;
     for(const definition of Object.values(data.tables.templates)){definition.context=[];definition.instances=[];packScene(definition,data);elementTypes(definition,data.tables);}
   }

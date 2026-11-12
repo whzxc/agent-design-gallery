@@ -27,8 +27,9 @@ async function fixture(t){
   await put('design/tokens.css',starterTokens.replace('--text: #171717;','--text: #171717;\n--accent: #336699;\n--alias: var(--accent);'));
   await put('design/art/mark.svg','<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"><path d="M0 0L4 4"/></svg>');
   await put('design/components/control.tsx',`import {Frame,Icon} from 'adg';import Mark from '../art/mark.svg';import image from '../art/mark.svg?url';
+export function Rows(){return <><button key="a" data-adg-id="row">A</button><button key="b" data-adg-id="row">B</button></>}
 export function Control(){return <button data-adg-id="save" class="text-accent font-semibold">Save <Icon name="check"/></button>}
-export default()=>[<Frame name="ready"><main class="flex gap-4 p-4 text-text"><Control key="save"/><label for="input">Name</label><input id="input" placeholder="Type"/><a id="e0" href="#e1" title="e0">e0</a><a href="#12">12</a><input type="password" value="private-value"/><div class="dark:hidden">Light only</div><div><span>Find</span> me</div><section class='flex flex-col gap-2'>{Array.from({length:6},()=> <div class='flex gap-2'><span>Repeated label</span><Icon name='check'/></div>)}</section><Mark width="4" height="4"/><img src={image} width="4" height="4"/><span class="before:content-['!'] before:text-accent">Alert</span></main></Frame>,<Frame name="other"><div>Other</div></Frame>];`);
+export default()=>[<Frame name="ready"><main class="flex gap-4 p-4 text-text"><Control key="save"/><section data-adg-id="rows-group"><Rows/></section><label for="input">Name</label><input id="input" placeholder="Type"/><a id="e0" href="#e1" title="e0">e0</a><a href="#12">12</a><input type="password" value="private-value"/><div class="dark:hidden">Light only</div><div><span>Find</span> me</div><div class="w-10 h-8 overflow-hidden"><div data-adg-id="contents" style={{display:"contents"}}><div class="w-20 h-20">Clipped</div></div></div><section class='flex flex-col gap-2'>{Array.from({length:6},()=> <div class='flex gap-2'><span>Repeated label</span><Icon name='check'/></div>)}</section><Mark width="4" height="4"/><img src={image} width="4" height="4"/><span class="before:content-['!'] before:text-accent">Alert</span></main></Frame>,<Frame name="other"><div>Other</div></Frame>];`);
   await put('design/surfaces/view.tsx',`import {Frame} from 'adg';export default()=> <Frame name="ready"><div>View</div></Frame>;`);
   return {root,put,config:await loadConfig(root),state:path.join(root,'state')};
 }
@@ -97,6 +98,9 @@ test('rich shared collection, AX, selectors, warm reuse, generation checks and l
     const broken=await audit(corruptInspection(data,kind),{config:f.config});assert.ok(broken.findings.length>0,kind+' corruption escaped live verification');
   }
   const warm=await run({});assert.equal(warm.data.coverage.frameLoads,0);assert.equal(warm.data.coverage.cacheHits,2);assert.equal(warm.data.coverage.materializedSources,1);
+  const rowIDs=data.baseline.elements.filter(e=>e.identity.anchor==='row').map(e=>e.id);
+  await f.put(source,(await readFile(path.join(f.root,source),'utf8')).replace('<Rows/>','<div style={{display:"contents"}}><Rows/></div>'));
+  const wrapped=await run({});assert.deepEqual(wrapped.data.baseline.elements.filter(e=>e.identity.anchor==='row').map(e=>e.id),rowIDs);assert.ok(wrapped.data.baseline.elements.filter(e=>e.identity.anchor==='row').every(e=>e.identity.stability==='authored'));
   const id=data.baseline.elements.find(e=>e.tag==='button').id;
   const element=(await run({element:id,depth:'0'})).data;assert.ok(element.baseline.context.length);assert.equal(element.baseline.elements.length,1);assert.ok(element.baseline.elements[0].cutoff);
   const part=(await run({part:source+'#Control'})).data;assert.equal(part.matches.length,1);assert.equal(part.baseline.roots[0],id);
@@ -119,6 +123,9 @@ test('unique-frame defaults, literal-only text, selective fields, execution fail
   const one=await run(),two=await run();assert.equal(two.data.coverage.cacheHits,0);assert.equal(two.data.coverage.frameLoads,2);
   assert.ok(two.warnings.some(w=>w.code==='INSPECT_CACHE_BYPASSED'));
   assert.ok(one.data.baseline.runs.some(r=>r.raw==='mixed Case'&&r.normalized==='mixed Case'&&!('rendered'in r)));
+  await f.put('design/fixtures/clock.ts',"export function clock(){ Date.now(); Math.random(); return 'constant'; }");
+  await f.put(source,"import {Frame} from 'adg';import {clock} from '../fixtures/clock';export default()=> <Frame name='ready'><div>{clock()}</div></Frame>;");
+  for(let i=0;i<2;i++){const value=await run();assert.equal(value.data.coverage.cacheHits,0);assert.equal(value.data.coverage.frameLoads,2);assert.ok(value.warnings.some(w=>w.code==='INSPECT_CACHE_BYPASSED'));}
   await f.put(source,'not valid TSX !');await assert.rejects(run(),error=>{assert.equal(error.code,'SOURCE_BUILD_FAILED');return true;});
 });
 
@@ -128,4 +135,12 @@ test('concurrent generation edits cannot return complete inspection or a success
     const index=await openProjectIndex(config,options);
     return {...index,verifyInputs:async()=>{await f.put('design/tokens.css',starterTokens.replace('#171717','#222222'));await index.verifyInputs();}};
   }}),error=>{assert.equal(error.code,'INSPECT_INPUT_CHANGED');assert.equal(error.data.complete,false);return true;});
+});
+
+
+test('late cleanup failures cannot publish a complete inspection',async t=>{
+  const f=await fixture(t);let closes=0;
+  await assert.rejects(inspect(f.config,['design/surfaces/view.tsx'],{json:true,'state-dir':f.state},{openIndex:async(config,options)=>{
+    const index=await openProjectIndex(config,options);return {...index,close:async()=>{await index.close();if(++closes===2)throw Error('Injected late close');}};
+  }}),error=>{assert.equal(error.code,'SHUTDOWN_FAILED');assert.equal(error.data.complete,false);return true;});
 });

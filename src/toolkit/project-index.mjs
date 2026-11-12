@@ -4,7 +4,6 @@ import path from 'node:path';
 import { listSources, archFiles, sourceDirectories, relative, loadTokens } from './project.mjs';
 import { tokenLocations } from './tokens.mjs';
 import { CliError } from '../cli-output.mjs';
-import { buildSource } from './build.mjs';
 import { createBuildStore, BuildPool } from './build-store.mjs';
 import { sourceFacts } from './source-facts.mjs';
 import { sidecar } from './arch.mjs';
@@ -67,6 +66,7 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
     if (!buildPromises.has(source)) buildPromises.set(source, (async () => {
       let built;
       if (!persist) {
+        const {buildSource}=await import('./build.mjs');
         const snapshot = new Map();
         built = await buildSource(config, path.join(config.root, source), { write: false, allowLegacy: false, snapshot });
         built.dependencyHashes = Object.fromEntries([...snapshot].map(([file, bytes]) => [path.relative(config.design, file), indexDigest(bytes === null ? 'missing\0' : Buffer.concat([Buffer.from('present\0'), bytes]))]));
@@ -110,6 +110,10 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
     inventory,
     getBuild,
     materialize,
+    async releaseMaterializers() {
+      // A finite frame query keeps the built bytes, not an idle compiler isolate during observation.
+      const pool=freshPool;freshPool=undefined;await pool?.close();
+    },
     async source(source, { tokens = false, fresh = false } = {}) {
       const built = fresh ? await materialize(source) : await getBuild(source);
       const inputs = fresh ? null : { source, build: built.inputHash ?? indexDigest(JSON.stringify({ ...built, frames: built.frames.map(({ document, ...frame }) => frame) })) };

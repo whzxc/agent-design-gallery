@@ -113,7 +113,7 @@ export async function createBuildStore({ config, cacheDirectory }) {
   const workerConfig = { root: await realpath(config.root), design, output: config.output, sources: config.sources, arch:config.arch, check:config.check, ...(config.overlay?{overlay:config.overlay}:{}) };
   const require = createRequire(import.meta.url);
   const fingerprint = digest(Buffer.concat(await Promise.all([
-    ...['../../package.json', './build.mjs', './frame-document.mjs', './runtime.mjs', './tokens.mjs', './text.mjs', './project.mjs', './build-worker.mjs', './build-store.mjs', './arch.mjs', './arch-browser.mjs', './browser.mjs'].map(file => new URL(file, import.meta.url)),
+    ...['../../package.json', './build.mjs', './frame-document.mjs', './html.mjs', './runtime.mjs', './tokens.mjs', './text.mjs', './project.mjs', './build-worker.mjs', './build-store.mjs', './arch.mjs', './arch-browser.mjs', './browser.mjs'].map(file => new URL(file, import.meta.url)),
     ...(config.overlay?['./arch-overlay.mjs','./arch-git.mjs'].map(file=>new URL(file,import.meta.url)):[]),
     require.resolve('esbuild/package.json'), require.resolve('tailwindcss/package.json'),
   ].map(file => readFile(file)))));

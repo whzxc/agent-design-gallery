@@ -58,7 +58,7 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
       if(!candidates.length)warn('EMPTY_SELECTION','No TSX frames were discovered.');
     } else {
       const chosen=candidates[0];selection.source=chosen.source;selection.frame=chosen.frame;
-      const built=await timed('materializeMs',async()=>{try{return await index.materialize(chosen.source);}catch(cause){throw cause instanceof CliError?cause:new CliError('SOURCE_BUILD_FAILED',cause.message,{cause});}});data.coverage.materializedSources=1;
+      const built=await timed('materializeMs',async()=>{try{return await index.materialize(chosen.source);}catch(cause){throw cause instanceof CliError?cause:new CliError('SOURCE_BUILD_FAILED',cause.message,{cause});}});data.coverage.materializedSources=1;await index.releaseMaterializers();
       const frame=built.frames.find(f=>f.name===chosen.frame);
       if(!frame)throw new CliError('INSPECT_INPUT_CHANGED','The selected frame disappeared during fresh execution.');
       data.frame={source:chosen.source,name:frame.name,locale:frame.locale??null,authored:{width:frame.width??null,height:frame.height??null},parent:frame.parent??null};
@@ -77,11 +77,11 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
         const animated=/<(?:animate|animateTransform|set|canvas|video)\b/i.test(frame.html)||[...document.matchAll(/data:(image\/[^;,]+)(;base64)?,([^"'\s<)]+)/gi)].some(([,mime,base64,body])=>{
           try{const bytes=base64?Buffer.from(body,'base64'):Buffer.from(decodeURIComponent(body));const text=bytes.toString('latin1');return /svg/i.test(mime)?/<(?:animate|animateTransform|set)\b/i.test(text):/NETSCAPE2\.0|ANIMEXTS1\.0|acTL|ANIM/.test(text);}catch{return true;}
         });
-        const bypass=env===null||eligible(document).length>0||animated;
+        const bypass=built.observationDynamic===true||env===null||eligible(document).length>0||animated;
         if(bypass)warn('INSPECT_CACHE_BYPASSED','Dynamic/external resources or unavailable environment identity require live observation.');
         const result=await timed('observeMs',()=>observeInspectFrame(index,chosen.source,built,frame,theme,env,getPage,tokens,policy,{bypass,onLoad:()=>data.coverage.frameLoads++}));
         data.coverage.cacheHits+=Number(result.hit);data.coverage.completedObservations++;
-        observations.push({theme,value:result.value});
+        observations.push({theme,palette:result.value.rich.palette});
         const projected=await timed('projectMs',()=>projectInspection(data,result.value,theme,config,intern,tokens));
         if(data.baseline===null){data.baselineTheme=theme;data.baseline=projected.scene;}else data.additionalThemes[theme]=projected.scene;
         for(const match of projected.matches){const existing=data.matches.find(m=>m.element===match.element);if(existing)existing.themes.push(theme);else data.matches.push(match);}
@@ -92,8 +92,8 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
       if(selection.subtree?.kind==='element'&&!data.matches.length)throw new CliError('INSPECT_ELEMENT_NOT_FOUND','The selected identity is absent from the requested frame/themes.');
       if(!data.matches.length)warn('INSPECT_NO_MATCH','No selected text/part occurrences matched.',retry('Read the full frame to choose a current selector.',true));
       pruneTables(data);
-      for(const [name,token]of Object.entries(data.tables.tokens))for(const {theme,value}of observations){
-        const resolved=value.rich.palette[name]??null;
+      for(const [name,token]of Object.entries(data.tables.tokens))for(const {theme,palette}of observations){
+        const resolved=palette[name]??null;
         if(theme==='light')token.resolved=resolved;
         else if(resolved!==token.resolved)(token.dark??={}).resolved=resolved;
       }

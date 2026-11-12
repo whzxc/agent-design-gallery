@@ -5,6 +5,7 @@ export function installInspectFacets() {
     create({ elements, paths, style, rect, origin, declarationsFor, tokens, theme, properties }) {
       const p = globalThis.__adgFramePrimitives, facts = [], runs = [], limitations = [], orderKeys=new Map();
       const customCache = new Map(), variableDeclarations = new Map(),referenceCache=new Map(),customKeys=new Map();
+      const valueFacts=[],valueKeys=new Map();
       const projectDeclarations=new Map(tokens.map(t=>[t.name,new Set(t.values.map(v=>v.declaration))]));
       const definitions = new Map(tokens.map(t => [t.name, t.values.find(v => v.theme === theme)?.declaration]));
       const round = n => Math.round(n * 100) / 100 || 0;
@@ -53,12 +54,26 @@ export function installInspectFacets() {
         const result={refs:[...new Map(refs.map(r=>[JSON.stringify(r),r])).values()],unresolved:[...new Set(unresolved)]};referenceCache.set(cacheKey,result);return result;
       }
       function styles(node, pseudo='') {
-        const s=pseudo?getComputedStyle(node,pseudo):style(node), values={};
-        for (const property of properties) {
-          const css=s.getPropertyValue(property), evidence=references(node,property,pseudo);
-          values[property]={css,...evidence};
+        const s=pseudo?getComputedStyle(node,pseudo):style(node);
+        return properties.map(property=>{
+          const value={css:s.getPropertyValue(property),...references(node,property,pseudo)},key=JSON.stringify(value);
+          if(valueKeys.has(key))return valueKeys.get(key);
+          const index=valueFacts.length;valueFacts.push(value);valueKeys.set(key,index);return index;
+        });
+      }
+      const ancestors=new Map(),frameNode=document.querySelector('[data-adg-frame]');
+      function ancestry(node){
+        if(ancestors.has(node))return ancestors.get(node);
+        const parent=node===frameNode?null:node.parentElement,above=parent?ancestry(parent):null,s=style(node),r=rect(node);
+        const clip={...(above?.childClip??{left:origin.left,top:origin.top,right:origin.right,bottom:origin.bottom})},childClip={...clip};
+        if(s.display!=='inline'){
+          const sx=r.width/(node.offsetWidth||r.width||1),sy=r.height/(node.offsetHeight||r.height||1);
+          if(/hidden|clip|scroll|auto/.test(s.overflowX)){childClip.left=Math.max(childClip.left,r.left+(node.clientLeft||0)*sx);childClip.right=Math.min(childClip.right,r.left+((node.clientLeft||0)+node.clientWidth)*sx);}
+          if(/hidden|clip|scroll|auto/.test(s.overflowY)){childClip.top=Math.max(childClip.top,r.top+(node.clientTop||0)*sy);childClip.bottom=Math.min(childClip.bottom,r.top+((node.clientTop||0)+node.clientHeight)*sy);}
         }
-        return values;
+        const rounded=(above?.rounded??0)+Number(s.display!=='inline'&&/hidden|clip|scroll|auto/.test(s.overflowX+s.overflowY)&&!!parseFloat(s.borderRadius));
+        const masks=(above?.masks??0)+Number(s.clipPath!=='none'||s.maskImage!=='none');
+        const result={clip,childClip,rounded,masks,ancestorRounded:above?.rounded??0,hidden:(above?.hidden??false)||s.display==='none'||Number(s.opacity)===0};ancestors.set(node,result);return result;
       }
       function geometry(node) {
         const s=style(node), r=rect(node);
@@ -68,18 +83,10 @@ export function installInspectFacets() {
         const rects=[...node.getClientRects()].map(box);
         if(rects.length>1)g.clientRects=rects;
         if(node instanceof HTMLElement)g.layoutSize={width:node.offsetWidth,height:node.offsetHeight};
-        let clip={left:origin.left,top:origin.top,right:origin.right,bottom:origin.bottom}, hidden=s.visibility!=='visible';
-        for(let ancestor=node;ancestor;ancestor=ancestor.parentElement){
-          const a=style(ancestor), ar=rect(ancestor);hidden ||= a.display==='none'||Number(a.opacity)===0;
-          if(ancestor!==node && a.display!=='inline'){
-            const sx=ar.width/(ancestor.offsetWidth||ar.width||1),sy=ar.height/(ancestor.offsetHeight||ar.height||1);
-            if(/hidden|clip|scroll|auto/.test(a.overflowX)){clip.left=Math.max(clip.left,ar.left+(ancestor.clientLeft||0)*sx);clip.right=Math.min(clip.right,ar.left+((ancestor.clientLeft||0)+ancestor.clientWidth)*sx);}
-            if(/hidden|clip|scroll|auto/.test(a.overflowY)){clip.top=Math.max(clip.top,ar.top+(ancestor.clientTop||0)*sy);clip.bottom=Math.min(clip.bottom,ar.top+((ancestor.clientTop||0)+ancestor.clientHeight)*sy);}
-            if(/hidden|clip|scroll|auto/.test(a.overflowX+a.overflowY)&&parseFloat(a.borderRadius))limit('CLIP_SHAPE_APPROXIMATE',paths.get(node),'bounds','border-radius');
-          }
-          if(a.clipPath!=='none'||a.maskImage!=='none'){g.clipAccuracy='bounds';limit('CLIP_SHAPE_APPROXIMATE',paths.get(node),'bounds','clip-path');}
-          if(ancestor===document.querySelector('[data-adg-frame]'))break;
-        }
+        const inherited=ancestry(node),clip=inherited.clip,hidden=s.visibility!=='visible'||inherited.hidden;
+        for(let i=0;i<inherited.ancestorRounded;i++)limit('CLIP_SHAPE_APPROXIMATE',paths.get(node),'bounds','border-radius');
+        for(let i=0;i<inherited.masks;i++)limit('CLIP_SHAPE_APPROXIMATE',paths.get(node),'bounds','clip-path');
+        if(inherited.masks)g.clipAccuracy='bounds';
         g.clip={x:round(clip.left-origin.left),y:round(clip.top-origin.top),width:round(Math.max(0,clip.right-clip.left)),height:round(Math.max(0,clip.bottom-clip.top))};
         const visible={left:Math.max(r.left,clip.left),top:Math.max(r.top,clip.top),right:Math.min(r.right,clip.right),bottom:Math.min(r.bottom,clip.bottom)};
         g.visibleBox=visible.right>visible.left&&visible.bottom>visible.top?box({...visible,width:visible.right-visible.left,height:visible.bottom-visible.top}):null;
@@ -153,7 +160,7 @@ export function installInspectFacets() {
           if(urls.length)fact.backgrounds=urls;
           facts.push(fact);
         },
-        finish(){runs.sort((a,b)=>{const x=orderKeys.get(a),y=orderKeys.get(b);for(let i=0;i<Math.min(x.length,y.length);i++)if(x[i]!==y[i])return x[i]-y[i];return x.length-y.length;});return {nodes:facts,runs,limitations,size:{width:round(origin.width),height:round(origin.height)},palette:Object.fromEntries(tokens.map(t=>[t.name,getComputedStyle(document.documentElement).getPropertyValue(t.name).trim()||null]))};},
+        finish(){runs.sort((a,b)=>{const x=orderKeys.get(a),y=orderKeys.get(b);for(let i=0;i<Math.min(x.length,y.length);i++)if(x[i]!==y[i])return x[i]-y[i];return x.length-y.length;});return {properties,valueFacts,nodes:facts,runs,limitations,size:{width:round(origin.width),height:round(origin.height)},palette:Object.fromEntries(tokens.map(t=>[t.name,getComputedStyle(document.documentElement).getPropertyValue(t.name).trim()||null]))};},
       };
     },
   };

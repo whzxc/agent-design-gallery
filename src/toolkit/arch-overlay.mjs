@@ -2,7 +2,7 @@ import { parse } from 'pele';
 import { buildArch, inspectArch, vocabulary } from './arch.mjs';
 import { readFileSync } from 'node:fs';
 import { readBase } from './arch-git.mjs';
-import { escape } from './runtime.mjs';
+import { escape } from './html.mjs';
 
 export const diffClasses=['added','changed','removed'];
 const words=value=>(Array.isArray(value)?value.join(' '):value??'').split(/[\s,]+/).filter(Boolean);

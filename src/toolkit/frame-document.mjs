@@ -1,4 +1,4 @@
-import { escape } from './runtime.mjs';
+import { escape } from './html.mjs';
 
 /** The builder and operation-local proof use the same exact document construction. */
 export function frameDocument(frame, theme, css) {

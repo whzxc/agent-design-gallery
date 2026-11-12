@@ -25,7 +25,7 @@ parentPort.on('message', async ({ id, config, name, type }) => {
       const bytes=snapshot.get(path.join(config.design,name));
       return [name,createHash('sha256').update(bytes===null?'missing\0':'present\0').update(bytes??'').digest('hex')];
     }));
-    if (!shuttingDown) parentPort.postMessage({ id, result: { frames, parts: built.parts ?? [], css: built.css,
+    if (!shuttingDown) parentPort.postMessage({ id, result: { ...(built.observationDynamic?{observationDynamic:true}:{}), frames, parts: built.parts ?? [], css: built.css,
       ...(built.tokenCss !== undefined ? { tokenCss: built.tokenCss, cssWithoutTokens: built.cssWithoutTokens,
         cssBeforeTokens: built.cssBeforeTokens, cssAfterTokens: built.cssAfterTokens } : {}),
       ...(config.overlay?{baseBlob:built.baseBlob}:{}), imports: built.imports, dependencies, dependencyHashes }, heapBytes: process.memoryUsage().heapUsed });
