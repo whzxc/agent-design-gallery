@@ -141,3 +141,111 @@ The runner derives an isolated design copy, uses separate preferences and free p
 The benchmark uses Fit all and an interior viewport zoom anchor, switches to the opposite theme, and waits for ADG readiness. Resource entries distinguish source/preview GETs from cache uploads. Metadata, image queues and cache writes settle before warm/restart samples and isolated save timing.
 
 Detailed commands and raw results are retained locally in `output/perf-round2/baseline.md`, `result.md` and `summary.json`. The local retention harness records server/driver process identities, worker statistics, current metadata coverage and renderer RSS. Copied acceptance assets and raw measurements stay under ignored `output/` and are excluded from the npm package.
+
+## Impact performance methodology
+
+For new impact material, retain workload identities, local machine paths, measured results, copied
+assets and traces under ignored `output/`. The following procedures use fictional examples; the
+agreed milestone 3 budgets and historical evidence above remain unchanged.
+
+## Freeze the workload
+
+Use a disposable project copy with its own configuration, design sources, tokens, artwork and Git
+history. Keep the original project read-only. Pin the baseline runtime to a commit or release export
+and install each runtime's locked dependencies. Record the runtime versions, host/browser settings,
+source/frame counts and exact edits with the raw results. Do not change inputs between paired runs.
+
+Use identical viewport, device scale, theme and scope across implementations. Separate process
+startup from browser navigation; distinguish cold state, warm reload and restart with the same state.
+OS file caches are not automatically purged. Alternate baseline/current samples on the same host,
+retain each sample, and report medians and ranges rather than treating one run as a stable budget.
+Set workload-specific budgets before comparing results; they are not portable timing guarantees.
+
+## Viewer comparison
+
+From the ADG repository, with fictional project/runtime exports:
+
+```sh
+node tooling/compare.mjs /tmp/catalog-project output/performance/viewer 3 \
+  --phases --scope=all --adg-baseline=/tmp/adg-baseline --no-screenshots
+```
+
+The phase runner uses isolated state and free ports, alternates baseline/current for direct and hub
+routes, and measures cold navigation, warm reload and process restart. `--route=direct` or `hub`
+selects one route. Repeat with the same frozen inputs and a narrower scope when diagnosing a layer.
+Choose a new output directory per comparison so stale state cannot be mistaken for a cold sample.
+
+Read first layout, first content, visible-ready and complete separately. Build, geometry measurement,
+preview preparation, arrangement, drawing, network bytes and cache writes are different costs.
+Readiness is a user-visible boundary; complete also includes cache/metadata drainage. A shorter
+first-content interval does not establish faster visible readiness.
+
+Compare final source/frame positions and dimensions, not just latency. Inspect page errors, failed
+requests and cache failures. Reuse the retained geometry for exact baseline/current assertions.
+Keep camera input independent of page-component rendering; layout/cache work must not change
+pan, zoom, selection or refresh behavior. For interaction and disposable save/restore coverage,
+use the [existing reproduction procedure](#verification-and-reproduction).
+
+## Selective command comparison
+
+Prepare a frozen Git base and one working-tree edit per disposable copy. Fictional edit families:
+
+- A data attribute on the Badge root, preserving its pixels while changing materialized markup.
+- A shared component class that can change an entry's common utility stylesheet.
+- A rarely reached token, a dark-only override, and a global token/config/CSS change.
+- A shared-helper comment with identical output, and a leaf surface edit.
+- A newly extracted part with an explicit `Frame.parent`, plus restricted and single-theme runs.
+
+Run ordinary full and impacted diff on the same pair, with separate output directories:
+
+```sh
+adg diff --base=HEAD --out-dir=output/performance/full --json
+adg diff --base=HEAD --impacted --out-dir=output/performance/selected --json
+adg render --base=HEAD --impacted --out-dir=output/performance/render --json
+adg check --base=HEAD --impacted --read-only --json
+```
+
+Take repeated samples without editing between them. Record wall time, every reported phase,
+source/frame/theme universe, actual jobs, proven/uncovered/deleted rows, fallback counts and JSON
+stdout bytes. Compare matched before/after PNGs and CSS/device dimensions between full and selected
+runs; independently verify every proven row against the full oracle when validating proof changes.
+Verdicts and structural coverage must agree for unqualified both-theme runs. Restricted structural
+runs must retain coverage failures. Check also needs a preexisting violation in an unchanged frame:
+selective check leaves it `not_checked`, while ordinary check still reports it.
+
+## Planner cost and proof limits
+
+The shared project index supplies dependency graphs, emitted occurrences, mappings and token facts.
+Git operations materialize every TSX entry on both endpoints once, through the existing build pool.
+Transform reuse is allowed; executed payloads and proof verdicts are never reused across operations.
+CSS identifier decoding and CSS eligibility run once per entry/side; only frame markup is scanned
+per frame. Exact shared-style/markup segments preserve whole-projection byte equality. Digests are
+explanation/index keys, never equality evidence. See the [proof rule](architecture.md#impact-proofs-and-selection).
+
+`materializeMs` measures fresh build/execution. `proofMs` measures eligibility and exact projection
+comparison; token/source collection also appears in `indexMs`. Consumer `impactMs` includes planning
+and final validation, `workMs` includes the consuming command and cleanup, and diff retains capture,
+compare and write phases. These intervals have different boundaries: do not add nested timings or
+claim planner time as capture time. Query totals include CLI-owned operation work; wall time also
+includes process startup and output handling.
+
+Selective rendering saves only the capture/comparison work actually omitted. A global change can
+retain every frame and add planner overhead. Entry-wide generated CSS can widen a shared component's
+render set beyond its emitted occurrences. Architecture conservatively includes the entire token
+sheet. Hypothetical token candidates assume unchanged Tailwind classification; only actual Git input
+comparison can establish skips after a classification change.
+
+Proofs require fresh eligible materialized-input equality and final generation validation. Time and
+randomness are evaluated again; external resources or script-capable documents require rendering.
+Fonts, rasterization and allowed animation/media/canvas behavior retain ordinary diff's shared-context
+assumptions. A proof is not a persisted visual receipt or a completed check. Reports carry descriptive
+metadata and literal work counts; all-proven diff can have no captures, while selective check remains
+partial for skipped evaluations.
+
+## Retain evidence and close resources
+
+Retain raw command JSON, PNGs, geometry, traces, server logs and environment/sample details locally
+under `output/`. Inspect cache/worker counts and memory over repeated refreshes when relevant;
+stable application caches alone do not establish stable native renderer memory. Benchmark processes
+must close their browsers, pages, servers and workers. Do not use a resident production hub or modify
+an original project to collect a sample. Package-content checks exclude all local evidence.

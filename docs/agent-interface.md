@@ -801,13 +801,14 @@ findings still exits 1 under `CHECK_FAILED`.
 ### Impact
 
 `impact` returns frame candidates and, for Git queries, operation-local materialized-input proofs.
-It takes no screenshots and changes no render/check/diff scheduling.
+The query takes no screenshots. Selective commands compute and consume their own fresh selection
+inside the same operation; an earlier query result is never a reusable skip receipt.
 
 ```sh
-adg impact --source=design/components/button.tsx --part=Button --explain --json
+adg impact --source=design/components/badge.tsx --part=Badge --explain --json
 adg impact --source=design/fixtures/states.ts --json
 adg impact --token=--accent --theme=dark --json
-adg impact --file=ui/controls.tsx --symbol=Button --json
+adg impact --file=ui/badge.tsx --symbol=Badge --json
 adg impact --base=HEAD --json
 adg impact --base=main --head=HEAD --json
 ```
@@ -821,9 +822,29 @@ project-root grammar. Hypothetical token candidates assume unchanged Tailwind cl
 `--head` selects a second exact commit instead. No merge-base or triple-dot inference.
 
 Options are `--theme=both|light|dark` (default both), `--state-dir`, `--explain` and `--json`.
-There are no positional operands, `--scale`, `--observe` or consuming-command `--impacted`
-flags in this segment. Empty values, mixed families and repeated single-valued flags fail
+The query accepts no positional operands, `--scale`, `--observe` or `--impacted`.
+Use `--impacted` on render/check/diff as described below. Empty values, mixed families and repeated single-valued flags fail
 `USAGE_INVALID`. Help/version and sanitation follow the common contract.
+
+Direct dependency reasons identify frames in the changed source; transitive reasons identify
+consumers through the old/new build closures. Evidence classes remain independent:
+
+| Evidence | Meaning |
+| --- | --- |
+| `part_occurrence` | Registered part provenance emitted into a frame; it does not establish painted visibility. |
+| `dependency` | Conservative build dependency, including helpers, unused exports and full-sheet architecture tokens. |
+| `token_dependency` | Theme-local lexical token/alias/fallback reachability outside the appended token block. |
+| `mapping` | A resolvable declared implementation counterpart. |
+| `global` | Config, global CSS or dependency-environment change candidates. |
+| `lifecycle` | Added/removed identity, including unmatched rename candidates. |
+| `unknown` | A path role that cannot be resolved more narrowly. |
+
+A frame can have multiple classes. Occurrence or dependency absence never proves it unaffected.
+Git queries union both inventories and reverse closures. Mapping gaps return resolvable targets and
+findings without broadening to every frame; implementation files in a design build closure also
+follow that closure. Unknown/global changes can add candidates, while fresh input equality decides
+which captures can be skipped. Standalone source/part/token/file selectors describe hypothetical
+changes and cannot establish proofs.
 
 ```ts
 type ImpactQuery =
@@ -890,11 +911,15 @@ pool, once per operation. Transform caches can be reused; executed source payloa
 Compare canonical document/metadata/policy bytes directly. The document is exactly the builder's
 per-theme document with its own token block replaced by reachable theme-local declarations or
 absence; full_sheet mode retains the complete raw sheet. Parent/dimensions and resolved capture
-policy also participate. Shared CSS identifier decoding and CSS eligibility run once per entry/side;
+policy also participate. Input comparison includes compiled utilities, default styles, authored
+markup and metadata, rather than just source-file equality. Shared CSS identifier decoding and CSS eligibility run once per entry/side;
 frame markup is scanned separately. Segmented exact document bytes avoid reserializing shared styles
-for each frame; explanation digests retain the whole canonical projection. The policy fixes initial viewport, reduced motion, locale/timezone,
+for each frame; explanation digests retain the whole canonical projection. The policy fixes initial
+viewport, reduced motion, locale/timezone,
 animation/caret behavior and per-side diff policy; no machine/environment fingerprint is used.
-Architecture compares raw .mmd bytes, sidecar presence/bytes, full token bytes and resolved architecture config.
+Architecture compares raw .mmd bytes, sidecar presence/bytes, full token bytes and resolved
+architecture config, without token pruning. Both sides use this operation's installed runtime and
+dependencies, not a recreated historical execution environment.
 
 Eligibility parses HTML and tokenizes CSS without launching Chromium. Script elements, on* attributes,
 javascript: URLs, iframe/object/embed require rendering (`dynamic_document`). Resource references
@@ -909,11 +934,16 @@ Required new-part parents remain render with support evidence. Unchanged source 
 render after fresh Date/random output differs. A render row without a dependency reason can result
 from this fresh output comparison. Hypothetical queries stay proof-free, with noncandidates unassessed.
 
-Proof computations are operation-local; reports retain only descriptive kind/version/tokenMode metadata. --explain adds the
+Proof computations are operation-local; reports retain descriptive kind/version/tokenMode metadata.
+--explain adds the
 first represented frame/theme's projection digest; digests never decide equality or split groups.
 Final validation checks dependency bytes, discovery/resolution inventories, tracked/config/token
 inputs and freshly resolved config after worker shutdown. Concurrent changes fail
 IMPACT_INPUT_CHANGED, exit 2. Incomplete results discard every proof and set proofComplete:false.
+Time, randomness and other module evaluation results are freshly materialized, even for unchanged
+source bytes. External assets cannot qualify for skipping. System fonts, browser rasterization and
+allowed animation/media/canvas behavior retain ordinary diff's same-operation capture assumptions;
+there is no environment certificate, font-content hash or cross-invocation validity claim.
 
 Dependencies are conservative, including helpers and unrendered exports. Emitted provenance
 does not claim painted visibility. Lexical token reachability scans the union of raw, CSS-escape-
@@ -949,7 +979,7 @@ summing group.frames.length, not the number of groups.
 Reuse existing source/file/config/token/map/Git/build/I/O/cleanup diagnostics. Every error
 has recovery argv. Retry flags use attached values in source/part/token/file/line/symbol/base/head/
 theme/state-dir order, then explain/json; sanitization falls back to impact JSON help. Exit 0
-means a completed candidate query, including empty/stale mappings. Impact never emits exit 1.
+means a completed query, including empty/stale mappings and Git proof classification. Impact never emits exit 1.
 Exit 2 retains partial data with complete:false, or null before normalization. All workers and
 disposable revision trees close before completion.
 
@@ -958,11 +988,17 @@ disposable revision trees close before completion.
 `render --impacted --base=<rev>`, `check --impacted --base=<rev>` and
 `diff --base=<rev> --impacted` use Git selection only, with the working tree as the current side.
 Source operands, `--frame` and `--theme` restrict targets after the complete union is materialized.
+`--explain` and `--state-dir` require `--impacted` on consuming commands; render/diff retain their
+ordinary scale/output flags. Help/version keep the common precedence rules.
 Hypothetical selectors and `--head` are invalid on these commands. Check frame/theme flags require
 `--impacted`. `--state-dir` selects isolated index state; `--explain` includes sampled proof digests.
 
 All three command data objects contain `impact: ImpactSelection | null`. Ordinary invocations use null.
 The selection uses the same grouped frame records and scoped explanation rules as ImpactData.
+It lists only selected candidate/render identities; noncandidate proofs remain counts. Facts are
+scoped to the listed groups. IDs are opaque and operation-local. `pathIndexes` addresses the change
+list in standalone ImpactData; consuming selections omit that list and retain source/kind context.
+Row counters count frame/theme pairs, never groups.
 
 ```ts
 type ImpactCommandTimings = {impactMs:number,workMs:number,materializeMs:number,proofMs:number,totalMs:number};
@@ -985,7 +1021,17 @@ browser evaluations for check, and written selected plus support comparisons for
 removed rows. For render these are reported without current PNGs and cover the deletion; for diff they
 are actual comparisons included in renderedRows. Check leaves deleted rows uncovered.
 `uncoveredRows` is expected minus rendered/proven rows (and reported deletions for render).
-A deletion-only render or empty union with no proofs uses basis:selected.
+Coverage basis describes the work supporting the result:
+
+| Basis | Meaning |
+| --- | --- |
+| `rendered` | Actual captures/comparisons, with no proven rows counted. |
+| `rendered_and_proven` | Actual captures/comparisons plus fresh input proofs. |
+| `proven` | Proven rows with zero capture/comparison jobs. |
+| `selected` | Check scope, or empty/deletion-only work with no counted proofs. |
+
+Check never counts input equality as rule-check coverage. A deletion-only render or empty union
+with no proofs uses selected rather than inventing captures or proofs.
 Support captures have separate literal diff counters and contribute covered rows; explicit restrictions
 always keep scope partial and cannot gain structural full coverage from support captures.
 `proofComplete` means union classification and final generation verification succeeded; it does not
@@ -998,8 +1044,7 @@ verdicts describe actual work; proofs fabricate no paths, pixels, sizes or compa
 Render captures current render rows only, including plain architecture frames. Its ordinary --base
 architecture overlay behavior is unchanged. Only newly completed captures are listed; existing output
 files are never rediscovered. Deleted frame identities remain in impact.frames; deleted lists
-their distinct source paths, including
-sources whose selected frame was removed while other frames remain.
+their distinct source paths, including sources whose selected frame was removed while other frames remain.
 
 Check retains applicable token, mapping, static architecture and import validations. Browser inspection
 runs only for scheduled current rows; proven rows count as not_checked, not proven check coverage.
@@ -1013,13 +1058,23 @@ Explicit source/frame filters and single-theme runs retain partial structural co
 DIFF_FAILED/DIFF_COVERAGE_INCOMPLETE behavior. `report.json` includes impact coverage and proof records.
 All-proven runs can be identical with zero captures and no browser launch.
 
-IMPACT_COVERAGE_PARTIAL warns when rows remain uncovered or explicit restrictions keep coverage partial. IMPACT_NO_CHANGES identifies zero scheduled browser
-jobs without treating cached PNGs as results. Both include an unqualified full-work recovery argv:
-`adg check --read-only --json`, `adg render --json`, or `adg diff --base=<same> --json`, retaining an
-explicit capture scale. These warnings do not change exits. IMPACT_INPUT_CHANGED retries preserve the
-consuming command, --impacted, base and explicit selection. Capture/cleanup/input failures return exit 2
-with incomplete data and discarded proofs; completed check/diff findings keep exit 1. Zero-job success
-has literal zero counters and is distinct from an empty project.
+| Diagnostic | Result | Recovery |
+| --- | --- | --- |
+| `IMPACT_COVERAGE_PARTIAL` | Warning when rows are uncovered or explicit restrictions keep coverage partial. | Unqualified full-work command; check uses `--read-only`, diff retains base, and capture commands retain explicit scale. |
+| `IMPACT_NO_CHANGES` | Warning on successful zero-job selection; old PNGs are not results. | Same unqualified full-work recovery. Standalone impact uses `next:[]`. |
+| `DIFF_COVERAGE_INCOMPLETE` | A locally passing structural part lacks full both-theme batch coverage; exit 1. | Remove source/frame filters and request both themes with the same base/scale. |
+| `IMPACT_INPUT_CHANGED` | Inputs changed before final validation; exit 2, proofs discarded. | Retry the consuming command after edits finish, retaining its impact/base/selection flags. |
+
+For base HEAD, example full-work argv are `["adg","check","--read-only","--json"]`,
+`["adg","render","--json"]` and `["adg","diff","--base=HEAD","--json"]`. These warnings do not
+change exits. Render succeeds with exit 0 on completed
+captures or a genuine zero-job run. Check succeeds for completed selected rules, with exit 1 for
+findings; skipped rows remain partial. Diff exits 0 for identical/structural and 1 for changed.
+Capture/cleanup/input failures return exit 2 with incomplete data and discarded proofs. Zero-job success
+has literal zero work counters and is distinct from an empty project. Preparation failures can
+return data:null; failures after command data exists retain completed artifacts/findings only.
+The diff report is finalized after generation validation. Generated PNG/report JSON files are
+excluded from output discovery, while observed build/config dependency bytes still require validation.
 
 ### Check
 

@@ -106,8 +106,12 @@ adg check --read-only
 adg diff --base=HEAD --json
 adg owner --file=ui/controls.tsx --symbol=Button --json
 adg owner --text="Save changes" --locale=en --json
-adg impact --source=design/components/button.tsx --part=Button --json
+adg impact --source=design/components/badge.tsx --part=Badge --json
+adg impact --token=--accent --json
 adg impact --base=HEAD --json
+adg render --impacted --base=HEAD --json
+adg check --impacted --base=HEAD --read-only --json
+adg diff --base=HEAD --impacted --json
 ```
 
 `init` creates tokens, components/modules/surfaces, fixtures/art, editor configuration and ignore entries. A fresh library gets one `example.tsx` per production layer, composed downward with shared fixture data; existing libraries receive no demo sources. Existing authored files are preserved, declarations are refreshed, and missing ignore entries are appended. Starter configuration requires ADG 0.5.0 or newer. `check --read-only` skips declarations and build files for an audit. Projects do not install ADG as a dependency.
@@ -135,7 +139,10 @@ implementation mappings or exact Git endpoints. It uses emitted provenance and l
 reachability, with compact optional `--explain` witnesses. Equal theme records and same-source frame records are grouped; noncandidates are counted.
 Git queries freshly materialize both endpoints and prove equivalent closed rendering inputs for
 this operation. Hypothetical queries remain candidate lookups. `render`, `check` and `diff` accept `--impacted --base=<rev>`;
-check reports skipped evaluations as partial coverage, while unqualified both-theme diff counts fresh proofs. See the [impact contract](docs/agent-interface.md#impact).
+check reports skipped evaluations as `not_checked` with partial coverage, while unqualified both-theme
+diff counts fresh proofs. Query stdout cannot authorize a later skip. Architecture `render --base`
+produces proposal overlays; `render --impacted --base` captures plain current frames. Zero-job runs
+report zero work. See the [impact contract](docs/agent-interface.md#impact).
 
 See the [toolkit contract](docs/design-toolkit.md) for source format and compare adapters, and the [changelog](CHANGELOG.md) for version changes. Node.js executes design modules at build time; open sources you trust.
 

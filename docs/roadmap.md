@@ -56,7 +56,7 @@ Agents are first-class users. In priority order:
    to design sources, parts and frames with scoped evidence (done, 0.9.0). See the
    [owner contract](agent-interface.md#owner) and [machine-readable mappings](design-toolkit.md#implementation-mappings).
 4. Impact: frames affected directly and transitively by a component or token change, and rendering only those frames
-   (in progress).
+   (done, 0.10.0).
 5. Frames as data: element tree, text, boxes and tokens, for Agents that need structure rather than pixels.
 
 ## 5. Annotation collaboration

@@ -14,7 +14,7 @@ This document is the source format and authoring command contract. The [agent CL
 npm install -g @whzxc/agent-design-gallery
 ```
 
-The package comes from the public npm registry. Run the same install again to update. `check`, `render` and `compare` launch Chromium through the Playwright that ships with `adg`; the viewer and the build start without it. When Chromium is missing, those commands stop with the command that installs it for that Playwright version.
+The package comes from the public npm registry. Run the same install again to update. `check`, `render`, `compare` and `diff` use Chromium through the Playwright that ships with `adg`; the viewer and TSX builds start without it. Standalone `impact` does not launch a browser; selective zero-job commands can also finish without one. When Chromium is missing, those commands stop with the command that installs it for that Playwright version.
 
 A project may set `requires` in `adg.config.mjs`, such as `'>=0.4.0'`. Older versions stop with exit code 2 and the update command, so every contributor checks with the same rules.
 
@@ -330,6 +330,10 @@ adg render [source...] [--frame=<name>] [--theme=both|light|dark] [--scale=2] [-
 adg compare <source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin=<x> <y>] [--click=<name>...] [--viewport=<w>x<h>]
 adg compare --all
 adg diff [source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]
+adg impact (--source=<path> [--part=<export>] | --token=<name> | --file=<implementation-path> | --base=<rev> [--head=<rev>]) --json
+adg render --impacted --base=<rev> [source...] [--frame=<name>] [--theme=both|light|dark] --json
+adg check --impacted --base=<rev> [source...] --read-only --json
+adg diff --base=<rev> --impacted [source...] --json
 ```
 
 A first argument that names a command runs it; any other argument is a directory to open. `adg open check` opens a directory named `check`.
@@ -338,12 +342,89 @@ A first argument that names a command runs it; any other argument is a directory
 - `check` checks import direction and the named sources' frames, or all sources. `--read-only` skips generated type declarations and HTML build files; it runs the same import and both-theme frame checks without changing consumer files.
 - `render` writes `output/design/<path>/<frame>-light.png` and `-dark.png` at the given scale, for every frame or the one named.
 - `compare` compares one frame; its flags override the frame's `fixture` and `capture`.
+- `impact` explains direct/transitive candidates and, for Git queries, fresh materialized-input equality.
 - `diff` compares Git base and working-tree frames, writes PNGs and a machine-readable report, and gates ordinary changes or structural parts. It defaults to both themes at 2×.
 - `compare --all` compares every frame that has a fixture and writes `output/design/compare/summary.json` and `index.html`, one row per frame with its counts and report link.
 
 Each design capture in `render` and `compare` uses a fresh page and browser context, including between themes, so PNG bytes are independent of frame order. `render` reuses one Chromium process for the batch, runs up to four captures concurrently within the available CPU parallelism, and closes each page after capture. Console output follows source, frame and theme order.
 
 Source arguments are paths under the design directory, with or without `design/` and `.tsx`. Exit codes are 0 for success, 1 when `check`, `compare` or `diff` found problems, and 2 for a usage, configuration or environment error, with one line on stderr naming the fix.
+
+## Impact and selective commands
+
+These examples use a fictional badge library. Run from its project root with ADG 0.10.0 or newer.
+
+```sh
+# Hypothetical changes: inspect candidates without editing or capturing.
+adg impact --source=design/components/badge.tsx --json
+adg impact --source=design/components/badge.tsx --part=Badge --explain --json
+adg impact --source=design/fixtures/badges.ts --json
+adg impact --token=--badge-gap --token=--accent --theme=dark --json
+adg impact --file=ui/badge.tsx --symbol=Badge --json
+
+# Actual Git endpoints: base versus working tree, or two exact commits.
+adg impact --base=HEAD --json
+adg impact --base=main --head=HEAD --json
+
+# After edits, compute fresh proofs and consume them in the same operation.
+adg render --impacted --base=HEAD --json
+adg check --impacted --base=HEAD --read-only --json
+adg diff --base=HEAD --impacted --json
+```
+
+Source, part, token and implementation-file selectors are hypothetical candidate queries. A part is a
+registered named export, not a frame name. Sources/helpers use the build closure; emitted occurrences
+and lexical token dependencies remain separate evidence. File selectors use optional
+`implementation.json` mappings and the owner's line/symbol grammar. Mapping gaps return findings and
+resolvable targets without turning every frame into a candidate.
+
+Git selection includes staged, unstaged and untracked files. It uses exact revisions, not an inferred
+merge base. The old/new inventory union retains deleted frames and rename candidates. Direct frames
+belong to the changed source; transitive frames consume it. Token candidates follow theme-local
+aliases, fallbacks and absent declarations; architecture depends on the full token sheet. Hypothetical
+token queries assume unchanged Tailwind classification. Git mode also compares freshly compiled utilities.
+
+Only Git selection can drive `--impacted`. Render/check require `--base`; diff already requires it.
+These commands use the current working tree, accept no `--head` or hypothetical selectors, and apply
+source/frame/theme filters after materializing the complete union. For example:
+
+```sh
+adg render surfaces/catalog --frame=empty --theme=light --impacted --base=HEAD --json
+adg check surfaces/catalog --frame=empty --theme=light --impacted --base=HEAD --read-only --json
+```
+
+Every TSX entry executes freshly on both sides once per operation. Skipping requires exact equality
+of eligible rendering inputs, never just absent occurrences or an unchanged source hash. Added,
+removed, renamed and required parent/support rows cannot be skipped. Scripts or external resource
+references require rendering. The [proof architecture](architecture.md#impact-proofs-and-selection)
+defines token projection, eligibility, generation validation and the same-operation limits.
+
+Render writes only newly completed current PNGs; deleted rows are reported without captures. Check
+retains static, token, mapping and import validation, but evaluates only scheduled current rows in
+Chromium. Proven input equality does not establish a rule passed: skipped rows remain `not_checked`,
+with partial coverage unless every row was evaluated. Use ordinary check for a full audit.
+
+Unqualified both-theme impacted diff can cover existing frames with fresh proofs. Parents/support
+always capture, all lifecycle rows must be processed, and structural snapshot/classifier/size gates
+are unchanged. Source/frame restrictions or one theme retain the existing partial-coverage failure
+for structural batches. Zero-job runs report zero work; reports do not invent PNGs or pixel counts.
+See [selection schemas, warnings and exits](agent-interface.md#selective-render-check-and-diff).
+
+### Render base modes
+
+```sh
+# Architecture proposal: mark changes against the base as an overlay.
+adg render arch/catalog.mmd --base=HEAD --json
+
+# Select work using Git, then render plain current architecture frames.
+adg render arch/catalog.mmd --impacted --base=HEAD --json
+```
+
+Ordinary `render --base` applies only to architecture and produces proposal overlays. An explicit
+TSX-only ordinary selection ignores base with a usage warning. With `--impacted`, base selects actual
+changes across design inputs; current architecture captures are plain frames, never overlays. Diff
+also uses plain revision-local architecture renders. An earlier `impact` result cannot authorize a
+later capture skip; each consuming operation rebuilds and validates its own inputs.
 
 ## Git frame diff
 
@@ -456,8 +537,9 @@ observations produce `DIFF_UNSETTLED`.
 A new mapped part is locally `structural` only if both complete parent renders remain
 identical in both themes, target/part snapshots and sizes agree, no `other` pixels
 remain and every class budget passes. An exact extraction is also structural. Full
-batch `structural` additionally requires every existing frame in the revision union,
-in both themes, to be identical. Restricted selection reports partial coverage and
+batch `structural` additionally requires full existing-frame coverage in both themes. Ordinary diff
+captures every existing frame; unqualified `--impacted` diff may cover eligible existing rows with
+its fresh proofs. Restricted selection reports partial coverage and
 cannot yield a structural batch; locally passing evidence remains in its rows. One
 requested theme fails a part with `theme_coverage_incomplete`, without silently rendering
 the other theme. Exit 0 means `identical`/`structural`, exit 1 is completed `changed`

@@ -60,8 +60,8 @@ ADG's repository-only `adg.config.mjs` starts the server on `fixtures/arc-sample
 
 The finite [owner command](agent-interface.md#owner) opens
 `src/toolkit/project-index.mjs`, independent of the hub and viewer startup. Its internal
-projections share identities and build facts for future impact, frame-data and
-architecture-owner queries; the public JSON envelope is the compatibility boundary.
+projections share identities and build facts with impact; frame-data and
+architecture-owner queries can extend the same index; the public JSON envelope is the compatibility boundary.
 
 | Projection | Current facts / modules |
 | --- | --- |
@@ -138,22 +138,84 @@ matching environment as well as matching build/collector inputs. The command ver
 needed dependency generations before returning; concurrent input changes fail with
 `OWNER_INDEX_CHANGED` rather than certifying mixed observations.
 
-The finite `impact` command reuses these source facts, dependency closures, token declarations and
-mapping locators for conservative direct/transitive frame candidates. It reads no observation shards.
-The builder exposes the raw token block and CSS without that block; `token-reachability.mjs` scans
-raw/CSS-decoded/HTML-decoded names and theme-local alias/fallback closure, retaining absent declarations.
-Only token parsing or unbalanced var() triggers a counted, warned full-sheet fallback. New postings use the same
-bounded index store. Historical queries reuse diff preparation and read-only temporary indexes.
-Git impact uses the same BuildPool for operation-local fresh execution, bypassing executed payloads
-and derived source shards. The builder and proof share frame-document construction and explicit
-token-block boundaries. parse5 HTML parsing and css-tree tokenization inspect script/resource
-eligibility without a browser. Canonical input bytes establish equality; optional explanation
-digests are not equality evidence. Architecture uses exact raw inputs. Final generation checks
-run after worker shutdown. Proof computations are never cached or reused; reports retain descriptive metadata. Selective render/check/diff consume that
-operation before final generation validation. Check proofs
-remain uncovered rule evaluations; unqualified both-theme diff can count proofs toward coverage.
-Shared CSS scans and eligibility are per entry; exact segmented document comparison retains the
-canonical whole-projection explanation digest. Owner output and `/relationships` remain unchanged.
+## Impact proofs and selection
+
+`impact`, selective render/check/diff and owner share `project-index.mjs`, the existing build pool,
+`source-facts.mjs`, token parsing, mapping locators and `public/relationships.js` traversal. There is
+no parallel impact index. Impact reads no observation shards and launches no browser itself.
+
+### Operation lifecycle
+
+1. Resolve exact Git endpoints through the existing disposable-base lifecycle, using revision-local
+   configs and source inventories with the installed runtime/dependencies. Enumerate staged,
+   unstaged and untracked working changes, or two exact commits; union old/new reverse closures and
+   identities. Preserve deletions and rename candidates rather than auto-matching them.
+2. Freshly build/execute every TSX entry on both sides once through the shared index/build pool.
+   Reuse content-valid registration transforms, never executed payloads or derived source shards
+   for a Git proof. Operation-local materializations feed both classification and later captures.
+   Hypothetical candidate queries may use valid build/source shards but cannot prove skips.
+3. Keep emitted part occurrences, lexical token dependencies, mappings and conservative build/global
+   reachability as distinct evidence. For example, a fictional Badge source's helper edit can seed
+   dependent frames even when no Badge occurrence was emitted. Neither absence proves safety.
+4. Classify each Git frame/theme row as render or proven_unaffected, then apply consumer target
+   filters. Added/removed/renamed identities and required parent/support rows always require work.
+   Render captures plain current frames; check keeps static validation and schedules browser rules;
+   diff reuses its existing paired/structural capture pipeline. No TSX entry is executed again.
+5. Close owned browser/worker resources and validate source/dependency bytes, discovery and
+   resolution inventories, token bytes, config inputs/results and working-change inventory before
+   removing revision trees. Generated output PNG/JSON files are excluded from artifact discovery;
+   observed build/config dependencies are still byte-validated. A concurrent change returns
+   IMPACT_INPUT_CHANGED with discarded proofs. Reports finalize after this validation.
+
+### Equality rule
+
+Only fresh materialized-input equality can establish a skip. For a matched TSX frame/theme, compare
+canonical bytes containing the exact builder document with its provenance-separated token block
+replaced as below, parent/dimensions and per-side resolved capture policy. Source hashes, occurrence
+absence, dependency absence and matching token colors are insufficient. Digests identify/explain
+projections and never decide equality.
+
+The builder and proof share document construction. Shared style bytes, markup and canonical
+metadata/policy can be compared as exact segments without reserializing a full stylesheet per frame;
+explanation digests still describe the original whole projection. Both endpoints are rendered under
+one operation's browser/capture assumptions. Proof computations are never cached or reused across
+invocations; report metadata is descriptive, not a later skip receipt.
+
+The token replacement is lexical, not CSSOM/cascade analysis. Decode CSS escapes and HTML character
+references in addition to raw text, taking the union of --ident spellings outside the appended raw
+token block. Scan shared CSS once per entry/side and markup once per frame, then follow theme-local
+var targets and fallbacks through declarations. Record each reachable declaration or absence;
+cycles terminate through visited names. Dark overrides select the effective dark declarations.
+`@theme inline reference` utilities preserve var references. Git comparison also retains exact
+compiled utilities, so a Tailwind classification change cannot disappear through token pruning.
+Only parseTokens failure or an unbalanced var() in a reached declaration requires the full raw
+sheet; coverage counts the modes and one coalesced warning names fallback reasons.
+
+Architecture compares exact .mmd bytes, sidecar presence/bytes, full token-sheet bytes and resolved
+architecture config. It does not prune tokens or reuse a prior SVG/observation as proof.
+
+### Eligibility and limits
+
+Parse the materialized document loaded at about:blank. Eligibility has two checks:
+
+- No script-capable content: script elements, on* attributes, javascript: URLs, iframe/object/embed.
+- Every resource-loading reference is data: or fragment-only: HTML URL attributes including srcset,
+  CSS url/image-set/import/font sources, SVG href/xlink:href and nested embedded resource references.
+
+Other references require rendering. Parse/decoding failures and uninspectable CSS resources retain
+explicit reasons. Ordinary hyperlinks are not resource loads. No additional animation/media/canvas
+exclusion is imposed: reduced motion and capture policy apply identically to equal documents.
+Time/random/global/config output is freshly materialized, even when source bytes match. System font
+selection and browser rasterization retain ordinary diff's shared-operation assumptions; impact adds
+no font-content hash, OS/browser/GPU fingerprint or persisted environment certificate. Owner's
+observation environment identity above is a different cache boundary and is never a skip proof.
+
+Unqualified both-theme impacted diff may count fresh proofs toward full existing-frame coverage only
+when inventories/lifecycle work are complete, every required parent/support row is captured,
+structural gates pass, and final validation/cleanup succeeds. Explicit source/frame/theme restrictions
+retain partial structural coverage. Check input equality does not establish a rule passed: skipped
+browser evaluations remain not_checked. Zero-job runs have literal zero work/artifacts, with separate
+proof/coverage counts. See the [JSON contract](agent-interface.md#selective-render-check-and-diff).
 
 ## Git frame diff pipeline
 
@@ -180,7 +242,8 @@ limits. The working tree remains the current input throughout the command.
    Preserve added/removed rows and attach rename candidates without auto-matching.
    Build revision-local documents with `write:false`, sharing captured dependency
    bytes within each side and the existing bounded source-registration transform
-   cache. Only selected sources and active parent dependencies build. A TSX entry
+   cache. Ordinary diff builds selected sources and active parent dependencies. Impacted diff
+   uses the full fresh materialization above, then schedules captures. A TSX entry
    executes its declared frames and compiles shared CSS, but only selected frames
    and explicit support parents are captured. Architecture sources borrow the same
    browser for label measurement and use plain revision-local tokens/sidecars.
@@ -210,7 +273,9 @@ limits. The working tree remains the current input throughout the command.
    their own strict budget. Antialiasing requires stable local anchors, convex
    blends, bounded channel delta and a strict intermediate beyond anchor rounding
    residual. Full parent equality, snapshot/size equality and both-theme/full-project
-   coverage gate structural approval independently of candidate pixel counts.
+   coverage gate structural approval independently of candidate pixel counts. Only unqualified
+   both-theme impacted runs may substitute fresh proofs for existing ordinary comparisons;
+   parents/support still capture.
 7. **Artifacts and cleanup.** Publish each comparison only after its PNG/snapshot
    artifacts and per-row JSON finish. Store selected rows and extra `support` rows
    separately; their IDs link full parent renders to cropped parts. JSON includes
