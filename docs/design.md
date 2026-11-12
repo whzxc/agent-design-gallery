@@ -14,15 +14,12 @@ implementation mappings and review process. The asset rules take precedence over
 - Review platform: macOS with system UI fonts. The declared implementation capture viewport is 1440 × 900,
   locale `en-US`, timezone `UTC`; ARC artwork retains its own content language. The resident hub also declares
   390 × 844 home and switcher forms. Other viewport and locale forms are not declared.
-- Codex proposes and implements each authorized batch. The delegating Claude conversation reviews the completed report,
-  ownership, mappings and renders after the Codex turn ends. Codex does not dispatch other Agents or answer their
-  permission requests.
-  The controller may release a structure-only batch when every affected frame is pixel-identical in both themes and
-  no choice remains unresolved. When explicitly authorized, Codex may release structural governance changes with exact
-  existing renders and content-cropped new part frames. Missing states and visual corrections remain known gaps.
-  New visual changes or unresolved choices otherwise go to the user for gallery approval.
-- Capture a baseline in a disposable copy outside the checkout before editing. Run `adg check`, render all affected
-  frames in both themes and compare decoded pixels per frame/theme. Use the repository `src/cli.mjs` render command,
+- Each task is one end-to-end Codex round. Layout and behavior changes are implemented directly; the design sources
+  are synced after the user accepts the running result. Only a new visual direction is drawn in the design sources
+  first and shown to the user before implementation. Codex does not dispatch other Agents or answer their permission
+  requests.
+- Run `adg check` and the affected tests. Only a change declared a pure refactor also captures a baseline in a
+  disposable copy outside the checkout and compares decoded pixels per affected frame/theme. Use the repository `src/cli.mjs` render command,
   which waits for fonts and captures each frame/theme in an isolated page/context with bounded concurrency.
   Commit only the authorized batch. Open review with `adg open <design-directory> --port=<free-port>`; port 4310 is reserved.
 - This document keeps current mappings, approval/adoption state, exceptions and scope. Render, pixel-comparison and

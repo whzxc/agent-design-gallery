@@ -3,9 +3,9 @@
 [Architecture](architecture.md) · [Design toolkit](design-toolkit.md) · [Asset rules](asset-rules.md)
 
 ADG, agent-design-gallery, is a sibling of ARC: one place where people and Agents see, check and discuss a
-project's UI design sources and architecture diagrams. Milestones run in order. Each starts from a controller-reviewed
-specification and ends with tests, checks, the benchmark and the global installation update. New viewer chrome starts in
-the design sources and needs user gallery approval before implementation.
+project's UI design sources and architecture diagrams. Milestones run in order. Each task is one
+end-to-end round that ends with the push gate, the local installation update and a running result for the user.
+New visual directions start in the design sources; other UI changes are implemented directly.
 
 ## 1. Architecture sources (done)
 
@@ -57,7 +57,8 @@ Agents are first-class users. In priority order:
    [owner contract](agent-interface.md#owner) and [machine-readable mappings](design-toolkit.md#implementation-mappings).
 4. Impact: frames affected directly and transitively by a component or token change, and rendering only those frames
    (done, 0.10.0).
-5. Frames as data: element tree, text, boxes and tokens, for Agents that need structure rather than pixels.
+5. Frames as data: element tree, text, boxes and tokens, for Agents that need structure rather than pixels
+   (done: `adg inspect`).
 
 ## 5. Annotation collaboration
 
