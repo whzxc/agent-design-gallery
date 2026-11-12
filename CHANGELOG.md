@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0
+
+- Add `adg impact` queries for design sources, named parts, tokens, implementation files/regions/symbols, and exact Git endpoints. Compact grouped JSON keeps emitted occurrences, conservative dependencies, lexical token reachability, mappings and lifecycle evidence distinct. See the [impact contract](docs/agent-interface.md#impact).
+- Prove eligible frames unaffected only through fresh materialized-input equality within the operation. Reuse the shared project index/build pool, preserve theme-local token declarations or absence, compare full architecture inputs, and reject concurrent input changes with `IMPACT_INPUT_CHANGED`. Proofs are never reused across invocations.
+- Add Git-only `render/check/diff --impacted --base=<rev>`. Render captures plain current frames and reports deletions; zero-job runs return literal zero work without advertising old PNGs. Ordinary architecture `render --base` keeps proposal overlays.
+- Keep static/token/mapping/import validation in selective check; skipped browser evaluations remain `not_checked` with partial coverage. Unqualified both-theme impacted diff can count fresh proofs toward full coverage while always capturing required parents/support and retaining structural gates and restricted-coverage failures.
+- Document grouped proof metadata, coverage basis and literal counters, scoped `--explain`, warnings with recovery argv, exits, and portable reproduction methods. See the [authoring examples](docs/design-toolkit.md#impact-and-selective-commands) and [proof limits](docs/architecture.md#impact-proofs-and-selection).
+
 ## 0.9.0
 
 - Add finite `adg owner` lookups from implementation files, directories, globs, symbols and export/anchor line regions, rendered text, absolute CSS colors and token names. Schema-version-1 JSON returns ranked design sources/parts, host frames, tokens, ambiguity, scoped evidence and actionable recovery argv. Empty, stale and ambiguous observations exit 0; incomplete requests exit 2. See the [owner contract](docs/agent-interface.md#owner).
