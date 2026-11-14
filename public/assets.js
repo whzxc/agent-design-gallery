@@ -1,4 +1,5 @@
 import { dataFetch } from './auth.js';
+import { collectViewerElements } from './frame-identity.js';
 import { blockForAsset, componentWrapWidth, layoutWorld } from "./layout.js";
 // Measure declared SVG content in an isolated, script-disabled document.
 export const metadataContext = () => `adaptive-wrap-v1|${navigator.userAgent}|${devicePixelRatio}`;
@@ -313,19 +314,9 @@ async function prepareSource(asset, built, theme, signal) {
       const styles=new Map(),rects=new Map();
       const styleFor=node=>{if(!styles.has(node))styles.set(node,frame.contentWindow.getComputedStyle(node));return styles.get(node)};
       const rectFor=node=>{if(!rects.has(node))rects.set(node,node.getBoundingClientRect());return rects.get(node)};
-      const elements = [...shell.querySelectorAll('[data-adg-owners]')].flatMap((node,index) => {
-        const rect = rectFor(node);
-        let left=Math.max(rect.left,box.left),top=Math.max(rect.top,box.top),right=Math.min(rect.right,box.right),bottom=Math.min(rect.bottom,box.bottom);
-        for (let parent=node.parentElement;parent && parent!==shell;parent=parent.parentElement) {
-          const style=styleFor(parent);
-          if (!/(hidden|clip|auto|scroll)/.test(style.overflowX+' '+style.overflowY)) continue;
-          const clip=rectFor(parent);
-          if (/(hidden|clip|auto|scroll)/.test(style.overflowX)) {left=Math.max(left,clip.left);right=Math.min(right,clip.right)}
-          if (/(hidden|clip|auto|scroll)/.test(style.overflowY)) {top=Math.max(top,clip.top);bottom=Math.min(bottom,clip.bottom)}
-        }
-        if (right<=left || bottom<=top || styleFor(node).visibility==='hidden') return [];
-        return [{id:String(index),owners:JSON.parse(node.dataset.adgOwners),x:left-box.x,y:top-box.y,width:right-left,height:bottom-top}];
-      });
+      const elements = asset.path.endsWith('.tsx')
+        ? collectViewerElements(shell, { projectSource: built.projectSource ?? asset.projectSource ?? asset.path, assetPath: asset.path, frame: form.name, styleFor, rectFor, origin: box })
+        : [];
       const content=frame.contentDocument.createElement('div');
       content.setAttribute('xmlns','http://www.w3.org/1999/xhtml');
       content.setAttribute('style','font:16px/1.5 var(--font-ui);color:var(--text);');

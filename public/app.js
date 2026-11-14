@@ -1,4 +1,4 @@
-import { createAnnotations } from './annotations.js';
+import { createAnnotations, createContextMenu, formatElementReference, READABLE_ANNOTATION_SCALE } from './annotations.js';
 import { initSwitcher, updateSwitcherLabels } from './switcher.js';
 import { dataFetch, keyURL, isUnauthorized } from './auth.js';
 import { Labels } from "./labels.js";
@@ -307,6 +307,9 @@ function syncSelectionURL() {
   const url = viewURL(location.href, initializedScope, target, { isolated: queryView, onlyFrame });
   if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
 }
+function elementOwner(element, fallbackSource) {
+  return element?.owner ?? element?.owners?.at(-1) ?? { source: fallbackSource, export: null };
+}
 function restoreSelection(target) {
   if (!target) return;
   const source = manifest.assets.find(a => a.path === target.path);
@@ -318,8 +321,9 @@ function restoreSelection(target) {
     selectedForm = form?.id ?? null;
     const element = target.element && form?.elements?.find(e => e.id === target.element.id);
     const owner = target.element?.owner;
-    if (element && (!owner || element.owners.some(o => o.source === owner.source && o.export === owner.export)))
-      selectedElement = {...element, owner:owner ?? element.owners.at(-1)};
+    const resolvedOwner = element ? elementOwner(element, item.path) : null;
+    if (element && (!owner || (resolvedOwner.source === owner.source && resolvedOwner.export === owner.export) || (element.owners ?? []).some(o => o.source === owner.source && o.export === owner.export)))
+      selectedElement = {...element, owner:owner ?? resolvedOwner};
     active = item.group;
   } else {
     const group = groups.findIndex(g => g.title === target.group);
@@ -635,21 +639,22 @@ function selection() {
   $('#back').disabled = !history.length && !onlyFrame;
   const host=currentItem(), part=host?.parts.find(p=>p.id===selectedForm);
   const owner=selectedElement?.owner;
-  const a=owner ? manifest?.assets.find(a=>a.path===owner.source) ?? {path:owner.source,parts:[]} : host;
+  const hasExport=!!owner?.export;
+  const a=hasExport ? manifest?.assets.find(a=>a.path===owner.source) ?? manifest?.extraAssets?.find(a=>a.path===owner.source) ?? {path:owner.source,parts:[]} : host;
   if(a) {
-    $('#source-name').textContent=owner?.export ?? a.name;$('#source-path').textContent=a.path;
+    $('#source-name').textContent=hasExport ? owner.export : a.name;$('#source-path').textContent=a.path;
     $('#source-path').title=a.path;
     $('#frame-detail').hidden=!part;
     $('#frame-name').textContent=part?.name ?? '';
     const size=selectedElement ?? part;
     $('#frame-size').textContent=size?`${Math.round(size.width)} × ${Math.round(size.height)}`:'';
-    $('#forms-heading').textContent=owner?'Frames using this export':a.component?'Forms':'Frames';
-    const forms=owner?exportFrames(a,owner):a.parts;
+    $('#forms-heading').textContent=hasExport?'Frames using this export':a.component?'Forms':'Frames';
+    const forms=hasExport?exportFrames(a,owner):a.parts;
     $('#forms').replaceChildren(...forms.map(p=>{
       const button=makeRow(a.component?'component':'app-window',p.name,`${Math.round(p.width)} × ${Math.round(p.height)}`);
       button.classList.add('frame-row');button.title=p.name;
       button.dataset.frame=p.name;
-      button.setAttribute('aria-current',String(!owner && selectedForm===p.id));
+      button.setAttribute('aria-current',String(!hasExport && selectedForm===p.id));
       button.onclick=()=>inspectForm(a,p);
       if (p.note) { const row=document.createElement('div');row.append(button);const note=document.createElement('p');note.textContent=p.note;note.className='frame-note';row.append(note);return row; }
       return button;
@@ -665,7 +670,7 @@ function selectSource(a) {
 }
 function selectFrame(a,p,element=null) {
   if (!a || !p) return;
-  remember();selected=a.path;selectedId=a.id;selectedForm=p.id;active=a.group;selectedElement=element?{...element,owner:element.owners.at(-1)}:null;
+  remember();selected=a.path;selectedId=a.id;selectedForm=p.id;active=a.group;selectedElement=element?{...element,owner:elementOwner(element,a.path)}:null;
   expanded.add(active);selection();
 }
 function clearSelection() { selected=null;selectedId=null;selectedForm=null;selectedElement=null;inspection=null;selection(); }
@@ -675,12 +680,86 @@ function selectedBox() {
   const box=frameBox(a,p);
   return selectedElement?{...selectedElement,x:box.x+selectedElement.x,y:box.y+selectedElement.y}:box;
 }
-const annotationUI = createAnnotations(viewport, () => {
-  const a=currentItem(),p=a?.parts.find(p=>p.id===selectedForm);
-  if(!p)return null;
-  const world=frameBox(a,p);
-  return {source:a.path,frame:p.name,world,box:{x:view.x+world.x*view.scale,y:view.y+world.y*view.scale,width:world.width*view.scale,height:world.height*view.scale}};
-}, e=>error(e.message));
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).catch(e => error(e.message));
+}
+function visibleFrames() {
+  const displayed = manifest?.renderTheme === effectiveTheme ? (inspection ? [inspection] : assets) : [];
+  const list = [];
+  for (const a of displayed) {
+    if (!visible(a, 320)) continue;
+    const parts = a.component ? a.parts : a.parts.filter(p => p.id === a.shown[0]?.id);
+    for (const part of parts) {
+      const worldBox = frameBox(a, part);
+      const box = {
+        x: view.x + worldBox.x * view.scale,
+        y: view.y + worldBox.y * view.scale,
+        width: worldBox.width * view.scale,
+        height: worldBox.height * view.scale,
+      };
+      if (box.x + box.width + 280 < 0 || box.x > width + 40 || box.y + box.height + 40 < 0 || box.y > height + 40) continue;
+      list.push({ asset: a, part, source: a.path, frame: part.name, world: worldBox, box });
+    }
+  }
+  return list;
+}
+function locateNoteOnCanvas(row, moveCamera = false) {
+  const run = () => {
+    const sourceAsset = manifest?.assets.find(a => a.path === row.source);
+    const part = sourceAsset?.parts.find(p => p.name === row.frame);
+    const item = assets.find(a => a.path === row.source && (a.component || !part || a.shown[0]?.id === part.id));
+    if (!item || !part) return false;
+    const el = row.element ? (part.elements ?? []).find(e => e.id === row.element.id) : null;
+    inspection = null;
+    selectFrame(item, part, el);
+    if (moveCamera) {
+      frame(frameBox(item, part), 48);
+      if (view.scale < READABLE_ANNOTATION_SCALE) zoom(READABLE_ANNOTATION_SCALE);
+    }
+    return true;
+  };
+  if (!run() && moveCamera && initializedScope !== 'all') {
+    changeScope('all');
+    pendingNavigation = () => { run(); annotationUI.render(); };
+  }
+}
+const contextMenu = createContextMenu($('#context-menu'), {
+  viewport,
+  onOverlayChange: () => { hideTooltip(); requestDraw(true, false); },
+});
+const annotationUI = createAnnotations({
+  viewport,
+  panel: $('#annotations-panel'),
+  toggleButton: $('#annotate'),
+  contextMenu,
+  getState: () => {
+    const a = currentItem(), p = a?.parts.find(part => part.id === selectedForm);
+    return {
+      opened: Boolean(manifest?.directory) && !tokenManifest,
+      projectRoot: manifest?.projectRoot ?? manifest?.directory ?? null,
+      sourcePrefix: manifest?.sourcePrefix ?? '',
+      revision: manifest?.revision ?? 0,
+      scope: initializedScope ?? manifest?.scope ?? 'all',
+      loading: Boolean(manifest?.loading),
+      view,
+      moving,
+      manifestAssets: manifest?.assets ?? [],
+      selectedFrame: a && p ? { asset: a, part: p, source: a.path, frame: p.name } : null,
+      visibleFrames: visibleFrames(),
+    };
+  },
+  hitFrameAt: (worldX, worldY) => {
+    const hit = hitSelection(inspection ? [inspection] : assets, worldX, worldY);
+    if (!hit?.part) return null;
+    return { ...hit, frameBox: frameBox(hit.asset, hit.part) };
+  },
+  navigateToNote: row => locateNoteOnCanvas(row, true),
+  selectNoteTarget: row => locateNoteOnCanvas(row, false),
+  inspectFrame: (a, p, minScale) => inspectForm(a, p, minScale),
+  onChromeChange: () => { updateChrome(); requestDraw(true, false); },
+  copyText: copyToClipboard,
+  fail: e => error(e.message ?? String(e)),
+});
 function updateOutlines() {
   annotationUI.render();
   const hover=hoveredElement,origin=hover?.part?frameBox(hover.asset,hover.part):null;
@@ -718,11 +797,17 @@ function focusAsset(a) {
   selectSource(a);
   frame(a,24);
 }
-function inspectForm(a,p) {
+function inspectForm(a,p,minScale=0) {
   if (!a || !p) return;
   const item=assets.find(item=>item.path===a.path && (a.component || item.shown[0].id===p.id));
-  if (!item) return;
+  if (!item) {
+    if (initializedScope !== 'all') {
+      changeScope(`asset:${a.path}`, { target: { path: a.path, form: p.name } });
+    }
+    return;
+  }
   inspection=null;selectFrame(item,p);frame(frameBox(item,p),24);
+  if (minScale && view.scale < minScale) zoom(minScale);
 }
 
 function zoom(scale, x = cameraArea().x + cameraArea().width / 2, y = cameraArea().y + cameraArea().height / 2) {
@@ -1178,6 +1263,140 @@ function up(e) {
 }
 for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
   viewport.addEventListener(event, up);
+function openSelectionContextMenu({ worldPoint = null, screenX, screenY, returnFocus = viewport }) {
+  const a = currentItem(), p = a?.parts.find(part => part.id === selectedForm), el = selectedElement;
+  if (a && p && el) {
+    const fb = frameBox(a, p);
+    const owner = elementOwner(el, a.path);
+    const fx = worldPoint ? Math.max(0, Math.min(1, (worldPoint.x - fb.x) / fb.width)) : (p.width > 0 ? Math.max(0, Math.min(1, (el.x + el.width / 2) / p.width)) : 0.5);
+    const fy = worldPoint ? Math.max(0, Math.min(1, (worldPoint.y - fb.y) / fb.height)) : (p.height > 0 ? Math.max(0, Math.min(1, (el.y + el.height / 2) / p.height)) : 0.5);
+    const ex = worldPoint && el.width > 0 ? Math.max(0, Math.min(1, (worldPoint.x - (fb.x + el.x)) / el.width)) : 0.5;
+    const ey = worldPoint && el.height > 0 ? Math.max(0, Math.min(1, (worldPoint.y - (fb.y + el.y)) / el.height)) : 0.5;
+    contextMenu.open([
+      {
+        label: 'Annotate here',
+        action: () => annotationUI.annotateAt({
+          source: a.path,
+          frame: p.name,
+          fx,
+          fy,
+          element: { id: el.id, owner, x: ex, y: ey },
+          returnFocus,
+        }),
+      },
+      {
+        label: 'Copy element reference',
+        action: () => copyToClipboard(formatElementReference({
+          sourcePrefix: manifest?.sourcePrefix ?? '',
+          source: a.path,
+          owner,
+          frame: p.name,
+          elementId: el.id,
+        })),
+      },
+      {
+        label: 'Show in Inspector',
+        action: () => {
+          inspector = true;
+          selection();
+          $('#copy-path')?.focus({ preventScroll: true });
+        },
+      },
+      {
+        label: 'Select owning component',
+        disabled: !owner?.export,
+        action: async () => {
+          inspector = true;
+          if (owner?.source && !manifest?.assets.some(item => item.path === owner.source) && !manifest?.extraAssets?.some(item => item.path === owner.source)) {
+            try {
+              const loaded = await sourceFor({ path: owner.source, version: manifest?.revision ?? 0 }, effectiveTheme);
+              if (manifest) manifest.extraAssets = [...(manifest.extraAssets ?? []), loaded];
+            } catch {}
+          }
+          selection();
+          $('#forms-heading')?.scrollIntoView({ block: 'nearest' });
+          ($('#forms button') ?? $('#copy-path'))?.focus({ preventScroll: true });
+        },
+      },
+      {
+        label: 'Show usages',
+        action: () => {
+          inspector = true;
+          selection();
+          $('#used-by-heading')?.scrollIntoView({ block: 'nearest' });
+          ($('#used-by button') ?? $('#copy-path'))?.focus({ preventScroll: true });
+        },
+      },
+    ], { x: screenX, y: screenY, returnFocus });
+    return;
+  }
+  if (a && p) {
+    const fb = frameBox(a, p);
+    const fx = worldPoint ? Math.max(0, Math.min(1, (worldPoint.x - fb.x) / fb.width)) : 0.5;
+    const fy = worldPoint ? Math.max(0, Math.min(1, (worldPoint.y - fb.y) / fb.height)) : 0.5;
+    contextMenu.open([
+      {
+        label: 'Annotate frame',
+        action: () => annotationUI.annotateAt({ source: a.path, frame: p.name, fx, fy, element: null, returnFocus }),
+      },
+      { label: 'Copy frame name', action: () => copyToClipboard(p.name) },
+      { label: 'Copy source path', action: () => copyToClipboard(a.path) },
+      {
+        label: 'Show in Inspector',
+        action: () => {
+          inspector = true;
+          selection();
+          $('#copy-frame')?.focus({ preventScroll: true });
+        },
+      },
+      { label: 'Fit frame', action: () => frame(frameBox(a, p), 24) },
+      {
+        label: 'Copy open annotations as agent prompt',
+        disabled: annotationUI.countOpenForFrame(a.path, p.name) === 0,
+        action: () => annotationUI.copyOpenForFrame(a.path, p.name),
+      },
+    ], { x: screenX, y: screenY, returnFocus });
+    return;
+  }
+  contextMenu.open([
+    { label: 'Fit all', action: () => fit() },
+    { label: 'Arrange current group', action: () => $('#arrange').click() },
+  ], { x: screenX, y: screenY, returnFocus });
+}
+viewport.addEventListener('contextmenu', e => {
+  if (tokenManifest || !manifest?.directory) return;
+  if (e.target.closest('.annotation-point, .annotation-card')) return;
+  e.preventDefault();
+  viewport.focus({ preventScroll: true });
+  const rect = viewport.getBoundingClientRect();
+  const wx = (e.clientX - rect.left - view.x) / view.scale;
+  const wy = (e.clientY - rect.top - view.y) / view.scale;
+  const hit = hitSelection(inspection ? [inspection] : assets, wx, wy);
+  if (hit?.part) selectFrame(hit.asset, hit.part, hit.element);
+  else if (hit) selectSource(hit.asset);
+  else clearSelection();
+  openSelectionContextMenu({ worldPoint: { x: wx, y: wy }, screenX: e.clientX, screenY: e.clientY, returnFocus: viewport });
+});
+document.addEventListener('keydown', e => {
+  if (!(e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) return;
+  if (tokenManifest || !manifest?.directory || document.querySelector('dialog[open]')) return;
+  e.preventDefault();
+  const activeEl = document.activeElement;
+  const noteEl = activeEl?.closest?.('[data-annotation-id]');
+  if (noteEl) {
+    const row = annotationUI.getRow(noteEl.dataset.annotationId);
+    if (row) {
+      const r = noteEl.getBoundingClientRect();
+      annotationUI.openNoteMenu(row, { x: r.left + r.width / 2, y: r.top + r.height / 2, returnFocus: activeEl });
+      return;
+    }
+  }
+  const box = selectedBox();
+  const vr = viewport.getBoundingClientRect();
+  const sx = box ? vr.left + view.x + (box.x + box.width / 2) * view.scale : vr.left + width / 2;
+  const sy = box ? vr.top + view.y + (box.y + box.height / 2) * view.scale : vr.top + height / 2;
+  openSelectionContextMenu({ worldPoint: null, screenX: sx, screenY: sy, returnFocus: activeEl instanceof HTMLElement ? activeEl : viewport });
+});
 document.addEventListener("keydown", (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey || e.target.matches("input,textarea,[contenteditable]") || document.querySelector("dialog[open], :popover-open")) return;
   const v = view;
@@ -1357,6 +1576,7 @@ function applyTokenManifest(data) {
     if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
   }
   updateChrome();
+  annotationUI.render();
   renderNav();
 }
 async function applyManifest(data, force = false) {
@@ -1514,7 +1734,8 @@ async function applyManifest(data, force = false) {
     else if (selectedForm!==null && !p) {selectedForm=null;selectedElement=null}
     else if (selectedElement) {
       const next=p?.elements?.find(e=>e.id===selectedElement.id);
-      selectedElement=next?.owners.some(o=>o.source===selectedElement.owner.source && o.export===selectedElement.owner.export)?{...next,owner:selectedElement.owner}:null;
+      const nextOwner=next ? elementOwner(next,a.path) : null;
+      selectedElement=next && ((nextOwner.source===selectedElement.owner.source && nextOwner.export===selectedElement.owner.export) || (next.owners ?? []).some(o=>o.source===selectedElement.owner.source && o.export===selectedElement.owner.export))?{...next,owner:selectedElement.owner}:null;
     }
   }
   if (inspection) {
@@ -1646,6 +1867,7 @@ if ((tokenManifest || manifest) && !isUnauthorized()) {
   events.onmessage = (e) => {
     const data = JSON.parse(e.data);
     if (data.error) error(data.error);
+    else if (data.annotations) annotationUI.refresh().catch(err => error(err.message));
     else void refresh();
   };
   events.onerror = async () => {
@@ -1663,8 +1885,9 @@ document.addEventListener("keydown", (e) => {
     $("#search").focus();
     return;
   }
-  if (e.key !== "Escape" || $("#keys").open) return;
+  if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
   if (document.querySelector(":popover-open")) return;
+  if (annotationUI.cancelMove()) return;
   if (tokenManifest) {
     if ($('#search').value) $('#search-clear').click();
     return;

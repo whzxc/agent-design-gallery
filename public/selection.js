@@ -16,5 +16,5 @@ export function hitSelection(assets, x, y, elements = true) {
   return null;
 }
 export function exportFrames(asset, owner) {
-  return (asset?.parts ?? []).filter(part => part.elements?.some(element => element.owners.some(o => o.source === owner.source && o.export === owner.export)));
+  return (asset?.parts ?? []).filter(part => part.elements?.some(element => (element.owners ?? []).some(o => o.source === owner.source && o.export === owner.export)));
 }

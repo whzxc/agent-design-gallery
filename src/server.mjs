@@ -1,5 +1,5 @@
 // Adapted from ARC's MIT-licensed tooling/design-server.mjs.
-import { annotations } from './annotations.mjs';
+import { annotations, annotationFile, readAnnotationContext } from './annotations.mjs';
 import { randomUUID, createHash } from 'node:crypto';
 import { directLocal, viewerFile, shell, json } from './http.mjs';
 import { createServer } from "node:http";
@@ -31,7 +31,7 @@ function tokenSourcePath(directory, project) {
   const base = project.design === directory ? project.root : path.dirname(directory);
   return path.relative(base, path.join(directory, tokenFile)).split(path.sep).join('/');
 }
-const viewerVersion = Promise.all(['assets.js','layout.js','selection.js','arrangement.js','arrangement-worker.js'].map(file => readFile(new URL('../public/'+file,import.meta.url)))).then(parts => digest(Buffer.concat(parts)));
+const viewerVersion = Promise.all(['assets.js','frame-identity.js','layout.js','selection.js','arrangement.js','arrangement-worker.js'].map(file => readFile(new URL('../public/'+file,import.meta.url)))).then(parts => digest(Buffer.concat(parts)));
 const defaultState = path.join(
   process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
   "agent-design-gallery",
@@ -89,6 +89,25 @@ export async function startServer({
     for (const client of clients)
       client.write(`data: ${JSON.stringify(data)}\n\n`);
   };
+  let annotationStamp = null;
+  async function readAnnotationStamp() {
+    if (!activeProject) return null;
+    try {
+      const info = await stat(annotationFile(activeProject.root, annotationStateDirectory));
+      return `${info.mtimeMs}-${info.size}`;
+    } catch (e) {
+      return e.code === 'ENOENT' ? 'missing' : null;
+    }
+  }
+  const annotationTimer = setInterval(async () => {
+    if (closing || !clients.size || !activeProject) return;
+    const next = await readAnnotationStamp();
+    if (next && next !== annotationStamp) {
+      annotationStamp = next;
+      emit({ annotations: true });
+    }
+  }, 800);
+  annotationTimer.unref?.();
   const diagnostic = (error, name = null, fallback = 'SOURCE_BUILD_FAILED') => {
     if (error.name === 'AbortError') return;
     const at = error.location ?? error.errors?.[0]?.location ?? error.cause?.errors?.[0]?.location;
@@ -233,6 +252,7 @@ export async function startServer({
     watcher = nextWatcher;
     activeProject=project;watchArch(project,next);
     root = next;
+    annotationStamp = await readAnnotationStamp();
     tokenSource = hasTokens ? tokenSourcePath(next, project) : null;
     codePaths=nextCode;
     sources = nextSources;
@@ -321,6 +341,8 @@ export async function startServer({
   }
   const baseManifest = () => ({
     directory: root ?? null,
+    projectRoot: activeProject?.root ?? null,
+    sourcePrefix: activeProject && root ? path.relative(activeProject.root, root).split(path.sep).join('/') : '',
     label: root
       ? path.basename(root) === "design" ? path.basename(path.dirname(root)) : path.basename(root)
       : "Agent Design Gallery",
@@ -339,7 +361,7 @@ export async function startServer({
     if (Number.isFinite(fixtures.assetModifiedAt)) data.assets = data.assets.map(a => ({...a,modifiedAt:fixtures.assetModifiedAt}));
     const preset = fixtures.states[name];
     if (!preset) throw new Error(`Unknown fixture ${name}; choose a declared ADG fixture.`);
-    return { ...data, ...(preset.empty ? { directory: null, assets: [], groups: [] } : {}),
+    return { ...data, ...(preset.empty ? { directory: null, projectRoot: null, sourcePrefix: '', assets: [], groups: [] } : {}),
       label: 'agent-remote-control', recent: fixtures.recent, view: null, theme: preset.themeChoice ?? preset.theme,
       sidebar: preset.sidebar, inspector: !!preset.inspector, fixture: { name, ...preset } };
   }
@@ -429,8 +451,9 @@ export async function startServer({
       const built=base&&name.endsWith('.mmd')?await overlayBuild(name,base):await sourceBuild(name);
       const frames = onlyFrame ? built.frames.filter(frame => frame.name === onlyFrame) : built.frames;
       if (!frames.length && onlyFrame) throw new CliError('FRAME_NOT_FOUND', `Frame ${onlyFrame} does not exist in ${name}.`);
+      const projectSource = activeProject ? path.relative(activeProject.root, path.join(root, name)).split(path.sep).join('/') : name;
       return {version:built.hash,imports:built.imports,dependencies:built.dependencies,
-        body:JSON.stringify({format:'tsx',hash:built.hash,css:built.css,imports:built.imports,component:!onlyFrame && name.endsWith('.tsx') && !name.startsWith('surfaces/'),frames})};
+        body:JSON.stringify({format:'tsx',hash:built.hash,projectSource,css:built.css,imports:built.imports,component:!onlyFrame && name.endsWith('.tsx') && !name.startsWith('surfaces/'),frames})};
     }
     let content = await readFile(path.join(root, name), "utf8");
     content = content.replace(
@@ -504,9 +527,25 @@ export async function startServer({
         if (request.method !== 'GET' && request.method !== 'POST') return json(response,405,{error:'Use GET or POST.'});
         if (request.method === 'POST' && request.headers.origin && ![`http://${host}`,`https://${host}`].includes(request.headers.origin)) return json(response,403,{error:'Cross-origin request refused.'});
         const config = await loadConfig(root);
-        const input = request.method === 'POST' ? await body(request) : {};
-        const action = request.method === 'GET' ? (url.searchParams.has('id') ? 'read' : 'list') : input.action;
-        return json(response,200,await annotations(config.root,annotationStateDirectory,action,request.method === 'GET' ? {id:url.searchParams.get('id')} : input));
+        if (request.method === 'GET') {
+          if (url.searchParams.has('id')) {
+            const id = url.searchParams.get('id');
+            const result = url.searchParams.get('context') === '1'
+              ? await readAnnotationContext(config, annotationStateDirectory, id)
+              : await annotations(config.root, annotationStateDirectory, 'read', { id });
+            return json(response, 200, result);
+          }
+          const status = url.searchParams.get('status') ?? 'all';
+          return json(response, 200, await annotations(config.root, annotationStateDirectory, 'list', { status }));
+        }
+        const input = await body(request);
+        const result = await annotations(config.root, annotationStateDirectory, input.action, {
+          ...input,
+          ...(input.action === 'reply' && !input.author ? { author: 'user' } : {}),
+        });
+        annotationStamp = await readAnnotationStamp();
+        emit({ annotations: true });
+        return json(response, 200, result);
       }
       if(url.pathname==='/api/cache-stats'&&request.method==='GET')return json(response,200,{process:process.memoryUsage(),builds:buildStore?.stats(),viewer:viewerCache?.stats()});
       if (url.pathname === '/api/health' && request.method === 'GET') return json(response, 200, { id: instanceId, capabilities: { keyAuth: 1 } });
@@ -576,6 +615,7 @@ export async function startServer({
         return;
       }
       if (url.pathname === "/events") {
+        annotationStamp ??= await readAnnotationStamp();
         response.writeHead(200, {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-store",
@@ -643,6 +683,7 @@ export async function startServer({
   const close = () => closePromise ??= (async () => {
     closing = true;
     clearTimeout(refreshTimer);
+    clearInterval(annotationTimer);
     let primary;
     for (const step of [
       async () => { watcher?.close(); },
