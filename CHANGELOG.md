@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.2
+
+- Fix lifecycle checks to report unbound parts and uncaptured surfaces under the configured design root, including custom roots.
+- Fix single-consumer warnings for custom design roots.
+
 ## 0.13.1
 
 - Build only a feature folder's `index.tsx` as its frame source. Sibling files are internal parts in the import graph, ownership, mappings and single-consumer counts, and are no longer built or listed as frame sources.
