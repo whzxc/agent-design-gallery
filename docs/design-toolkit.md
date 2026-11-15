@@ -41,9 +41,9 @@ and service migration details.
 
 - `adg.config.mjs`, `adg.config.js` or `adg.config.ts` at the project root configures paths, `sources`, `check` and `compare`. Every field is optional.
 - `design/tokens.css` holds color, type, radius, size and shadow tokens for the light and dark themes.
-- `design/components/<name>.tsx` holds one shared component. It exports the functions other sources use, and its default export returns the component's declared forms as frames.
-- `design/modules/<feature>.tsx` owns feature parts and their states, composed from components and other modules' exported parts.
-- `design/surfaces/<name>.tsx` holds a panel, dialog, page or screen composed from components. Its default export returns its declared forms as frames.
+- `design/components/<name>.tsx` holds one building block that more than one feature block embeds, with or without domain meaning. It exports the functions other sources use, and its default export returns the component's declared forms as frames.
+- `design/modules/<feature>.tsx` owns one feature block and its states, composed from components. It does not import another module.
+- `design/surfaces/<name>.tsx` holds a panel, dialog, page or screen laid out from modules and components. It does not import another surface. Its default export returns its declared forms as frames.
 - `design/art/` holds SVG illustrations and brand artwork that sources import.
 - `design/fixtures/` holds representative content and state data. `design/studies/` holds temporary direction explorations only while they are active.
 - `design/implementation.json` optionally maps implementation files/symbols to design parts and frames; see [implementation mappings](#implementation-mappings).
@@ -143,9 +143,11 @@ A source describes structure, not coordinates. Write it the way the UI is built.
 ## Presentation forms
 
 - The user declares the forms each source contains, such as three densities of one card.
-- Draw only declared forms. Do not add frames for combinations of theme, width, locale or interaction state.
+- Draw only declared forms. Each frame shows one distinct appearance; see [frame admission](asset-rules.md#states-frame-names-and-fidelity).
+- Do not add frames for width-only reflow, locale or theme, or for state combinations that show nothing new.
 - Themes come from tokens. Every source renders in both themes without extra frames.
 - Each source shows one representative language.
+- Frames show what the implementation renders. Explanatory diagrams belong in `arch/`; explorations belong in `studies/`.
 
 ## Check
 
@@ -298,7 +300,7 @@ Consumers using the feature can set `requires: '>=0.9.0'` in their ADG config.
 6. Implement with the project's shared components and runtime tokens.
 7. Run `compare` for the frame's fixture and review the overlay. Fix structural differences and systematic offsets. Accept small isolated offsets when the implementation reads as well as the design.
 
-A frame uses the language and text of its fixture, including dates under the fixture clock and time zone. A drafter may propose forms. Approving the renders approves those forms. Frames whose state the implementation cannot reach have no fixture; record them in the project's design doc as drift instead of forcing a capture.
+A frame uses the language and text of its fixture, including dates under the fixture clock and time zone. A drafter may propose forms. Approving the renders approves those forms and starts their implementation. A frame stays proposed until it is implemented and bound. Delete a frame the implementation does not reach instead of recording it as drift. After the user accepts an implementation change, update the owning source in the same task.
 
 A new project starts with a visual direction before any source: two or three specimen frames that differ in palette, density and chrome, one chosen by the user. Then tokens, then the component sources, then one pilot surface taken through implementation and `compare` before the remaining surfaces.
 

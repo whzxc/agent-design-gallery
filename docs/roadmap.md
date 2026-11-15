@@ -60,7 +60,23 @@ Agents are first-class users. In priority order:
 5. Frames as data: element tree, text, boxes and tokens, for Agents that need structure rather than pixels
    (done: `adg inspect`).
 
-## 5. Annotation collaboration
+## 5. Asset governance (next)
+
+The [asset rules](asset-rules.md) layer assets by assembly level and keep only current or proposed assets. The toolkit
+checks those rules so retirement and layering no longer depend on cleanup rounds:
+
+- Import direction rejects module-to-module and surface-to-surface imports; only the lowest layer imports within
+  itself. The existing `importDirection: false` opt-out still disables the lint.
+- Frame `proposed`: a nonempty string naming the review scope. Proposed frames are reported in check output and are
+  exempt from binding findings.
+- Lifecycle findings when `implementation.json` exists: a production part without a binding, a surface source
+  without a whole-source binding, and a surface frame without `fixture` and `capture`, each unless proposed.
+- Redundant-frame warnings: two frames of one source whose structure is identical apart from text, locale and
+  geometry. Warnings do not fail check.
+- Reverse ownership: `adg owner --part=<source>#<Export>` returns the implementation bindings of a design part, so
+  implementers find the counterpart to reuse.
+
+## 6. Annotation collaboration
 
 - Annotation mode on a selected node: the user marks points and writes notes. Notes render as callouts in the margin
   outside the node, with leader lines ordered top to bottom so they do not cross.
@@ -75,9 +91,9 @@ Agents are first-class users. In priority order:
 
 Afterwards, expose the stable commands, including the annotation inbox, as an MCP server through ARC's MCP hub.
 
-## 6. Review and architecture
+## 7. Review and architecture
 
-UI-side capabilities come first; these items follow milestone 5.
+UI-side capabilities come first; these items follow milestone 6.
 
 - Review sheets: one composite image per change (frames, both themes, before and after), so a remote reviewer reads
   one image instead of many.

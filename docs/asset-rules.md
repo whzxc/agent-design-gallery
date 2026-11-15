@@ -4,37 +4,39 @@ These rules define a reusable design library for any ADG consumer. The [toolkit 
 
 ## Layers and placement
 
+Layers follow assembly level. Components are building blocks, modules assemble them into feature blocks, and surfaces lay feature blocks out. Each layer adds only its own layout, its own presentation and its own states.
+
 | Location | Owns |
 | --- | --- |
 | `design/tokens.css` | Values: colors, typography, dimensions, radii, shadows and motion timing. |
-| `design/components/` | Domain-agnostic controls and compositions usable across features. |
-| `design/modules/<feature>.tsx` | One feature block per file. Split by feature, not by page: a page can use several modules, and a module can serve several pages. |
-| `design/surfaces/<name>.tsx` | A small set of full-page or full-region compositions. Assemble existing assets and lay them out; introduce no new controls or visual patterns here. |
+| `design/components/` | Building blocks: controls and single-purpose visual units that more than one feature block embeds, with or without domain meaning, such as a button, a status chip or an entity mark. |
+| `design/modules/<feature>.tsx` | One feature block per file: the part an application implements as one feature component, with that feature's states. Split by feature, not by page: a page can use several modules, and a module can serve several pages. |
+| `design/surfaces/<name>.tsx` | A small set of full-page or full-region layouts. Place modules and components and lay them out; introduce no new controls or visual patterns here. |
 | `design/fixtures/` | Representative content, names, times and state data, separate from visual markup. |
 | `design/art/` | Brand artwork and content images. Declare their display dimensions and a file-size budget in the consumer's asset notes; downscale images before importing them. |
 
-Place a new asset in this order:
+Place a new asset by the first test that applies:
 
-1. Put a value change in tokens.
-2. Put a domain-agnostic control or composition in components.
-3. Put a feature-specific part in its owning module.
-4. Create a new module for a new feature block; keep unrelated features in separate files.
-5. Assemble modules and components into a surface only when the full layout needs a frame.
+1. A value change goes in tokens.
+2. A visual unit that another feature block embeds goes in components. Domain meaning does not keep it out of components.
+3. A feature block with its own states goes in its owning module. Create a new module for a new feature; keep unrelated features in separate files.
+4. A layout that places several blocks side by side goes in a surface, and only when the full layout needs a frame.
+
+A visual unit used inside one module only stays in that module until a second feature block embeds it. Components mirror the application's shared component layer: a part implemented once and reused across features belongs in components on both sides. The consumer documents its shared implementation location.
 
 Fixtures and artwork support these layers; they are not additional UI layers or gallery sources.
 
 ## Ownership and imports
 
-- Components may reuse components; they never import modules or surfaces.
-- Modules import components and may reuse another module's exported parts; they never import surfaces.
-- Surfaces may import any production layer.
-- The defining module owns a feature part. Reuse by several modules does not remove its domain meaning or transfer ownership.
-- Promote a part to components only when it remains generic without domain meaning. Reuse count alone is not a reason to promote it.
-- Import the defining source instead of copying its markup or creating another owner for the same part.
+- Imports go strictly downward. Modules import components. Surfaces import modules and components.
+- Components may import other components. They never import modules or surfaces.
+- A module never imports another module. A surface never imports another surface.
+- When a module needs another module's part, move the part to components if the module embeds it inside its own structure. Compose the two blocks in a surface if they only sit side by side.
+- The defining source owns a part. Import it instead of copying its markup or creating another owner for the same part.
 
-By default, `sources` is `['components', 'modules', 'surfaces']`. Its order is from lower to higher layers. Custom source directory names follow the same order. For example, with `sources: ['primitives', 'features', 'surfaces']`, primitives cannot import features or surfaces, and features cannot import surfaces. Same-layer imports are allowed.
+By default, `sources` is `['components', 'modules', 'surfaces']`. Its order is from lower to higher layers. Custom source directory names follow the same order. For example, with `sources: ['primitives', 'features', 'surfaces']`, primitives cannot import features or surfaces, and features cannot import surfaces or other features. Only the lowest layer imports within itself.
 
-`adg check` checks resolved direct source imports against this order. It reports the importing file, the imported source and the offending layer direction. It uses the same resolved edges as the viewer's relationship graph. Imports into fixtures, artwork, tokens and other helper files are outside that graph; type-only imports removed by the build are also outside it. Review helper indirection and type-only ownership during the audit below.
+`adg check` checks resolved direct source imports against this order. It reports the importing file, the imported source and the offending layer direction. It uses the same resolved edges as the viewer's relationship graph. Imports into fixtures, artwork, tokens and other helper files are outside that graph; type-only imports removed by the build are also outside it. Review helper indirection, same-layer imports above the lowest layer and type-only ownership during the audit below.
 
 A consumer with an intentional alternative dependency policy can disable only this lint:
 
@@ -49,32 +51,37 @@ Record the reason and the replacement policy in the consumer's governance docume
 
 ## Implementation counterparts
 
-Keep machine-readable UI counterparts in optional `design/implementation.json` (or
-under the configured design root), version 1. The [mapping authoring contract](design-toolkit.md#implementation-mappings)
+A library with an implementation keeps every counterpart in `design/implementation.json` (or
+under the configured design root), version 1. The map is the only counterpart record:
+human documentation links to it and keeps no counterpart rows. Every production part
+has a binding unless it is proposed. A surface binds as a whole source without `part`.
+The [mapping authoring contract](design-toolkit.md#implementation-mappings)
 defines its strict schema, exact file/directory/glob selectors, defining-source parts
 and optional frame subsets. File symbols in JS/TS auto-resolve only when one exported
 declaration line matches the documented lexical rule. Use a unique literal anchor for
 non-exported or other-language symbols. No absolute line ranges are authored; line
 lookup uses export/anchor regions, including unmapped export boundaries.
 
-Update bindings with file/export/frame moves. A stale selector, locator, source, part,
+Update bindings with file/export/frame moves in the same change. A stale selector, locator, source, part,
 frame or part/frame mismatch is an `OWNER_*` check finding; duplicate bindings are also
 findings. Full `check --read-only --json` audits the map, exiting 1 for completed
-findings and 2 for invalid schema or incomplete execution. An absent map is allowed.
+findings and 2 for invalid schema or incomplete execution. A library without an implementation may omit the map.
 Lookup excludes stale bindings and exposes their findings; it does not silently repair
 or pick a replacement identity.
 
 Migrate human-readable tables in small checked slices: split `file#Export` into `file`
 and `symbol`, map styles explicitly, omit `part` for inline compositions, and keep
-multi-target/frame bindings intact. Keep review/adoption status and drift notes in
-human documentation; link to the JSON map instead of maintaining duplicate counterpart
-rows. Follow the [migration steps](design-toolkit.md#migrate-a-mapping-table).
+multi-target/frame bindings intact. Delete each migrated counterpart row from the human
+document in the same slice. Follow the [migration steps](design-toolkit.md#migrate-a-mapping-table).
+
+Feature implementation composes the counterparts of components and adds only layout.
+It does not restyle a counterpart or draw a visual that a component already defines.
+An implementation visual without a library asset is a gap; see below.
 
 Declare Frame `locale` when a language-specific specimen should be discoverable with
-`owner --locale`, for example `<Frame name="ready-en" locale="en">`. It is an authored
+`owner --locale`, for example `<Frame name="ready" locale="en">`. It is an authored
 language annotation, canonicalized as BCP 47, with exact filtering and no translation
-or rendering effects. Use distinct frame names for authored localized forms; do not
-invent locale-specific frames whose content the implementation cannot reach.
+or rendering effects. It does not justify a second frame for another language.
 
 ## States, frame names and fidelity
 
@@ -82,11 +89,51 @@ invent locale-specific frames whose content the implementation cannot reach.
 - A multi-part file prefixes each frame with the part: `<part>` or `<part>-<state>`. Name parts after real usage. Give each part one named function and keep source lines under 140 characters.
 - Generic component variants stay in the component source. Feature states and variants stay in their owning module. Crop part frames to their content.
 - Add a surface frame only when the full-page or full-region layout changes, such as a platform layout, a minimum viewport or a banner that changes page geometry. Use full window or region dimensions. Local control states belong to their component or module.
-- Both themes render automatically. Do not add separate dark frames or an undeclared matrix of theme, locale, size and state combinations.
 - A surface preserves the intended production structure, content, order, states and layout. Use the consumer's implementation mapping and the library's visuals; reconcile detailed differences through the consumer's visual acceptance process.
 - Flex, grid, gaps, padding and placement are surface layout glue. Controls and other visuals come from components or modules; fixture data stays separate.
 
+Frames show what the implementation renders. Explanatory diagrams, annotated specimens,
+hand-placed illustrations and flow pictures are not production frames. Put mechanism
+diagrams in `arch/` and direction explorations in `studies/`.
+
+Each frame shows one distinct appearance:
+
+- An element appears or disappears, the arrangement changes, or semantic paint changes.
+- Width-only reflow, truncation, wrapping, longer content and translated copy are not distinct appearances. The consumer's layout acceptance covers them, not frames.
+- A viewport frame exists only when the layout changes structure at that viewport, such as a different arrangement or solver.
+- Each source shows one representative language. Do not duplicate frames per locale.
+- Draw one frame per declared state. Draw a combination only when it shows an appearance that neither state shows alone.
+- Both themes render automatically. Do not add separate dark frames.
+
 A gap is an element without an asset, or an asset unable to express a required function or state. Extend the owning asset's props with unchanged defaults. If a new asset is required, stop implementation of that element, add and review the library asset, then continue. Report any remaining omission with its source evidence. Do not silently substitute another pattern or invent a surface-local control.
+
+## Status and lifecycle
+
+A production asset is either current or proposed. There are no other states.
+
+- **Current**: the part has an implementation binding, and each of its frames shows a state the implementation reaches. A surface frame also declares the `fixture` and `capture` that reach it.
+- **Proposed**: a new frame or part under active review, marked with the Frame `proposed` property that names its review scope. It has no binding yet.
+
+Approval of a proposal starts its implementation. When it is implemented, remove the
+marker and add the binding in the same change. When its review closes without
+implementation, delete it.
+
+A frame that no longer matches its implementation is drift, not a status. Fix the
+source or the implementation in the task that found it. After the user accepts an
+implementation change that alters a mapped part's appearance, update the owning source
+in the same task.
+
+Only an implementation binding keeps a part alive. A design surface, a gallery entry or
+a specimen frame does not. When a task removes or replaces an implementation, it deletes
+or rebinds the design counterpart in the same change; a stale `OWNER_IMPLEMENTATION_MISSING`
+binding is that signal. Delete unbound, unproposed assets, abandoned alternatives and
+stale imports as soon as they appear. Do not defer retirement to cleanup rounds.
+
+Starter examples demonstrate authoring: replace or remove them when introducing real assets.
+
+Tokens, components, modules and surfaces share the review rule: run `adg check`, render the changed frames in both themes and obtain reviewer approval. Later target changes land in the library first. The consumer's governance document defines who proposes, approves and implements each batch, how visual acceptance runs, and how status is recorded. Work on one surface or one cohesive library family at a time.
+
+ADG checks source structure, rendered frames, import direction and implementation bindings. Reviewers assess placement, frame admission, fidelity and image budgets, and delete assets without a binding.
 
 ## Crop and part frames
 
@@ -140,16 +187,6 @@ requires the consumer's visual review process. Failed or incomplete evidence nev
 supplies structural approval. Once a part exists at the chosen base, its retained
 parent declaration is inactive and exact ordinary-frame comparison applies.
 
-## Review and lifecycle
-
-Assets progress from proposed to reviewed to having at least one page or surface consumer. A real consumer may be a composed design surface or a mapped implementation usage, including a transitive use through modules. A specimen frame or gallery entry alone does not establish adoption.
-
-Keep proposals only while their review is active. When a batch closes, delete assets without a consumer; remove abandoned alternatives and stale imports as well. Map every adopted asset or part to its implementation location in a consumer-owned mapping document. Starter examples demonstrate authoring: replace or remove them when introducing real assets and record the real consumers.
-
-Tokens, components, modules and surfaces share the review rule: run `adg check`, render the changed frames in both themes and obtain reviewer approval. Later target changes land in the library first. The consumer's governance document defines who proposes, approves and implements each batch, how visual acceptance runs, and how status is recorded. Work on one surface or one cohesive library family at a time.
-
-ADG checks source structure, rendered frames and import direction. Reviewers assess ownership quality, complete state coverage, fidelity, implementation mappings and image budgets, and identify assets without consumers for deletion.
-
 ## Studies
 
 Temporary direction explorations live in `design/studies/` and are exempt from the production asset rules in this document. The toolkit's TSX/build and frame checks still apply; studies are excluded from the import-direction lint.
@@ -182,12 +219,12 @@ adg check modules/example --read-only
 
 Audit checklist:
 
-- Placement: values in tokens, generic controls in components, feature parts in their own modules, and only layout glue in surfaces. Look for page-named modules that combine unrelated features.
-- Dependencies: upward source imports, copied markup, helper files that hide an upward dependency, and type-only imports that cross ownership boundaries. Confirm that reuse preserves the defining owner.
-- Frames: duplicate state coverage across layers, module states represented only by surface frames, missing required variants, needless full-page permutations, incorrect crop sizes and separate dark frames.
+- Placement: values in tokens, building blocks embedded by more than one feature block in components, feature blocks in their own modules, and only layout glue in surfaces. Look for page-named modules that combine unrelated features, and for components that only one module uses.
+- Dependencies: upward source imports, module-to-module and surface-to-surface imports, copied markup, helper files that hide an upward or same-layer dependency, and type-only imports that cross ownership boundaries. Confirm that reuse preserves the defining owner.
+- Frames: duplicate state coverage across layers, module states represented only by surface frames, missing required variants, width-only or locale-only duplicates, needless full-page permutations, explanatory diagrams, incorrect crop sizes and separate dark frames.
 - Names: repeated file/part prefixes in a single-part source, missing part prefixes in a multi-part source, unclear part ownership, unnamed reusable parts and lines over 140 characters.
 - Fidelity and gaps: altered content or order, surface-local visuals, assets with insufficient props, missing elements and stale implementation mappings. Distinguish source evidence from an unobserved implementation.
-- Lifecycle: orphaned or abandoned parts, alternatives with no consumer, proposals without an active review, and studies left after a direction was selected. Trace transitive use before declaring an asset unused.
+- Lifecycle: parts without an implementation binding, frames the implementation cannot reach, proposals without an active review, abandoned alternatives and studies left after a direction was selected. A design surface does not count as a consumer.
 - Supporting data: fixture content embedded in markup, duplicate fixture records, oversized artwork, missing display dimensions and unspecified image budgets.
 - Local process: an identifiable reviewer, approval state, mapping location and acceptance procedure. Missing evidence stays an explicit finding.
 
@@ -198,7 +235,7 @@ Report findings with these columns. Include the relevant frame, export, import t
 | `design/components/toolbar.tsx` | Imports `modules/search.tsx`, an upward source dependency. | Move feature composition into the search module and keep the generic toolbar in components. |
 | `design/modules/profile.tsx` | Single-part frames repeat the `profile-` prefix. | Rename frames to their states and update the consumer's references in the same batch. |
 | `design/surfaces/settings.tsx` | An inline control has no mapped library asset. | Add or extend its owning component/module, review it, then compose it here. |
-| `design/modules/unused.tsx` | No consumer found in the import graph; implementation mapping is missing. | Verify the implementation mapping before deciding whether to delete the source. |
+| `design/modules/unused.tsx` | No implementation binding; only a design surface imports it. | Bind it to its implementation counterpart, or delete it with its surface usage. |
 
 Include the audited scope and the commands actually run, with their results. Report confirmed violations separately from missing evidence when the consumer's review protocol requires that distinction. Record ownership, fidelity and lifecycle findings from the manual audit alongside automated results.
 
@@ -208,7 +245,7 @@ Include the audited scope and the commands actually run, with their results. Rep
 2. Review tokens and one cohesive component family. Keep the batch small enough to inspect every changed frame in both themes.
 3. Take one feature module at a time: establish its owner, move its states and update its importers together. Preserve part defaults while adding missing capabilities.
 4. Take one composed surface at a time after its dependencies are reviewed. Preserve structure and fixture content; reconcile it with the mapped implementation through local acceptance.
-5. Close the batch by updating mappings and status, removing assets without consumers, and deleting or converting completed studies.
+5. Close the batch by updating bindings, removing assets without a binding, and deleting or converting completed studies.
 
 A move, frame rename or extraction includes all affected imports, captures and mapping references in the same batch. Keep new visual proposals in their own review scope rather than mixing them into a structural migration.
 
@@ -218,11 +255,11 @@ The consumer keeps:
 
 - Its selected visual direction, tokens, declared forms and supported platforms/viewports/locales.
 - Its source directories in lower-to-higher order, feature owners, and any deliberate policy exception or import-lint opt-out.
-- Machine-readable asset/part-to-implementation counterparts in implementation.json, plus reachable fixtures/captures, review and adoption status, and concrete remaining gaps in human documentation.
+- Every implementation counterpart in implementation.json, plus proposals under review and concrete remaining gaps in human documentation. Human documentation keeps no counterpart rows.
 - Image display dimensions and file-size budgets.
 - Review batch scope, proposer/reviewer responsibilities, approval and visual acceptance procedures, and the minimum ADG version.
 
-Choose local filenames and status conventions that fit the project. Link this toolkit standard instead of copying its generic rules into every consumer's governance documents.
+Choose local filenames that fit the project. Link this toolkit standard instead of copying its generic rules into every consumer's governance documents.
 
 ## Architecture assets
 
