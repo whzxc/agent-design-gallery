@@ -76,8 +76,11 @@ and `symbol`, map styles explicitly, omit `part` for inline compositions, and ke
 multi-target/frame bindings intact. Delete each migrated counterpart row from the human
 document in the same slice. Follow the [migration steps](design-toolkit.md#migrate-a-mapping-table).
 
-Feature implementation composes the counterparts of components and adds only layout.
-It does not restyle a counterpart or draw a visual that a component already defines.
+Feature implementation composes the counterparts of components and adds the feature's
+own layout and presentation. Its paint uses tokens only. It does not restyle a counterpart
+or redraw a visual that a component already defines. A part enters the shared component
+layer when a second feature embeds it; a shared part with a single consumer moves back to
+its feature, on both the implementation and the library side.
 An implementation visual without a library asset is a gap; see below.
 
 Declare Frame `locale` when a language-specific specimen should be discoverable with
