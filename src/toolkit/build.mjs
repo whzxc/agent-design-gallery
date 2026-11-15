@@ -101,7 +101,7 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     return encoding ? value.toString(encoding) : value;
   };
   file = realpathSync(file);
-  const base = realpathSync(config.design), dependencies = new Set([path.join(base, 'tokens.css')]);
+  const base = realpathSync(config.design), dependencies = new Set();
   const imports = new Set(), sources = sourceDirectories(config);
   const result = await build({ entryPoints: [file], bundle: true, write: false, format: 'esm', platform: 'node', jsx: 'automatic', jsxImportSource: 'adg', jsxDev: true, metafile: true, logLevel: 'silent', plugins: [{ name: 'adg-sources', setup(api) {
     api.onResolve({ filter: /.*/ }, args => {
@@ -172,7 +172,9 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     try { validateFrame(frame); if (names.has(frame.name)) throw Error(`Duplicate frame name ${frame.name}`); names.add(frame.name); }
     catch(error) { throw Error(`${relative(config,file)}: ${frame?.name ?? '-'}: ${error.message}`); }
   }
-  const tokenSource = read(path.join(base,'tokens.css'),'utf8'), tokens = snapshot ? parseTokens(tokenSource) : loadTokens(config);
+  const tokenFile = path.join(base, 'tokens.css');
+  dependencies.add(tokenFile);
+  const tokenSource = read(tokenFile,'utf8'), tokens = snapshot ? parseTokens(tokenSource) : loadTokens(config);
   const compiler = await compile(`${readFileSync(path.join(tailwind,'theme.css'),'utf8')}\n${themeCss(tokens)}\n${readFileSync(path.join(tailwind,'preflight.css'),'utf8')}\n@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));\n@tailwind utilities;`);
   const classes = [...new Set(frames.flatMap(f => [...f.html.matchAll(/\bclass="([^"]*)"/g)].flatMap(m => m[1].split(/\s+/))))];
   const utilities = compiler.build(classes);

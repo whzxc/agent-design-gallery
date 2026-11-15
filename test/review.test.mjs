@@ -44,6 +44,23 @@ test('diff writes a self-contained overwritten review index.html and hub viewer 
   await put('.gitignore', 'output/\ndesign/.adg/\n');
   await put('design/tokens.css', starterTokens);
   await put(
+    'design/modules/banner/part.tsx',
+    `export function BannerPart() {
+  return <div style={{ width: 96, height: 32, background: '#224466', color: '#ffffff' }}>Banner</div>;
+}\n`,
+  );
+  await put(
+    'design/modules/banner/index.tsx',
+    `import { Frame } from 'adg';
+import { BannerPart } from './part';
+export { BannerPart } from './part';
+export default () => [
+  <Frame name="default">
+    <BannerPart />
+  </Frame>,
+];\n`,
+  );
+  await put(
     'design/components/card.tsx',
     `import { Frame } from 'adg';
 export default () => [

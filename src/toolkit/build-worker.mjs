@@ -1,5 +1,6 @@
 import { parentPort } from 'node:worker_threads';
 import { createHash } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { buildSource } from './build.mjs';
 import { createArchBrowser } from './arch-browser.mjs';
@@ -20,9 +21,12 @@ parentPort.on('message', async ({ id, config, name, type }) => {
     const build = async browser => config.overlay && name.endsWith('.mmd') ? (await import('./arch-overlay.mjs')).buildOverlay(config,path.join(config.root,name),{base:config.overlay,browser,snapshot}) : buildSource(config, path.join(name.endsWith('.mmd')?config.root:config.design, name), { write: false, snapshot, browser, allowLegacy: config.allowLegacy ?? true });
     const built = await (name.endsWith('.mmd') ? archBrowser.run(build) : build());
     const frames = JSON.parse(JSON.stringify(built.frames.map(({ document, ...frame }) => frame))); 
-    const dependencies = [...new Set(built.dependencies.map(file => path.relative(config.design, file).split(path.sep).join('/')))].sort();
+    const designRoot = realpathSync(config.design);
+    const dependencies = [...new Set(built.dependencies.map(file => path.relative(file.startsWith(designRoot + path.sep) ? designRoot : config.design, file).split(path.sep).join('/')))].sort();
     const dependencyHashes = Object.fromEntries(dependencies.map(name => {
-      const bytes=snapshot.get(path.join(config.design,name));
+      const designFile = path.join(designRoot, name), rawFile = path.join(config.design, name);
+      const bytes = snapshot.has(designFile) ? snapshot.get(designFile) : snapshot.get(rawFile);
+      if (bytes === undefined) throw Error(`Missing snapshot bytes for dependency ${name}`);
       return [name,createHash('sha256').update(bytes===null?'missing\0':'present\0').update(bytes??'').digest('hex')];
     }));
     if (!shuttingDown) parentPort.postMessage({ id, result: { ...(built.observationDynamic?{observationDynamic:true}:{}), frames, parts: built.parts ?? [], css: built.css,
