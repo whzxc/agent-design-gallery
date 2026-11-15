@@ -34,7 +34,6 @@ export const hubCopy = {
 };
 
 export const emptyStates = [
-  { name: 'no-roots', title: 'No roots registered', detail: 'Register a root in the hub configuration to list projects.' },
   { name: 'no-projects', title: 'No projects found', detail: 'No design sources found in the 2 registered roots.' },
 ];
 

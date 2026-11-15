@@ -3,7 +3,6 @@ export const frames = [
     "name": "empty",
     "width": 1440,
     "height": 900,
-    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -23,7 +22,6 @@ export const frames = [
     "name": "dialog",
     "width": 1440,
     "height": 900,
-    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -61,7 +59,6 @@ export const frames = [
     "name": "error",
     "width": 560,
     "height": 464,
-    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "kind": "scrim"

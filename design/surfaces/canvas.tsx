@@ -1,5 +1,4 @@
 import { Frame } from 'adg';
-import { frames } from '../fixtures/canvas-surfaces';
 import { Screen, Scrim } from '../components/canvas';
 import { Contents, ScopeTabs, Sidebar } from '../modules/navigation';
 import { Inspector } from '../modules/inspector';
@@ -9,9 +8,7 @@ import { ProjectPicker } from '../modules/project-switcher';
 import { Field } from '../components/field';
 import { Drawing } from '../components/canvas';
 import { Minimap } from '../modules/canvas';
-import { scenes } from '../scenes/canvas';
 import { renderScopeScenes } from '../scenes/render-scope';
-import { scopeFrames } from '../fixtures/render-scope';
 import { viewerBarContents, viewerBarDetails, viewerBarFrames, viewerBarProject, viewerBarScopes } from '../fixtures/viewer-bars';
 import navigationFixtures from '../fixtures/navigation.json';
 import inspectorFixtures from '../fixtures/inspector.json';
@@ -61,27 +58,6 @@ export function ViewerHeader({ scope, contentsOpen = false, detailsOpen = false,
 }
 
 export default () => [
-  ...frames.map(({ chrome, ...frame }) => (
-    <Frame {...frame}>
-      <Screen width={frame.width} height={frame.height} drawing={<Drawing nodes={scenes[frame.name]} />}>
-        <ViewerChrome chrome={chrome} />
-      </Screen>
-    </Frame>
-  )),
-  ...scopeFrames.map(({ name, key, navigation }) => {
-    const scene = renderScopeScenes[key];
-    return (
-      <Frame name={name} width={1440} height={900} note="Historical viewer layout from before the top bars.">
-        <Screen width={1440} height={900} drawing={<Drawing nodes={scene.nodes} />}>
-          <ViewerChrome chrome={[
-            { kind: 'sidebar', left: 12, top: 12, navigation },
-            { kind: 'tools', left: 1276, top: 12 },
-            { kind: 'zoom', left: scene.zoomLeft, top: 840, label: scene.zoom, backDisabled: true },
-          ]} />
-        </Screen>
-      </Frame>
-    );
-  }),
   ...viewerBarFrames.map(({ name, fixture, scope, panels }) => {
     const scene = renderScopeScenes.layer;
     const nodes = panels ? scene.nodes.map(node => {

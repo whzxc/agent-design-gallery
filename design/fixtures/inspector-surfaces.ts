@@ -3,7 +3,6 @@ export const frames = [
     "name": "frame",
     "width": 1440,
     "height": 900,
-    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -38,7 +37,6 @@ export const frames = [
     "name": "component",
     "width": 1440,
     "height": 900,
-    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,

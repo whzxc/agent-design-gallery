@@ -3,7 +3,6 @@ export const frames = [
     "name": "components",
     "width": 1440,
     "height": 900,
-    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -32,7 +31,6 @@ export const frames = [
     "name": "zoomed",
     "width": 1440,
     "height": 900,
-    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -110,7 +108,6 @@ export const frames = [
     "name": "surfaces",
     "width": 1440,
     "height": 900,
-    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,
@@ -139,7 +136,6 @@ export const frames = [
     "name": "overview",
     "width": 1440,
     "height": 900,
-    "note": "Historical viewer layout from before the top bars.",
     "chrome": [
       {
         "left": 12,

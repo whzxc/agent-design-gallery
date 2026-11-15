@@ -135,14 +135,14 @@ export default () => [
   <Frame name="search">
     <Sidebar {...navigationFixtures.search} />
   </Frame>,
-  ...scopeSpecimens.map(({ name, navigation }) => (
+  ...scopeSpecimens.filter(({ name }) => name === 'scope-picker-open').map(({ name, navigation }) => (
     <Frame name={name} note="Historical viewer navigation before the top bars.">
       <div class={`bg-canvas p-3 ${navigation.scopeAction ? 'pr-[168px]' : ''}`}>
         <Sidebar {...navigation} height={undefined} />
       </div>
     </Frame>
   )),
-  ...frames.map(({ chrome, ...frame }) => (
+  ...frames.filter(({ note }) => !note?.startsWith('Historical')).map(({ chrome, ...frame }) => (
     <Frame {...frame}>
       <Screen width={frame.width} height={frame.height} drawing={<Drawing nodes={scenes[frame.name]} />}>
         {chrome.map(({ left, top, navigation }) => (
