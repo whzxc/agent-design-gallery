@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.0
+
+- Write one self-contained `index.html` review page in the overwritten `<configured output>/diff` directory from `adg diff --base=<rev> --impacted`, showing `added`, `removed` and `changed` frame counts (`data.review`) at the top followed by both-theme before, after and difference views side by side.
+- Serve the same Git-derived frame review on clean viewer URLs with `?base=<rev>` in the hub and direct viewer, and emit that single review URL from `adg link <viewer-url> --base=<rev>`.
+- Capture both themes of an impacted frame during `adg diff --base=<rev> --impacted` whenever either theme changes so the review page stays complete across themes.
+
 ## 0.13.2
 
 - Fix lifecycle checks to report unbound parts and uncaptured surfaces under the configured design root, including custom roots.
