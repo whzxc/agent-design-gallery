@@ -28,7 +28,7 @@
     "start": "node src/cli.mjs",
     "benchmark": "node tooling/benchmark.mjs",
     "compare": "node tooling/compare.mjs",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --import ./tooling/test-temp.mjs --test test/*.test.mjs",
     "prepack": "node tooling/package.mjs"
   },
   "dependencies": {
