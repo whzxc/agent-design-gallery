@@ -38,6 +38,31 @@ test('import lint checks ordered source layers, same-layer cycles and study exem
   assert.deepEqual(importDirectionViolations(custom,['pages','features','atoms']).map(v=>[v.source,v.target]),[['features/search.tsx','atoms/button.tsx']]);
 });
 
+test('feature folders allow intra-feature imports and require public index imports', () => {
+  const graph = {
+    'modules/home/index.tsx': { uses: ['modules/home/toolbar.tsx'] },
+    'modules/home/toolbar.tsx': { uses: ['modules/home/list.tsx'] },
+    'modules/home/list.tsx': { uses: ['modules/other/index.tsx'] },
+    'modules/other/index.tsx': { uses: [] },
+    'surfaces/home.tsx': { uses: ['modules/home/index.tsx'] },
+    'surfaces/internal.tsx': { uses: ['modules/home/toolbar.tsx'] },
+  };
+  const violations = importDirectionViolations(graph, ['components', 'modules', 'surfaces'], { strictLayers: true });
+  assert.deepEqual(violations.map(row => [row.source, row.target]), [
+    ['modules/home/list.tsx', 'modules/other/index.tsx'],
+    ['surfaces/internal.tsx', 'modules/home/toolbar.tsx'],
+  ]);
+});
+
+test('source discovery includes module feature files', async t => {
+  const root = temporary(t);
+  put(root, 'design/modules/home/index.tsx', source);
+  put(root, 'design/modules/home/toolbar.tsx', source);
+  put(root, 'design/modules/other.tsx', source);
+  const files = listSources(path.join(root, 'design'));
+  assert.deepEqual(files.map(file => path.relative(path.join(root, 'design'), file)), ['modules/home/index.tsx', 'modules/home/toolbar.tsx', 'modules/other.tsx']);
+});
+
 test('fresh init seeds a runnable downward composition and preserves it on rerun',async t=>{
   const root=temporary(t),logs=[];init({root},line=>logs.push(line));
   const c=await loadConfig(root);

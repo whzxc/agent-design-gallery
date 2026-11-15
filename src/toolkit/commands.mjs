@@ -290,8 +290,8 @@ export async function check(config, args = [], options = {}, log = console.log, 
     }
     await cleanup(() => browser?.close(), primary);
     browser = null;
-    if (config.check?.importDirection !== false) for (const { source, target, from, to, sameLayer } of importDirectionViolations(graph, sourceDirectories(config), { strictLayers: config.check?.strictLayers === true })) {
-      add({ code: 'IMPORT_DIRECTION', message: `import ${target} violates import direction (${from} -> ${to}); ${sameLayer ? 'same-layer imports are allowed only in the lowest layer' : 'import from the same or a lower layer in sources'}`, line: null, column: null }, path.join(config.design, source));
+    if (config.check?.importDirection !== false) for (const { source, target, from, to, sameLayer, featureBoundary } of importDirectionViolations(graph, sourceDirectories(config), { strictLayers: config.check?.strictLayers === true })) {
+      add({ code: 'IMPORT_DIRECTION', message: `import ${target} violates import direction (${from} -> ${to}); ${featureBoundary ? (sameLayer ? 'module files may import only within their own feature folder' : 'surfaces must import a module feature through its index.tsx') : sameLayer ? 'same-layer imports are allowed only in the lowest layer' : 'import from the same or a lower layer in sources'}`, line: null, column: null }, path.join(config.design, source));
     }
     if (config.check?.lifecycle === true && mapping.present && validatedMap) {
       const production = sourceDirectories(config).filter(name => name !== 'studies');

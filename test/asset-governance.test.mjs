@@ -19,12 +19,13 @@ test('single-consumer components count nearest modules and surfaces', () => {
     'components/shared.tsx': { uses: [] },
     'components/helper.tsx': { uses: ['components/shared.tsx'] },
     'components/direct-surface.tsx': { uses: [] },
-    'modules/one.tsx': { uses: ['components/single.tsx', 'components/two-modules.tsx', 'components/helper.tsx'] },
+    'modules/one/index.tsx': { uses: ['components/single.tsx', 'components/two-modules.tsx', 'components/helper.tsx'] },
+    'modules/one/detail.tsx': { uses: ['components/single.tsx', 'components/helper.tsx'] },
     'modules/two.tsx': { uses: ['components/two-modules.tsx', 'components/helper.tsx'] },
-    'surfaces/page.tsx': { uses: ['modules/one.tsx', 'components/direct-surface.tsx'] },
+    'surfaces/page.tsx': { uses: ['modules/one/index.tsx', 'components/direct-surface.tsx'] },
   };
   const warnings = singleConsumerComponents(graph, ['components', 'modules', 'surfaces'], parts);
-  assert.deepEqual(warnings.map(row => [row.part, row.consumers]), [['Single', ['modules/one.tsx']], ['DirectSurface', ['surfaces/page.tsx']]]);
+  assert.deepEqual(warnings.map(row => [row.part, row.consumers]), [['Single', ['modules/one']], ['DirectSurface', ['surfaces/page.tsx']]]);
 });
 
 test('proposed frame metadata is validated as a nonempty review scope', () => {

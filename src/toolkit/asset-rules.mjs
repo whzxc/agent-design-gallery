@@ -1,13 +1,21 @@
+import { isFeatureEntry, sourceFeature } from './project.mjs';
+
 // Production sources are ordered from lower to higher layers. Studies are explorations.
 export function importDirectionViolations(graph, sources, { strictLayers = false } = {}) {
-  const rank=new Map(sources.filter(name=>name!=='studies').map((name,index)=>[name,index]));
+  const production=sources.filter(name=>name!=='studies'), rank=new Map(production.map((name,index)=>[name,index])), moduleLayer=production[1], topLayer=production.at(-1);
   const violations=[];
   for (const source of Object.keys(graph).sort()) {
     const from=source.split('/')[0];
     if (!rank.has(from)) continue;
     for (const target of [...new Set(graph[source].uses)].sort()) {
       const to=target.split('/')[0];
-      if (rank.has(to) && (rank.get(to)>rank.get(from) || (strictLayers && rank.get(to)===rank.get(from) && rank.get(from)>0))) violations.push({source,target,from,to,sameLayer:rank.get(to)===rank.get(from)});
+      if (!rank.has(to)) continue;
+      const sameLayer=rank.get(to)===rank.get(from), crossFeature=sameLayer && rank.get(from)===rank.get(moduleLayer) && sourceFeature(source,sources)!==sourceFeature(target,sources);
+      const surfaceInternal=from===topLayer && to===moduleLayer && !isFeatureEntry(target,sources);
+      const sameLayerViolation=sameLayer && rank.get(from)>0 && (rank.get(from)!==rank.get(moduleLayer) || crossFeature);
+      if (rank.get(to)>rank.get(from) || (strictLayers && (sameLayerViolation || surfaceInternal))) {
+        violations.push({source,target,from,to,sameLayer,featureBoundary:crossFeature||surfaceInternal});
+      }
     }
   }
   return violations;
@@ -36,7 +44,7 @@ export function singleConsumerComponents(graph, sources, partsBySource) {
         seen.add(importer);
         const importerLayer = importer.split('/')[0];
         if (importerLayer === layer) queue.push(importer);
-        else if (rank.has(importerLayer) && rank.get(importerLayer) > rank.get(layer)) consumers.add(importer);
+        else if (rank.has(importerLayer) && rank.get(importerLayer) > rank.get(layer)) consumers.add(sourceFeature(importer, sources));
       }
       if (consumers.size < 2) warnings.push({ code: 'SINGLE_CONSUMER_COMPONENT', source, part, consumers: [...consumers].sort(), message: `${source}#${part} is reached by ${consumers.size} distinct higher-layer source${consumers.size === 1 ? '' : 's'}; move it back to its feature or add another feature consumer` });
     }

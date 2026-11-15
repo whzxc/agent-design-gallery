@@ -10,7 +10,7 @@ Layers follow assembly level. Components are building blocks, modules assemble t
 | --- | --- |
 | `design/tokens.css` | Values: colors, typography, dimensions, radii, shadows and motion timing. |
 | `design/components/` | Building blocks: controls and single-purpose visual units that more than one feature block embeds, with or without domain meaning, such as a button, a status chip or an entity mark. |
-| `design/modules/<feature>.tsx` | One feature block per file: the part an application implements as one feature component, with that feature's states. Split by feature, not by page: a page can use several modules, and a module can serve several pages. |
+| `design/modules/<feature>.tsx` or `design/modules/<feature>/` | One feature block per file or folder. A folder's `index.tsx` is its public entry; sibling files are internal feature parts and may import each other. Split by feature, not by page: a page can use several features, and a feature can serve several pages. |
 | `design/surfaces/<name>.tsx` | A small set of full-page or full-region layouts. Place modules and components and lay them out; introduce no new controls or visual patterns here. |
 | `design/fixtures/` | Representative content, names, times and state data, separate from visual markup. |
 | `design/art/` | Brand artwork and content images. Declare their display dimensions and a file-size budget in the consumer's asset notes; downscale images before importing them. |
@@ -28,10 +28,10 @@ Fixtures and artwork support these layers; they are not additional UI layers or 
 
 ## Ownership and imports
 
-- Imports go strictly downward. Modules import components. Surfaces import modules and components.
+- Imports go strictly downward. Modules import components. Surfaces import module feature indexes and components.
 - Components may import other components. They never import modules or surfaces.
-- A module never imports another module. A surface never imports another surface.
-- When a module needs another module's part, move the part to components if the module embeds it inside its own structure. Compose the two blocks in a surface if they only sit side by side.
+- Files inside one module feature folder may import each other and components. A module file never imports another feature, and a surface never imports another surface or a feature-internal file.
+- When a module needs another feature's part, move the part to components if the module embeds it inside its own structure. Compose the two blocks in a surface if they only sit side by side.
 - The defining source owns a part. Import it instead of copying its markup or creating another owner for the same part.
 
 By default, `sources` is `['components', 'modules', 'surfaces']`. Its order is from lower to higher layers. Custom source directory names follow the same order. For example, with `sources: ['primitives', 'features', 'surfaces']`, primitives cannot import features or surfaces, and features cannot import surfaces or other features. Only the lowest layer imports within itself.
@@ -224,7 +224,8 @@ adg check modules/example --read-only
 
 Audit checklist:
 
-- Placement: values in tokens, building blocks embedded by more than one feature block in components, feature blocks in their own modules, and only layout glue in surfaces. Look for page-named modules that combine unrelated features, and for components that only one module uses.
+- Placement: values in tokens, building blocks embedded by more than one feature block in components, feature blocks in their own modules, and only layout glue in surfaces. Look for page-named modules that combine unrelated features, components that only one module uses, and feature folders that expose internal files.
+- Feature folders: keep one feature's files together, expose only `index.tsx` to surfaces, and test a new visual unit against the folder's feature boundary before promoting it to components.
 - Dependencies: upward source imports, module-to-module and surface-to-surface imports, copied markup, helper files that hide an upward or same-layer dependency, and type-only imports that cross ownership boundaries. Confirm that reuse preserves the defining owner.
 - Shared parts: consumers are counted per source file, so every export in one file shares one verdict. The consumers are the nearest module or surface source files that import the component directly or through other components; a lowest-layer export reached by fewer than two distinct higher-layer sources is a warning. Move it back to its feature unless a second feature consumer is planned.
 - Frames: duplicate state coverage across layers, module states represented only by surface frames, missing required variants, width-only or locale-only duplicates, needless full-page permutations, explanatory diagrams, incorrect crop sizes and separate dark frames.
