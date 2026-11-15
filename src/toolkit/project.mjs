@@ -105,33 +105,39 @@ export function listSources(directory, sources = sourceDirectories({design:direc
   return sources.flatMap(name => {
     const base = path.join(directory, name);
     if (!existsSync(base)) return [];
-    const files = [];
-    const visit = (folder, prefix) => {
+    const files = [], production = sources.filter(item => item !== 'studies'), moduleLayer = production.length >= 3 ? production[1] : null;
+    const addDirect = folder => {
       for (const entry of readdirSync(folder, { withFileTypes: true })) {
-        const source = `${prefix}/${entry.name}`;
-        if (entry.isDirectory()) visit(path.join(folder, entry.name), source);
-        else if (entry.isFile() && isSourcePath(source, sources)) files.push(path.join(folder, entry.name));
+        const source = `${name}/${entry.name}`;
+        if (entry.isFile() && isSourcePath(source, sources)) files.push(path.join(folder, entry.name));
       }
     };
-    visit(base, name);
+    addDirect(base);
+    if (name === moduleLayer) for (const entry of readdirSync(base, { withFileTypes: true })) if (entry.isDirectory()) {
+      const folder = path.join(base, entry.name);
+      for (const child of readdirSync(folder, { withFileTypes: true })) {
+        const source = `${name}/${entry.name}/${child.name}`;
+        if (child.isFile() && isSourcePath(source, sources)) files.push(path.join(folder, child.name));
+      }
+    }
     return files;
   }).sort();
 }
 export function isSourcePath(name, sources = defaultSources) {
-  const parts = name.split('/'), layer = parts[0], moduleLayer = sources.filter(item => item !== 'studies')[1];
+  const parts = name.split('/'), layer = parts[0], production = sources.filter(item => item !== 'studies'), moduleLayer = production.length >= 3 ? production[1] : null;
   if (!sources.includes(layer) || parts.length < 2 || parts.some(part => !part || part === '.' || part === '..')) return false;
   if (!/^([^/.][^/]*)\.tsx$/.test(parts.at(-1))) return false;
   return parts.length === 2 || layer === moduleLayer && parts.length === 3;
 }
 
 export function sourceFeature(name, sources = defaultSources) {
-  const parts = name.split('/'), moduleLayer = sources.filter(item => item !== 'studies')[1];
+  const parts = name.split('/'), production = sources.filter(item => item !== 'studies'), moduleLayer = production.length >= 3 ? production[1] : null;
   if (parts[0] !== moduleLayer) return name;
   return parts.length >= 3 ? `${parts[0]}/${parts[1]}` : name;
 }
 
 export function isFeatureEntry(name, sources = defaultSources) {
-  const parts = name.split('/'), moduleLayer = sources.filter(item => item !== 'studies')[1];
+  const parts = name.split('/'), production = sources.filter(item => item !== 'studies'), moduleLayer = production.length >= 3 ? production[1] : null;
   return parts[0] !== moduleLayer || parts.length === 2 || parts.length === 3 && parts.at(-1) === 'index.tsx';
 }
 export function readGroups(directory, sources = sourceDirectories({design:directory})) {

@@ -2,7 +2,7 @@ import { isFeatureEntry, sourceFeature } from './project.mjs';
 
 // Production sources are ordered from lower to higher layers. Studies are explorations.
 export function importDirectionViolations(graph, sources, { strictLayers = false } = {}) {
-  const production=sources.filter(name=>name!=='studies'), rank=new Map(production.map((name,index)=>[name,index])), moduleLayer=production[1], topLayer=production.at(-1);
+  const production=sources.filter(name=>name!=='studies'), rank=new Map(production.map((name,index)=>[name,index])), moduleLayer=production.length >= 3 ? production[1] : null, topLayer=production.at(-1);
   const violations=[];
   for (const source of Object.keys(graph).sort()) {
     const from=source.split('/')[0];

@@ -157,15 +157,17 @@ test('check, render and the canvas discover configured top-level TSX source dire
     const component=put(c,'components/a.tsx',`import {width} from '../scenes/topology-screen';${source('<div style={{width,height:100}}/>')}`);
     const surface=put(c,'surfaces/a.tsx',source('<div/>'));
     const module=put(c,'modules/a.tsx',source('<div/>'));
-    const expected=(directories.includes('modules')?[component,module,surface]:[component,surface]).sort();
+    const nestedModule=path.join(c.design,'modules/nested/helper.tsx');
+    const expected=(directories.includes('modules')?[component,module,nestedModule,surface]:[component,surface]).sort();
     for(const name of ['helper.tsx','art/helper.tsx','helpers/helper.tsx','components/nested/helper.tsx',
-      'surfaces/nested/helper.tsx','modules/nested/helper.tsx','components/helper.ts'])put(c,name,'imports only');
+      'surfaces/nested/helper.tsx','modules/nested/helper.tsx','components/helper.ts'])put(c,name,name==='modules/nested/helper.tsx' && directories.includes('modules') ? source('<div/>') : 'imports only');
     writeFileSync(path.join(c.design,'gallery.json'),JSON.stringify({groups:[{title:'Sources',assets:directories.map(d=>`${d}/a.tsx`)}]}));
     assert.deepEqual(selectSources(c),expected);
     for(const name of ['scenes/topology-screen','design/helper.tsx','art/helper.tsx','components/nested/helper.tsx',
-      'surfaces/nested/helper.tsx','modules/nested/helper.tsx','components/helper.ts']) {
+      'surfaces/nested/helper.tsx','components/helper.ts']) {
       assert.throws(()=>selectSources(c,[name]),/Invalid source.*directly/);
     }
+    if(directories.includes('modules')) assert.deepEqual(selectSources(c,['modules/nested/helper']),[nestedModule]);
     if(directories.includes('modules'))assert.deepEqual(selectSources(c,['modules/a']),[module]);
     else assert.throws(()=>selectSources(c,['modules/a']),/Invalid source.*directly/);
     const logs=[],problems=[];
@@ -179,7 +181,8 @@ test('check, render and the canvas discover configured top-level TSX source dire
     const server=await startServer({directory:c.design,stateDirectory:path.join(c.root,'.viewer')});
     try {
       const manifest=await (await fetch(new URL('/manifest',server.url))).json();
-      assert.deepEqual(manifest.assets.map(asset=>asset.path),directories.map(d=>`${d}/a.tsx`).sort());
+      const expectedAssets=directories.map(d=>`${d}/a.tsx`);if(directories.includes('modules'))expectedAssets.push('modules/nested/helper.tsx');
+      assert.deepEqual(manifest.assets.map(asset=>asset.path),expectedAssets.sort());
       if(directories.includes('modules')) {
         const asset=await (await fetch(new URL('/asset/modules/a.tsx',server.url))).json();
         assert.equal(asset.format,'tsx');assert.equal(asset.component,true);
