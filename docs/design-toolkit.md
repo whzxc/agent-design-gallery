@@ -359,7 +359,7 @@ Source arguments are paths under the design directory, with or without `design/`
 
 ## Impact and selective commands
 
-These examples use a fictional badge library. Run from its project root with ADG 0.11.0 or newer.
+These examples use a fictional badge library. Run from its project root with ADG 0.12.0 or newer.
 
 ```sh
 # Hypothetical changes: inspect candidates without editing or capturing.

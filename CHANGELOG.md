@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0
+
+- Add opt-in single-consumer component warnings for lowest-layer exports and keep feature-local parts local until a second feature embeds them.
+- Merge adjacent date text segments across fractional flex whitespace so compare matches visible labels across DOM text-node boundaries.
+
+
 ## 0.11.0
 
 - Enforce opt-in asset governance with strict production layers, lifecycle bindings, proposed Frame scopes and redundant-frame warnings; `adg init` enables the new checks for fresh projects.
