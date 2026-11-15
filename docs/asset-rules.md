@@ -253,6 +253,7 @@ Audit checklist:
 - Fidelity and gaps: altered content or order, surface-local visuals, assets with insufficient props, missing elements and stale implementation mappings. Distinguish source evidence from an unobserved implementation.
 - Lifecycle: parts without an implementation binding, frames the implementation cannot reach, proposals without an active review, abandoned alternatives and studies left after a direction was selected. A design surface does not count as a consumer.
 - Tokens: value-named tokens, literal paint outside named artwork, and values a small step from an existing token that fewer than three declarations use.
+- Implementation: literal paint in implementation styles, shared exports with one feature consumer, feature styles that restyle shared visuals, and modules over about 400 lines. Report counts.
 - Supporting data: fixture content embedded in markup, duplicate fixture records, oversized artwork, missing display dimensions and unspecified image budgets.
 - Local process: an identifiable reviewer, approval state, mapping location and acceptance procedure. Missing evidence stays an explicit finding.
 
@@ -267,17 +268,38 @@ Report findings with these columns. Include the relevant frame, export, import t
 
 Include the audited scope and the commands actually run, with their results. Report confirmed violations separately from missing evidence when the consumer's review protocol requires that distinction. Record ownership, fidelity and lifecycle findings from the manual audit alongside automated results.
 
-### 3. Split changes into review batches
+### 3. Govern in check-decided steps
 
-1. Agree on ownership boundaries, naming and local mapping/governance locations from the inventory. Record the dependency findings that each batch will resolve.
-2. Review tokens and one cohesive component family. Keep the batch small enough to inspect every changed frame in both themes. Normalize literals under [Tokens](#tokens) in one batch, with a decision table of value, nearest token, difference, uses and decision.
-3. Take one feature module at a time: establish its owner, move its states and update its importers together. Preserve part defaults while adding missing capabilities.
-4. Take one composed surface at a time after its dependencies are reviewed. Preserve structure and fixture content; reconcile it with the mapped implementation through local acceptance.
-5. Close the batch by updating bindings, removing assets without a binding, and deleting or converting completed studies.
+Enforcement comes first, so that checks decide the remaining work. Each step runs to completion in one agent turn: commit per batch with the cheap checks, run the full validation once at the end, and stop early only for a decision that belongs to the user, such as a visual direction or an appearance change that has not been approved.
 
-A move, frame rename or extraction includes all affected imports, captures and mapping references in the same batch. Keep new visual proposals in their own review scope rather than mixing them into a structural migration.
+1. Enforce. Add the [implementation checks](#4-add-implementation-checks) with exact exception lists and tests. Run them and `adg check` from the project's check script, and enable `check.strictLayers` and `check.lifecycle`. Current violations form the burn-down list.
+2. Placement. Agree on feature owners and naming from the inventory. Move single-consumer shared parts back to their features on both the implementation and library sides, promote a part when a second feature embeds it, and split modules over about 400 lines into feature folders. Preserve part defaults while adding missing capabilities.
+3. Tokens. Normalize literals under [Tokens](#tokens), with a decision table of value, nearest token, difference, uses and decision. The user approves appearance changes once, up front. The report then lists the changed scenarios and the compare review list instead of screenshots.
+4. Lifecycle. Bind every part, remove assets without a binding, and delete or convert completed studies.
+5. Close. Run the full tests, each affected acceptance scenario once and `adg compare` on the affected frames as a review list.
 
-### 4. Document locally
+A move, frame rename or extraction includes all affected imports, captures and mapping references in the same batch. Keep new visual proposals in their own review scope rather than mixing them into a structural migration. When a step needs a toolkit change, stop and report a reproduction to the ADG maintainers instead of patching or vendoring ADG; resume once a release fixes it and the project raises `requires`.
+
+Pitfalls seen in practice:
+
+- A rule that a check can satisfy by relocation. A layout-only rule for feature styles moved feature visuals into the shared layer; state the rule's purpose and its allowed form.
+- Literals wrapped in value-named or single-use tokens to pass a literal check.
+- A module and the surface that composes it counted as two consumers of one shared part.
+- Hover, focus or selection paint recorded as an artwork exception.
+- Cleanup started before the checks exist, or check-decided work split into several review rounds.
+- Compare missing or extra counts read as regressions without the same counts at the pre-change commit.
+
+### 4. Add implementation checks
+
+`adg check` covers the design sources. The consumer adds three checks on its implementation, each with exact exceptions and tests:
+
+- Literal paint: paint properties (color, background, border, radius, shadow, font, line height, letter spacing, fill and stroke) reference tokens. An exception records the file, selector and property, with a reason that names the artwork.
+- Shared consumers: each export of the shared component location has at least two feature consumers. Count each feature directory once, follow re-exports and shared-to-shared imports, and ignore tests and type-only imports. An export with one consumer moves back to its feature.
+- Tokens: names state a role, and small differences follow the [Tokens](#tokens) thresholds and use counts.
+
+[ARC](https://github.com/whzxc/agent-remote-control) implements these checks in `tooling/check-ui-styles.mjs`, `tooling/check-ui-consumers.mjs`, `tooling/check-ui-tokens.mjs` and `tooling/token-distance.mjs`, with tests in `tests/ui-style-policy.test.mjs`. Adapt their paths and feature mapping rather than importing them.
+
+### 5. Document locally
 
 The consumer keeps:
 
@@ -286,6 +308,7 @@ The consumer keeps:
 - Every implementation counterpart in implementation.json, plus proposals under review and concrete remaining gaps in human documentation. Human documentation keeps no counterpart rows.
 - Image display dimensions and file-size budgets.
 - The implementation style checks that enforce token-only paint and shared-part consumers, with their exact exception lists.
+- Agent instructions that link these rules and the [toolkit contract](design-toolkit.md), require `adg check` and the implementation checks before a commit, and stay within a size budget.
 - Review batch scope, proposer/reviewer responsibilities, approval and visual acceptance procedures, and the minimum ADG version.
 
 Choose local filenames that fit the project. Link this toolkit standard instead of copying its generic rules into every consumer's governance documents.

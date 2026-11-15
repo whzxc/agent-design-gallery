@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.13.1
+
+- Build only a feature folder's `index.tsx` as its frame source. Sibling files are internal parts in the import graph, ownership, mappings and single-consumer counts, and are no longer built or listed as frame sources.
+- Reject Frame defaults exported from internal feature files, and report `FEATURE_INDEX_MISSING` and `FEATURE_SOURCE_NESTED` under `check.strictLayers`.
+
+## 0.13.0
+
+- Support module feature folders (`modules/<feature>/`): `index.tsx` is the public entry, files inside one feature may import each other, and cross-feature or surface-to-internal imports fail `IMPORT_DIRECTION` under strict layers.
+- Count single-consumer components per feature folder.
+
+## 0.12.1
+
+- Stop the single-consumer walk at the nearest module or surface so a module and the surface composing it count as one consumer.
+
 ## 0.12.0
 
 - Add opt-in single-consumer component warnings for lowest-layer exports and keep feature-local parts local until a second feature embeds them.
