@@ -44,10 +44,14 @@ export async function withImpacted(config, args, options, command, work) {
         const usedFacts = new Set(selection.frames.flatMap(group => group.rows.flatMap(row => (row.reasons ?? []).map(reason => reason.fact))));
         selection.facts = data.facts.filter(fact => usedFacts.has(fact.id));
         const selected = new Set(chosen.flatMap(row => themes.map(theme => impactRowKey(row, theme))));
-        const scheduled = (row, theme) => selected.has(impactRowKey(row, theme)) && assessments.get(impactRowKey(row, theme)).disposition === 'render';
+        const renderRow = (row, theme) => assessments.get(impactRowKey(row, theme))?.disposition === 'render';
+        const scheduled = (row, theme) => selected.has(impactRowKey(row, theme)) && (
+          renderRow(row, theme) ||
+          (command === 'diff' && themes.length === 2 && themes.some(other => renderRow(row, other)))
+        );
         for (const row of chosen) for (const theme of themes) {
           if (row.status === 'removed') selection.coverage.deletedRows++;
-          if (assessments.get(impactRowKey(row, theme)).disposition === 'proven_unaffected') {
+          if (!scheduled(row, theme) && assessments.get(impactRowKey(row, theme)).disposition === 'proven_unaffected') {
             if (command === 'check') exclusions.not_checked++;
             else selection.coverage.provenRows++;
           }
@@ -89,7 +93,7 @@ export async function withImpacted(config, args, options, command, work) {
   if (outcome) outcome.warnings = [...new Set([...outcome.warnings, ...warnings])];
   if (outcome?.data?.reportPath) {
     try { await mkdir(path.dirname(outcome.data.reportPath), { recursive: true }); await writeFile(outcome.data.reportPath, JSON.stringify(outcome.data, null, 2) + '\n'); }
-    catch (cause) { discardProofs(); outcome.data.reportPath = null; failure = commandFailure(cause, outcome.data, outcome.warnings); }
+    catch (cause) { discardProofs(); outcome.data.reportPath = null; if ('indexPath' in outcome.data) outcome.data.indexPath = null; failure = commandFailure(cause, outcome.data, outcome.warnings); }
   }
   if (failure) { if (outcome?.data) failure = commandFailure(failure, outcome.data, outcome.warnings); throw failure; }
   return outcome;

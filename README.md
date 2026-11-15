@@ -47,13 +47,12 @@ Path links locate a selection within its design hierarchy. Query links open an i
 ## Share a design update
 
 ```sh
-adg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled
-adg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled --mode=path
-adg open ./design --asset=components/button.tsx --frame=disabled --no-open
-adg render components/button --frame=disabled --theme=dark --out-dir=output/review --json
+adg diff --base=<rev> --impacted --json
+adg link https://gallery.example/p/project/ --base=<rev>
+adg open ./design --base=<rev> --no-open
 ```
 
-Use the independent link in a change report. Add the path link when the surrounding assets matter. Use the project URL on a hub the recipient can reach. `adg open` provides a live loopback preview while its server runs. `render` exports exact frame PNGs for attachments or automation. Without `--theme`, it exports both themes. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
+Set `--base=<rev>` to the task's starting commit. Git supplies the added, removed and changed frames. A change report carries one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted`, with no per-frame images. The hub and direct viewer serve the same review page at `?base=<rev>`, showing counts at the top followed by added, removed and changed frames in both themes (`light` and `dark`) with before, after and difference side by side. Targeted `--asset`, `--frame`, `--group`, `--layer`, `--tokens` and `--mode=path` links remain available for interactive navigation, and `adg render` exports frame PNGs for automation. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
 
 Every command accepts `--json`: finite commands return one versioned envelope, while foreground `open`/`serve` stream NDJSON events. `render` PNGs are in `data.captures`, with CSS and PNG pixel dimensions. See the [agent CLI interface](docs/agent-interface.md) for schemas, exits and recovery actions.
 
@@ -118,8 +117,11 @@ adg diff --base=HEAD --impacted --json
 
 Builds produce standalone HTML and renders produce `<frame>-light.png` and `<frame>-dark.png` under `output/design/<source>/`. After configuring an implementation adapter and frame fixture/capture, use `adg compare <source> --frame=<name>` or `adg compare --all`. Flags override Frame capture props; `--all` writes a linked HTML index and `summary.json` under `output/design/compare/`. `sync` and `measure` have been removed.
 
-`adg diff --base=<rev>` writes per-frame/theme before, after and difference PNGs plus
-`report.json` for Git and working-tree sources, including added/removed frames. Existing
+`adg diff --base=<rev>` overwrites `<configured output>/diff` and writes a self-contained
+`index.html` review page, per-frame/theme before, after and difference PNGs, plus
+`report.json` for Git and working-tree sources, including added/removed frames. `index.html`
+shows the `added`, `removed` and `changed` frame counts (`data.review`) at the top, followed
+by each affected frame in both themes with before, after and difference side by side. Existing
 frames require exact pixels and size. New part Frames can declare `parent` and use
 consumer `diff.thresholds`; a `structural` batch requires full existing-frame coverage
 in both themes. Exit 0 is `identical`/`structural`, 1 is completed `changed`, and 2 is

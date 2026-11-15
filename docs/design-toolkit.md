@@ -436,6 +436,7 @@ later capture skip; each consuming operation rebuilds and validates its own inpu
 ## Git frame diff
 
 ```sh
+adg diff --base=HEAD --impacted --json
 adg diff --base=HEAD --json
 adg diff modules/toolbar --base=HEAD~1 --frame=compact --out-dir=output/review --json
 ```
@@ -444,7 +445,13 @@ adg diff modules/toolbar --base=HEAD~1 --frame=compact --out-dir=output/review -
 Omitting sources includes configured TSX and architecture sources at either revision;
 explicit selection and `--frame` limit the capture. Base-only and current-only frames
 remain visible. `--theme` defaults to `both`, `--scale` to 2 and the output to
-`<configured output>/diff`. Relative output directories resolve from the project root.
+`<configured output>/diff`. Each run overwrites previous diff artifacts in its output
+directory and writes a self-contained `index.html` review page alongside `report.json`
+and per-frame PNGs. `index.html` shows `added`, `removed` and `changed` frame counts at
+the top, then the added, removed and changed frames, each in both themes (`light` and
+`dark`) with before, after and difference side by side. Under `--impacted` with both
+themes, when either theme of a frame requires capture, both themes are captured so the
+review page stays complete. Relative output directories resolve from the project root.
 See the [agent contract](agent-interface.md#diff) for schema, artifacts and recovery argv.
 
 Ordinary matched frames are `identical` only with exact decoded pixels and equal CSS
@@ -555,18 +562,21 @@ the consumer's normal approval process.
 
 ## Review handoff
 
-After changing design assets, name the change and include an ADG link for each affected frame, source, or cohesive group. Choose the smallest target that covers the change. For example, report “Button disabled state — adjusted the foreground contrast” with a link to that frame. Add a PNG when the report needs an inline preview or the recipient cannot reach the viewer.
+Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report carries one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted` (`data.review`), with no per-frame images.
 
 | Need | Command |
 | --- | --- |
-| Live preview of the working directory | `adg open ./design --asset=components/button.tsx --frame=disabled --no-open` |
-| Share the changed frame on a registered project | `adg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled` |
-| Include the frame's source layer for context | Add `--mode=path` to the link command. |
-| Export PNGs for a report or another tool | `adg render components/button --frame=disabled --theme=dark --out-dir=output/review --json` |
+| Compute counts and write the local self-contained `index.html` review | `adg diff --base=<rev> --impacted --json` |
+| Print the reachable hub review URL for a change report | `adg link https://gallery.example/p/project/ --base=<rev>` |
+| Open a local loopback review server | `adg open ./design --base=<rev> --no-open` |
+| Link to one frame or layer during interactive browsing | `adg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled` |
+| Export frame PNGs for automation | `adg render components/button --frame=disabled --theme=dark --out-dir=output/design/render --json` |
 
-`open` and `link` accept one target: `--asset` with an optional `--frame`, `--group`, `--layer`, or `--tokens`. Source paths are relative to the design directory and include the extension. Query mode is the default. To convert a URL copied from the viewer, pass it to `adg link` without target flags. `link` emits a single URL and strips unrelated query parameters, including access keys. Share a reachable hub project URL for remote review and verify that it serves the changed checkout. A direct preview uses loopback. A proxied instance link lasts until its viewer stops. Viewer links reflect the current source files and refresh after saves. Keep the PNG when the report needs a fixed snapshot.
+When `<viewer-url>` has no asset, group, layer or token locator, `--base=<rev>` opens the project's Git frame review page (`?base=<rev>`). Both the hub viewer (`/p/<slug>/?base=<rev>` and `/i/<id>/?base=<rev>`) and direct `adg open --base=<rev>` render the same counts and both-theme before, after and difference panels for TSX and architecture frames, refreshing live when working-tree sources change. Switch scope tabs in the viewer to browse individual layers or tokens while retaining `?base=<rev>`.
 
-`render` exports TSX frames at their exact bounds. It defaults to both themes at 2×. `--theme` selects a theme, and a relative `--out-dir` resolves from the project root. `--json` emits one versioned envelope. `data.captures` is ordered by selected source, frame, then light before dark; each capture contains project-root-relative `source` with `/` separators, `frame`, `theme`, absolute PNG `path`, `scale`, CSS `width`/`height` and actual PNG `pixelWidth`/`pixelHeight`. `data` always contains `project`, `outputDirectory`, `complete`, `base`, `captures` and `deleted`, including `base: null` and `deleted: []` without a base. Failed batches advertise completed PNGs only. Human logs go to stderr under `--json`; default text output remains available for interactive use.
+`open` and `link` also accept an explicit locator (`--asset` with an optional `--frame`, `--group`, `--layer`, or `--tokens`, plus `--mode=query|path`) for interactive navigation. Source paths are relative to the design directory (or project root for `.mmd`) and include the extension. Passing a viewer URL to `adg link` without target flags cleans the URL, strips unrelated query parameters including access keys, and preserves or updates `base`. Share a reachable hub project URL for remote review and verify that it serves the changed checkout.
+
+`render` exports TSX frames at their exact bounds for automation. It defaults to both themes at 2×. `--theme` selects a theme, and a relative `--out-dir` resolves from the project root. `--json` emits one versioned envelope. `data.captures` is ordered by selected source, frame, then light before dark; each capture contains project-root-relative `source` with `/` separators, `frame`, `theme`, absolute PNG `path`, `scale`, CSS `width`/`height` and actual PNG `pixelWidth`/`pixelHeight`. `data` always contains `project`, `outputDirectory`, `complete`, `base`, `captures` and `deleted`, including `base: null` and `deleted: []` without a base. Failed batches advertise completed PNGs only. Human logs go to stderr under `--json`; default text output remains available for interactive use.
 
 ## Architecture sources
 
@@ -701,9 +711,12 @@ adg link https://gallery.example/p/project/ --asset=arch/mechanisms/work.mmd --b
 ```
 
 Source paths may be project-relative or absolute paths resolving inside the project
-root. TSX-only named renders ignore `base` and retain their existing output format;
-TSX comparison remains roadmap milestone 4. Normal builds without `base` retain the
-same frame bytes, content hashes and JSON array format.
+root. On a clean viewer URL without an `--asset`, `--group`, `--layer` or `--tokens`
+target, `?base=<rev>` opens the Git frame review page for TSX and architecture frames;
+choosing the `Arch` scope or an `--asset=arch/...` target renders structural Mermaid
+overlays on the canvas. TSX-only named `render` invocations ignore `base` and retain
+their existing output format. Normal builds without `base` retain the same frame bytes,
+content hashes and JSON array format.
 
 Comparison uses Pele models:
 

@@ -459,7 +459,8 @@ type DiffData = {
       bitmap_resampling: number, other: number
     }
   },
-  differencePalette: Record<string, string>, reportPath: string | null,
+  review: { added: number, removed: number, changed: number },
+  differencePalette: Record<string, string>, reportPath: string | null, indexPath: string | null,
   timings: {
     prepareMs: number, buildMs: number, captureMs: number,
     compareMs: number, writeMs: number, totalMs: number,
@@ -503,6 +504,7 @@ manifest write. Timing values are diagnostic, without a fixed latency promise.
 Artifacts under `outputDirectory`:
 
 ```text
+index.html
 report.json
 frames/<encoded source components>/<encoded frame>/<theme>/
   before.png                    # null/absent for an ordinary addition
@@ -548,11 +550,13 @@ remain evidence alongside resolved styles; full property-to-token provenance is 
 provided. Two equal consecutive observations and an unchanged post-capture observation
 must fit one five-second monotonic deadline. Ordinary frames bypass this work.
 
-All referenced artifacts are written before their completed row is advertised. Failed
-runs keep completed rows and, when writable, a partial manifest. `reportPath:null` means
-the manifest write failed. Stale unreferenced artifacts from previous runs are not deleted.
-The ordered rows, revision labels, sizes, PNGs, notes, palette, crop/support references and
-findings are sufficient for a later review-sheet composer without re-rendering.
+All referenced artifacts are written before their completed row is advertised. Each run
+cleans prior `frames/`, `support/`, `report.json` and `index.html` entries inside
+`outputDirectory` before writing new captures, then writes a self-contained `index.html`
+review page with inline `data:image/png;base64,...` images and `data.review` frame counts
+(`added`, `removed`, `changed`, excluding matched frames whose themes are all `identical`).
+Failed runs keep completed rows from that run and, when writable, a partial manifest and
+review page. `reportPath:null` and `indexPath:null` mean the manifest/review write failed.
 
 ### Owner
 

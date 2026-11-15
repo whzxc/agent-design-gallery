@@ -9,6 +9,7 @@ import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext
 import { sourceRelationships, relatedSources } from './relationships.js';
 import { hitSelection, frameBox, exportFrames } from './selection.js';
 import { groupTokens, renderTokenTable } from './token-catalog.js';
+import { renderReview } from './review.js';
 import { readViewRoute, viewURL } from './view-route.js';
 import { createArranger } from './arrangement.js';
 const arranger = createArranger();
@@ -23,6 +24,7 @@ const viewport = $(".gallery-viewport"),
 let manifest,
   catalog = null,
   tokenManifest = null,
+  reviewManifest = null,
   tokenCategory = null,
   pendingNavigation = null,
   groups = [],
@@ -137,7 +139,7 @@ let route = {}, routeError;
 try { route = readViewRoute(new URL(location.href)); }
 catch (error) { routeError = error; }
 let initialLink = route.target, strictRoute = route.strict, queryView = !!route.isolated;
-let scopeRequest = fixtureName ? 'all' : route.scope ?? 'default', onlyFrame = route.onlyFrame ?? null;
+let scopeRequest = fixtureName ? 'all' : (route.base && route.scope === 'default' ? 'review' : route.scope ?? 'default'), onlyFrame = route.onlyFrame ?? null;
 let initializedScope, initializedFrame, scopeEntry;
 const currentItem = () => inspection || assets.find((a) => a.id === selectedId);
 function remember() {
@@ -177,13 +179,13 @@ function back() {
 function changeScope(next, entry = null, record = true) {
   const nextFrame = entry?.onlyFrame ?? null;
   if (next === scopeRequest && nextFrame === onlyFrame) return;
-  if ((initializedScope || tokenManifest) && !catalog) {
-    if (record && !tokenManifest && next !== 'tokens') remember();
+  if ((initializedScope || tokenManifest || reviewManifest) && !catalog) {
+    if (record && !tokenManifest && !reviewManifest && next !== 'tokens' && next !== 'review') remember();
     void persistPreferences();
   }
   scopeRequest = next;
   onlyFrame = nextFrame;
-  queryView = entry?.queryView ?? !['all', 'layer'].includes(scopeKind(next));
+  queryView = entry?.queryView ?? (next !== 'review' && !['all', 'layer'].includes(scopeKind(next)));
   strictRoute = false;
   scopeEntry = entry;
   initialLink = null;
@@ -200,23 +202,30 @@ function toggleSidebar(value = !sidebar) {
 }
 function updateChrome() {
   updateSwitcherLabels();
-  const opened = !!(tokenManifest ?? catalog ?? manifest)?.directory;
+  const opened = !!(reviewManifest ?? tokenManifest ?? catalog ?? manifest)?.directory;
   const showTokens = !!tokenManifest;
-  const canInspect = opened && !showTokens && !!selected;
-  $('.gallery').classList.toggle('tokens-mode', showTokens);
+  const showReview = !!reviewManifest;
+  const canInspect = opened && !showTokens && !showReview && !!selected;
+  $('.gallery').classList.toggle('tokens-mode', showTokens || showReview);
   $('#token-catalog').hidden = !showTokens;
-  viewport.inert = showTokens;
-  $('#sidebar').hidden = !opened || !sidebar;
+  $('#review-page').hidden = !showReview;
+  viewport.inert = showTokens || showReview;
+  $('#sidebar').hidden = !opened || showReview || !sidebar;
+  $('#sidebar-toggle').hidden = showReview;
+  $('.search-divider').hidden = showReview;
+  $('.search-field').hidden = showReview;
+  $('#annotate').hidden = showReview;
+  $('#inspect').hidden = showReview;
   $('#app-bar').hidden = !opened;
   if (fixtureState) $('#app-directory .switcher-chevron').hidden = false;
   $('#tools').hidden = !opened;
-  $('.zoom').hidden = !opened || showTokens;
+  $('.zoom').hidden = !opened || showTokens || showReview;
   $('#source').hidden = !canInspect || !inspector;
   $('#inspect').disabled = !canInspect;
   $('#inspect').setAttribute('aria-expanded', String(canInspect && inspector));
-  $('#arrange').hidden = showTokens;
-  if (!opened) $('#minimap').hidden = true;
-  $('#sidebar-toggle').setAttribute('aria-expanded', String(opened && sidebar));
+  $('#arrange').hidden = showTokens || showReview;
+  if (!opened || showReview) $('#minimap').hidden = true;
+  $('#sidebar-toggle').setAttribute('aria-expanded', String(opened && !showReview && sidebar));
   positionZoomMenu();
 }
 function positionZoomMenu() {
@@ -229,8 +238,9 @@ const media = matchMedia("(prefers-color-scheme: dark)");
 const modifiedDate = new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 window.__adg = {
   ready: false,
-  get metadataComplete() {return !!tokenManifest || (!!manifest && !manifest.loading);},
-  get scope() {return tokenManifest?.scope ?? initializedScope;},
+  get metadataComplete() {return !!reviewManifest || !!tokenManifest || (!!manifest && !manifest.loading);},
+  get scope() {return (reviewManifest ?? tokenManifest)?.scope ?? initializedScope;},
+  get review() {return reviewManifest?.review ?? null;},
   get cachePending() {return cacheWrites+loading+queued.length;},
   get cacheFlush() {return flushCache();},
   get cacheFailures() {return cacheFailures;},
@@ -238,7 +248,7 @@ window.__adg = {
     return { ...view };
   },
   get assets() {
-    return tokenManifest ? 0 : assets.length;
+    return reviewManifest || tokenManifest ? 0 : assets.length;
   },
   get previews() {
     return {entries: cache.size, decoded: [...cache.values()].filter(e => e.image).length,
@@ -283,7 +293,7 @@ async function api(url, data, keepalive = false, signal) {
   return result;
 }
 function preferences() {
-  if (tokenManifest || onlyFrame) return { theme };
+  if (reviewManifest || tokenManifest || onlyFrame) return { theme };
   return {
     view,
     scope: initializedScope,
@@ -333,11 +343,11 @@ function restoreSelection(target) {
 }
 function persistPreferences(keepalive = false) {
   clearTimeout(saveTimer);
-  if (fixtureState || catalog || !(tokenManifest ?? manifest)?.directory) return;
+  if (fixtureState || catalog || !(reviewManifest ?? tokenManifest ?? manifest)?.directory) return;
   return api('preferences', preferences(), keepalive).catch(e => error(e.message));
 }
 function save() {
-  if(fixtureState || catalog || !(tokenManifest ?? manifest)?.directory) return;
+  if(fixtureState || catalog || !(reviewManifest ?? tokenManifest ?? manifest)?.directory) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(persistPreferences, 220);
 }
@@ -452,6 +462,7 @@ function navigate(action) {
 function scopedUI(data) { return !!data.layers && (!data.fixture || !!data.fixture.scope); }
 function scopeLabel(scope) {
   const target = scopeTarget(scope);
+  if (scope === 'review') return 'Review';
   if (scope === 'all') return 'All designs';
   if (scope === 'tokens') return 'Tokens';
   if (scopeKind(scope) === 'layer') return target[0].toUpperCase() + target.slice(1);
@@ -460,7 +471,8 @@ function scopeLabel(scope) {
 }
 function renderScopeTabs(data) {
   const tabs = $('#scope-tabs');
-  const choices = [...(data.tokenSource ? ['tokens'] : []), ...(data.layers ?? []).map(layer => 'layer:' + layer), 'all'];
+  const hasBase = new URL(location.href).searchParams.has('base');
+  const choices = [...(hasBase ? ['review'] : []), ...(data.tokenSource ? ['tokens'] : []), ...(data.layers ?? []).map(layer => 'layer:' + layer), 'all'];
   const signature = JSON.stringify([data.scope, choices]);
   $('#sidebar').classList.toggle('scoped', scopedUI(data));
   if (tabs.dataset.signature === signature) return;
@@ -517,9 +529,13 @@ function navFile(a, options = {}) {
   return row;
 }
 function renderNav() {
-  const data = tokenManifest ?? catalog ?? manifest;
+  const data = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
   if (!data) return;
   renderScopeTabs(data);
+  if (reviewManifest) {
+    requestDraw();
+    return;
+  }
   const scoped = scopedUI(data), kind = scoped ? scopeKind(data.scope) : null;
   const focusKey = document.activeElement?.dataset.navkey;
   const query = $("#search").value.trim().toLowerCase(), nodes = [];
@@ -735,7 +751,7 @@ const annotationUI = createAnnotations({
   getState: () => {
     const a = currentItem(), p = a?.parts.find(part => part.id === selectedForm);
     return {
-      opened: Boolean(manifest?.directory) && !tokenManifest,
+      opened: Boolean(manifest?.directory) && !tokenManifest && !reviewManifest,
       projectRoot: manifest?.projectRoot ?? manifest?.directory ?? null,
       sourcePrefix: manifest?.sourcePrefix ?? '',
       revision: manifest?.revision ?? 0,
@@ -977,8 +993,9 @@ function draw() {
   const endDrawing = globalThis.__adgTiming?.span('drawing');
   raf = 0;
   drawBackground();
-  if (tokenManifest) {
+  if (tokenManifest || reviewManifest) {
     window.__adg.ready = true;
+    window.__adg.revision = (reviewManifest ?? tokenManifest)?.revision;
     if (fixtureState) document.documentElement.dataset.fixtureReady = fixtureState.name;
     endDrawing?.(); return;
   }
@@ -1168,12 +1185,12 @@ for (const b of $("#themes").children)
   b.onclick = () => {
     theme = b.dataset.theme;
     applyTheme();
-    void refresh(true);
+    if (!reviewManifest) void refresh(true);
     save();
   };
 media.addEventListener("change", () => {
   applyTheme();
-  void refresh(true);
+  if (!reviewManifest) void refresh(true);
 });
 viewport.addEventListener(
   "wheel",
@@ -1364,7 +1381,7 @@ function openSelectionContextMenu({ worldPoint = null, screenX, screenY, returnF
   ], { x: screenX, y: screenY, returnFocus });
 }
 viewport.addEventListener('contextmenu', e => {
-  if (tokenManifest || !manifest?.directory) return;
+  if (reviewManifest || tokenManifest || !manifest?.directory) return;
   if (e.target.closest('.annotation-point, .annotation-card')) return;
   e.preventDefault();
   viewport.focus({ preventScroll: true });
@@ -1379,7 +1396,7 @@ viewport.addEventListener('contextmenu', e => {
 });
 document.addEventListener('keydown', e => {
   if (!(e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) return;
-  if (tokenManifest || !manifest?.directory || document.querySelector('dialog[open]')) return;
+  if (reviewManifest || tokenManifest || !manifest?.directory || document.querySelector('dialog[open]')) return;
   e.preventDefault();
   const activeEl = document.activeElement;
   const noteEl = activeEl?.closest?.('[data-annotation-id]');
@@ -1475,7 +1492,7 @@ $("#arrange").onclick = async () => {
   let placed;
   try {if(!data.loading)placed=await arranger.arrange(layoutData(data));}
   catch(failure){if(failure.name!=='AbortError')error(failure.message);requestDraw();return;}
-  if(manifest!==data || catalog!==previousCatalog || tokenManifest){requestDraw();return;}
+  if(manifest!==data || catalog!==previousCatalog || tokenManifest || reviewManifest){requestDraw();return;}
   const old = assets,
     oldGroups = groups;
   layout(manifest,false,{placed,provisional:!!data.loading});
@@ -1552,9 +1569,10 @@ function relationshipGraph(data, measured) {
   return sourceRelationships([...entries].map(([path,imports])=>({path,imports})));
 }
 function applyTokenManifest(data) {
-  const previous = tokenManifest ?? catalog ?? manifest;
+  const previous = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
   const entering = !tokenManifest || tokenManifest.directory !== data.directory;
   tokenManifest = { ...data, tokenGroups: groupTokens(data.tokens ?? []) };
+  reviewManifest = null;
   scopeRequest = data.scope;
   catalog = null;
   if (entering) {
@@ -1579,17 +1597,40 @@ function applyTokenManifest(data) {
   annotationUI.render();
   renderNav();
 }
+function applyReviewManifest(data) {
+  const previous = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
+  reviewManifest = data;
+  tokenManifest = null;
+  catalog = null;
+  scopeRequest = 'review';
+  fixtureState = null;
+  if (previous?.directory !== data.directory) {
+    theme = data.theme;
+    sidebar = false;
+    applyTheme();
+  }
+  for (const element of document.querySelectorAll('.directory-name')) element.textContent = data.label;
+  $('#app-directory').title = data.directory || '';
+  document.title = `${data.label} · Review — Agent Design Gallery`;
+  const url = viewURL(location.href, 'review');
+  if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
+  renderReview($('#review-page'), data.review);
+  updateChrome();
+  annotationUI.render();
+  renderNav();
+  requestDraw();
+}
 async function applyManifest(data, force = false) {
   if (data.scope === 'tokens') {
     if (force || tokenManifest?.directory !== data.directory || tokenManifest?.revision !== data.revision) applyTokenManifest(data);
     return;
   }
-  const leavingTokens = !!tokenManifest;
+  const leavingOverlayView = !!tokenManifest || !!reviewManifest;
   const changedRoot = initializedDirectory !== data.directory, changedScope = initializedScope !== data.scope || initializedFrame !== onlyFrame;
   const first = changedRoot || changedScope;
-  if (!force && !first && !leavingTokens && manifest.revision === data.revision)
+  if (!force && !first && !leavingOverlayView && manifest.revision === data.revision)
     return;
-  if (leavingTokens) {
+  if (leavingOverlayView) {
     initialLink = null;
     $('#search').value = '';
   }
@@ -1597,7 +1638,7 @@ async function applyManifest(data, force = false) {
     fixtureState=data.fixture ?? null;
     theme = data.theme;
     applyTheme();
-    if (!leavingTokens) sidebar = !!fixtureState?.sidebar;
+    if (!leavingOverlayView) sidebar = !!fixtureState?.sidebar;
     inspector = !!fixtureState && data.inspector;
     history = [];
   }
@@ -1633,7 +1674,7 @@ async function applyManifest(data, force = false) {
   restorePacking(data.packing);
   const previous=manifest, results=new Array(data.assets.length), signal=refreshController?.signal;
   let next=0,publishFrame=0,streamView=null,streamMoved=false,publishedCount=0,nextPublish=1;
-  const streaming=first && !leavingTokens;
+  const streaming=first && !leavingOverlayView;
   const publish=()=>{
     publishFrame=0;
     if(signal?.aborted||versionTheme!==effectiveTheme)return;
@@ -1692,6 +1733,7 @@ async function applyManifest(data, force = false) {
   for(const key of metadataCache.keys())if(!live.has(key))metadataCache.delete(key);
   manifest = { ...data, assets: results, relationships:relationshipGraph(data,results), renderTheme: versionTheme };
   tokenManifest = null;
+  reviewManifest = null;
   // Early streamed worlds can use a much larger camera scale. Discard those
   // raster intermediates so the completed world starts at its exact final scale.
   if(streaming&&publishedCount)for(const entry of cache.values()){delete entry.bitmap;delete entry.bitmapScale;}
@@ -1835,6 +1877,14 @@ async function refresh(force = false) {
   fetching = true;refreshController=new AbortController();
   try {
     if (routeError) throw routeError;
+    if (scopeRequest === 'review') {
+      window.__adg.ready = false;
+      const signal = refreshController.signal, data = await api('review', null, false, signal);
+      signal.throwIfAborted();
+      applyReviewManifest(data);
+      error("");
+      return;
+    }
     const query=new URLSearchParams({context:metadataContext(),theme:effectiveTheme,scope:scopeRequest});
     if (strictRoute) query.set('strict', '1');
     if (onlyFrame) query.set('frame', onlyFrame);
@@ -1861,7 +1911,7 @@ async function refresh(force = false) {
 }
 await refresh();
 if(fixtureState) { try { await applyFixture(); } catch(e) { error(e.message); } }
-if ((tokenManifest || manifest) && !isUnauthorized()) {
+if ((reviewManifest || tokenManifest || manifest) && !isUnauthorized()) {
   const events = new EventSource(keyURL('events'));
   window.addEventListener('adg-unauthorized', () => events.close(), { once: true });
   events.onmessage = (e) => {
@@ -1881,6 +1931,7 @@ if ((tokenManifest || manifest) && !isUnauthorized()) {
 
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+    if (reviewManifest) return;
     e.preventDefault();
     $("#search").focus();
     return;
@@ -1888,6 +1939,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
   if (document.querySelector(":popover-open")) return;
   if (annotationUI.cancelMove()) return;
+  if (reviewManifest) return;
   if (tokenManifest) {
     if ($('#search').value) $('#search-clear').click();
     return;

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import { launch, loadFrame, browserTask, readyResources } from './browser.mjs';
 import { prepareDiffInputs } from './diff-inputs.mjs';
@@ -11,6 +11,7 @@ import { commandFailure, cleanup, emptySelection } from './results.mjs';
 import { CliError, classifyError, asCliError, nextActions } from '../cli-output.mjs';
 import { withImpacted } from './impact-selection.mjs';
 import { resolveDiffPolicy } from './diff-policy.mjs';
+import { buildReview, reviewDocumentHtml } from '../../public/review.js';
 
 const metadata = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const safeName = name => encodeURIComponent(name).replace(/\./g, '%2E');
@@ -78,7 +79,7 @@ async function comparePair(browser, pair, thresholds, context) {
   } catch (error) { throw frameFailure(error, pair.row, pair.theme); }
 }
 
-async function writePair(output, pair, thresholds) {
+async function writePair(output, pair, thresholds, reviewImages) {
   const { row, theme } = pair;
   const directory = path.join(output, row.support ? 'support' : 'frames', ...row.source.split('/').map(safeName), safeName(row.frame), theme);
   await mkdir(directory, { recursive: true });
@@ -116,6 +117,13 @@ async function writePair(output, pair, thresholds) {
     metadata: { before: row.before ? { locale: row.before.locale ?? null, proposed: row.before.proposed ?? null, fixture: row.before.fixture ?? null, capture: row.before.capture ?? null } : null,
       after: row.after ? { locale: row.after.locale ?? null, proposed: row.after.proposed ?? null, fixture: row.after.fixture ?? null, capture: row.after.capture ?? null } : null }, paths,
   };
+  if (!row.support) {
+    reviewImages.set(comparison.id, {
+      before: pair.before ? `data:image/png;base64,${pair.before.png.toString('base64')}` : null,
+      after: pair.after ? `data:image/png;base64,${pair.after.png.toString('base64')}` : null,
+      difference: `data:image/png;base64,${pair.difference.toString('base64')}`,
+    });
+  }
   await Promise.all([
     pair.before && writeFile(paths.before, pair.before.png),
     pair.after && writeFile(paths.after, pair.after.png),
@@ -129,9 +137,9 @@ async function writePair(output, pair, thresholds) {
 }
 
 /** Exact ordinary frames and evidence-backed structural part comparisons. */
-export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock, session } = {}) {
+export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock, session, onReview } = {}) {
   if (options.impacted && !session) return withImpacted(config, args, options, 'diff', selected =>
-    diff(config, args, options, { launchBrowser, prepareInputs, log, clock, session: selected }));
+    diff(config, args, options, { launchBrowser, prepareInputs, log, clock, session: selected, onReview }));
   const started = performance.now(), scale = Number(options.scale ?? 2), themeOption = options.theme ?? 'both';
   if (!Number.isFinite(scale) || scale <= 0) throw new CliError('USAGE_INVALID', 'Invalid --scale; use a positive number.');
   if (!['both', 'light', 'dark'].includes(themeOption)) throw new CliError('USAGE_INVALID', 'Choose --theme=both, light, or dark.');
@@ -139,7 +147,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
   const themes = themeOption === 'both' ? ['light', 'dark'] : [themeOption];
   const output = options['out-dir'] === undefined ? path.join(config.output, 'diff') : path.resolve(config.root, options['out-dir']);
   const timings = { prepareMs: 0, buildMs: 0, captureMs: 0, compareMs: 0, writeMs: 0, totalMs: 0 };
-  const warnings = [], completed = [];
+  const warnings = [], completed = [], reviewImages = new Map();
   const thresholds = config.diff?.thresholds ?? resolveDiffPolicy().thresholds;
   let inputs, browser, data, primary, context;
   const timed = async (name, work) => {
@@ -164,8 +172,11 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
       summary: { sources: inputs.sources.length, frames: 0, comparisons: 0, supportComparisons: 0, isolationCaptures: 0,
         added: 0, removed: 0, matched: 0, identical: 0, structural: 0, changed: 0,
         classPixels: Object.fromEntries(classNames.map(name => [name, 0])) },
-      differencePalette: { equal: '#00000000', imperceptible: '#64748b', antialiasing: '#f59e0b', boundary_bleed: '#0ea5e9', bitmap_resampling: '#a855f7', other: '#ff00ff' }, reportPath: null, timings,
+      review: { added: 0, removed: 0, changed: 0 },
+      differencePalette: { equal: '#00000000', imperceptible: '#64748b', antialiasing: '#f59e0b', boundary_bleed: '#0ea5e9', bitmap_resampling: '#a855f7', other: '#ff00ff' }, reportPath: null, indexPath: null, timings,
     };
+    await timed('writeMs', () => Promise.all(['frames', 'support', 'report.json', 'index.html'].map(entry =>
+      rm(path.join(output, entry), { recursive: true, force: true }))));
     if (session ? session.chosen.some(row => row.source.endsWith('.mmd') && session.themes.some(theme => session.scheduled(row, theme))) : inputs.sources.length) browser = await launchBrowser();
     const built = await timed('buildMs', () => inputs.buildFrames({ browser }));
     if (session) built.frames = built.frames.filter(row => themes.some(theme => session.scheduled(row, theme)));
@@ -198,7 +209,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
           ? browserTask(browser, () => capturePart(browser, job.row, job.theme, context)).catch(error => { throw frameFailure(error, job.row, job.theme); })
           : capturePair(browser, job.row, job.theme, scale, context)));
         const compared = await phase('compareMs', openPairs, pair => comparePair(browser, pair, thresholds, context));
-        const rows = await phase('writeMs', compared, pair => writePair(output, pair, thresholds));
+        const rows = await phase('writeMs', compared, pair => writePair(output, pair, thresholds, reviewImages));
         for (const row of rows) {
           context?.comparisons.set(comparisonIdentity(row, row.theme), row);
           if (supportKeys.has(frameIdentity(row))) { data.support.push(row); data.summary.supportComparisons++; }
@@ -248,18 +259,23 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
       warnings.push({ code: 'DIFF_COVERAGE_INCOMPLETE', message: 'A structural batch requires every existing frame in both themes.', next });
     }
   }
+  const reviewModel = buildReview(data, reviewImages, { label: config.name ?? path.basename(config.root) });
+  data.review = reviewModel.counts;
+  onReview?.(reviewModel);
   timings.totalMs = performance.now() - started;
   data.reportPath = path.join(output, 'report.json');
+  data.indexPath = path.join(output, 'index.html');
   try {
-    if (!session) await mkdir(output, { recursive: true });
+    await mkdir(output, { recursive: true });
+    await writeFile(data.indexPath, reviewDocumentHtml(reviewModel));
     if (!session) await writeFile(data.reportPath, JSON.stringify(data, null, 2) + '\n');
   } catch (error) {
-    data.reportPath = null; data.complete = false; data.verdict = null;
+    data.reportPath = null; data.indexPath = null; data.complete = false; data.verdict = null;
     if (primary) primary.warnings.push(classifyError(error).error);
     else primary = commandFailure(error, data, warnings);
   }
   if (primary) throw primary;
-  if (!options.json) log(`${data.verdict}: ${data.summary.frames} frames. ${data.reportPath}`);
+  if (!options.json) log(`${data.verdict}: ${data.review.added} added, ${data.review.removed} removed, ${data.review.changed} changed (${data.summary.frames} frames). ${data.indexPath}`);
   if (data.verdict === 'changed') throw new CliError('DIFF_FAILED', 'Design differences require review.', { data, warnings });
   return { data, warnings };
 }
