@@ -20,7 +20,7 @@ function frameStructure(frame) {
     .trim();
 }
 
-function frameOwnsPart(frame, source, part, config) {
+function frameOwnsPart(frame, source, part) {
   return (frame.owners ?? frameOwners(frame.html)).some(owner => owner.source === source && owner.export === part);
 }
 
@@ -300,10 +300,11 @@ export async function check(config, args = [], options = {}, log = console.log, 
       const active = validatedMap.bindings.filter(binding => binding.active);
       const hasBinding = (source, part = null) => active.some(binding => binding.design.source === source && (part === null ? binding.design.part === undefined : binding.design.part === part));
       for (const [source, built] of allBuilt) {
-        const layer = source.split('/')[0];
+        const designSource = path.relative(config.design, path.join(config.root, source)).split(path.sep).join('/');
+        const layer = designSource.split('/')[0];
         if (!production.includes(layer)) continue;
         for (const part of built.parts ?? []) {
-          const frames = built.frames.filter(frame => frameOwnsPart(frame, source.replace(/^design\//, ''), part, config));
+          const frames = built.frames.filter(frame => frameOwnsPart(frame, designSource, part));
           if (layer !== top && !hasBinding(source, part) && !frames.some(frame => frame.proposed)) add({ code: 'OWNER_PART_UNBOUND', message: `Exported part ${part} has no implementation binding or proposed frame; add a binding or mark a review frame with proposed`, line: null, column: null }, path.join(config.root, source));
         }
         if (layer === top && !hasBinding(source)) add({ code: 'OWNER_SURFACE_UNBOUND', message: `Surface source has no whole-source implementation binding; add a binding without part`, line: null, column: null }, path.join(config.root, source));
@@ -311,7 +312,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
       }
     }
     if (config.check?.singleConsumer !== false) {
-      for (const warning of singleConsumerComponents(graph, sourceDirectories(config), Object.fromEntries([...allBuilt].map(([source, built]) => [source.replace(/^design\//, ''), built.parts ?? []])))) {
+      for (const warning of singleConsumerComponents(graph, sourceDirectories(config), Object.fromEntries([...allBuilt].map(([source, built]) => [path.relative(config.design, path.join(config.root, source)).split(path.sep).join('/'), built.parts ?? []])))) {
         warnings.push({ code: warning.code, message: warning.message, next: [] });
         if (!options.json) log(`WARNING ${warning.message}`);
       }
