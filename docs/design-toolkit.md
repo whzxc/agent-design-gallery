@@ -42,7 +42,7 @@ and service migration details.
 - `adg.config.mjs`, `adg.config.js` or `adg.config.ts` at the project root configures paths, `sources`, `check` and `compare`. Every field is optional.
 - `design/tokens.css` holds color, type, radius, size and shadow tokens for the light and dark themes.
 - `design/components/<name>.tsx` holds one building block that more than one feature block embeds, with or without domain meaning. It exports the functions other sources use, and its default export returns the component's declared forms as frames.
-- `design/modules/<feature>.tsx` owns one feature block and its states, composed from components. A large feature may use `design/modules/<feature>/index.tsx` plus sibling TSX files; those files may import each other, while surfaces import only the index.
+- `design/modules/<feature>.tsx` owns one feature block and its states, composed from components. A large feature may use `design/modules/<feature>/index.tsx` plus sibling TSX files; the index is the only frame source, sibling files are part sources, and surfaces import only the index.
 - `design/surfaces/<name>.tsx` holds a panel, dialog, page or screen laid out from modules and components. It does not import another surface. Its default export returns its declared forms as frames.
 - `design/art/` holds SVG illustrations and brand artwork that sources import.
 - `design/fixtures/` holds representative content and state data. `design/studies/` holds temporary direction explorations only while they are active.

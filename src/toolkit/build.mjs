@@ -4,7 +4,7 @@ import { statSync, readFileSync, realpathSync, mkdirSync, writeFileSync } from '
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadTokens, refreshTypes, rejectLegacy, relative, isSourcePath, sourceDirectories } from './project.mjs';
+import { loadTokens, refreshTypes, rejectLegacy, relative, isSourcePath, sourceDirectories, isFeatureInternal } from './project.mjs';
 import { themeCss, parseTokens } from './tokens.mjs';
 import { componentOwner } from './runtime.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
@@ -153,6 +153,17 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
   // Conservative cache eligibility hint from this entry's bundled helpers; quoted copy is not code.
   const observationDynamic=/\b(?:(?:Date\s*\.\s*now|Math\s*\.\s*random)\s*\(|(?:new\s+)?Date\s*\()/.test(executable.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g,'""'));
   const mod = await import(`data:text/javascript;base64,${Buffer.from(executable).toString('base64')}#${++evaluation}`);
+  const sourceName = path.relative(base, file).split(path.sep).join('/');
+  const parts = Object.keys(mod).filter(name => {
+    const owner = typeof mod[name] === 'function' && componentOwner(mod[name]);
+    return owner && owner.source === sourceName && owner.export === name;
+  }).sort();
+  const internal = isFeatureInternal(sourceName, sources);
+  if (internal) {
+    const original = read(file, 'utf8');
+    if (/export\s+default[\s\S]*<Frame\b/.test(original)) throw Error(`${relative(config,file)}: feature-internal source must not export Frame defaults; move frames to index.tsx`);
+    return { frames: [], parts, dependencies: [...dependencies], imports: [...imports].sort(), css: '', tokenCss: '', cssWithoutTokens: '', cssBeforeTokens: '', cssAfterTokens: '' };
+  }
   if (typeof mod.default !== 'function') throw Error(`${relative(config,file)}: export a default function returning Frames`);
   const value = mod.default(), frames = (Array.isArray(value) ? value.flat(Infinity) : [value]).filter(v => v != null && v !== false);
   if (!frames.length) throw Error(`${relative(config,file)}: default export must return at least one Frame`);
@@ -171,11 +182,6 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     frame.document = theme => frameDocument(frame, theme, css);
     if (write) { const destination = path.join(config.output, path.relative(base,file).replace(/\.tsx$/, ''), `${encodeURIComponent(frame.name)}.html`); mkdirSync(path.dirname(destination),{recursive:true}); writeFileSync(destination,frame.document('light')); }
   }
-  const sourceName = path.relative(base, file).split(path.sep).join('/');
-  const parts = Object.keys(mod).filter(name => {
-    const owner = typeof mod[name] === 'function' && componentOwner(mod[name]);
-    return owner && owner.source === sourceName && owner.export === name;
-  }).sort();
   return { ...(observationDynamic?{observationDynamic:true}:{}), frames, parts, dependencies: [...dependencies], imports: [...imports].sort(), css,
     tokenCss: tokenSource, cssWithoutTokens: `${utilities}\n${defaults}`,
     cssBeforeTokens: `${utilities}\n`, cssAfterTokens: `\n${defaults}` };

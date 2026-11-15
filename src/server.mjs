@@ -20,7 +20,7 @@ import { createBuildStore } from './toolkit/build-store.mjs';
 import { CliError, asCliError } from './cli-output.mjs';
 import { cleanup } from './toolkit/results.mjs';
 import { createViewerCache } from './viewer-cache.mjs';
-import { refreshTypes, archFiles, isSourcePath, readGroups, sourceDirectories } from './toolkit/project.mjs';
+import { refreshTypes, archFiles, isSourcePath, readGroups, sourceDirectories, isFeatureInternal } from './toolkit/project.mjs';
 import { loadConfig } from './toolkit/config.mjs';
 import { parseTokens } from './toolkit/tokens.mjs';
 import { sourceRelationships } from '../public/relationships.js';
@@ -343,7 +343,7 @@ export async function startServer({
     label: root
       ? path.basename(root) === "design" ? path.basename(path.dirname(root)) : path.basename(root)
       : "Agent Design Gallery",
-    assets: [...files.values()].sort((a, b) => a.path.localeCompare(b.path)),
+    assets: [...files.values()].filter(asset => !isFeatureInternal(asset.path, sources)).sort((a, b) => a.path.localeCompare(b.path)),
     groups,
     revision,
     recent: state.recent,
@@ -641,7 +641,7 @@ export async function startServer({
         type = "application/json";
       } else if (url.pathname.startsWith("/asset/")) {
         const name = decodeURIComponent(url.pathname.slice(7));
-        if (!files.has(name)) {
+        if (!files.has(name) || isFeatureInternal(name, sources)) {
           response.writeHead(404);
           response.end("Unknown SVG.");
           return;
@@ -721,7 +721,7 @@ export async function startServer({
   return { id: instanceId, directory: root, stateDirectory:path.resolve(stateDirectory), url: `http://127.0.0.1:${server.address().port}/`, port: server.address().port, close,
     cacheStats:()=>({builds:buildStore?.stats(),viewer:viewerCache?.stats()}),
     stats: () => {
-      const entries = [...files.keys()].filter(name => /\.(tsx|mmd)$/.test(name));
+      const entries = [...files.keys()].filter(name => /\.(tsx|mmd)$/.test(name) && !isFeatureInternal(name, sources));
       return { sourceCount: entries.length, frameCount: entries.every(name => frameCounts.has(name)) ? entries.reduce((n, name) => n + frameCounts.get(name), 0) : null };
     } };
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { init, starterTokens, listSources, sourceDirectories } from '../src/toolkit/project.mjs';
+import { init, starterTokens, listSources, sourceDirectories, featureFolderProblems } from '../src/toolkit/project.mjs';
 import { loadConfig } from '../src/toolkit/config.mjs';
 import { importDirectionViolations } from '../src/toolkit/asset-rules.mjs';
 import { check, render } from '../src/toolkit/commands.mjs';
@@ -61,6 +61,30 @@ test('source discovery includes module feature files', async t => {
   put(root, 'design/modules/other.tsx', source);
   const files = listSources(path.join(root, 'design'));
   assert.deepEqual(files.map(file => path.relative(path.join(root, 'design'), file)), ['modules/home/index.tsx', 'modules/home/toolbar.tsx', 'modules/other.tsx']);
+});
+
+test('feature internals build as parts while index owns frames', async t => {
+  const root = temporary(t);
+  put(root, 'adg.config.mjs', "export default { check: { strictLayers: true } };\n");
+  put(root, 'design/tokens.css', starterTokens);
+  put(root, 'design/components/control.tsx', source.replace('<div>Example</div>', '<span>Control</span>'));
+  put(root, 'design/modules/feature/part.tsx', "export function Part(){return <span>Part</span>;}\n");
+  put(root, 'design/modules/feature/index.tsx', "import {Frame} from 'adg';import {Part} from './part';export {Part} from './part';export default()=> <Frame name=\"default\"><Part/></Frame>;\n");
+  put(root, 'design/surfaces/page.tsx', "import {Frame} from 'adg';import Feature from '../modules/feature';export default()=> <Frame name=\"default\"><Feature/></Frame>;\n");
+  const config = await loadConfig(root), problems = [];
+  const result = await check(config, [], { 'read-only': true }, () => {}, message => problems.push(message));
+  assert.equal(result.data.complete, true, problems.join('\n'));
+  assert.equal(result.data.summary.sources, 4);
+  assert.equal(result.data.summary.frames, 3);
+  assert.equal(problems.length, 0);
+});
+
+test('feature folder shape problems report missing index and deep files', async t => {
+  const root = temporary(t);
+  mkdirSync(path.join(root, 'design/modules/feature/deep'), { recursive: true });
+  put(root, 'design/modules/feature/part.tsx', source.replace('<div>Example</div>', '<span>Part</span>'));
+  put(root, 'design/modules/feature/deep/nested.tsx', source.replace('<div>Example</div>', '<span>Nested</span>'));
+  assert.deepEqual(featureFolderProblems(path.join(root, 'design'), ['components', 'modules', 'surfaces']).map(row => row.code), ['FEATURE_INDEX_MISSING', 'FEATURE_SOURCE_NESTED']);
 });
 
 test('fresh init seeds a runnable downward composition and preserves it on rerun',async t=>{

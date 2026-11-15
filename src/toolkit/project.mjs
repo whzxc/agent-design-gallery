@@ -136,6 +136,26 @@ export function sourceFeature(name, sources = defaultSources) {
   return parts.length >= 3 ? `${parts[0]}/${parts[1]}` : name;
 }
 
+export function isFeatureInternal(name, sources = defaultSources) {
+  const parts = name.split('/'), production = sources.filter(item => item !== 'studies'), moduleLayer = production.length >= 3 ? production[1] : null;
+  return !!moduleLayer && parts[0] === moduleLayer && parts.length === 3 && parts.at(-1) !== 'index.tsx';
+}
+
+export function featureFolderProblems(directory, sources = sourceDirectories({design: directory})) {
+  const production = sources.filter(item => item !== 'studies'), moduleLayer = production.length >= 3 ? production[1] : null;
+  if (!moduleLayer) return [];
+  const base = path.join(directory, moduleLayer), problems = [];
+  if (!existsSync(base)) return problems;
+  for (const entry of readdirSync(base, { withFileTypes: true })) if (entry.isDirectory()) {
+    const folder = path.join(base, entry.name), index = path.join(folder, 'index.tsx');
+    if (!existsSync(index)) problems.push({ code: 'FEATURE_INDEX_MISSING', file: folder, message: `${moduleLayer}/${entry.name} is a feature folder without index.tsx; add the public entry before using internal files` });
+    for (const child of readdirSync(folder, { withFileTypes: true })) if (child.isDirectory()) {
+      problems.push({ code: 'FEATURE_SOURCE_NESTED', file: path.join(folder, child.name), message: `${moduleLayer}/${entry.name}/${child.name} is nested deeper than one feature level; keep source files directly beside index.tsx` });
+    }
+  }
+  return problems;
+}
+
 export function isFeatureEntry(name, sources = defaultSources) {
   const parts = name.split('/'), production = sources.filter(item => item !== 'studies'), moduleLayer = production.length >= 3 ? production[1] : null;
   return parts[0] !== moduleLayer || parts.length === 2 || parts.length === 3 && parts.at(-1) === 'index.tsx';

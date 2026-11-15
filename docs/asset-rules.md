@@ -10,7 +10,7 @@ Layers follow assembly level. Components are building blocks, modules assemble t
 | --- | --- |
 | `design/tokens.css` | Values: colors, typography, dimensions, radii, shadows and motion timing. |
 | `design/components/` | Building blocks: controls and single-purpose visual units that more than one feature block embeds, with or without domain meaning, such as a button, a status chip or an entity mark. |
-| `design/modules/<feature>.tsx` or `design/modules/<feature>/` | One feature block per file or folder. A folder's `index.tsx` is its public entry; sibling files are internal feature parts and may import each other. Split by feature, not by page: a page can use several features, and a feature can serve several pages. |
+| `design/modules/<feature>.tsx` or `design/modules/<feature>/` | One feature block per file or folder. A folder's `index.tsx` is its public entry and only frame source; sibling files are internal feature parts and may import each other. Split by feature, not by page: a page can use several features, and a feature can serve several pages. |
 | `design/surfaces/<name>.tsx` | A small set of full-page or full-region layouts. Place modules and components and lay them out; introduce no new controls or visual patterns here. |
 | `design/fixtures/` | Representative content, names, times and state data, separate from visual markup. |
 | `design/art/` | Brand artwork and content images. Declare their display dimensions and a file-size budget in the consumer's asset notes; downscale images before importing them. |

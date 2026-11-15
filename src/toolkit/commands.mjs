@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { availableParallelism } from 'node:os';
 import { buildSource } from './build.mjs';
-import { selectSources, relative, loadTokens, sourceDirectories, archFiles } from './project.mjs';
+import { selectSources, relative, loadTokens, sourceDirectories, archFiles, featureFolderProblems } from './project.mjs';
 import { importDirectionViolations, singleConsumerComponents } from './asset-rules.mjs';
 import { launch, loadFrame, browserTask } from './browser.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
@@ -224,6 +224,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
     const files = session ? session.sources.map(source => path.join(config.root, source)).filter(existsSync) : selectSources(config, args, { write });
     data.sources = files.map(file => relative(config, file));
     data.summary.sources = files.length;
+    if (config.check?.strictLayers === true) for (const problem of featureFolderProblems(config.design, sourceDirectories(config))) add({ code: problem.code, message: problem.message, line: null, column: null }, problem.file);
     const tokens = files.length ? loadTokens(config) : null;
     const arch = files.some(file => file.endsWith('.mmd')) ? await import('./arch.mjs') : null;
     let page;
