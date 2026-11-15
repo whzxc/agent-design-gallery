@@ -49,7 +49,7 @@ export default {
 
 Record the reason and the replacement policy in the consumer's governance documentation. Frame, token, layout and source-format checks still run.
 
-Existing consumers keep `check.strictLayers` and `check.lifecycle` disabled unless they opt in. `adg init` enables both keys for a new project.
+Existing consumers keep `check.strictLayers` and `check.lifecycle` disabled unless they opt in. `check.singleConsumer` defaults on and can be disabled for a deliberate exception. `adg init` enables strict layers and lifecycle checks for a new project.
 
 ## Implementation counterparts
 
@@ -226,6 +226,7 @@ Audit checklist:
 
 - Placement: values in tokens, building blocks embedded by more than one feature block in components, feature blocks in their own modules, and only layout glue in surfaces. Look for page-named modules that combine unrelated features, and for components that only one module uses.
 - Dependencies: upward source imports, module-to-module and surface-to-surface imports, copied markup, helper files that hide an upward or same-layer dependency, and type-only imports that cross ownership boundaries. Confirm that reuse preserves the defining owner.
+- Shared parts: a lowest-layer export reached by fewer than two distinct higher-layer sources is a warning; move it back to its feature unless a second feature consumer is planned.
 - Frames: duplicate state coverage across layers, module states represented only by surface frames, missing required variants, width-only or locale-only duplicates, needless full-page permutations, explanatory diagrams, incorrect crop sizes and separate dark frames.
 - Names: repeated file/part prefixes in a single-part source, missing part prefixes in a multi-part source, unclear part ownership, unnamed reusable parts and lines over 140 characters.
 - Fidelity and gaps: altered content or order, surface-local visuals, assets with insufficient props, missing elements and stale implementation mappings. Distinguish source evidence from an unobserved implementation.

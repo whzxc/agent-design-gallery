@@ -1111,6 +1111,7 @@ retained with `complete:false`. `--read-only` skips generated declarations and b
 | `OWNER_PART_UNBOUND` | Exported production part below the top layer has no implementation binding and no proposed frame; add a binding or mark a review frame with `proposed` |
 | `OWNER_SURFACE_UNBOUND` | Top-layer surface has no whole-source implementation binding; add a binding without `part` |
 | `OWNER_SURFACE_FRAME_UNCAPTURED` | Current surface frame lacks fixture or capture metadata; add both fields or mark it `proposed` |
+| `SINGLE_CONSUMER_COMPONENT` | Lowest-layer export has fewer than two distinct higher-layer consumers; move it to its feature or add another feature consumer |
 | `FRAME_ROOT_INVALID` | Frame does not have exactly one root element |
 | `MARKUP_FORBIDDEN` | Forbidden style/script element or event/className attribute |
 | `STYLE_FORBIDDEN` | Unsupported inline style outside `data-free` |

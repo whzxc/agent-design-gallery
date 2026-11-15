@@ -3,7 +3,7 @@ import path from 'node:path';
 import { availableParallelism } from 'node:os';
 import { buildSource } from './build.mjs';
 import { selectSources, relative, loadTokens, sourceDirectories, archFiles } from './project.mjs';
-import { importDirectionViolations } from './asset-rules.mjs';
+import { importDirectionViolations, singleConsumerComponents } from './asset-rules.mjs';
 import { launch, loadFrame, browserTask } from './browser.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
 import { commandFailure, cleanup, emptySelection } from './results.mjs';
@@ -307,6 +307,12 @@ export async function check(config, args = [], options = {}, log = console.log, 
         }
         if (layer === top && !hasBinding(source)) add({ code: 'OWNER_SURFACE_UNBOUND', message: `Surface source has no whole-source implementation binding; add a binding without part`, line: null, column: null }, path.join(config.root, source));
         if (layer === top) for (const frame of built.frames) if (!frame.proposed && (!frame.fixture || !frame.capture)) add({ code: 'OWNER_SURFACE_FRAME_UNCAPTURED', message: `Surface frame ${frame.name} needs fixture and capture or a proposed review scope; add both metadata fields or proposed`, line: null, column: null }, path.join(config.root, source), frame.name);
+      }
+    }
+    if (config.check?.singleConsumer !== false) {
+      for (const warning of singleConsumerComponents(graph, sourceDirectories(config), Object.fromEntries([...allBuilt].map(([source, built]) => [source.replace(/^design\//, ''), built.parts ?? []])))) {
+        warnings.push({ code: warning.code, message: warning.message, next: [] });
+        if (!options.json) log(`WARNING ${warning.message}`);
       }
     }
     if (config.check?.redundantFrames !== false) {

@@ -12,3 +12,34 @@ export function importDirectionViolations(graph, sources, { strictLayers = false
   }
   return violations;
 }
+
+// A component is a library asset only when distinct higher-layer sources reach it.
+// Walk the resolved source graph backwards so component-to-component indirection
+// and feature/surface transitive use are counted without treating its own frames
+// as consumers.
+export function singleConsumerComponents(graph, sources, partsBySource) {
+  const production = sources.filter(name => name !== 'studies');
+  const rank = new Map(production.map((name, index) => [name, index]));
+  const reverse = new Map();
+  for (const [source, row] of Object.entries(graph)) for (const target of new Set(row.uses ?? [])) {
+    const list = reverse.get(target) ?? []; list.push(source); reverse.set(target, list);
+  }
+  const warnings = [];
+  for (const [source, parts] of Object.entries(partsBySource)) {
+    const layer = source.split('/')[0];
+    if (layer !== production[0] || !rank.has(layer)) continue;
+    const consumers = new Set();
+    for (const part of parts) {
+      const queue = [source], seen = new Set([source]);
+      while (queue.length) for (const importer of reverse.get(queue.shift()) ?? []) {
+        if (seen.has(importer)) continue;
+        seen.add(importer);
+        const importerLayer = importer.split('/')[0];
+        if (rank.has(importerLayer) && rank.get(importerLayer) > rank.get(layer)) consumers.add(importer);
+        queue.push(importer);
+      }
+      if (consumers.size < 2) warnings.push({ code: 'SINGLE_CONSUMER_COMPONENT', source, part, consumers: [...consumers].sort(), message: `${source}#${part} is reached by ${consumers.size} distinct higher-layer source${consumers.size === 1 ? '' : 's'}; move it back to its feature or add another feature consumer` });
+    }
+  }
+  return warnings;
+}

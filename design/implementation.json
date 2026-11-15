@@ -161,28 +161,6 @@
       },
       "design": [
         {
-          "source": "design/components/kbd.tsx",
-          "part": "Kbd"
-        }
-      ]
-    },
-    {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/kbd.tsx",
-          "part": "Kbd"
-        }
-      ]
-    },
-    {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
           "source": "design/components/menu-item.tsx",
           "part": "Menu"
         }
@@ -922,6 +900,28 @@
         {
           "source": "design/modules/project-switcher.tsx",
           "part": "SwitcherRow"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/shortcuts.tsx",
+          "part": "Kbd"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/shortcuts.tsx",
+          "part": "Kbd"
         }
       ]
     },

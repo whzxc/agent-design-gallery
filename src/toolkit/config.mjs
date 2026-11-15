@@ -126,7 +126,7 @@ export async function loadConfig(cwd = process.cwd(), { checkVersion = true, dis
   for (const key of ['design', 'output', 'arch']) if (config[key] !== undefined && !(key === 'arch' && config[key] === false) && (typeof config[key] !== 'string' || !config[key].trim())) throw new CliError('CONFIG_INVALID', `Set ${key} to a directory path in adg.config.mjs`);
   if (config.check !== undefined && (!config.check || typeof config.check!=='object' || Array.isArray(config.check))) throw new CliError('CONFIG_INVALID', 'Set check to an object in adg.config.mjs');
   if (config.check?.importDirection !== undefined && typeof config.check.importDirection!=='boolean') throw new CliError('CONFIG_INVALID', 'Set check.importDirection to true or false in adg.config.mjs');
-  for (const key of ['strictLayers', 'lifecycle']) if (config.check?.[key] !== undefined && typeof config.check[key] !== 'boolean') throw new CliError('CONFIG_INVALID', `Set check.${key} to true or false in adg.config.mjs`);
+  for (const key of ['strictLayers', 'lifecycle', 'singleConsumer']) if (config.check?.[key] !== undefined && typeof config.check[key] !== 'boolean') throw new CliError('CONFIG_INVALID', `Set check.${key} to true or false in adg.config.mjs`);
   const compare = { port: 5188, viewport: '1280x800', ...config.compare };
   viewport(compare.viewport);
   if (!Number.isInteger(compare.port) || compare.port < 1 || compare.port > 65535) throw new CliError('CONFIG_INVALID', 'Set compare.port to an integer from 1 to 65535 in adg.config.mjs');
@@ -136,5 +136,5 @@ export async function loadConfig(cwd = process.cwd(), { checkVersion = true, dis
   if (typeof config.arch === 'string' && (path.isAbsolute(config.arch) || path.relative(root,path.resolve(root,config.arch)).startsWith('..'))) throw new CliError('CONFIG_INVALID', 'Set arch to a project-root-relative directory in adg.config.mjs');
   const arch = config.arch === false ? false : path.resolve(root,config.arch ?? 'arch');
   const design=path.resolve(root,config.design??'design');
-  return { root, name: config.name ?? path.basename(root), requires: config.requires ?? null, compatible, archDirectory: arch, arch: arch && (config.arch !== undefined || archFiles(arch).length) ? arch : false, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{archMaxEdges:30,importDirection:true,strictLayers:false,lifecycle:false,...config.check}, compare, diff: resolveDiffPolicy(config.diff) };
+  return { root, name: config.name ?? path.basename(root), requires: config.requires ?? null, compatible, archDirectory: arch, arch: arch && (config.arch !== undefined || archFiles(arch).length) ? arch : false, sources: sourceDirectories({...config,design}), design, output: path.resolve(root, config.output ?? 'output/design'), check:{archMaxEdges:30,importDirection:true,strictLayers:false,lifecycle:false,singleConsumer:true,...config.check}, compare, diff: resolveDiffPolicy(config.diff) };
 }

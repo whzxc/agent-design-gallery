@@ -53,7 +53,7 @@ and service migration details.
 
 `sources` is an optional array of plain top-level directory names. Since 0.5.0 it defaults to `['components', 'modules', 'surfaces']`, adding `studies` only when a direct `design/studies/*.tsx` file exists. Empty study directories and nested helpers do not enable studies. Saving the first study or removing the last one updates default viewer discovery. Explicit lists retain their exact directories and order, including whether to include studies. Names use letters, digits, underscores or hyphens; nested paths are rejected. Only direct TSX files in those directories are source entries. Other files under `design/`, such as shared scene data, remain imports.
 
-Production directories in `sources` are ordered from lower to higher layers. `check.strictLayers: true` rejects same-layer imports above the lowest layer; with the default order, modules cannot import modules and surfaces cannot import surfaces. `check.lifecycle: true` enables implementation binding and surface capture findings. Both keys default to `false` for existing consumers and `adg init` enables them for new projects. Custom names use the configured order; studies are exempt. `check.importDirection: false` disables all import-direction linting, including strict same-layer checks. The check uses resolved direct source imports from the relationship graph, including extension/index resolution and re-exports.
+Production directories in `sources` are ordered from lower to higher layers. `check.strictLayers: true` rejects same-layer imports above the lowest layer; with the default order, modules cannot import modules and surfaces cannot import surfaces. `check.lifecycle: true` enables implementation binding and surface capture findings. `check.singleConsumer` warns when a lowest-layer export has fewer than two distinct higher-layer consumers; it defaults on. Strict layers and lifecycle default to `false` for existing consumers and `adg init` enables them for new projects. Custom names use the configured order; studies are exempt. `check.importDirection: false` disables all import-direction linting, including strict same-layer checks. The check uses resolved direct source imports from the relationship graph, including extension/index resolution and re-exports.
 
 Commands run from any directory inside the project. They find the nearest `adg.config.mjs`, `.js` or `.ts` (in that priority order), or, without one, the nearest `package.json`, and resolve paths from there.
 
@@ -158,6 +158,7 @@ A source describes structure, not coordinates. Write it the way the UI is built.
 - invalid implementation mapping declarations or stale bindings; see [mapping findings](#validate-mappings);
 - a duplicate frame name, a frame without exactly one root element, or an invalid `capture`;
 - strict-layer, lifecycle and redundant-frame findings when enabled; redundant frames are warnings and do not fail the check;
+- single-consumer component warnings; these do not fail the check and exclude frames/specimens declared in the component's own source;
 - a computed text, background, border, outline, fill, stroke or shadow color that matches no token value in the active theme, outside `data-brand`;
 - text that overflows its box without an ellipsis, leaves the frame, or overlaps other text;
 - content that overflows the frame's declared width or height;
