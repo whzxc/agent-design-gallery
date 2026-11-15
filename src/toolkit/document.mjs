@@ -20,10 +20,10 @@ export function implementationTexts(root, clip) {
     }
     return box.left >= left - 0.5 && box.right <= right + 0.5 && (box.top + box.bottom) / 2 >= top && (box.top + box.bottom) / 2 <= bottom;
   };
-  const push = (text, box, owner, style = getComputedStyle(owner)) => {
+  const push = (text, box, owner, style = getComputedStyle(owner), leadingSpace = false) => {
     if (!inside(box, owner)) return;
     texts.push({ text, x: box.left - origin.left, y: box.top - origin.top, width: box.right - box.left, height: box.bottom - box.top,
-      space: (measure.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`, measure.measureText(' ').width), anchor: style.textAlign === 'center' ? 'middle' : style.textAlign === 'right' ? 'end' : 'start', fill: style.color, size: style.fontSize, weight: style.fontWeight, family: style.fontFamily });
+      space: (measure.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`, measure.measureText(' ').width), leadingSpace, anchor: style.textAlign === 'center' ? 'middle' : style.textAlign === 'right' ? 'end' : 'start', fill: style.color, size: style.fontSize, weight: style.fontWeight, family: style.fontFamily });
   };
   const linesFor = node => {
     const result=[];
@@ -34,7 +34,7 @@ export function implementationTexts(root, clip) {
       if (!rect) continue;
       let line = lines.at(-1);
       if (!line || Math.abs(line.top - rect.top) >= rect.height / 2) {
-        line = { text: '', top: rect.top, bottom: rect.bottom, chars: [] }; lines.push(line);
+        line = { text: '', top: rect.top, bottom: rect.bottom, chars: [], leadingSpace: /^\s/.test(node.data) }; lines.push(line);
       }
       line.text += node.data[index]; line.chars.push({ index, rect }); line.bottom = Math.max(line.bottom, rect.bottom);
     }
@@ -43,7 +43,7 @@ export function implementationTexts(root, clip) {
       if (!content) continue;
       const chars = line.chars.filter(({ index }) => !/\s/.test(node.data[index]));
       const box = { left: Math.min(...chars.map(c => c.rect.left)), right: Math.max(...chars.map(c => c.rect.right)), top: line.top, bottom: line.bottom };
-      result.push({content,box});
+      result.push({content,box,leadingSpace:line.leadingSpace});
     }
     return result;
   };
@@ -51,7 +51,7 @@ export function implementationTexts(root, clip) {
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const owner=node.parentElement;
     if (!node.textContent.trim() || !owner || owner.closest('input,textarea') || !visible(owner)) continue;
-    for (const {content,box} of linesFor(node)) push(content,box,owner);
+    for (const {content,box,leadingSpace} of linesFor(node)) push(content,box,owner,undefined,leadingSpace);
   }
   const canvas = document.createElement('canvas').getContext('2d');
   const fields='input:not([type]), input[type=text], input[type=search], input[type=email], input[type=url], input[type=tel], input[type=number], textarea';
@@ -77,7 +77,7 @@ export function implementationTexts(root, clip) {
   }
   const merged = [];
   for (const item of texts.sort((a,b) => a.y - b.y || a.x - b.x)) {
-    const previous = merged.findLast(p => Math.abs(p.y + p.height/2 - item.y - item.height/2) < 1 && item.x >= p.x + p.width - .5 && item.x - p.x - p.width < Math.max(p.space, item.space) - .1);
+    const previous = merged.findLast(p => Math.abs(p.y + p.height/2 - item.y - item.height/2) < 1 && item.x >= p.x + p.width - .5 && item.x - p.x - p.width <= Math.max(p.space, item.space, item.leadingSpace ? 6 : 0) + .1);
     if (previous) { const gap = item.x - previous.x - previous.width; previous.text += (gap > .5 ? ' ' : '') + item.text; previous.width = item.x + item.width - previous.x; }
     else merged.push({...item});
   }

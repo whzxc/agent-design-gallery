@@ -280,6 +280,17 @@ test('reader merges adjacent line segments and pairs duplicate content nearest-f
   assert.deepEqual(textDelta({...a,anchor:'end'},{...a,x:3,width:12}),{dx:5,dy:0,dw:2});
 });
 
+test('reader merges fractional flex date segments at a measured space boundary', async () => {
+  const browser = await launch();
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<button style='position:absolute;left:83.609375px;top:24px;display:flex;align-items:center;gap:6px;padding:0;border:0;height:34px;font:600 13px/18px -apple-system, system-ui, "SF Pro Text", "PingFang SC", "Segoe UI", "Microsoft YaHei", Inter, sans-serif;white-space:nowrap'>Board<span style='display:block;font:600 12px/18px -apple-system, system-ui, "SF Pro Text", "PingFang SC", "Segoe UI", "Microsoft YaHei", Inter, sans-serif;white-space:nowrap'></span></button>`);
+    await page.locator('button').evaluate(button => button.querySelector('span').append(...[' · ', 'January 1', ' · ', 'Thu'].map(text => document.createTextNode(text))));
+    const result = await page.locator('button').evaluate(implementationTexts);
+    assert.deepEqual(result.texts.map(item => item.text), ['Board · January 1 · Thu']);
+  } finally { await browser.close(); }
+});
+
 test('root discovery prefers nearest config over package and defaults to nearest package', async t => {
   const root = temporary(t), nested = path.join(root, 'a/b'); mkdirSync(nested, { recursive: true });
   // A repository-local TMPDIR may inherit an ancestor's config before this fixture creates its own.
