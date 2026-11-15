@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { importDirectionViolations, singleConsumerComponents } from '../src/toolkit/asset-rules.mjs';
 import { validateFrame } from '../src/toolkit/build.mjs';
 import { parseCli } from '../src/cli.mjs';
+import { loadConfig } from '../src/toolkit/config.mjs';
 
 test('strict layers reject same-layer imports above the lowest layer', () => {
   const graph = { 'components/a.tsx': { uses: ['components/b.tsx'] }, 'modules/a.tsx': { uses: ['modules/b.tsx'] }, 'surfaces/a.tsx': { uses: ['surfaces/b.tsx'] } };
@@ -39,4 +40,8 @@ test('proposed frame metadata is validated as a nonempty review scope', () => {
 test('owner reverse part selector is accepted by the CLI parser', () => {
   const parsed = parseCli(['owner', '--part=design/components/button.tsx#Button', '--json']);
   assert.equal(parsed.values.part, 'design/components/button.tsx#Button');
+});
+
+test('single-consumer checking defaults on', async () => {
+  assert.equal((await loadConfig(process.cwd())).check.singleConsumer, true);
 });
