@@ -9,7 +9,24 @@ import { CliError, classifyError } from '../cli-output.mjs';
 import { commandFailure, cleanup, emptySelection } from './results.mjs';
 import { loadImplementationMap, validateImplementationMap } from './implementation-map.mjs';
 import { withImpacted } from './impact-selection.mjs';
-import { mappingFacts } from './source-facts.mjs';
+import { mappingFacts, frameOwners } from './source-facts.mjs';
+
+function frameStructure(frame) {
+  return frame.html
+    .replace(/>[^<]*</g, '><')
+    .replace(/\s(?:aria-label|aria-description|title|placeholder|value)="[^"]*"/g, '')
+    .replace(/\sdata-adg-keys="[^"]*"/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function frameOwnsPart(frame, source, part, config) {
+  return (frame.owners ?? frameOwners(frame.html)).some(owner => owner.source === source && owner.export === part);
+}
+
+function proposedFrame(source, frame) {
+  return frame.proposed ? { source, frame: frame.name, scope: frame.proposed } : null;
+}
 export function inspectFrame(tokenNames) {
   const frame = document.querySelector('[data-adg-frame]'), box = frame.getBoundingClientRect(), problems = new Map();
   const add = (code, message) => problems.set(message, {code, message, line:null, column:null});
@@ -187,7 +204,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
     check(config, args, options, log, error, { launchBrowser, session: selected }));
   const write = !options['read-only'];
   /** @type {import('./results.mjs').CheckData} */
-  const data = { project: config.root, readOnly: !write, complete: false, impact: session?.selection ?? null, sources: [], summary: { sources: 0, frames: 0, evaluations: 0, problems: 0 }, findings: [] };
+  const data = { project: config.root, readOnly: !write, complete: false, impact: session?.selection ?? null, sources: [], summary: { sources: 0, frames: 0, evaluations: 0, problems: 0 }, findings: [], proposed: [] };
   const warnings = [], humanProblems = new Set(), findingKeys = new Set(), graph = {};
   let browser, primary;
   const add = (problem, file, frame = null, theme = null, source = relative(config, file)) => {
@@ -210,7 +227,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
     const tokens = files.length ? loadTokens(config) : null;
     const arch = files.some(file => file.endsWith('.mmd')) ? await import('./arch.mjs') : null;
     let page;
-    const builtSources = new Map(), failedSources = new Map();
+    const builtSources = new Map(), allBuilt = new Map(), failedSources = new Map();
     for (const file of files) {
       const architecture = file.endsWith('.mmd');
       if (architecture) {
@@ -238,6 +255,8 @@ export async function check(config, args = [], options = {}, log = console.log, 
         continue;
       }
       data.summary.frames += built.frames.length;
+      allBuilt.set(relative(config, file), built);
+      for (const frame of built.frames) if (frame.proposed) data.proposed.push(proposedFrame(relative(config, file), frame));
       if (mapping.present && !architecture) builtSources.set(relative(config, file), mappingFacts(built));
       graph[path.relative(config.design, file).split(path.sep).join('/')] = { uses: built.imports };
       for (const frame of built.frames) for (const theme of session?.themes ?? ['light', 'dark']) {
@@ -255,9 +274,10 @@ export async function check(config, args = [], options = {}, log = console.log, 
         }
       }
     }
+    let validatedMap = null;
     if (mapping.present) {
       const { listSources } = await import('./project.mjs');
-      await validateImplementationMap(config, mapping, {
+      validatedMap = await validateImplementationMap(config, mapping, {
         sources: listSources(config.design, sourceDirectories(config)).map(file => relative(config, file)),
         selected: args.length ? data.sources : undefined,
         getBuild: source => {
@@ -270,11 +290,36 @@ export async function check(config, args = [], options = {}, log = console.log, 
     }
     await cleanup(() => browser?.close(), primary);
     browser = null;
-    if (config.check?.importDirection !== false) for (const { source, target, from, to } of importDirectionViolations(graph, sourceDirectories(config))) {
-      add({ code: 'IMPORT_DIRECTION', message: `import ${target} violates import direction (${from} -> ${to}); import from the same or a lower layer in sources`, line: null, column: null }, path.join(config.design, source));
+    if (config.check?.importDirection !== false) for (const { source, target, from, to, sameLayer } of importDirectionViolations(graph, sourceDirectories(config), { strictLayers: config.check?.strictLayers === true })) {
+      add({ code: 'IMPORT_DIRECTION', message: `import ${target} violates import direction (${from} -> ${to}); ${sameLayer ? 'same-layer imports are allowed only in the lowest layer' : 'import from the same or a lower layer in sources'}`, line: null, column: null }, path.join(config.design, source));
+    }
+    if (config.check?.lifecycle === true && mapping.present && validatedMap) {
+      const production = sourceDirectories(config).filter(name => name !== 'studies');
+      const top = production.at(-1);
+      const active = validatedMap.bindings.filter(binding => binding.active);
+      const hasBinding = (source, part = null) => active.some(binding => binding.design.source === source && (part === null ? binding.design.part === undefined : binding.design.part === part));
+      for (const [source, built] of allBuilt) {
+        const layer = source.split('/')[0];
+        if (!production.includes(layer)) continue;
+        for (const part of built.parts ?? []) {
+          const frames = built.frames.filter(frame => frameOwnsPart(frame, source.replace(/^design\//, ''), part, config));
+          if (layer !== top && !hasBinding(source, part) && !frames.some(frame => frame.proposed)) add({ code: 'OWNER_PART_UNBOUND', message: `Exported part ${part} has no implementation binding or proposed frame; add a binding or mark a review frame with proposed`, line: null, column: null }, path.join(config.root, source));
+        }
+        if (layer === top && !hasBinding(source)) add({ code: 'OWNER_SURFACE_UNBOUND', message: `Surface source has no whole-source implementation binding; add a binding without part`, line: null, column: null }, path.join(config.root, source));
+        if (layer === top) for (const frame of built.frames) if (!frame.proposed && (!frame.fixture || !frame.capture)) add({ code: 'OWNER_SURFACE_FRAME_UNCAPTURED', message: `Surface frame ${frame.name} needs fixture and capture or a proposed review scope; add both metadata fields or proposed`, line: null, column: null }, path.join(config.root, source), frame.name);
+      }
+    }
+    if (config.check?.redundantFrames !== false) {
+      for (const [source, built] of allBuilt) {
+        const byStructure = new Map();
+        for (const frame of built.frames) { const key = frameStructure(frame); const list = byStructure.get(key) ?? []; list.push(frame.name); byStructure.set(key, list); }
+        for (const frames of byStructure.values()) if (frames.length > 1) warnings.push({ code: 'REDUNDANT_FRAME', message: `${source}: frames ${frames.join(', ')} have identical structure apart from text, locale and geometry.`, next: [] });
+      }
     }
     for (const problem of humanProblems) error(problem);
     const message = `Design check ${humanProblems.size ? 'failed' : 'passed'} for ${files.length} sources${humanProblems.size ? `: ${humanProblems.size} problems` : ''}.`;
+    for (const item of data.proposed) log(`PROPOSED ${item.source}#${item.frame} (${item.scope})`);
+    for (const warning of warnings.filter(warning => warning.code === 'REDUNDANT_FRAME')) log(`WARNING ${warning.message}`);
     log(message);
     if (!files.length) emptySelection(warnings);
     if (primary) { primary.humanReported = true; throw primary; }

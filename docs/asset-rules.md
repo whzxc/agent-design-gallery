@@ -36,7 +36,7 @@ Fixtures and artwork support these layers; they are not additional UI layers or 
 
 By default, `sources` is `['components', 'modules', 'surfaces']`. Its order is from lower to higher layers. Custom source directory names follow the same order. For example, with `sources: ['primitives', 'features', 'surfaces']`, primitives cannot import features or surfaces, and features cannot import surfaces or other features. Only the lowest layer imports within itself.
 
-`adg check` checks resolved direct source imports against this order. It reports the importing file, the imported source and the offending layer direction. It uses the same resolved edges as the viewer's relationship graph. Imports into fixtures, artwork, tokens and other helper files are outside that graph; type-only imports removed by the build are also outside it. Review helper indirection, same-layer imports above the lowest layer and type-only ownership during the audit below.
+`adg check` checks resolved direct source imports against this order. It reports the importing file, the imported source and the offending layer direction. It uses the same resolved edges as the viewer's relationship graph. Imports into fixtures, artwork, tokens and other helper files are outside that graph; type-only imports removed by the build are also outside it. With `check.strictLayers` enabled, same-layer imports above the lowest layer fail the check; when it is disabled, reviewers must still resolve those dependencies during the audit below.
 
 A consumer with an intentional alternative dependency policy can disable only this lint:
 
@@ -48,6 +48,8 @@ export default {
 ```
 
 Record the reason and the replacement policy in the consumer's governance documentation. Frame, token, layout and source-format checks still run.
+
+Existing consumers keep `check.strictLayers` and `check.lifecycle` disabled unless they opt in. `adg init` enables both keys for a new project.
 
 ## Implementation counterparts
 

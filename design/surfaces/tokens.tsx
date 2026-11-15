@@ -3,7 +3,15 @@ import { Canvas } from '../components/canvas';
 import { Sidebar } from '../modules/navigation';
 import { TokenCatalog } from '../modules/tokens';
 import { tokenGroups, tokenNavigation, tokenSource } from '../fixtures/tokens';
-import { ViewerHeader } from './canvas';
+import { Field } from '../components/field';
+import { ProjectPicker } from '../modules/project-switcher';
+import { ScopeTabs } from '../modules/navigation';
+import { ViewerBars } from '../components/toolbar';
+import { viewerBarProject, viewerBarScopes } from '../fixtures/viewer-bars';
+
+function ViewerHeader({ scope, contentsOpen = false, detailsOpen = false, inspectorDisabled = false }: any) {
+  return <ViewerBars project={<ProjectPicker current={viewerBarProject} kind="project" />} scopes={<ScopeTabs options={viewerBarScopes} selected={scope} />} search={<Field form="search" label={scope === 'Tokens' ? 'Find tokens…' : 'Find assets…'} width={216} />} contentsOpen={contentsOpen} detailsOpen={detailsOpen} inspectorDisabled={inspectorDisabled} />;
+}
 
 export default () => [
   <Frame name="desktop" width={1440} height={900} note="Historical token layout from before the top bars.">

@@ -2,353 +2,38 @@
 
 [Asset rules](asset-rules.md) · [Design toolkit](design-toolkit.md) · [Architecture](architecture.md)
 
-The TSX sources in `design/` define how the viewer looks. This document records the current direction, ownership,
-implementation mappings and review process. The asset rules take precedence over conflicting project guidance.
-
-## Governance
-
-- Minimum toolkit: ADG `>=0.5.0`, declared in `adg.config.mjs`.
-- Design root: `design/`; discovery order: `components`, `modules`, `surfaces`. No explicit source override or
-  import-direction opt-out is configured. The module sources are navigation, inspector, menus, open-directory, shortcuts,
-  view-controls, canvas, hub-home, project-switcher, hub-access and tokens; there are no studies.
-- Review platform: macOS with system UI fonts. The declared implementation capture viewport is 1440 × 900,
-  locale `en-US`, timezone `UTC`; ARC artwork retains its own content language. The resident hub also declares
-  390 × 844 home and switcher forms. Other viewport and locale forms are not declared.
-- Each task is one end-to-end Codex round. Layout and behavior changes are implemented directly; the design sources
-  are synced after the user accepts the running result. Only a new visual direction is drawn in the design sources
-  first and shown to the user before implementation. Codex does not dispatch other Agents or answer their permission
-  requests.
-- Run `adg check` and the affected tests. Only a change declared a pure refactor also captures a baseline in a
-  disposable copy outside the checkout and compares decoded pixels per affected frame/theme. Use the repository `src/cli.mjs` render command,
-  which waits for fonts and captures each frame/theme in an isolated page/context with bounded concurrency.
-  Commit only the authorized batch. Open review with `adg open <design-directory> --port=<free-port>`; port 4310 is reserved.
-- This document keeps current mappings, approval/adoption state, exceptions and scope. Render, pixel-comparison and
-  controller-review evidence stays in local `output/` or the external baseline copy. This document has no batch log.
-
-The approved browser mark lives in `design/art/adg-mark.svg`. Its 32 × 32 viewBox is designed for display at 16 and 32 px,
-with a 1 KiB source budget. Both the hub and viewer link to `/favicon.svg`; packaging copies the artwork to `public/favicon.svg`.
-
-### Ownership and current scope
-
-| Owner | Current assets | Current scope / remaining work |
-| --- | --- | --- |
-| Shared values and controls | `tokens.css`, button, icon-button, field, tree-row and menu-item components; their fixtures | Reviewed; IconButton disabled is approved; defaults belong to parts and frame presentation data belongs to fixtures. |
-| Generic containers | `components/panel.tsx`, `components/toolbar.tsx`, `components/canvas.tsx`, `fixtures/containers.ts` | Independent source entries and minimal specimens; Reviewed. |
-| Surface layout | `surfaces/canvas.tsx` / `ViewerChrome`; three surface renderers | Reviewed; all three surfaces compose approved parts around the generic Screen and own their capture/layout records in fixtures. |
-| Navigation | `modules/navigation.tsx` / `Sidebar` | Reviewed; navigation/search fixtures are separate. |
-| Token catalog | `modules/tokens.tsx` / `TokenCatalog`; `surfaces/tokens.tsx`; `fixtures/tokens.ts` | Approved and implemented in `public/token-catalog.js` and the viewer shell. The desktop frame maps to the `tokens-light` compare fixture. |
-| Inspector | `modules/inspector.tsx` / `Inspector`; `fixtures/inspector.json` | Reviewed; one Inspector composition with separate fixtures and approved source, exported-element, nested-element and empty-match states. |
-| Menus | `modules/menus.tsx` / `Menu` | Reviewed; menu captures and their fixtures belong to the menus module. |
-| View controls | `modules/view-controls.tsx` / `Tools`, `AppBar`, `ZoomBar` | Reviewed; tools, AppBar, ZoomBar and tooltip capture are approved, including Fit scan, Back disabled and Minimap pressed. |
-| Directory opening | `modules/open-directory.tsx` / `OpenDialog` | Reviewed; directory states and recent entries have one fixture owner; current visual gaps are listed below. |
-| Shortcuts | `modules/shortcuts.tsx` / `Shortcuts`; `components/kbd.tsx` | Reviewed; keyboard content belongs to shortcuts fixtures; keycap geometry uses dedicated tokens at its current values. |
-| Canvas presentation | `modules/canvas.tsx` / `Drawing`, `Minimap`, `AssetLabel`; `fixtures/canvas.ts`, `scenes/`, `art/arc-previews/` | Reviewed; one canvas feature owner. Drawing owns section/artboard/flow layers; mapped AssetLabel specimens and preview artwork remain in use. |
-| Resident hub | `modules/hub-home.tsx`, `modules/project-switcher.tsx`, `modules/hub-access.tsx`; corresponding hub surfaces; `fixtures/hub.ts` | All 12 frames and presentation choices approved by the user; runtime implemented in `public/hub.js`, `public/switcher.js` and `public/auth.js`; automated design compare fixtures remain pending. |
-
-Feature modules own their parts and specimens. Remaining coverage and fidelity gaps are listed below. There are no approved dependency-policy exceptions. `scenes/*.ts` are generated supporting data,
-not frame sources. The separate `fixtures/arc-sample/design/` tree is acceptance content, not the viewer UI library.
-
-### Viewer top bars
-
-Two toolbars stay above the viewer. The left toolbar starts with the Contents toggle, then the project picker,
-the scope tabs in order (Tokens, Components, Modules, Surfaces, All designs), and the search field. The right
-toolbar has More followed by the Inspector toggle at its right edge. More contains Fullscreen, Theme, Canvas,
-and the existing view actions. Inspector becomes available when a canvas node is selected.
-
-Contents and Inspector start closed. Each opens beneath its toolbar, overlays the canvas, and uses its
-toolbar toggle to close. Contents shows the tree for the selected scope and opens for asset search results.
-Tokens uses the full width below the bars and keeps categories in Contents. Search filters the token table
-in place. The project menu and More menu anchor to their respective triggers.
-
-The approved frames and active implementation captures are `surfaces/canvas.tsx` / `top-bars` and
-`top-bars-panels`, `surfaces/tokens.tsx` / `top-bars`, and `modules/menus.tsx` / `viewer-more`.
-They use the 1440 × 900 desktop viewport or a crop of it. Earlier viewer chrome specimens remain as
-historical frames without implementation capture bindings. At narrow widths the tabs scroll in their
-own row. Contents and Inspector still overlay the canvas.
-
-### Render scopes
-
-`modules/view-controls.tsx` owns the scope tabs between the project picker and search.
-The tabs list each configured source layer and **All designs**. `modules/navigation.tsx` owns
-Contents and its **Render only this group** and **Render only this asset** row actions. A clean project URL opens its first
-nonempty layer, normally Components. All designs is a choice for the current URL.
-
-Click a row to focus it within the current scope. Use the trailing action to switch scope.
-A layer shows only its own assets, with curated groups projected onto that layer. An isolated group
-shows all assets assigned to it, including assets from other layers. An isolated asset shows that
-source's frames or forms in the canvas and navigation. Search and Fit all operate within the current scope.
-Back restores the previous scope, camera and selection. The inspector starts closed on entry and opens
-only through its toolbar button; changing selection, including from a link, does not open it.
-
-Path links locate a target inside a canvas hierarchy. Query links select an independent render scope.
-Append these examples to a standalone viewer URL or to the project's `/p/<slug>/` URL.
-
-| Locator | Result |
-| --- | --- |
-| `view/layer/components` | Open the Components layer. |
-| `view/all/group/Essentials` | Focus Essentials on the full project canvas. |
-| `view/layer/components/asset/components%2Ffield.tsx/frame/error` | Focus field's error form in Components. |
-| `?group=Essentials` | Render the complete Essentials group by itself. |
-| `?asset=components%2Ffield.tsx` | Render field and all its forms by itself. |
-| `?asset=components%2Ffield.tsx&frame=error` | Render just field's error form. |
-
-An explicit `scope` query sets the render scope and can carry a focus within it. This also keeps existing
-links such as `?scope=all&group=Essentials` and `?scope=asset:components%2Ffield.tsx&frame=error` usable.
-A query locator takes precedence if a URL includes both forms. The source catalog resolves the scope.
-Builds and preview requests stay within that scope, including dependencies needed to render it.
-An independent TSX frame compiles its owning source and sends only the named frame to the browser.
-See the [review handoff workflow](design-toolkit.md#review-handoff) for link and screenshot commands.
-
-The scope tabs and row actions map to `public/app.js`, `public/index.html` and `public/style.css`.
-The runtime fixtures exercise independent layer, group and asset scopes. Scope resolution lives in
-`public/assets.js` and is applied by `src/server.mjs` before asset metadata is read.
-
-### Token catalog
-
-The top bar lists **Tokens** first for projects with `design/tokens.css`.
-The catalog replaces the canvas with a read-only table. Returning to a design scope restores its view.
-The top search filters token names and values in the table. Contents filters by category. The table shows CSS names and
-authored light and dark values side by side. Color values show swatches. Spacing, size, and radius
-values in pixels show a length or corner sample next to the exact value. A missing dark declaration
-uses the light value. The token name copies on click, with the copy icon shown on hover or focus.
-The `?scope=tokens` URL opens the catalog directly. The server reads the project's token file on demand and
-refreshes the catalog when it changes. The viewer keeps using its own tokens for chrome.
-
-The review uses `surfaces/tokens` / `top-bars` for the catalog and `modules/tokens` / `typography` and `spacing-and-radii` for value previews.
-
-### Part mappings and state
-
-Paths in the source column are relative to `design/`. An implementation mapping names the corresponding runtime
-location; the application does not import design TSX. "In use" includes a composed design consumer or mapped runtime
-usage. Reviewed structural compositions preserve their existing visuals; remaining fidelity and capture gaps stay explicit below.
-
-| Source / part | Implementation location | Design consumers | Approval / adoption / remaining gap |
-| --- | --- | --- | --- |
-| `tokens.css` | `public/index.html` `/tokens.css`; `public/style.css`; `public/app.js` `applyTheme` | All sources | Reviewed; in use. Shared theme, typography and geometry values. |
-| `components/button.tsx` / `Button` | `public/index.html` `#directory-form .primary`, `#zoom-options`; `public/style.css` `.primary`, `#zoom-options` | `modules/open-directory`, `modules/view-controls` → surface chrome; `modules/hub-home` Rescan | Reviewed; in use. Frames: `primary`, `secondary`, `zoom`, `zoom-open`. Secondary is adopted by the approved hub Rescan design; directory submit-disabled coverage remains a known gap. |
-| `components/icon-button.tsx` / `IconButton` | `public/index.html` `.icon-button`; `public/style.css` `.icon-button`, pressed/current states | Inspector, navigation, directory, shortcuts and view-controls modules; Toolbar specimens | Reviewed; in use. Approved frames: `default`, `active`, `disabled`. Disabled uses the runtime 45% opacity and is adopted by ZoomBar. |
-| `components/field.tsx` / `Field` | `public/index.html` `.picker`, `.search-field`, `#path`; `public/style.css` corresponding selectors | Navigation, directory and view-controls modules | Reviewed; in use. Frames: `search`, `search-active`, `picker`, `input`, `input-error`, `input-empty`. Default height uses `--field-height`; numeric overrides are supported. |
-| `components/tree-row.tsx` / `TreeRow` | `public/app.js` `makeRow`, `renderNav`, `selection`, `recent`; `public/style.css` `.tree-row`, `.frame-row`, `#recent button` | Navigation, inspector and directory modules | Reviewed; in use. Frames: `root`, `root-selected`, `group`, `group-selected`, `item`, `item-selected`, `two-line`, `two-line-selected`. Heights use row tokens; numeric overrides are supported; multiline follows content. |
-| `components/menu-item.tsx` / `MenuItem` | `public/index.html` menu buttons/headings; `public/style.css` `.menu button`, `.menu h3` | Menus module | Reviewed; in use. Frames: `item`, `item-active`, `check`, `option`, `label`. Heights use `--menu-item-height` and `--menu-label-height`. |
-| `components/kbd.tsx` / `Kbd` | `public/index.html` `#keys kbd`; `public/style.css` `kbd` | Shortcuts module | Reviewed; in use; current 6px radius and 22px minimum size use dedicated keycap tokens; runtime radius gap is retained. |
-| `components/panel.tsx` / `Panel` | `public/style.css` `.floating`, `.menu`, `dialog` | Navigation, inspector, menus, directory and shortcuts modules | In use; generic specimens `floating`, `menu`, `dialog` Reviewed. Default form remains `sidebar`. |
-| `components/toolbar.tsx` / `Toolbar` | `public/style.css` `#tools`, `#app-bar`, `.zoom` | View-controls module | In use; generic specimens `toolbar`, `toolbar-wide` Reviewed. |
-| `components/toolbar.tsx` / `Separator` | `public/index.html` `.separator`; `public/style.css` `.separator` | AppBar and ZoomBar in view-controls | In use; generic specimen `separator` Reviewed. |
-| `components/canvas.tsx` / `Canvas` | `public/index.html` `.gallery-viewport`; `public/app.js` `drawBackground` | Screen, Scrim specimen | In use; `canvas-dots` specimen Reviewed. |
-| `modules/canvas.tsx` / `Drawing` | `public/app.js` `draw`, `drawLabels`; `public/labels.js` `Labels` | Screen → surfaces and feature-module captures | Reviewed; in use; owns section fills, artboard/flow outlines, preview images and SVG labels. The cropped `drawing` specimen shows its existing section layer. |
-| `components/canvas.tsx` / `Screen` | `public/index.html` gallery layers; `public/app.js` `draw` | Three surfaces and captured feature modules | In use; generic scene layer with child content, independent of feature dispatch; callers supply the drawing content. Specimen `screen` Reviewed. |
-| `components/canvas.tsx` / `Scrim` | `public/style.css` `dialog::backdrop` | ViewerChrome and shortcuts module | In use; existing 60% canvas overlay. Specimen `scrim` Reviewed. |
-| `modules/navigation.tsx` / `Contents` | `public/index.html` `#sidebar`; `public/app.js` `renderNav` | `surfaces/canvas` / `top-bars-panels` | Approved; overlay for the current scope. |
-| `modules/inspector.tsx` / `Inspector` | `public/index.html` `#source`, `#relationships`; `public/app.js` `selection`, `renderRelationships`; `public/selection.js` `exportFrames` | ViewerChrome → inspector surface; mapped source and export selection | Reviewed; in use. Approved states: `frames`, `frame`, `element`, `source`, `export-element`, `export-element-nested`, `export-element-empty`. Export rows show owning-frame sizes while the header shows the selected element size; export rows have no selected frame highlight. |
-| `modules/menus.tsx` / `Menu` | `public/index.html` `#zoom-menu`, `#more-menu` | Zoom and viewer More menus | Approved; `viewer-more` captures the combined menu. |
-| `modules/open-directory.tsx` / `OpenDialog` | `public/index.html` `#directories`; `public/app.js` `showOpen`, `open`, `recent` | ViewerChrome → open-directory surface | Reviewed; in use; `error` specimen and captured states preserve existing visuals. Recent labels/paths are shared with runtime fixtures. Two-line rows use their existing height token. |
-| `modules/shortcuts.tsx` / `Shortcuts` | `public/index.html` `#keys`; `public/style.css` `#keys` | Mapped runtime usage; module capture | Reviewed; in use; captured `default` consumes shared keyboard fixtures; its module owns the local dialog capture. |
-| `modules/view-controls.tsx` / viewer toolbars | `public/index.html` `#app-bar`, `#tools`; `public/app.js` `renderScopeTabs`, `updateChrome` | `surfaces/canvas` and `surfaces/tokens` | Approved; Contents, project picker, tabs and search on the left; More and Inspector on the right. |
-| `modules/view-controls.tsx` / `AppBar` | `public/index.html` `#app-bar`; `public/app.js` `updateChrome` | ViewerChrome → canvas/open-directory surfaces | Reviewed; in use; `app-bar` uses a separate presentation fixture. |
-| `modules/view-controls.tsx` / `ZoomBar` | `public/index.html` `.zoom`; zoom/fit handlers | ViewerChrome → surfaces; menus module | Reviewed; in use; Fit uses `scan`, Back exposes `backDisabled`, and Minimap exposes `minimapPressed` through the existing active form. All four state specimens are approved. Frames: `zoom-bar`, `zoom-bar-menu-open`, `zoom-bar-back-disabled`, `zoom-bar-minimap-pressed`. |
-| `surfaces/canvas.tsx` / `ViewerChrome` | `public/index.html` floating chrome; `public/app.js` `updateChrome` | All three surface renderers | In use; boundary Reviewed. Only chooses and positions imported feature parts. |
-| `modules/canvas.tsx` / `Minimap` | `public/index.html` `#minimap`; `public/app.js` `drawMap` | ViewerChrome → canvas surface | Reviewed; in use; `minimap` preserves the existing specimen geometry; its fidelity gap is listed below. |
-| `components/tooltip.tsx` / `Tooltip` | `public/index.html` `#tooltip`; tooltip handlers; `public/style.css` `#tooltip` | View-controls module capture | Reviewed; in use; existing tooltip geometry and its default specimen are preserved. |
-| `modules/canvas.tsx` / `AssetLabel` | `public/labels.js` `Labels`; `public/app.js` `drawLabels`; `.label-copy` | Mapped runtime usage; no imported design consumer | Reviewed; in use; frames: `asset-label-modified`, `asset-label-hover`, `asset-label-copied`. Drawing retains SVG labels under this same feature owner. |
-| `surfaces/canvas.tsx` / frame renderer | Gallery layout/camera/chrome | Entry surface | Reviewed structural composition; existing full-region layouts and camera states retained; capture identities remain mapped below. |
-| `surfaces/inspector.tsx` / frame renderer | Gallery and source inspector | Entry surface | Reviewed structural composition; frame/component captures use the unified Inspector and retain their existing full-window crops. Approved source/export states belong to the module. |
-| `surfaces/open-directory.tsx` / frame renderer | Gallery and directories dialog | Entry surface | Reviewed structural composition; empty/dialog/error captures retain their current crops, chrome and shared directory fixtures. |
-
-`fixtures/buttons.ts`, `fixtures/fields.ts` and `fixtures/rows.ts` own frame presentation data for Button, IconButton,
-Field, TreeRow and MenuItem. `fixtures/containers.ts` owns only neutral generic-container specimen dimensions and icon content.
-`fixtures/navigation.json` owns Sidebar presentation records for module and surface consumers. The compact `search`
-specimen shows one of two results; the captured `search-results` frame shows both, matching the runtime fixture.
-Part defaults belong to their defining components. The fixtures have no independent implementation mapping.
-`fixtures/menus.json` owns menu rows and widths; `fixtures/view-controls.json` owns AppBar presentation data and ZoomBar state specimens.
-`fixtures/inspector.json` owns Inspector specimens and captured surface content. The `frame` and `element` records
-retain illustrative external source names; `source` and exported-element states use the local ARC snapshot.
-Their part mappings are `StatePill` in `components/state-pill.tsx` and nested `Input` in `components/field.tsx`;
-`SetupAction` in `components/setup-choice.tsx` has no owning-frame match when selected in `surfaces/setup.tsx` / `source-empty`.
-The top-bars panel capture shows a component selection. Other local source and export specimens use ARC owner and geometry data.
-`fixtures/open-directory.json` owns recent labels/paths and dialog presentation states; `fixtures/viewer.mjs`
-derives runtime recent paths from that same record.
-`fixtures/shortcuts.json` owns shortcut labels/key sequences and the keycap specimen.
-`fixtures/canvas.ts` owns neutral drawing/minimap data and AssetLabel presentation content.
-`fixtures/viewer-bars.ts` owns the approved top-bar, Contents, Inspector and More presentation data.
-`fixtures/{canvas-surfaces,inspector-surfaces,menu-captures,open-directory-surfaces}.ts` retain the earlier viewer chrome and capture placement.
-Frame names are listed above, and composition is owned by the consumers in the mapping table.
-
-
-### Generic container specimens
-
-These sources remain direct gallery entries. The outer `bg-canvas p-6` specimen wrapper provides shadow space;
-it is review framing, not product chrome. Panel owns no internal padding or border. Neutral Panel height and Toolbar
-icons are fixture content. Container fills, radii, shadows, padding and gaps use their existing part definitions.
-
-| Specimen | Corresponding functional frame / existing layer |
-| --- | --- |
-| `components/panel` / `floating` | `modules/navigation` / `search`: outer Panel, 260px wide, panel radius and floating shadow |
-| `components/panel` / `menu` | `modules/menus` / `default`: outer Panel, 220px wide, menu radius and shadow |
-| `components/panel` / `dialog` | `modules/open-directory` / `error`: outer Panel, 360px wide, dialog radius and menu shadow |
-| `components/toolbar` / `toolbar` | `modules/view-controls` / `tools`: outer Toolbar, 44px high, 6px padding and 4px gap |
-| `components/toolbar` / `toolbar-wide` | `modules/view-controls` / `app-bar`: outer Toolbar, 44px high, 6px padding and 8px gap |
-| `components/toolbar` / `separator` | `modules/view-controls` / `app-bar`: 1 × 20px border-colored divider |
-| `components/canvas` / `screen` | `surfaces/canvas` / `components`: Canvas background and scene-layer layout with empty content |
-| `components/canvas` / `scrim` | `surfaces/open-directory` / `dialog`: 60% canvas-colored overlay above the Canvas |
-
-### Captures and artwork budget
-
-Surface and feature-module fixture identities and states are listed under Frames and fixtures. Their exact page crops, origins and
-viewports live in each `Frame.capture`; the adapter is `adg.config.mjs`, with runtime states in `fixtures/viewer.mjs`.
-Fresh frame renders use `output/design/<source>/<frame>-<theme>.png`. Existing files at that location may be stale;
-each review uses its own baseline and newly rendered affected frames. The button specimens have no implementation
-capture of their own; their composed usage is reachable through the surface fixtures.
-
-| Artwork | Display dimensions | Resolution and file-size budget | Owner |
-| --- | --- | --- | --- |
-| `art/arc-previews/*.png` | Each preview's `size` in `scenes/{canvas,inspector,menus,navigation,open-directory,shortcuts,view-controls}.ts`; declared placements are at most 1200px wide and 668px high | Twice the largest specimen scale, capped at 4096px per bitmap dimension; at most 256 KiB per PNG and 5 MiB for the complete light/dark snapshot | Canvas presentation; generated by `fixtures/refresh-arc-scenes.mjs` |
-
-The preview snapshot has 188 PNGs representing 94 ARC artboards in both themes. All are referenced by scene data.
-Source provenance and palette ownership remain with the ARC fixture. Preview artwork is repository-only and excluded
-from the npm package. Every referenced bitmap fits the declared per-image and total budgets; the canvas module owns scene presentation.
-
-### Known gaps
-
-- Directory copy remains SVG-specific and includes a redundant description; disabled/pending submit states are missing.
-- Keycap radius is 6px in design and 7px at runtime.
-- Canvas scenes use SVG labels; runtime labels use DOM. Minimap specimen geometry differs from runtime.
-- Inspector retains legacy full-window crops and content-fit layout; runtime header/scroll geometry and independent
-  source/export captures are missing.
-- Button's secondary variant is adopted by the approved hub design; its runtime consumer is pending.
-
-## Resident hub
-
-The resident hub extends Float with a quiet project list on the canvas background. It has no path entry.
-Project names navigate to `/p/<slug>/`; live instances navigate to `/i/<id>/`; All projects returns to `/`.
-The approved live instance rows in the switcher and hub home use the shared IconButton for Close instance.
-The switcher prefixes the path with the instance port. Closing the current instance returns to the hub home.
-Rescan is the only registry mutation. A running rescan replaces its control in place with a disabled Rescanning… state.
-The project switcher replaces the directory picker in the resident viewer app bar; the standalone viewer keeps its existing picker.
-
-The user approved all 12 frames in both themes and every presentation choice below.
-Runtime implementation and compare fixtures are pending. Implementation starts from main after the server branch lands.
-Presentation forms are light/dark, desktop home at 1440 × 900, narrow home at 390 × 844,
-and narrow open switcher at 390 × 844. The access shell uses the existing desktop viewport.
-There are no additional locale, viewport or state combinations. `fixtures/hub.ts` owns the fictional registry snapshot and copy.
-
-| Source / part | Frames | Design consumer | Runtime mapping / approval |
-| --- | --- | --- | --- |
-| `modules/hub-home` / HubBar, HubHeading, Rescan, ProjectList, LiveInstances, HubEmpty | `rescan-pending`, `no-roots`, `no-projects` | `surfaces/hub-home`; HubBar also serves the access shell | Approved; implemented by `public/hub.html`, `hub.js` and `hub.css` |
-| `modules/project-switcher` / ProjectPicker, SwitcherRow, SwitcherMenu, Switcher | `project`, `instance`, `open`, `search` | `surfaces/hub-switcher`; reuses `view-controls` AppBar through its optional picker slot | Approved; implemented by `public/switcher.js`, `switcher.css` and the viewer picker buttons |
-| `modules/hub-access` / AccessState, AccessShell | `rejected` | `surfaces/hub-access` | Approved; implemented by `public/auth.js` and `access.css` |
-| `surfaces/hub-home` | `desktop`, `phone` | Entry surface | Approved; implemented by `public/hub.html`, `hub.js` and `hub.css` |
-| `surfaces/hub-switcher` | `phone` | Entry surface | Approved; implemented by the responsive viewer switcher |
-| `surfaces/hub-access` | `key-required` | Entry surface | Approved; implemented by `public/auth.js` and `access.css` |
-
-The desktop list groups name/path, last design change, Git branch/short HEAD and source/frame counts in columns.
-The narrow layout stacks those same fields. The dot next to relative design time denotes uncommitted design changes;
-its accessible label carries that meaning. Incompatible projects remain visible with their version requirement and hub version,
-and their names are disabled. Instances that cannot be proxied remain visible with Proxy unavailable and have no navigation link.
-Start times use relative time with a Started prefix. Paths and branches truncate with full-value titles where needed.
-
-The switcher marks the current destination, groups Projects and Live instances, and shows search at 5 or more destinations.
-Search matches names, paths and branches, retaining the result's section. The narrow menu fits the available page width.
-Its existing folder/radio icons distinguish projects and instances without another badge. The access state is rendered inside
-the hub/viewer shell after a missing or rejected localStorage key; it contains no form and no key value.
-
-Approved presentation choices are the column home layout, phone stacking density, dirty dot, disabled incompatible/unproxyable
-destinations, search at 5 or more targets, and a full-width phone menu. No open design choices remain.
-No new artwork or tokens are introduced.
+This document records ADG's visual direction, declared forms, open proposals, deliberate exceptions and remaining gaps. Machine-readable counterparts live in `design/implementation.json`; this document does not duplicate that map or maintain a status ladder.
 
 ## Direction
 
-ADG uses the Float direction. A dotted canvas fills the window. Chrome floats above it as rounded panels: the sidebar card, the tool pill at the top right, the zoom bar at the bottom center, and the inspector, menus and minimap when open. Selection is a monochrome ring. Chrome stays neutral in both themes, so each project's palette reads true on its own canvas color.
+ADG uses the Float direction. A dotted canvas fills the window. Neutral rounded panels carry the sidebar, top toolbars, zoom controls, inspector, menus and resident hub surfaces. Selection uses a monochrome ring. Themes come from `design/tokens.css`; no separate dark frames are authored.
 
-## Screen
+The review platform is macOS with system UI fonts. The primary implementation viewport is 1440 × 900, locale `en-US`, timezone `UTC`. The resident hub also declares 390 × 844 home and switcher forms. Runtime fixtures are defined by `adg.config.mjs` and `fixtures/viewer.mjs`.
 
-- There is no header row. Back is the first control in the zoom bar.
-- The tool pill holds Display, Inspector, Fullscreen and More. Display is one menu for theme and canvas background.
-- Search lives only in the sidebar and opens with ⌘F. Results replace the tree until the query clears.
-- A directory opens only through the directory picker, in the sidebar or the app bar. The picker opens the open-directory dialog, which lists recent directories.
-- The zoom bar is back, then zoom out, the zoom menu and zoom in, then Fit and the minimap toggle. The zoom menu holds Fit all (0), Fit group, Fit selection and Zoom to 100% (1).
-- More holds Arrange current group and Keyboard shortcuts (?).
-- Collapsing the sidebar leaves the app bar: the sidebar toggle, ADG and the directory picker.
-- The right inspector follows source, frame and exported-element selection after it is opened manually. Source path and frame name have inline copy controls, followed by frame sizes, a scrollable frame list and Relationships. Uses and Used by group discovered direct and indirect sources by directory; indirect entries are muted and name their shortest route. The TSX review states and shared inspector composition are in `design/modules/inspector.tsx`; the generic shell is in `design/components/panel.tsx`.
-- Frame clicks select the variant. Hovering an exported component outlines its root; clicking it shows the owning source/export and matching frames. Selecting a relationship focuses its source, and selecting a matching frame focuses that variant. Source-title clicks select the source and retain copying; the copy icon alone copies. Escape clears selection and Back restores selection and camera.
-- With no directory open, the screen shows only the app bar and the open-directory dialog without a close button.
+## Declared forms
 
-Geometry, in CSS pixels at a 1440 × 900 viewport:
+The library declares component forms in `design/components/`, feature forms in `design/modules/`, and full layouts in `design/surfaces/`:
 
-| Element | Position and size |
-| --- | --- |
-| Sidebar | 12 from the top, left and bottom; 260 wide. Toggle at (6, 6); title at x 48; project picker at y 48, scope picker at y 92, search at y 136, all 236 × 32 at x 12; tree from y 180 |
-| Tree rows | 28 high, radius 8. Groups advance 30, items 28 and indent 20; an open group adds 6 after its items. A divider follows All designs |
-| Tool pill | 12 from the top and right; 44 high; four 32px buttons on a 36px pitch with 6 padding |
-| App bar | 12 from the top and left; 44 high; toggle, title at x 46, a separator, then a 220-wide picker |
-| Zoom bar | 16 from the bottom; 44 high; centered over the canvas between the sidebar or left edge and the inspector or right edge |
-| Inspector | 300 wide, right edge 12 from the window, top at 64; height follows its content |
-| Minimap | 200 × 132, 12 from the right and 16 from the bottom |
-| Menus | 6 below their trigger and right-aligned to the tool pill; the zoom menu is centered on its trigger and 8 above the bar |
-| Dialogs | Centered, 440 wide for Open and 380 for shortcuts, over a `--canvas` scrim at 60% opacity |
+- Components cover buttons, icon buttons, fields, rows, menu items, keycaps, panels, toolbars, tooltips and canvas primitives.
+- Modules cover canvas presentation, navigation, inspector, menus, directory opening, shortcuts, view controls, token catalog, project switching and resident hub states.
+- Surfaces cover canvas, token catalog, inspector, directory opening, resident hub home, hub switcher and access shell.
+- Fixtures under `design/fixtures/` own representative content and capture records. Scenes and artwork remain supporting data.
 
-## Canvas layout
+Each source contains only distinct appearances. Width-only reflow, locale-only copies and explanatory specimens are not declared forms. Surfaces use `fixture` and `capture` metadata when they describe an implemented page or region.
 
-The world is laid out in SVG units and never changes while panning, zooming or collapsing the sidebar. Groups come from `gallery.json`, or from directories without one. `fixtures/arc-sample.layout.json` is the reference result for `fixtures/arc-sample/design/`.
+## Open proposals
 
-- **Sets.** A component source is one set. Its TSX forms run left to right in source order with a 32 gap and 48 between rows. The wrap width is `ceil(sqrt(padded form area × 1.6))`, clamped to 1600–6400; padded area includes each form's 32 horizontal and 48 vertical gap. A form wider than the limit occupies its own row. Legacy SVG forms retain their authored positions. The set's bounds are its forms padded 24 at the sides, 36 at the top and 24 at the bottom.
-- **Flows.** A surface source is one flow. Each frame takes its size plus 16 on every side. Frames run left to right with a 64 gap and wrap before 3600, with 112 between lines.
-- **Sections.** Each group is one section. Sets and flows share one skyline. Blocks pack by descending height, then descending width, with source order breaking ties. Each block takes the lowest available position, then the leftmost, leaving 64 horizontally and 112 vertically. Width candidates start at the widest block in steps of 50 and minimize `bbox area × (1 + 0.6 × abs(ln(aspect / 1.6)))`. This favors density while softly preferring a landscape fit. The section pads its content 64 at the sides and bottom and 104 at the top.
-- **World.** Sections use the same height-first skyline and area score, with 240 gaps on both axes, width steps of 100 and a target aspect ratio of 1.5. Canvas positions may differ from gallery/source order; navigation and returned identities retain source order. Unchanged regions retain their positions on file refresh until Arrange. Candidate search skips only safe 1/64px-grid thresholds with identical packing, and a bounded width cache includes the algorithm, score parameters, gaps and ordered block geometry.
-- **Fit.** Fit places the target inside the canvas area inset 20 from the sidebar or left edge, 24 from the right edge or inspector, 100 from the top and 84 from the bottom, centered. Fit selection insets that area by 24 on every side. Zoom to 100% keeps the point at the center of that area.
+New visual directions are marked with `Frame proposed="<review scope>"` while review is active. Current proposals are kept in their source files and are listed by `adg check`; they are removed or bound to implementation when the review closes.
 
-## Labels
+## Exceptions
 
-Labels draw at constant screen size. Each label is drawn only when it fits its slot and does not collide with floating chrome or another label; otherwise it is omitted.
+- `scenes/*.ts`, fixture JSON/TS and `design/art/` are supporting data, not gallery layers.
+- The repository keeps ARC-derived preview artwork under `design/art/arc-previews/`; it is repository-only and excluded from the npm package.
+- ADG's compare adapter uses fictional development fixtures and temporary state; it does not represent a production account or service.
 
-- Section title: `--text-section` 650 at 16 above the section's top-left, followed 8 later by the asset count in `--text-meta` tertiary.
-- Set name: `--text-meta` 550 secondary, or `--text` when selected, 12 above the artboard, followed 6 later by its form count and 10 later by the source's last modification time. Time uses local `MMM d, HH:mm`; hovering it shows the full local timestamp. Shown from 20% zoom. When space narrows, omit the time first, then the count, retaining the name whenever it fits.
-- Headings whose original anchor moves above or left of the viewport follow the visible canvas edge with an 8px inset, avoiding floating chrome by 12px. The selected asset's heading gets priority when labels collide.
-- Form names: `--text-caption` tertiary, with its center 9.5 above each form's top, inside the artboard. Shown from 75% zoom for sets with two or more forms. Visible captions are tested individually; offscreen or occluded siblings do not hide them.
-- Flow name: `--text-meta` 600 secondary, 34 above the flow, followed by its frame count and source modification time, with the same priority and clipping rules as set headings. Frame name: `--text-caption` tertiary, or 550 `--text` when selected, 12 above the frame. Both shown from 20% zoom.
-- Artboards have a 1px `--border` stroke, radius 6, and the asset's own canvas color. Selection replaces the stroke with a 2px `--accent` ring. Previews never stretch.
+## Gaps
 
-## Frames and fixtures
-
-Each captured surface or feature-module frame declares its fixture and a page capture at a 1440 × 900 viewport. Canvas and inspector frames, plus the empty/open dialog frames, cover the viewport. Menu, tooltip, shortcuts and error frames retain their local crop sizes and origins in `Frame.capture`. Fixtures open `fixtures/arc-sample/design/` with isolated preferences.
-
-| Asset | Frame | Fixture theme | State |
-| --- | --- | --- | --- |
-| canvas | components | light | Essentials open, `field` selected, Fit group |
-| canvas | zoomed | dark | As above at 100%, selected field centered, minimap on |
-| canvas | surfaces | light | Connections & MCP open, mcp-hub `failed` selected, 30%, section top-left at (292, 112) |
-| canvas | overview | dark | Sidebar collapsed, nothing selected, Fit all |
-| inspector | frame | light | mcp-hub `failed` selected, inspector open, Fit selection |
-| inspector | component | dark | `button` selected, inspector open, 125% centered on the set |
-| menus module | display, zoom, more | light | The menu open over the components state |
-| navigation module | search-results | light | Query `pill` with the first result selected |
-| view-controls module | tools-tooltip | light | Pointer resting on the Inspector button |
-| shortcuts module | default | light | Keyboard shortcuts open |
-| open-directory | empty | light | No directory open |
-| open-directory | dialog | dark | The picker activated over the overview |
-| open-directory | error | light | `~/projects/empty` submitted |
-
-## Implementation notes
-
-The asset metadata heading and its copy interaction in `design/modules/canvas.tsx` / `AssetLabel` are reviewed and adopted.
-Clicking a component, flow, frame, form or section name, or its adjacent 12px copy icon, copies the displayed name.
-The copy icon appears on title hover or keyboard focus. A successful copy shows a check for 1.2 seconds. Its 16px
-space, including the gap, stays reserved while the icon is transparent so metadata does not shift; the space yields
-when needed to keep a narrow name visible. Title buttons support Enter and Space without triggering canvas gestures.
-Clipboard failures use the existing error alert. Modification times describe the source file on disk. Fixture
-timestamps use November 7, 2026 at 13:24:08 UTC so comparisons remain deterministic.
-
-- The runtime theme uses `design/tokens.css` as its only token source.
-- Icons use Lucide geometry at a 1.75px stroke. Do not use Unicode glyphs as icons.
-- Canvas labels are positioned DOM text or reported through the compare `texts` hook, so `compare` reads them.
-- Form bounds for layout are the frames' sizes without shadow padding; the set padding covers shadows.
-
-## Scene data
-
-Ordinary controls use flex/grid layout and shared component functions. Only the free-form drawing canvas and floating chrome positions use coordinates, under `data-free`. Panels and lists follow content through padding and gaps; buttons size from their label and icon. The seven scene data files hold section, asset, crop and label data for loop-based drawing. The ARC preview pictures in `design/art/arc-previews/` are light/dark PNG renders of the TSX fixture artboards, imported as data URLs only by scenes that display them; their palettes are independent of ADG chrome. `node fixtures/refresh-arc-scenes.mjs` regenerates these images and the scene data from the local fixture and its layout reference. Preview resolution is twice the largest specimen scale, capped at 4096 pixels. They are not package contents.
-
-The ARC snapshot at `b9e18beb` contains 51 sources (31 components and 20 surfaces), 94 artboards and six sections: Essentials (8), Agents & quota (6), Tasks & interactions (5), Connections & MCP (6), components (14) and surfaces (12). The navigation retains the four curated groups in source order; the final two contain unlisted sources. Canvas placement follows the density rules above. Fit all is about 10% at the declared viewport. The MCP inspector includes the source frame notes and its empty frame is 960 × 434.
-
-The inspector exposes source, frame and export detail. Canvas labels occluded by the selection inspector are omitted.
-Browser text metrics can differ from SVG central-baseline metrics by about one pixel.
-
-The resident hub adopts the approved home, project switcher and access shell. Unknown frame counts remain `—` until a viewer computes them; paths, Git metadata and instance order come from the live registry. The viewer directory dialog is retired: `open-dialog` and `open-error` fixture IDs now resolve to the baseline canvas; their existing design snapshots await the UI lane update. The `open-empty` fixture retains an empty canvas without a filesystem input.
+- Directory copy remains SVG-specific and disabled/pending submit states are not yet represented.
+- Keycap radius and minimap geometry still differ from parts of the runtime CSS.
+- Some inspector and canvas captures retain historical crops while runtime header and scroll geometry continue to converge.
+- Hub compare fixtures remain a follow-up after the resident hub implementation settles.

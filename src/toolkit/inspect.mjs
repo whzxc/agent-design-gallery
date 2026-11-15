@@ -46,7 +46,7 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
         sources=[relative(config,selected[0])];selection.source=sources[0];
       }
       const facts=await Promise.all(sources.map(async source=>{try{return args.length?await timed('materializeMs',()=>index.source(source,{fresh:true})):await index.source(source);}catch(cause){throw cause instanceof CliError?cause:new CliError('SOURCE_BUILD_FAILED',cause.message,{cause});}}));
-      data.catalog=facts.map(f=>({source:f.source,frames:f.frames.map(f=>({name:f.name,locale:f.locale??null,width:f.width??null,height:f.height??null}))}));
+      data.catalog=facts.map(f=>({source:f.source,frames:f.frames.map(f=>({name:f.name,locale:f.locale??null,proposed:f.proposed??null,width:f.width??null,height:f.height??null}))}));
       data.coverage.listedFrames=data.catalog.reduce((n,s)=>n+s.frames.length,0);
     });
     if(args.length)data.timings.prepareMs-=data.timings.materializeMs;
@@ -61,7 +61,7 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
       const built=await timed('materializeMs',async()=>{try{return await index.materialize(chosen.source);}catch(cause){throw cause instanceof CliError?cause:new CliError('SOURCE_BUILD_FAILED',cause.message,{cause});}});data.coverage.materializedSources=1;await index.releaseMaterializers();
       const frame=built.frames.find(f=>f.name===chosen.frame);
       if(!frame)throw new CliError('INSPECT_INPUT_CHANGED','The selected frame disappeared during fresh execution.');
-      data.frame={source:chosen.source,name:frame.name,locale:frame.locale??null,authored:{width:frame.width??null,height:frame.height??null},parent:frame.parent??null};
+      data.frame={source:chosen.source,name:frame.name,locale:frame.locale??null,proposed:frame.proposed??null,fixture:frame.fixture??null,capture:frame.capture??null,authored:{width:frame.width??null,height:frame.height??null},parent:frame.parent??null};
       data.mode='frame';data.catalog=[];
       if(selection.subtree?.kind==='part'){
         const input=selection.subtree.input,separator=input.lastIndexOf('#');

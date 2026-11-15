@@ -71,7 +71,7 @@ export function init(config, log = console.log) {
     const sources=sourceDirectories(config), fresh=sources.some(name=>name!=='studies') &&
       !listSources(config.design,sources).length && !existsSync(path.join(config.design,'fixtures/example.ts'));
     for (const [file, content] of [
-      [path.join(config.root, 'adg.config.mjs'), "export default { requires: '>=0.5.0', design: 'design', output: 'output/design' };\n"],
+      [path.join(config.root, 'adg.config.mjs'), "export default { requires: '>=0.5.0', design: 'design', output: 'output/design', check: { strictLayers: true, lifecycle: true } };\n"],
       [path.join(config.design, 'tokens.css'), starterTokens],
       ...[...sources.filter(name=>name!=='studies'), 'fixtures', 'art'].map(name => [path.join(config.design, name), null]),
       ...(fresh ? [

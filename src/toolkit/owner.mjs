@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { CliError, nextActions } from '../cli-output.mjs';
 import { openProjectIndex } from './project-index.mjs';
-import { loadImplementationMap, implementationFiles } from './implementation-map.mjs';
+import { loadImplementationMap, implementationFiles, validateImplementationMap } from './implementation-map.mjs';
 import { regionAt } from './owner-locators.mjs';
 import { normalizeFileQuery, implementationScope } from './implementation-query.mjs';
 import { launch, loadFrame, readyResources, browserTask } from './browser.mjs';
@@ -10,6 +10,8 @@ import { observeOwnerFrame, observeOwnerPalette, occurrenceContext, observationE
 import { commandFailure, cleanup } from './results.mjs';
 import { escape } from './html.mjs';
 import { indexDigest } from './index-store.mjs';
+import { buildSource } from './build.mjs';
+import { listSources, sourceDirectories, selectSources, relative } from './project.mjs';
 
 export const compareRanks = (a, b) => { for (let i = 0; i < Math.max(a.length, b.length); i++) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) - (b[i] ?? 0); return 0; };
 export const compareNames = (a, b) => { const x = [...(a ?? '')], y = [...(b ?? '')]; for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i].codePointAt(0) - y[i].codePointAt(0); return x.length - y.length; };
@@ -27,7 +29,34 @@ function bindingKind(selector, query) {
     : selector.file ? 'mapping_file' : selector.directory ? 'mapping_directory' : 'mapping_glob';
 }
 
+async function ownerPart(config, values, { log = console.log } = {}) {
+  const raw = values.part, split = raw.indexOf('#'), sourceInput = split < 0 ? raw : raw.slice(0, split), part = split < 0 ? null : raw.slice(split + 1);
+  if (!sourceInput.trim() || (part !== null && !part.trim())) throw new CliError('USAGE_INVALID', 'Use --part=<source> or --part=<source>#<Export>.');
+  const selected = selectSources(config, [sourceInput], { write: false });
+  const source = relative(config, selected[0]), designSource = source;
+  const data = { project: config.root, complete: false, query: { kind: 'part', input: raw, normalized: raw, source, part }, region: null, owners: [], tokens: [], ambiguous: false, tokenAmbiguous: false, matchedImplementationFiles: [], mappingFindings: [], coverage: { discoveredSources: listSources(config.design, sourceDirectories(config)).length, builtSources: 0, requestedObservations: 0, completedObservations: 0, mappingState: 'absent', activeBindings: 0, excludedBindings: 0, domain: 'tsx' } };
+  const map = await loadImplementationMap(config);
+  data.coverage.mappingState = map.present ? 'valid' : 'absent';
+  if (!map.present) { data.complete = true; const missingWarning = { code: 'OWNER_MAPPING_MISSING', message: 'Add implementation.json to declare implementation ownership.', next: [] }; return { data, warnings: [missingWarning] }; }
+  const validated = await validateImplementationMap(config, map, { sources: listSources(config.design, sourceDirectories(config)).map(file => relative(config, file)), getBuild: target => buildSource(config, path.join(config.root, target), { write: false, allowLegacy: false }) });
+  data.mappingFindings = validated.findings; data.coverage.mappingState = validated.findings.length ? 'stale' : 'valid';
+  const warnings = validated.findings.length ? [{ code: 'OWNER_MAPPING_STALE', message: 'Repair the reported implementation mapping findings, then repeat the query.', next: [] }] : [];
+  for (const binding of validated.bindings.filter(binding => binding.active && binding.design.source === designSource && (part === null ? binding.design.part === undefined : binding.design.part === part))) {
+    data.coverage.activeBindings++;
+    const selector = binding.implementation;
+    const implementations = binding.files.map(file => ({ file, symbol: selector.symbol ?? null, region: binding.anchorLine === null ? null : (validated.regions[file] ?? []).find(region => region.line === binding.anchorLine) ?? null }));
+    const row = { source, part, matchKind: 'mapping_part', rank: fileRank(selector, 'mapping_symbol'), frames: binding.frames.map(frame => ({ source, frame, theme: null, locale: null, proposed: null })), tokens: [], evidence: [], implementation: selector };
+    for (const implementation of implementations) row.evidence.push({ matchKind: 'mapping_part', frame: null, theme: null, elementPath: null, boxes: [], owners: [], detail: { kind: 'mapping', file: map.source, pointer: binding.pointer, implementation: implementation.file, selector, symbol: selector.symbol ?? null, region: implementation.region } });
+    data.owners.push(row);
+  }
+  data.complete = true;
+  if (!data.owners.length) warnings.push({ code: 'OWNER_NO_MATCH', message: 'No implementation binding matched the requested design part.', next: [] });
+  if (!values.json) for (const row of data.owners) log(`${row.source}${row.part ? `#${row.part}` : ''} [${row.matchKind}] ${row.evidence.map(e => e.detail.implementation).join(', ')}`);
+  return { data, warnings };
+}
+
 export async function owner(config, values, { log = console.log, openIndex = openProjectIndex, launchBrowser = launch, environment = observationEnvironment } = {}) {
+  if (values.part !== undefined) return ownerPart(config, values, { log });
   if (values.file === undefined) return (await import('./owner-search.mjs')).searchOwner(config, values, { log, openIndex, launchBrowser, environment });
   const { query, text } = await normalizeFileQuery(config, values);
   const data = { project: config.root, complete: false, query, region: null, owners: [], tokens: [], ambiguous: false, tokenAmbiguous: false, matchedImplementationFiles: [], mappingFindings: [],
@@ -98,7 +127,7 @@ export async function owner(config, values, { log = console.log, openIndex = ope
       for (const { row, binding } of task.bindings) {
         const roots = binding.design.part ? observation.nodes.filter(node => node.box && node.owners.some(owner => projectOwners([owner]).some(part => part.source === row.source && part.part === row.part))) : observation.nodes.filter(node => node.path === '0' && node.box);
         if (row.part && !roots.length) warn('OWNER_PART_UNOBSERVED', 'The declared part has no painted occurrence in a bound frame; inspect its authored coverage.');
-        if (!row.frames.some(frame => frame.source === ref.source && frame.frame === ref.frame && frame.theme === task.theme)) row.frames.push({ ...ref, theme: task.theme, locale: frame.locale ?? null });
+        if (!row.frames.some(frame => frame.source === ref.source && frame.frame === ref.frame && frame.theme === task.theme)) row.frames.push({ ...ref, theme: task.theme, locale: frame.locale ?? null, proposed: frame.proposed ?? null });
         addMapping(row, binding, ref, task.theme, roots);
         for (const rawReference of observation.references) {
           const reference = occurrenceContext(observation, rawReference);

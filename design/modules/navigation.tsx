@@ -1,5 +1,5 @@
 import { Frame } from 'adg';
-import { Drawing } from './canvas';
+import { Drawing } from '../components/canvas';
 import { Screen } from '../components/canvas';
 import navigationFixtures from '../fixtures/navigation.json';
 import { scenes } from '../scenes/navigation';
@@ -8,7 +8,7 @@ import { Field } from '../components/field';
 import { IconButton } from '../components/icon-button';
 import { TreeRow } from '../components/tree-row';
 import { Tooltip } from '../components/tooltip';
-import { Menu } from './menus';
+import { Menu } from '../components/menu-item';
 import { scopeSpecimens } from '../fixtures/render-scope';
 
 export function ScopePicker({ scope, open }: any) {

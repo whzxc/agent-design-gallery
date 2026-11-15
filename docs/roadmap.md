@@ -60,20 +60,20 @@ Agents are first-class users. In priority order:
 5. Frames as data: element tree, text, boxes and tokens, for Agents that need structure rather than pixels
    (done: `adg inspect`).
 
-## 5. Asset governance (next)
+## 5. Asset governance (done, 0.11.0)
 
 The [asset rules](asset-rules.md) layer assets by assembly level and keep only current or proposed assets. The toolkit
 checks those rules so retirement and layering no longer depend on cleanup rounds:
 
 - Import direction rejects module-to-module and surface-to-surface imports; only the lowest layer imports within
-  itself. The existing `importDirection: false` opt-out still disables the lint.
+  itself. `check.strictLayers` opts this in for existing projects, and `importDirection: false` still disables the lint.
 - Frame `proposed`: a nonempty string naming the review scope. Proposed frames are reported in check output and are
   exempt from binding findings.
 - Lifecycle findings when `implementation.json` exists: a production part without a binding, a surface source
   without a whole-source binding, and a surface frame without `fixture` and `capture`, each unless proposed.
 - Redundant-frame warnings: two frames of one source whose structure is identical apart from text, locale and
   geometry. Warnings do not fail check.
-- Reverse ownership: `adg owner --part=<source>#<Export>` returns the implementation bindings of a design part, so
+- Reverse ownership: `adg owner --part=<source>#<Export>` (or `--part=<source>` for whole-source bindings) returns the implementation bindings of a design part, so
   implementers find the counterpart to reuse.
 
 ## 6. Annotation collaboration

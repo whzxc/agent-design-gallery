@@ -1,5 +1,5 @@
 import { Frame } from 'adg';
-import { Drawing } from './canvas';
+import { Drawing } from '../components/canvas';
 import { Panel } from '../components/panel';
 import { IconButton } from '../components/icon-button';
 import { Kbd } from '../components/kbd';

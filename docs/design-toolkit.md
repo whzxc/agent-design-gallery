@@ -53,7 +53,7 @@ and service migration details.
 
 `sources` is an optional array of plain top-level directory names. Since 0.5.0 it defaults to `['components', 'modules', 'surfaces']`, adding `studies` only when a direct `design/studies/*.tsx` file exists. Empty study directories and nested helpers do not enable studies. Saving the first study or removing the last one updates default viewer discovery. Explicit lists retain their exact directories and order, including whether to include studies. Names use letters, digits, underscores or hyphens; nested paths are rejected. Only direct TSX files in those directories are source entries. Other files under `design/`, such as shared scene data, remain imports.
 
-Production directories in `sources` are ordered from lower to higher layers. `check` rejects imports into a higher layer and permits imports within the same layer. With the default order, components cannot import modules or surfaces, and modules cannot import surfaces. Custom names use the configured order; studies are exempt. A consumer can set `check: { importDirection: false }` in `adg.config.mjs` to disable only this lint and document its alternative policy locally. The check uses resolved direct source imports from the relationship graph, including extension/index resolution and re-exports.
+Production directories in `sources` are ordered from lower to higher layers. `check.strictLayers: true` rejects same-layer imports above the lowest layer; with the default order, modules cannot import modules and surfaces cannot import surfaces. `check.lifecycle: true` enables implementation binding and surface capture findings. Both keys default to `false` for existing consumers and `adg init` enables them for new projects. Custom names use the configured order; studies are exempt. `check.importDirection: false` disables all import-direction linting, including strict same-layer checks. The check uses resolved direct source imports from the relationship graph, including extension/index resolution and re-exports.
 
 Commands run from any directory inside the project. They find the nearest `adg.config.mjs`, `.js` or `.ts` (in that priority order), or, without one, the nearest `package.json`, and resolve paths from there.
 
@@ -102,6 +102,7 @@ A `Frame` is one declared form of a component or surface.
 - `locale` optionally annotates the authored language with a canonicalizable BCP 47 tag, such as `en` or `zh-CN`. It does not change rendering, load dictionaries or set compare fixture locale. Existing frames are unspecified. `owner --locale` filters the exact canonical annotation, with no language fallback.
 - `fixture` names the compare fixture for this form.
 - `capture` tells `compare` what to capture in the implementation: `{ region }`, `{ selector }` or `{ page: true }`, each with optional `viewport` (`'<w>x<h>'`) and `clicks` (accessible names, in order). A page capture clips the page at `origin` (`'<x> <y>'`, default `'0 0'`) with the frame's size.
+- `proposed` optionally names a nonempty review scope. Proposed frames are listed as information by `check`, are exempt from lifecycle binding findings, and carry the scope through inspect, owner and diff metadata.
 - `parent` declares a new part's original region: `{ source, frame, selector }`, using a project-root-relative `.tsx` or `.mmd` source path with extension, a frame name and a CSS selector. See [Git frame diff](#git-frame-diff). `check` validates shape only; `diff` resolves an active mapping.
 - `note` is a caption that the viewer shows in the inspector. It is not part of the drawing.
 
@@ -156,6 +157,7 @@ A source describes structure, not coordinates. Write it the way the UI is built.
 - a build or render error, with its source location;
 - invalid implementation mapping declarations or stale bindings; see [mapping findings](#validate-mappings);
 - a duplicate frame name, a frame without exactly one root element, or an invalid `capture`;
+- strict-layer, lifecycle and redundant-frame findings when enabled; redundant frames are warnings and do not fail the check;
 - a computed text, background, border, outline, fill, stroke or shadow color that matches no token value in the active theme, outside `data-brand`;
 - text that overflows its box without an ellipsis, leaves the frame, or overlaps other text;
 - content that overflows the frame's declared width or height;
@@ -165,7 +167,7 @@ A source describes structure, not coordinates. Write it the way the UI is built.
 
 Each problem is one line, `<path>: <frame>: <problem>`. Completed rule findings exit 1. Build or frame-execution failures exit 2; `--json` returns `complete: false` with the observed partial findings. A completed check uses `complete: true`, with `CHECK_FAILED` when findings remain.
 
-An import-direction problem is one line, `<path>: import <source> violates import direction (<lower> -> <higher>); ...`. It names the resolved source rather than a manual dependency annotation. Named-source checks lint those sources' outgoing imports, including targets outside the selected subset. Other imported helpers and erased type-only imports are outside the graph; review their ownership in the [read-only audit](asset-rules.md#2-run-a-read-only-audit).
+An import-direction problem is one line, `<path>: import <source> violates import direction (<lower> -> <higher>); ...`. Same-layer findings name the direction, for example `(modules -> modules)`. It names the resolved source rather than a manual dependency annotation. Named-source checks lint those sources' outgoing imports, including targets outside the selected subset. Other imported helpers and erased type-only imports are outside the graph; review their ownership in the [read-only audit](asset-rules.md#2-run-a-read-only-audit).
 
 ## Implementation mappings
 
@@ -332,6 +334,7 @@ adg render [source...] [--frame=<name>] [--theme=both|light|dark] [--scale=2] [-
 adg compare <source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin=<x> <y>] [--click=<name>...] [--viewport=<w>x<h>]
 adg compare --all
 adg diff [source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]
+adg owner --part=<source>[#<Export>] [--json]
 adg impact (--source=<path> [--part=<export>] | --token=<name> | --file=<implementation-path> | --base=<rev> [--head=<rev>]) --json
 adg render --impacted --base=<rev> [source...] [--frame=<name>] [--theme=both|light|dark] --json
 adg check --impacted --base=<rev> [source...] --read-only --json
@@ -341,9 +344,10 @@ adg diff --base=<rev> --impacted [source...] --json
 A first argument that names a command runs it; any other argument is a directory to open. `adg open check` opens a directory named `check`.
 
 - `init` creates `adg.config.mjs` requiring `>=0.5.0`, required tokens, production source directories, fixtures/art, editor configuration and ignore entries. A fresh library gets `components/example.tsx`, `modules/example.tsx`, `surfaces/example.tsx` and `fixtures/example.ts`: one runnable downward composition with frame name `default` in each source. Explicit source names are used in place of the defaults. Existing source libraries or an existing example fixture receive no demo assets. Authored files are preserved, generated declarations are refreshed, missing ignore entries are appended, and created/skipped files are listed. It creates no study or empty studies directory.
-- `check` checks import direction and the named sources' frames, or all sources. `--read-only` skips generated type declarations and HTML build files; it runs the same import and both-theme frame checks without changing consumer files.
+- `check` checks import direction and the named sources' frames, or all sources. `check.strictLayers` and `check.lifecycle` opt in to same-layer and implementation lifecycle findings; `adg init` enables both. `--read-only` skips generated type declarations and HTML build files; it runs the same import and both-theme frame checks without changing consumer files.
 - `render` writes `output/design/<path>/<frame>-light.png` and `-dark.png` at the given scale, for every frame or the one named.
 - `compare` compares one frame; its flags override the frame's `fixture` and `capture`.
+- `owner --part` reverses a design part or whole source to active implementation bindings, including resolved selector files and regions.
 - `impact` explains direct/transitive candidates and, for Git queries, fresh materialized-input equality.
 - `diff` compares Git base and working-tree frames, writes PNGs and a machine-readable report, and gates ordinary changes or structural parts. It defaults to both themes at 2×.
 - `compare --all` compares every frame that has a fixture and writes `output/design/compare/summary.json` and `index.html`, one row per frame with its counts and report link.
@@ -354,7 +358,7 @@ Source arguments are paths under the design directory, with or without `design/`
 
 ## Impact and selective commands
 
-These examples use a fictional badge library. Run from its project root with ADG 0.10.0 or newer.
+These examples use a fictional badge library. Run from its project root with ADG 0.11.0 or newer.
 
 ```sh
 # Hypothetical changes: inspect candidates without editing or capturing.

@@ -416,8 +416,10 @@ type DiffComparison = {
     colorEqual: boolean, findings: SnapshotFinding[]
   },
   pixels: PixelStats,
-  verdict: Verdict, reasons: ComparisonReason[],
+  verdict: Verdict, reasons: ComparisonReason[], proposed: string | null,
   note: { before: string | null, after: string | null },
+  metadata: { before: { locale: string | null; proposed: string | null; fixture: string | null; capture: unknown | null } | null;
+              after: { locale: string | null; proposed: string | null; fixture: string | null; capture: unknown | null } | null },
   paths: {
     before: string | null, after: string | null, difference: string,
     beforeSnapshot: string | null, afterSnapshot: string | null,
@@ -578,6 +580,7 @@ operands and invalid combinations return `USAGE_INVALID`.
 | Mode | Inputs and matching |
 | --- | --- |
 | File | Exact file, directory or quoted POSIX glob, resolved from the discovered project root. In-project absolute paths are accepted; escaping paths/symlinks are rejected. Directory/glob queries expand current regular files and can succeed empty. Exact missing inputs use `OWNER_INPUT_NOT_FOUND`. Only a single existing file accepts `--line=<positive 1-based integer>` and/or `--symbol=<exact label>`; a line beyond EOF is invalid. Bindings come from [implementation.json](design-toolkit.md#implementation-mappings). |
+| Part | `--part=<source>#<Export>` returns active implementation bindings for that defining part; `--part=<source>` returns whole-source bindings. Evidence includes each resolved implementation file, selector and symbol/anchor region. Stale bindings remain in `mappingFindings` and are excluded from owners. |
 | Text | Unicode NFC and Unicode whitespace collapse/trim, preserving case, punctuation, accents and script. Default is exact equality; `--contains` adds literal substring matches. Whitespace-only input is invalid. `--locale=<BCP 47 tag>` canonicalizes and filters exact Frame annotations, excluding unspecified locales; there is no language fallback or translation. |
 | Color | Absolute CSS colors supported by packaged Chromium, including hex, RGB/HSL, named and modern color functions. Normalize to unpremultiplied 8-bit sRGB RGBA, clamp and round channels, canonical lowercase `#rrggbbaa`; alpha zero also zeros RGB. No compositing or tolerance. CSS-wide/system colors, `currentColor`, `var()` and context-dependent relative colors are `OWNER_COLOR_INVALID`; use `--token` for custom properties. |
 | Token | Exact case-sensitive custom-property name such as `--accent`. Invalid syntax is `USAGE_INVALID`; an undeclared valid name succeeds empty without building or launching a browser. Resolve declarations and aliases separately in light and merged light+dark maps, including noncolor tokens. |
@@ -614,7 +617,7 @@ type ImplementationSelector =
   | { glob: ProjectPath };
 type DesignBinding = { source: ProjectPath; part?: string; frames?: string[] };
 type OwnerQuery = {
-  kind: 'file' | 'text' | 'color' | 'token';
+  kind: 'file' | 'text' | 'color' | 'token' | 'part';
   input: string;                       // original query, envelope-sanitized
   normalized: string;                  // root-relative path/glob, text, RGBA hex or token
   pathKind: 'file' | 'directory' | 'glob' | null;
@@ -628,7 +631,7 @@ type MatchKind =
   | 'mapping_file' | 'mapping_directory' | 'mapping_glob'
   | 'text_exact' | 'text_contains' | 'color_value'
   | 'token_name' | 'token_value' | 'token_reference'
-  | 'token_alias_reference' | 'token_fallback_reference';
+  | 'token_alias_reference' | 'token_fallback_reference' | 'mapping_part';
 type Evidence = {
   matchKind: MatchKind;
   frame: FrameRef | null; theme: Theme | null;
@@ -663,7 +666,7 @@ type TokenResult = {
 type OwnerMatch = {
   source: ProjectPath; part: string | null;
   matchKind: MatchKind; rank: number[];
-  frames: (FrameRef & { theme: Theme; locale: string | null })[];
+  frames: (FrameRef & { theme: Theme | null; locale: string | null; proposed: string | null })[];
   tokens: string[];                     // referenced token names in matched scope
   authoredIn?: { source: ProjectPath; line: number }[]; // present on text owners
   evidence: Evidence[];
@@ -682,6 +685,7 @@ type OwnerData = {
   ambiguous: boolean; tokenAmbiguous: boolean;
   matchedImplementationFiles: ProjectPath[];
   mappingFindings: MappingFinding[];
+  proposed?: { source: ProjectPath; frame: string; scope: string }[];
   coverage: {
     discoveredSources: number; builtSources: number;
     requestedObservations: number; completedObservations: number;
@@ -1088,6 +1092,7 @@ type CheckData = {
   sources: ProjectPath[];
   summary: { sources: number; frames: number; evaluations: number; problems: number };
   findings: Finding[];
+  proposed: { source: ProjectPath; frame: string; scope: string }[];
 };
 type Finding = Location & { code: string; message: string };
 ```
@@ -1102,7 +1107,10 @@ retained with `complete:false`. `--read-only` skips generated declarations and b
 
 | Finding code | Meaning |
 | --- | --- |
-| `IMPORT_DIRECTION` | Source imports a higher production layer |
+| `IMPORT_DIRECTION` | Source imports a higher production layer or a same-layer source above the lowest layer when `check.strictLayers` is enabled |
+| `OWNER_PART_UNBOUND` | Exported production part below the top layer has no implementation binding and no proposed frame; add a binding or mark a review frame with `proposed` |
+| `OWNER_SURFACE_UNBOUND` | Top-layer surface has no whole-source implementation binding; add a binding without `part` |
+| `OWNER_SURFACE_FRAME_UNCAPTURED` | Current surface frame lacks fixture or capture metadata; add both fields or mark it `proposed` |
 | `FRAME_ROOT_INVALID` | Frame does not have exactly one root element |
 | `MARKUP_FORBIDDEN` | Forbidden style/script element or event/className attribute |
 | `STYLE_FORBIDDEN` | Unsupported inline style outside `data-free` |

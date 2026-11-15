@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.0
+
+- Enforce opt-in asset governance with strict production layers, lifecycle bindings, proposed Frame scopes and redundant-frame warnings; `adg init` enables the new checks for fresh projects.
+- Add reverse ownership with `adg owner --part=<source>[#<Export>]`, proposed metadata in inspect/owner/diff output, and stable `OWNER_PART_UNBOUND`, `OWNER_SURFACE_UNBOUND` and `OWNER_SURFACE_FRAME_UNCAPTURED` findings.
+- Migrate ADG's design library to downward-only imports with implementation bindings for viewer and hub sources.
+
 ## 0.10.0
 
 - Add `adg impact` queries for design sources, named parts, tokens, implementation files/regions/symbols, and exact Git endpoints. Compact grouped JSON keeps emitted occurrences, conservative dependencies, lexical token reachability, mappings and lifecycle evidence distinct. See the [impact contract](docs/agent-interface.md#impact).

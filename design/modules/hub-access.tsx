@@ -1,6 +1,6 @@
 import { Frame, Icon } from 'adg';
 import { Panel } from '../components/panel';
-import { HubBar } from './hub-home';
+import { Toolbar } from '../components/toolbar';
 import { accessStates, hubNotes } from '../fixtures/hub';
 
 export function AccessState({ code, title, detail }: { code: string; title: string; detail: string }) {
@@ -19,7 +19,7 @@ export function AccessState({ code, title, detail }: { code: string; title: stri
 
 export function AccessShell({ state, width, height }: any) {
   return <div class="flex flex-col bg-canvas p-3" style={{ width, height }}>
-    <div class="self-start"><HubBar /></div>
+    <div class="self-start"><Toolbar><span class="px-2 text-section font-[650]">ADG</span></Toolbar></div>
     <div class="flex flex-1 items-center justify-center"><AccessState {...state} /></div>
   </div>;
 }

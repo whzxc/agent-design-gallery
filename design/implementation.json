@@ -1,0 +1,1223 @@
+{
+  "version": 1,
+  "mappings": [
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/button.tsx",
+          "part": "Button"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/button.tsx",
+          "part": "Button"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/canvas.tsx",
+          "part": "Canvas"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/canvas.tsx",
+          "part": "Canvas"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/canvas.tsx",
+          "part": "Drawing"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/canvas.tsx",
+          "part": "Drawing"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/canvas.tsx",
+          "part": "Screen"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/canvas.tsx",
+          "part": "Screen"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/canvas.tsx",
+          "part": "Scrim"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/canvas.tsx",
+          "part": "Scrim"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/field.tsx",
+          "part": "Field"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/field.tsx",
+          "part": "Field"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/icon-button.tsx",
+          "part": "IconButton"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/icon-button.tsx",
+          "part": "IconButton"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/kbd.tsx",
+          "part": "Kbd"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/kbd.tsx",
+          "part": "Kbd"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/menu-item.tsx",
+          "part": "Menu"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/menu-item.tsx",
+          "part": "Menu"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/menu-item.tsx",
+          "part": "MenuItem"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/menu-item.tsx",
+          "part": "MenuItem"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/panel.tsx",
+          "part": "Panel"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/panel.tsx",
+          "part": "Panel"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "AppBar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "AppBar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "Separator"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "Separator"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "Toolbar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "Toolbar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "Tools"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "Tools"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "ViewerBars"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "ViewerBars"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "ViewerTools"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "ViewerTools"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "ZoomBar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "ZoomBar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/tooltip.tsx",
+          "part": "Tooltip"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/tooltip.tsx",
+          "part": "Tooltip"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/components/tree-row.tsx",
+          "part": "TreeRow"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/components/tree-row.tsx",
+          "part": "TreeRow"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/canvas.tsx",
+          "part": "AssetLabel"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/canvas.tsx",
+          "part": "AssetLabel"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/canvas.tsx",
+          "part": "Minimap"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/canvas.tsx",
+          "part": "Minimap"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-access.tsx",
+          "part": "AccessShell"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-access.tsx",
+          "part": "AccessShell"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-access.tsx",
+          "part": "AccessState"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-access.tsx",
+          "part": "AccessState"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "HubBar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "HubBar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "HubEmpty"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "HubEmpty"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "HubHeading"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "HubHeading"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "LiveInstances"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "LiveInstances"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "ProjectList"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "ProjectList"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "Rescan"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/hub-home.tsx",
+          "part": "Rescan"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/inspector.tsx",
+          "part": "Inspector"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/inspector.tsx",
+          "part": "Inspector"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/menus.tsx",
+          "part": "Menu"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/menus.tsx",
+          "part": "Menu"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/navigation.tsx",
+          "part": "Contents"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/navigation.tsx",
+          "part": "Contents"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/navigation.tsx",
+          "part": "ScopePicker"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/navigation.tsx",
+          "part": "ScopePicker"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/navigation.tsx",
+          "part": "ScopeRow"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/navigation.tsx",
+          "part": "ScopeRow"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/navigation.tsx",
+          "part": "ScopeTabs"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/navigation.tsx",
+          "part": "ScopeTabs"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/navigation.tsx",
+          "part": "Sidebar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/navigation.tsx",
+          "part": "Sidebar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/open-directory.tsx",
+          "part": "OpenDialog"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/open-directory.tsx",
+          "part": "OpenDialog"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/project-switcher.tsx",
+          "part": "ProjectPicker"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/project-switcher.tsx",
+          "part": "ProjectPicker"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/project-switcher.tsx",
+          "part": "Switcher"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/project-switcher.tsx",
+          "part": "Switcher"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/project-switcher.tsx",
+          "part": "SwitcherMenu"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/project-switcher.tsx",
+          "part": "SwitcherMenu"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/project-switcher.tsx",
+          "part": "SwitcherRow"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/project-switcher.tsx",
+          "part": "SwitcherRow"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/shortcuts.tsx",
+          "part": "Shortcuts"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/shortcuts.tsx",
+          "part": "Shortcuts"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/tokens.tsx",
+          "part": "TokenCatalog"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/tokens.tsx",
+          "part": "TokenCatalog"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/view-controls.tsx",
+          "part": "AppBar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/view-controls.tsx",
+          "part": "AppBar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/view-controls.tsx",
+          "part": "Tools"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/view-controls.tsx",
+          "part": "Tools"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/view-controls.tsx",
+          "part": "ViewerBars"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/view-controls.tsx",
+          "part": "ViewerBars"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/view-controls.tsx",
+          "part": "ViewerTools"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/view-controls.tsx",
+          "part": "ViewerTools"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/modules/view-controls.tsx",
+          "part": "ZoomBar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/modules/view-controls.tsx",
+          "part": "ZoomBar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/canvas.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/canvas.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/hub-access.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/hub-access.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/hub-home.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/hub-home.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/hub-switcher.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/hub-switcher.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/inspector.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/inspector.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/open-directory.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/open-directory.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "public/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/tokens.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "directory": "src/"
+      },
+      "design": [
+        {
+          "source": "design/surfaces/tokens.tsx"
+        }
+      ]
+    }
+  ]
+}

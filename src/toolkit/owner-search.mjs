@@ -113,7 +113,7 @@ export async function searchOwner(config, values, { log = console.log, openIndex
               const key = JSON.stringify([target.source, target.part]);
               if (!rows.has(key)) rows.set(key, { source: target.source, part: target.part, matchKind: kind, rank, frames: [], tokens: [], evidence: [] });
               const row = rows.get(key); if (compareRanks(rank, row.rank) < 0) { row.rank = rank; row.matchKind = kind; }
-              if (!row.frames.some(f => f.source === source && f.frame === frame.name && f.theme === theme)) row.frames.push({ ...ref, theme, locale: frame.locale ?? null });
+              if (!row.frames.some(f => f.source === source && f.frame === frame.name && f.theme === theme)) row.frames.push({ ...ref, theme, locale: frame.locale ?? null, proposed: frame.proposed ?? null });
               row.evidence.push(evidence);
               if (query.kind === 'text') row.authoredIn = orderAuthoredIn([...(row.authoredIn ?? []), ...evidence.authoredIn], [row.source, ...row.frames.map(frame => frame.source)]);
               for (const reference of references) {

@@ -1,4 +1,21 @@
-import { Frame } from 'adg';
+import { Frame, Icon } from 'adg';
+import { drawingSpecimen } from '../fixtures/canvas';
+
+const labelClasses: Record<string, string> = {
+  section: 'fill-text text-section font-[650]', set: 'fill-text-secondary text-meta font-[550]', 'selected-set': 'fill-text text-meta font-[550]',
+  flow: 'fill-text-secondary text-meta font-semibold', count: 'fill-text-tertiary text-meta', form: 'fill-text-tertiary text-caption', 'selected-frame': 'fill-text text-caption font-[550]',
+};
+export function Drawing({ nodes }: { nodes: any[] }): unknown {
+  return nodes.map(({ at: [x, y], size: [width, height], kind, selected, outline = true, preview, labels = [], children = [] }) => (
+    <g transform={`translate(${x} ${y})`}>
+      {kind === 'section' && <rect width={width} height={height} rx={16} class="fill-surface-section stroke-border" />}
+      {preview && <svg width={width} height={height} viewBox={preview.crop} class="overflow-hidden rounded-[6px]"><image width={preview.size[0]} height={preview.size[1]} href={preview.light} class="dark:hidden" /><image width={preview.size[0]} height={preview.size[1]} href={preview.dark} class="hidden dark:inline" /></svg>}
+      {kind !== 'section' && outline && <rect width={width} height={height} rx={Math.min(6, width / 2, height / 2)} class={selected ? 'fill-none stroke-accent stroke-[2]' : 'fill-none stroke-border'} />}
+      {labels.map(([lx, ly, role, text]: any) => role === 'copy' ? <g class="opacity-0" transform={`translate(${lx} ${ly - 6})`}><Icon name="copy" size={12} class="text-text-tertiary" /></g> : <text x={lx} y={ly} dominant-baseline="central" class={labelClasses[role]}>{text}</text>)}
+      <Drawing nodes={children} />
+    </g>
+  ));
+}
 export function Canvas({
   width = 280,
   height = 150,

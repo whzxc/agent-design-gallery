@@ -1,26 +1,15 @@
 import { Frame } from 'adg';
 import { frames } from '../fixtures/menu-captures';
-import { Drawing } from './canvas';
+import { Drawing } from '../components/canvas';
 import { Screen } from '../components/canvas';
-import { Tools, ViewerTools, ZoomBar } from './view-controls';
+import { Tools, ViewerTools, ZoomBar } from '../components/toolbar';
 import menuFixtures from '../fixtures/menus.json';
 import { viewerBarMore } from '../fixtures/viewer-bars';
 import { scenes } from '../scenes/menus';
 import { Panel } from '../components/panel';
-import { MenuItem } from '../components/menu-item';
+import { MenuItem, Menu as SharedMenu } from '../components/menu-item';
 export function Menu({ rows, width = 220 }: any) {
-  return (
-    <Panel form="menu" width={width}>
-      <div class="p-[6px]">
-        {rows.map((row: any, i: number) => (
-          <>
-            {i > 0 && (row.form === 'label' || row.divider) && <div class="h-px bg-border my-1 mx-[2px]" />}
-            <MenuItem {...row} />
-          </>
-        ))}
-      </div>
-    </Panel>
-  );
+  return <SharedMenu rows={rows} width={width} />;
 }
 
 export default () => [

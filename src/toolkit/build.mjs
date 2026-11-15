@@ -67,6 +67,7 @@ export function validateFrame(frame) {
     try { if (typeof frame.locale !== 'string' || !frame.locale.trim()) throw Error(); frame.locale = Intl.getCanonicalLocales(frame.locale)[0]; }
     catch { throw Error('Invalid Frame locale; use a BCP 47 language tag.'); }
   }
+  if (frame.proposed !== undefined && (typeof frame.proposed !== 'string' || !frame.proposed.trim())) throw Error('Invalid Frame proposed; use a nonempty review scope string');
   const parent = frame.parent;
   if (parent !== undefined) {
     if (!parent || typeof parent !== 'object' || Array.isArray(parent) ||

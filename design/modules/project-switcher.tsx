@@ -3,7 +3,7 @@ import { Field } from '../components/field';
 import { Panel } from '../components/panel';
 import { MenuItem } from '../components/menu-item';
 import { IconButton } from '../components/icon-button';
-import { AppBar } from './view-controls';
+import { AppBar } from '../components/toolbar';
 import { projects, instances, hubCopy as copy, switcherFrames, hubNotes } from '../fixtures/hub';
 
 export function ProjectPicker({ current, kind, open = false, width = 220 }: any) {

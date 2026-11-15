@@ -1,5 +1,5 @@
 import { Frame } from 'adg';
-import { Drawing } from './canvas';
+import { Drawing } from '../components/canvas';
 import { Screen } from '../components/canvas';
 import { Tooltip } from '../components/tooltip';
 import viewControlFixtures from '../fixtures/view-controls.json';

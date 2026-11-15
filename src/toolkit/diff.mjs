@@ -111,7 +111,10 @@ async function writePair(output, pair, thresholds) {
     relation: pair.parent ? 'parent_crop' : 'revision', before: pair.parent?.ref ?? (pair.before ? ref : null), after: pair.after ? ref : null,
     beforeSize, afterSize, parent: pair.parent ?? null, snapshots: pair.snapshots ?? null, pixels: pair.pixels,
     verdict: reasons.length ? 'changed' : pair.parent ? 'structural' : 'identical', reasons,
-    note: { before: row.before?.note ?? null, after: row.after?.note ?? null }, paths,
+    note: { before: row.before?.note ?? null, after: row.after?.note ?? null },
+    proposed: row.after?.proposed ?? row.before?.proposed ?? null,
+    metadata: { before: row.before ? { locale: row.before.locale ?? null, proposed: row.before.proposed ?? null, fixture: row.before.fixture ?? null, capture: row.before.capture ?? null } : null,
+      after: row.after ? { locale: row.after.locale ?? null, proposed: row.after.proposed ?? null, fixture: row.after.fixture ?? null, capture: row.after.capture ?? null } : null }, paths,
   };
   await Promise.all([
     pair.before && writeFile(paths.before, pair.before.png),

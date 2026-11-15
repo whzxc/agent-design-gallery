@@ -6,6 +6,7 @@ import { states, recent, assetModifiedAt } from './fixtures/viewer.mjs';
 
 export default {
   requires: '>=0.5.0',
+  check: { strictLayers: true, lifecycle: true },
   compare: {
     port: 5188,
     viewport: '1440x900',
