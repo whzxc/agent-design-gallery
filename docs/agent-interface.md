@@ -1107,7 +1107,7 @@ retained with `complete:false`. `--read-only` skips generated declarations and b
 
 | Finding code | Meaning |
 | --- | --- |
-| `IMPORT_DIRECTION` | Source imports a higher production layer or a same-layer source above the lowest layer when `check.strictLayers` is enabled |
+| `IMPORT_DIRECTION` | Source imports a higher production layer, crosses module feature folders, or targets a feature-internal file from a surface when `check.strictLayers` is enabled |
 | `OWNER_PART_UNBOUND` | Exported production part below the top layer has no implementation binding and no proposed frame; add a binding or mark a review frame with `proposed` |
 | `OWNER_SURFACE_UNBOUND` | Top-layer surface has no whole-source implementation binding; add a binding without `part` |
 | `OWNER_SURFACE_FRAME_UNCAPTURED` | Current surface frame lacks fixture or capture metadata; add both fields or mark it `proposed` |
