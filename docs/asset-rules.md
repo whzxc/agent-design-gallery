@@ -26,6 +26,26 @@ A visual unit used inside one module only stays in that module until a second fe
 
 Fixtures and artwork support these layers; they are not additional UI layers or gallery sources.
 
+## Tokens
+
+Token names state a role, such as `--radius-control` or `--line-reading`, never their value, such as `--radius-6` or `--gray-200`. A numbered series of ordinal steps, such as chart channels, is allowed.
+
+Paint in design sources and in the implementation references tokens. Literal paint is allowed only for named artwork: illustrations, sprites, canvas geometry and brand marks. Record each literal as an exact exception (file, selector and property) with a reason that names the artwork. Interaction states such as hover, focus and selection are not artwork.
+
+Normalize each literal or new value against the nearest existing token of the same kind:
+
+- A large difference gets its own role-named token.
+- A small difference gets its own token only when three or more declarations use the value. Otherwise the value takes the nearest token, and the visual change is accepted.
+
+A difference is large when:
+
+- lengths differ by more than 2px and by more than 20%;
+- colors differ by more than CIEDE2000 5 in either theme;
+- font weights differ by more than 100;
+- shadows differ in structure, or in any length beyond the length threshold.
+
+Compare radius, font size, line height, stroke and tracking as separate kinds, and compare unitless line heights at the body font size. Font families are discrete roles. Count declarations across the implementation's styles, shared styles included. `adg check` does not read implementation styles, so the consumer enforces these rules there with its own style check.
+
 ## Ownership and imports
 
 - Imports go strictly downward. Modules import components. Surfaces import module feature indexes and components.
@@ -232,6 +252,7 @@ Audit checklist:
 - Names: repeated file/part prefixes in a single-part source, missing part prefixes in a multi-part source, unclear part ownership, unnamed reusable parts and lines over 140 characters.
 - Fidelity and gaps: altered content or order, surface-local visuals, assets with insufficient props, missing elements and stale implementation mappings. Distinguish source evidence from an unobserved implementation.
 - Lifecycle: parts without an implementation binding, frames the implementation cannot reach, proposals without an active review, abandoned alternatives and studies left after a direction was selected. A design surface does not count as a consumer.
+- Tokens: value-named tokens, literal paint outside named artwork, and values a small step from an existing token that fewer than three declarations use.
 - Supporting data: fixture content embedded in markup, duplicate fixture records, oversized artwork, missing display dimensions and unspecified image budgets.
 - Local process: an identifiable reviewer, approval state, mapping location and acceptance procedure. Missing evidence stays an explicit finding.
 
@@ -249,7 +270,7 @@ Include the audited scope and the commands actually run, with their results. Rep
 ### 3. Split changes into review batches
 
 1. Agree on ownership boundaries, naming and local mapping/governance locations from the inventory. Record the dependency findings that each batch will resolve.
-2. Review tokens and one cohesive component family. Keep the batch small enough to inspect every changed frame in both themes.
+2. Review tokens and one cohesive component family. Keep the batch small enough to inspect every changed frame in both themes. Normalize literals under [Tokens](#tokens) in one batch, with a decision table of value, nearest token, difference, uses and decision.
 3. Take one feature module at a time: establish its owner, move its states and update its importers together. Preserve part defaults while adding missing capabilities.
 4. Take one composed surface at a time after its dependencies are reviewed. Preserve structure and fixture content; reconcile it with the mapped implementation through local acceptance.
 5. Close the batch by updating bindings, removing assets without a binding, and deleting or converting completed studies.
@@ -264,6 +285,7 @@ The consumer keeps:
 - Its source directories in lower-to-higher order, feature owners, and any deliberate policy exception or import-lint opt-out.
 - Every implementation counterpart in implementation.json, plus proposals under review and concrete remaining gaps in human documentation. Human documentation keeps no counterpart rows.
 - Image display dimensions and file-size budgets.
+- The implementation style checks that enforce token-only paint and shared-part consumers, with their exact exception lists.
 - Review batch scope, proposer/reviewer responsibilities, approval and visual acceptance procedures, and the minimum ADG version.
 
 Choose local filenames that fit the project. Link this toolkit standard instead of copying its generic rules into every consumer's governance documents.
