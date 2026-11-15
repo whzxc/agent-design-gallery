@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.14.1
+
+- Fix `impact` and `--impacted` worker builds on module feature folders so feature-internal files do not record unread `tokens.css` dependency hashes.
+
 ## 0.14.0
 
 - Write one self-contained `index.html` review page in the overwritten `<configured output>/diff` directory from `adg diff --base=<rev> --impacted`, showing `added`, `removed` and `changed` frame counts (`data.review`) at the top followed by both-theme before, after and difference views side by side.
