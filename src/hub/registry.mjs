@@ -9,7 +9,7 @@ import { listSources, archFiles } from '../toolkit/project.mjs';
 import { CliError } from '../cli-output.mjs';
 
 const exec = promisify(execFile);
-export const defaultStateDirectory = path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), '.local/state'), 'agent-design-gallery');
+export const defaultStateDirectory = path.join(os.homedir(), '.agent-design-gallery');
 const canonical = async (directory, cwd = process.cwd()) => {
   try { return await realpath(path.resolve(cwd, directory.replace(/^~(?=$|[\\/])/, os.homedir()))); }
   catch (error) {

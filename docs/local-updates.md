@@ -33,7 +33,7 @@ included in the requested delivery scope.
 
 Service migration resolves old state from `org.svg-design-gallery.hub`'s `--state-dir` argument, falling back to
 `$XDG_STATE_HOME/svg-design-gallery` or `~/.local/state/svg-design-gallery`. It stops that job, moves the whole
-directory to `$XDG_STATE_HOME/agent-design-gallery` (default `~/.local/state/agent-design-gallery`), removes the
+directory to `~/.agent-design-gallery` (default `~/.agent-design-gallery`), removes the
 old plist and starts `org.agent-design-gallery.hub` with the current Node/CLI paths, new state path and previous
 port. `adg service migrate --state-dir=/new/path` overrides the destination. An existing destination or new plist
 is refused before stopping the job. Registry, preferences, caches and logs are retained. The stored hub key prefix

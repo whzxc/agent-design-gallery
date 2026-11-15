@@ -31,7 +31,7 @@ On macOS, `adg service migrate` stops `org.svg-design-gallery.hub`, moves its en
 `svg-design-gallery` to `agent-design-gallery`, and replaces the LaunchAgent with `org.agent-design-gallery.hub`
 using the current Node and CLI paths and the previous port. It resolves the source from the old LaunchAgent's
 `--state-dir`, or `$XDG_STATE_HOME/svg-design-gallery` (default `~/.local/state/svg-design-gallery`). The destination
-is `$XDG_STATE_HOME/agent-design-gallery` by default; `--state-dir` selects a different destination. It refuses an
+is `~/.agent-design-gallery` by default; `--state-dir` selects a different destination. It refuses an
 existing target directory or new LaunchAgent. It prints steps and then lists other LaunchAgents still referencing
 the old state path without editing them or printing keys. Registry, preferences, caches and logs move together.
 The stored key prefix changes to `adg_`; update browser access with the new key through `adg serve --print-key`.
@@ -92,7 +92,7 @@ Files group by directory unless `gallery.json` supplies project groups. Entries 
 }
 ```
 
-Unlisted assets remain in directory groups. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Theme, sidebar, inspector, and per-directory camera and selection preferences stay in `$XDG_STATE_HOME/agent-design-gallery/state.json`, defaulting to `~/.local/state/agent-design-gallery/state.json`. Refreshing or reopening a directory restores its zoom, position, selected component and form. Canvas asset headings show the source's last modification time in local time; hover for the complete timestamp. `--state-dir` isolates preferences.
+Unlisted assets remain in directory groups. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Theme, sidebar, inspector, and per-directory camera and selection preferences stay in `~/.agent-design-gallery/state.json`, defaulting to `~/.agent-design-gallery/state.json`. Refreshing or reopening a directory restores its zoom, position, selected component and form. Canvas asset headings show the source's last modification time in local time; hover for the complete timestamp. `--state-dir` isolates preferences.
 
 ## Design toolkit
 

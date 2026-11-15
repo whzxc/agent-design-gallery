@@ -32,10 +32,7 @@ function tokenSourcePath(directory, project) {
   return path.relative(base, path.join(directory, tokenFile)).split(path.sep).join('/');
 }
 const viewerVersion = Promise.all(['assets.js','frame-identity.js','layout.js','selection.js','arrangement.js','arrangement-worker.js'].map(file => readFile(new URL('../public/'+file,import.meta.url)))).then(parts => digest(Buffer.concat(parts)));
-const defaultState = path.join(
-  process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local/state"),
-  "agent-design-gallery",
-);
+const defaultState = path.join(os.homedir(), ".agent-design-gallery");
 export async function startServer({
   directory,
   port = 0,

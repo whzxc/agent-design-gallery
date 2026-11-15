@@ -68,7 +68,7 @@ async function migrateService(values, { home, run, nodePath, cliPath, uid, outpu
   const argument = flag => args.includes(flag) ? args[args.indexOf(flag) + 1] : undefined;
   const base = process.env.XDG_STATE_HOME || path.join(home, '.local/state');
   const oldState = path.resolve(argument('--state-dir') ?? path.join(base, 'svg-design-gallery'));
-  const newState = path.resolve(values['state-dir'] ?? path.join(base, 'agent-design-gallery'));
+  const newState = path.resolve(values['state-dir'] ?? path.join(home, '.agent-design-gallery'));
   const data = { complete: false, from: {label:oldLabel,stateDirectory:oldState,plist:oldAgent},
     to: {label:SERVICE_LABEL,stateDirectory:newState,plist:newAgent}, changes: [], keyPrefixUpdated:false, references:[], service:null };
   const warnings = [];
