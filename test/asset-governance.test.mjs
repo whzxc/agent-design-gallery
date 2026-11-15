@@ -11,25 +11,20 @@ test('strict layers reject same-layer imports above the lowest layer', () => {
   assert.deepEqual(importDirectionViolations(graph, ['components', 'modules', 'surfaces']).map(row => [row.from, row.to]), []);
 });
 
-test('single-consumer components count direct, transitive, single and zero consumers', () => {
-  const parts = { 'components/direct.tsx': ['Direct'], 'components/transitive.tsx': ['Transitive'], 'components/single.tsx': ['Single'], 'components/unused.tsx': ['Unused'] };
+test('single-consumer components count nearest modules and surfaces', () => {
+  const parts = { 'components/single.tsx': ['Single'], 'components/two-modules.tsx': ['TwoModules'], 'components/shared.tsx': ['Shared'], 'components/direct-surface.tsx': ['DirectSurface'] };
   const graph = {
-    'components/direct.tsx': { uses: [] },
-    'components/transitive.tsx': { uses: [] },
     'components/single.tsx': { uses: [] },
-    'components/unused.tsx': { uses: [] },
-    'components/helper.tsx': { uses: ['components/transitive.tsx'] },
-    'modules/one.tsx': { uses: ['components/direct.tsx', 'components/helper.tsx'] },
-    'modules/solo.tsx': { uses: ['components/single.tsx'] },
-    'modules/two.tsx': { uses: ['components/direct.tsx'] },
+    'components/two-modules.tsx': { uses: [] },
+    'components/shared.tsx': { uses: [] },
+    'components/helper.tsx': { uses: ['components/shared.tsx'] },
+    'components/direct-surface.tsx': { uses: [] },
+    'modules/one.tsx': { uses: ['components/single.tsx', 'components/two-modules.tsx', 'components/helper.tsx'] },
+    'modules/two.tsx': { uses: ['components/two-modules.tsx', 'components/helper.tsx'] },
+    'surfaces/page.tsx': { uses: ['modules/one.tsx', 'components/direct-surface.tsx'] },
   };
   const warnings = singleConsumerComponents(graph, ['components', 'modules', 'surfaces'], parts);
-  assert.deepEqual(warnings.map(row => [row.part, row.consumers]), [
-    ['Transitive', ['modules/one.tsx']],
-    ['Single', ['modules/solo.tsx']],
-    ['Unused', []],
-  ]);
-  assert.equal(warnings.some(row => row.part === 'Direct'), false);
+  assert.deepEqual(warnings.map(row => [row.part, row.consumers]), [['Single', ['modules/one.tsx']], ['DirectSurface', ['surfaces/page.tsx']]]);
 });
 
 test('proposed frame metadata is validated as a nonempty review scope', () => {

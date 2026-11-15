@@ -28,15 +28,15 @@ export function singleConsumerComponents(graph, sources, partsBySource) {
   for (const [source, parts] of Object.entries(partsBySource)) {
     const layer = source.split('/')[0];
     if (layer !== production[0] || !rank.has(layer)) continue;
-    const consumers = new Set();
     for (const part of parts) {
+      const consumers = new Set();
       const queue = [source], seen = new Set([source]);
       while (queue.length) for (const importer of reverse.get(queue.shift()) ?? []) {
         if (seen.has(importer)) continue;
         seen.add(importer);
         const importerLayer = importer.split('/')[0];
-        if (rank.has(importerLayer) && rank.get(importerLayer) > rank.get(layer)) consumers.add(importer);
-        queue.push(importer);
+        if (importerLayer === layer) queue.push(importer);
+        else if (rank.has(importerLayer) && rank.get(importerLayer) > rank.get(layer)) consumers.add(importer);
       }
       if (consumers.size < 2) warnings.push({ code: 'SINGLE_CONSUMER_COMPONENT', source, part, consumers: [...consumers].sort(), message: `${source}#${part} is reached by ${consumers.size} distinct higher-layer source${consumers.size === 1 ? '' : 's'}; move it back to its feature or add another feature consumer` });
     }
