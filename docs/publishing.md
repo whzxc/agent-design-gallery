@@ -27,7 +27,9 @@ tree and the project's optional `gallery.json`. Nobody authors boards or writes 
 | Tokens board | `tokens.css`, presented as the [Tokens board](#tokens-board) describes |
 | Surface frame | One surface frame as its own Doop frame at its declared size. Surface sources form rows in declaration order; a `gallery.json` group gathers its surface sources into consecutive rows under its title |
 
-A chapter lands on the page of its first source's layer. Boards carry no authored prose: ADG adds only titles, source
+Pages stay layer-pure, so a group that mixes layers splits by layer: each layer's sources form a chapter with the
+group title on that layer's page, and surface sources become surface rows. Projects keep each group within one layer
+so no split leaves a one-source chapter. Boards carry no authored prose: ADG adds only titles, source
 paths, counts, frame names, source notes and proposal markers, so a board uses the source language. Matrices and other
 views of undeclared prop combinations are not published.
 
