@@ -12,52 +12,52 @@ import noticeSource from "../components/notice";
 import quotaSource from "../components/quota";
 import updateSource from "../components/update-about";
 
-const panels = framesOf(panelSource);
-const cards = framesOf(cardSource);
-const tiles = framesOf(tileSource);
-const settings = framesOf(settingsSource);
-const records = framesOf(recordSource);
-const inventory = framesOf(inventorySource);
-const popover = framesOf(popoverSource);
-const paths = framesOf(pathSource);
-const notices = framesOf(noticeSource);
-const quota = framesOf(quotaSource);
-const update = framesOf(updateSource);
+const panels = framesOf(panelSource, "components/panel.tsx");
+const cards = framesOf(cardSource, "components/card.tsx");
+const tiles = framesOf(tileSource, "components/tile.tsx");
+const settings = framesOf(settingsSource, "components/settings-row.tsx");
+const records = framesOf(recordSource, "components/record-detail.tsx");
+const inventory = framesOf(inventorySource, "components/entity-inventory.tsx");
+const popover = framesOf(popoverSource, "components/inspection-popover.tsx");
+const paths = framesOf(pathSource, "components/project-path.tsx");
+const notices = framesOf(noticeSource, "components/notice.tsx");
+const quota = framesOf(quotaSource, "components/quota.tsx");
+const update = framesOf(updateSource, "components/update-about.tsx");
 
 export default () => (
   <Frame name="board" width={1680}>
     <Board
       chapter="03"
-      eyebrow="ARC · Components"
-      title="Containers and display"
-      intro="Where content lives: panels and dialogs frame a task, cards group a record, rows carry a setting, and notices interrupt only when something failed. Every specimen is a declared frame imported from its source."
+      eyebrow="ARC · 组件"
+      title="容器与展示"
+      intro="内容放在哪里：面板和对话框框住一项任务，卡片归拢一条记录，列表行承载一项设置，通知只在出错时打断。每个样本都是从源文件导入的已声明 frame；容器按桌面视口展示。"
     >
       <Section
-        title="Panels and dialogs"
-        description="A panel is the 24px-radius sheet that holds one surface; a dialog is the same sheet with a footer that owns dismissal. While work is running the dialog cannot be discarded, and the footer says so."
+        title="面板与对话框"
+        description="面板是承载一个界面的 24px 圆角底板；对话框是同一块底板加上负责关闭的页脚。工作运行期间对话框不能丢弃，页脚会明确说明。"
         sources={["components/panel.tsx"]}
       >
         <Grid cols={2}>
-          <Specimen frame={panels.panel} note="Title, actions, content" />
-          <Specimen frame={panels.dialog} note="Panel with dialog chrome" />
+          <Specimen frame={panels.panel} note="标题、操作、内容 · 960px 桌面宽度" wide stage="desktop" />
+          <Specimen frame={panels.dialog} note="带对话框外壳的面板 · 560px" wide stage="desktop" />
         </Grid>
-        <Group title="Dismissal" note="Footer states for dialogs that edit something">
+        <Group title="关闭" note="编辑类对话框的页脚状态">
           <Grid cols={2}>
-            <Specimen frame={panels["dialog-discard"]} />
-            <Specimen frame={panels["dialog-running"]} />
+            <Specimen frame={panels["dialog-discard"]} wide stage="desktop" />
+            <Specimen frame={panels["dialog-running"]} wide stage="desktop" />
           </Grid>
         </Group>
-        <Group title="Parts">
+        <Group title="部件">
           <Grid cols={2}>
-            <Specimen frame={panels["panel-header"]} note="Header alone, 512px" />
-            <Specimen frame={panels["panel-shell"]} note="Shell without a header" />
+            <Specimen frame={panels["panel-header"]} note="单独的页头，512px" />
+            <Specimen frame={panels["panel-shell"]} note="无页头的外壳" />
           </Grid>
         </Group>
       </Section>
 
       <Section
-        title="Cards and tiles"
-        description="Cards group one record on a surface. A reply card nests under its parent. Tiles are the small square entry points used for phases and quick actions."
+        title="卡片与磁贴"
+        description="卡片在界面上归拢一条记录，回复卡片嵌套在父卡片下。磁贴是用于阶段和快捷操作的小方块入口。"
         sources={["components/card.tsx", "components/tile.tsx"]}
       >
         <Grid cols={2}>
@@ -73,8 +73,8 @@ export default () => (
       </Section>
 
       <Section
-        title="Rows and records"
-        description="Settings rows put the explanation on the left and the control on the right edge, so a column of rows reads as a list of decisions. Records and inventories are read-only facts."
+        title="列表行与记录"
+        description="设置行左边放说明、右边缘放控件，一列行读起来就是一串决定。记录和清单是只读的事实。"
         sources={["components/settings-row.tsx", "components/record-detail.tsx", "components/entity-inventory.tsx", "components/inspection-popover.tsx", "components/project-path.tsx"]}
       >
         <Grid cols={2}>
@@ -91,8 +91,8 @@ export default () => (
       </Section>
 
       <Section
-        title="Feedback and quota"
-        description="A notice is the one loud container: it names what failed, shows the diagnostic and offers the single next step. Quota cards turn a usage window into a bar, a reset time and a tone."
+        title="反馈与配额"
+        description="通知是唯一“大声”的容器：说清哪里失败、给出诊断、只提供一个下一步。配额卡片把用量窗口换算成进度条、重置时间和色调。"
         sources={["components/notice.tsx", "components/quota.tsx", "components/update-about.tsx"]}
       >
         <Grid cols={2}>

@@ -5,11 +5,11 @@ import { BrandMark, type Brand } from "../components/brand-mark";
 import { ThemeSwatch } from "../components/theme-swatch";
 
 const palette = [
-  { title: "Surfaces", note: "Canvas sits under everything; surfaces stack on it from sunken to raised.", tokens: ["canvas", "surface", "surface-raised", "surface-subtle", "surface-sunken", "border", "border-strong"] },
-  { title: "Text", note: "Three steps of emphasis. Tertiary is for metadata, never for actions.", tokens: ["text", "text-secondary", "text-tertiary"] },
-  { title: "Action and accent", note: "Action is the neutral primary; accent marks the source and links.", tokens: ["action", "on-action", "accent", "accent-text", "on-accent", "knob"] },
-  { title: "Status", note: "Status colours carry meaning only. Pair them with an icon or a word.", tokens: ["success", "warning", "danger"] },
-  { title: "Roles and phases", note: "Who is acting and what a running task is doing.", tokens: ["role-source", "role-agent", "phase-thinking", "phase-text", "phase-command", "phase-file"] },
+  { title: "表面", note: "canvas 垫在最底层，各级 surface 从凹陷到凸起依次叠在其上。", tokens: ["canvas", "surface", "surface-raised", "surface-subtle", "surface-sunken", "border", "border-strong"] },
+  { title: "文字", note: "三级强调。tertiary 只用于元信息，不用于可操作的内容。", tokens: ["text", "text-secondary", "text-tertiary"] },
+  { title: "操作与强调", note: "action 是中性的主操作色；accent 用来标记来源与链接。", tokens: ["action", "on-action", "accent", "accent-text", "on-accent", "knob"] },
+  { title: "状态", note: "状态色只承载语义，必须搭配图标或文字。", tokens: ["success", "warning", "danger"] },
+  { title: "角色与阶段", note: "谁在行动，以及运行中的任务正在做什么。", tokens: ["role-source", "role-agent", "phase-thinking", "phase-text", "phase-command", "phase-file"] },
 ];
 
 function Swatch({ token }: { token: string }) {
@@ -58,10 +58,10 @@ const radii = [
 ];
 
 const elevations = [
-  { token: "shadow-sm", cls: "shadow-sm", use: "Knobs, selected segments" },
-  { token: "shadow-md", cls: "shadow-md", use: "Cards and popovers" },
-  { token: "shadow-lg", cls: "shadow-lg", use: "Panels and dialogs" },
-  { token: "shadow-focus", cls: "shadow-focus", use: "Keyboard focus ring" },
+  { token: "shadow-sm", cls: "shadow-sm", use: "开关滑块、选中的分段" },
+  { token: "shadow-md", cls: "shadow-md", use: "卡片与弹出层" },
+  { token: "shadow-lg", cls: "shadow-lg", use: "面板与对话框" },
+  { token: "shadow-focus", cls: "shadow-focus", use: "键盘焦点环" },
 ];
 
 const sizes = [
@@ -77,8 +77,8 @@ const sizes = [
 
 const bezier = (value: string) => value.match(/[\d.]+/g)!.map(Number);
 const motions = [
-  { token: "ease-enter", use: "Panels and popovers arriving" },
-  { token: "ease-exit", use: "Leaving the screen" },
+  { token: "ease-enter", use: "面板与弹出层进入" },
+  { token: "ease-exit", use: "离开屏幕" },
 ];
 const durations = ["motion-fast", "motion-base", "motion-panel", "motion-running"];
 
@@ -89,11 +89,11 @@ export default () => (
   <Frame name="board" width={1680}>
     <Board
       chapter="01"
-      eyebrow="ARC · Design system"
-      title="Foundations"
-      intro="Every value a screen uses comes from design/tokens.css. This board reads the light and dark token blocks directly, so each swatch shows both themes and changes when the tokens change."
+      eyebrow="ARC · 设计系统"
+      title="基础"
+      intro="界面用到的每个取值都来自 design/tokens.css。本板直接读取浅色和深色两组 token，所以每个色块同时展示两种主题，token 一改这里就跟着变。"
     >
-      <Section title="Colour" description="Warm paper in light, warm charcoal in dark. Each chip shows the light value on the left and the dark value on the right. Paint references a role, never a hex." sources={["design/tokens.css"]}>
+      <Section title="颜色" description="浅色是暖纸色，深色是暖炭色。每个色块左半是浅色值、右半是深色值。上色只引用角色 token，从不直接写十六进制。" sources={["design/tokens.css"]}>
         {palette.map((group) => (
           <Group title={group.title} note={group.note}>
             <Grid cols={7}>{group.tokens.map((token) => <Swatch token={token} />)}</Grid>
@@ -101,7 +101,7 @@ export default () => (
         ))}
       </Section>
 
-      <Section title="Type" description="One system UI family carries the product. Size steps are few and named by role; weight does the rest. Chinese and English share the same scale.">
+      <Section title="字体" description="整个产品只用一套系统 UI 字体。字号档位少、按角色命名，其余层级靠字重拉开。中英文共用同一套字号。">
         <div class="flex flex-col">
           {typeScale.map((row) => (
             <div class="grid grid-cols-[160px_1fr_160px] items-baseline gap-6 border-b border-border py-4">
@@ -111,7 +111,7 @@ export default () => (
             </div>
           ))}
         </div>
-        <Group title="Families">
+        <Group title="字族">
           <Grid cols={4}>
             {families.map((family) => (
               <div class="flex flex-col gap-2 rounded-card bg-canvas px-5 py-4">
@@ -123,7 +123,7 @@ export default () => (
         </Group>
       </Section>
 
-      <Section title="Shape" description="Radius grows with the size of the thing it rounds: rails and progress are nearly square, controls are capsules, panels are the softest.">
+      <Section title="形状" description="圆角随物体尺寸增大：轨道和进度条近乎直角，控件是胶囊形，面板最柔和。">
         <div class="grid grid-cols-11 gap-4">
           {radii.map((radius) => (
             <div class="flex flex-col items-center gap-3">
@@ -135,7 +135,7 @@ export default () => (
         </div>
       </Section>
 
-      <Section title="Elevation" description="Shadows are warm and low. Most UI is flat on the canvas; elevation is reserved for things that float above it.">
+      <Section title="阴影层级" description="阴影偏暖、偏低。大部分界面平铺在 canvas 上，只有浮在其上的东西才用阴影。">
         <div class="grid grid-cols-4 gap-8 rounded-card bg-canvas p-10">
           {elevations.map((elevation) => (
             <div class="flex flex-col gap-4">
@@ -149,7 +149,7 @@ export default () => (
         </div>
       </Section>
 
-      <Section title="Sizing" description="Control heights are tokens so that buttons, fields and switches line up on one rail inside a row.">
+      <Section title="尺寸" description="控件高度都是 token，同一行里的按钮、输入框和开关因此能对齐在同一条轨道上。">
         <div class="grid grid-cols-8 gap-6 rounded-card bg-canvas px-8 pt-8 pb-6">
           {sizes.map((size) => (
             <div class="flex flex-col gap-3">
@@ -165,7 +165,7 @@ export default () => (
         </div>
       </Section>
 
-      <Section title="Motion" description="Short and decisive. Panels enter on a fast-out curve and leave on an accelerating one; only running work loops.">
+      <Section title="动效" description="短促、果断。面板用先快后慢的曲线进入、用加速曲线离开；只有运行中的工作会循环播放。">
         <div class="grid grid-cols-[1fr_1fr_1.2fr] gap-6">
           {motions.map((motion) => {
             const [x1, y1, x2, y2] = bezier(light[motion.token]);
@@ -192,8 +192,8 @@ export default () => (
         </div>
       </Section>
 
-      <Section title="Marks" description="Agent and platform marks are artwork with their own colours. Theme swatches preview the user-selectable accent pairs.">
-        <Group title="Agents and platforms">
+      <Section title="标识" description="Agent 与平台标识是自带颜色的图稿。主题色块预览用户可选的强调色组合。">
+        <Group title="Agent 与平台">
           <div class="grid grid-cols-8 gap-4">
             {brands.map((brand) => (
               <div class="flex flex-col items-center gap-2 rounded-card bg-canvas py-5">
@@ -203,7 +203,7 @@ export default () => (
             ))}
           </div>
         </Group>
-        <Group title="Theme swatches">
+        <Group title="主题色块">
           <div class="flex gap-6">
             {swatchThemes.map((theme) => (
               <div class="flex items-center gap-2 rounded-pill bg-canvas py-2 pr-4 pl-2">
@@ -213,7 +213,7 @@ export default () => (
             ))}
           </div>
         </Group>
-        <Note>Antigravity's mark is omitted here: it is the largest artwork in the library and the agent is out of rotation.</Note>
+        <Note>这里省略了 Antigravity 标识：它是库里最大的一份图稿，而且这个 Agent 已经不再使用。</Note>
       </Section>
     </Board>
   </Frame>

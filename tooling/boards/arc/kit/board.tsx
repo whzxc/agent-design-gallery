@@ -1,12 +1,12 @@
 import { Icon } from "adg";
 
 // Board primitives: chapter pages that reference declared frames instead of redrawing them.
-export type FrameLike = { name: string; width?: number; height?: number; html: string; note?: string };
+export type FrameLike = { name: string; width?: number; height?: number; html: string; note?: string; source?: string };
 type Source = () => FrameLike | FrameLike[];
 
-/** Index a source's declared frames by name. */
-export const framesOf = (source: Source): Record<string, FrameLike> =>
-  Object.fromEntries(([] as FrameLike[]).concat(source()).map((frame) => [frame.name, frame]));
+/** Index a source's declared frames by name, tagged with the source path so specimens carry their identity. */
+export const framesOf = (source: Source, path: string): Record<string, FrameLike> =>
+  Object.fromEntries(([] as FrameLike[]).concat(source()).map((frame) => [frame.name, { ...frame, source: path }]));
 
 export function Board({ eyebrow, title, intro, chapter, children }: { eyebrow: string; title: string; intro: string; chapter: string; children?: unknown }) {
   return (
@@ -65,12 +65,13 @@ export function Grid({ cols = 3, children }: { cols?: keyof typeof columns; chil
   return <div class={`grid items-start gap-x-6 gap-y-8 ${columns[cols]}`}>{children}</div>;
 }
 
-/** One declared frame on the canvas backdrop, captioned with its frame name. */
-export function Specimen({ frame, label, note, wide = false }: { frame: FrameLike; label?: string; note?: string; wide?: boolean }) {
+/** One declared frame on the canvas backdrop, captioned with its frame name.
+ *  stage="desktop" gives a frame without a declared width the full well, the way a layer host does on desktop. */
+export function Specimen({ frame, label, note, wide = false, stage }: { frame: FrameLike; label?: string; note?: string; wide?: boolean; stage?: "desktop" }) {
   return (
-    <figure class={`flex min-w-0 flex-col gap-3 ${wide ? "col-span-full" : ""}`}>
+    <figure data-specimen={`${frame.source ?? ""}#${frame.name}`} class={`flex min-w-0 flex-col gap-3 ${wide ? "col-span-full" : ""}`}>
       <div class="flex min-h-[96px] items-center justify-center overflow-hidden rounded-card bg-canvas px-6 py-8">
-        <div style={`width:${frame.width ? `${frame.width}px` : "max-content"};${frame.height ? `height:${frame.height}px;` : ""}`}>{frame}</div>
+        <div style={`width:${frame.width ? `${frame.width}px` : stage === "desktop" ? "100%" : "max-content"};${frame.height ? `height:${frame.height}px;` : ""}`}>{frame}</div>
       </div>
       <figcaption class="flex flex-col gap-[2px]">
         <span class="font-mono text-meta text-text">{label ?? frame.name}</span>
@@ -80,10 +81,10 @@ export function Specimen({ frame, label, note, wide = false }: { frame: FrameLik
   );
 }
 
-/** Labelled state matrix: rows are variants, columns are states. Cells are live components. */
+/** Labelled state matrix: rows are variants, columns are states. Cells call components directly, so they are derived views, not declared frames. */
 export function Matrix({ columns: heads, rows }: { columns: string[]; rows: { label: string; note?: string; cells: unknown[] }[] }) {
   return (
-    <div class="overflow-hidden rounded-card bg-canvas">
+    <div data-derived="matrix" class="overflow-hidden rounded-card bg-canvas">
       <div class="grid grid-cols-[180px_repeat(var(--cols),minmax(0,1fr))] items-center gap-x-6 px-6" style={`--cols:${heads.length}`}>
         <span />
         {heads.map((head) => (
