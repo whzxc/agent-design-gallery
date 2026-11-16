@@ -76,20 +76,19 @@ checks those rules so retirement and layering no longer depend on cleanup rounds
 - Reverse ownership: `adg owner --part=<source>#<Export>` (or `--part=<source>` for whole-source bindings) returns the implementation bindings of a design part, so
   implementers find the counterpart to reuse.
 
-## 6. Annotation collaboration
+## 6. Doop canvas (next)
 
-- Annotation mode on a selected node: the user marks points and writes notes. Notes render as callouts in the margin
-  outside the node, with leader lines ordered top to bottom so they do not cross.
-- Anchors use frame coordinates and, where possible, element identity, so annotations survive zoom and re-rendering.
-- Export produces an annotated image with a visible caption (asset path, frame, revision) and a structured payload
-  (asset, frame, revision hash, anchors, text). Image metadata alone is not relied on.
-- Sending uses ARC's public interface as an optional integration; ADG stays usable without ARC. The default recipient
-  is the project's control source session, which decides whether a design source changes first and dispatches the
-  implementation.
-- A node context menu offers related actions.
-- Annotation inbox: Agents list, read and resolve annotations through the CLI under the same JSON contracts.
+Doop replaces ADG's canvas for browsing and discussing designs. ADG keeps sources, checks and the agent commands. The
+[Doop publishing](publishing.md) contract owns the details. This replaces the in-canvas annotation plan: comments,
+element anchors and the comment inbox come from Doop.
 
-Afterwards, expose the stable commands, including the annotation inbox, as an MCP server through ARC's MCP hub.
+- Freeze the canvas viewer: fixes only. Decide its removal after the ARC pilot. The `?base=<rev>` review page stays.
+- `adg publish`: layer pages, generated sheets, surface frames, presentation viewport, specimen identity, provenance,
+  anchor carry-over, unchanged-document skipping and branch drafts.
+- Runtime: omit `undefined`, `null` and `false` style values instead of serializing them.
+- Pilot: ARC first, then the other consumers. Remove `tooling/boards/` once `adg publish` lands.
+
+Afterwards, expose the stable commands as an MCP server through ARC's MCP hub.
 
 ## 7. Review and architecture
 

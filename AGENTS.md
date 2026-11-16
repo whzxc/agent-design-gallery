@@ -10,6 +10,7 @@
   directly and the design sources are synced after the user accepts the result. Only a new visual direction is drawn
   in the design sources first. The push gate is `npm test` plus the tests of affected fixtures. Do not dispatch ARC
   Agents or answer their permission requests. Built-in Codex subagents are allowed.
+- The canvas viewer is frozen: fix defects and add no canvas features. Doop is the browsing and comment canvas; [Doop publishing](docs/publishing.md) owns the contract.
 - Keep camera input independent of page component rendering.
 - `tooling/compare.mjs` is a reporting tool, not a gate. Run it when a change claims to be a pure refactor or targets performance. Retain raw output locally under `output/`; do not publish copied acceptance assets in the npm package.
 - Publish `@whzxc/agent-design-gallery` to the public npm registry only when the user asks. Include only the CLI, server, browser files, toolkit runtime and types, README, and license in the package.
