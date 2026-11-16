@@ -2,7 +2,7 @@
 
 [Asset rules and adoption](asset-rules.md) · [Agent CLI interface](agent-interface.md) · [ADG design](design.md) · [Architecture](architecture.md) · [Performance](performance.md)
 
-A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `adg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, and browses them in the viewer (`adg <directory>`).
+A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `adg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, publishes them to Doop (`adg publish`), and retains the frozen viewer (`adg <directory>`) and Git review page.
 
 This document is the source format and authoring command contract. The [agent CLI interface](agent-interface.md) defines `--json` output, command data schemas, exit codes and recovery actions. The [design asset rules](asset-rules.md) define layers, ownership, states, frame naming, fidelity and lifecycle, with an adoption guide for existing projects. A project's own mapping and governance documents keep its direction, declared forms, implementation locations, approval process and concrete gaps.
 
@@ -48,7 +48,7 @@ and service migration details.
 - `design/fixtures/` holds representative content and state data. `design/studies/` holds temporary direction explorations only while they are active.
 - `design/implementation.json` optionally maps implementation files/symbols to design parts and frames; see [implementation mappings](#implementation-mappings).
 - `design/gallery.json` optionally arranges sources into groups for the viewer.
-- `design/tsconfig.json` lets editors resolve the toolkit's types. `adg init` writes it; every command refreshes the ignored `design/.adg/` declarations it points to.
+- `design/tsconfig.json` lets editors resolve the toolkit's types. `adg init` writes it; authoring commands refresh the ignored `design/.adg/` declarations it points to.
 - `output/design/` receives builds, renders and compare reports. Keep it and `design/.adg/` out of Git.
 
 `sources` is an optional array of plain top-level directory names. Since 0.5.0 it defaults to `['components', 'modules', 'surfaces']`, adding `studies` only when a direct `design/studies/*.tsx` file exists. Empty study directories and nested helpers do not enable studies. Saving the first study or removing the last one updates default viewer discovery. Explicit lists retain their exact directories and order, including whether to include studies. Names use letters, digits, underscores or hyphens; nested paths are rejected. Components and surfaces use direct TSX entries; the module layer also discovers `modules/<feature>/index.tsx` and its sibling TSX files. Other files under `design/`, such as shared scene data, remain imports.
@@ -560,12 +560,31 @@ the other theme. Exit 0 means `identical`/`structural`, exit 1 is completed `cha
 (`DIFF_FAILED`), and exit 2 is incomplete execution. Review visual differences through
 the consumer's normal approval process.
 
+## Publish to Doop
+
+```sh
+adg publish [project] --json
+adg publish [project] --state-dir=/path/to/scratch-state --json
+```
+
+Set `DOOP_URL` and `DOOP_AGENT_KEY` in the environment. Publishing derives one Tokens sheet, one sheet per component
+or module source, and separate surface frames on the project's four layer pages. Documents start in light mode and
+include a light/dark switch. `publish: { viewport: '1440x900' }` configures presentation media queries for sheets;
+surfaces keep their real viewport. Publishing writes only external ADG state and Doop, never the project checkout.
+
+Run `check`, review the source changes, then publish. Re-publishing skips unchanged documents and replaces changed
+HTML in place, preserving matching comment anchors. Inspect `data.orphaned` and `data.removed[].comments` before
+replying to feedback. On a non-default branch only changed documents publish to `Draft: <branch>`; merged draft
+pages retire on the next default-branch publish. See [publishing](publishing.md) for layout, state and merge rules,
+and the [agent interface](agent-interface.md#publish) for results and recovery.
+
 ## Review handoff
 
-Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report carries one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted` (`data.review`), with no per-frame images.
+Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report carries one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted` (`data.review`), with the affected Doop page link from `adg publish` next to the `?base=<rev>` link, and no per-frame images.
 
 | Need | Command |
 | --- | --- |
+| Publish the library or branch draft and obtain Doop page links | `adg publish --json` |
 | Compute counts and write the local self-contained `index.html` review | `adg diff --base=<rev> --impacted --json` |
 | Print the reachable hub review URL for a change report | `adg link https://gallery.example/p/project/ --base=<rev>` |
 | Open a local loopback review server | `adg open ./design --base=<rev> --no-open` |
@@ -836,6 +855,8 @@ export default {
 - `texts` returns `{ text, x, y, width, height, fill, size, weight, family }` entries in page coordinates. They join the DOM texts inside the captured element.
 
 ## Viewer conventions
+
+The canvas viewer is frozen for feature development. Doop owns browsing and comments; the Git `?base=<rev>` review page remains available.
 
 The viewer reads the same sources and rebuilds a source, and the sources that import it, when it is saved. A component source is one set of its forms; a surface source is one flow of its frames. Frame notes appear in the inspector. `gallery.json` lists groups of source paths; unlisted sources stay in directory groups. See the [README](../README.md) for viewer controls.
 

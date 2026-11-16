@@ -389,3 +389,26 @@ metadata, build payloads and catalog caches are not overwritten. A source delete
 since base has no artboard; CLI rendering reports selected deletions in its base JSON
 envelope. Unsupported kinds or type changes retain the current drawing and report the
 comparison limit in the Inspector note. There is no viewer chrome addition.
+
+## Doop publishing
+
+`src/publish/index.mjs` owns `adg publish`: Git branch selection, external state, Doop page/frame reconciliation,
+content skipping, deletion reports and draft retirement. State is keyed by canonical project path and Doop origin
+under the selected ADG state directory. Each mutation persists its returned IDs for later in-place updates.
+The CLI uses the shared schema-version-1 envelope and publish-specific recovery diagnostics.
+
+`documents.mjs` builds production entries through `buildSource(..., {write:false})`, derives token/source sheets,
+and emits standalone HTML with specimen identity, provenance and one theme-switch script. Feature helpers,
+studies and architecture sources do not become sheets. Local Chromium measures pending documents and closes
+before upload. `media.mjs` uses the existing css-tree parser to partially evaluate sheet viewport conditions;
+preference queries remain, and surface styles are unchanged. Fixed source-order rows replace packing.
+
+`anchors.mjs` parses old/new HTML with parse5, matches `data-specimen` plus relative nth-of-type paths, and inserts
+existing Doop IDs without rewriting unrelated markup. Unmatched anchors and deleted-frame comments are returned
+for review. `doop.mjs` reads only DOOP_URL/DOOP_AGENT_KEY and implements JSON/SSE MCP calls with bounded timeouts;
+network, authentication and remote tool failures have separate codes. Fake MCP tests exercise the same client.
+
+Drafts derive both current and merge-base documents using the existing disposable revision-tree mechanism, compare
+content hashes and publish only changed current documents. Revision metadata is excluded from skip hashes. Default
+publishes retire drafts whose recorded commits are ancestors of the default branch. The frozen viewer and its
+`?base=<rev>` review implementation are unchanged.

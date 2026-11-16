@@ -1,6 +1,6 @@
 # Agent Design Gallery
 
-Build and browse a repository's TSX design frames with a local browser canvas.
+Build, check and publish a repository's TSX design library to Doop. The local canvas viewer remains available for existing workflows and Git review.
 
 ```sh
 npm install -g @whzxc/agent-design-gallery
@@ -92,6 +92,24 @@ Files group by directory unless `gallery.json` supplies project groups. Entries 
 ```
 
 Unlisted assets remain in directory groups. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Theme, sidebar, inspector, and per-directory camera and selection preferences stay in `~/.agent-design-gallery/state.json`, defaulting to `~/.agent-design-gallery/state.json`. Refreshing or reopening a directory restores its zoom, position, selected component and form. Canvas asset headings show the source's last modification time in local time; hover for the complete timestamp. `--state-dir` isolates preferences.
+
+## Publish to Doop
+
+```sh
+export DOOP_URL=https://doop.example
+export DOOP_AGENT_KEY=your-agent-key
+adg publish /path/to/project --json
+```
+
+One project becomes one canvas with Tokens, Components, Modules and Surfaces pages. Sheets are generated from sources;
+surface frames retain their viewport. Every document has a light/dark switch, source identity and Git provenance.
+Re-publishing skips unchanged content, preserves matching comment anchors and reports orphans and removed comments.
+Other branches publish only changed documents to a draft page. Target IDs and hashes stay in `~/.agent-design-gallery`,
+or the selected `--state-dir`; nothing is written to the project. See [publishing](docs/publishing.md).
+
+Change reports include the affected Doop page link alongside the existing `?base=<rev>` review link and
+`added`, `removed`, `changed` counts from `adg diff --base=<rev> --impacted`. The canvas viewer is frozen; Doop owns
+new browsing and comment workflows.
 
 ## Design toolkit
 

@@ -12,7 +12,7 @@ export function children(value) {
 export function attributes(props) {
   return Object.entries(props).filter(([key, value]) => !['children', 'key', '__source'].includes(key) && value != null && value !== false).map(([key, value]) => {
     if (/^on/i.test(key) || key === 'className' || key === 'dangerouslySetInnerHTML') throw Error(`Forbidden attribute ${key}; use static markup and class`);
-    if (key === 'style' && typeof value === 'object') value = Object.entries(value).map(([name, v]) => `${name.startsWith('--') ? name : name.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${typeof v === 'number' && !/^(opacity|zIndex|fontWeight|lineHeight|flex|flexGrow|flexShrink|order|gridColumn|gridRow|scale)$/.test(name) && !name.startsWith('--') ? v + 'px' : v}`).join(';');
+    if (key === 'style' && typeof value === 'object') value = Object.entries(value).filter(([, v]) => v !== undefined && v !== null && v !== false).map(([name, v]) => `${name.startsWith('--') ? name : name.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${typeof v === 'number' && !/^(opacity|zIndex|fontWeight|lineHeight|flex|flexGrow|flexShrink|order|gridColumn|gridRow|scale)$/.test(name) && !name.startsWith('--') ? v + 'px' : v}`).join(';');
     return ` ${key}="${escape(value === true ? '' : value)}"`;
   }).join('');
 }

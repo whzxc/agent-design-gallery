@@ -18,7 +18,7 @@ are not machine interfaces.
 
 | Invocation | Stdout framing |
 | --- | --- |
-| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, `owner`, `impact`, `inspect`, every `root` and `service` action | One envelope, then exit |
+| `publish`, `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, `owner`, `impact`, `inspect`, every `root` and `service` action | One envelope, then exit |
 | `serve --print-key`, `serve --rotate-key` | One envelope, then exit |
 | `--help`, `--version`, including command-specific forms | One envelope, then exit |
 | Foreground `open`, ordinary `serve` | NDJSON: one envelope per line until termination |
@@ -49,7 +49,7 @@ array, including when empty. Failure data is either the command's observed parti
 result or `null` when no result has been assembled. A failure need not undo completed
 file changes. Consumers must examine `ok` and process termination, even when data exists.
 
-Canonical command identities are `open`, `link`, `serve`, `init`, `migrate`, `check`,
+Canonical command identities are `publish`, `open`, `link`, `serve`, `init`, `migrate`, `check`,
 `render`, `compare`, `diff`, `owner`, `impact`, `inspect`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
 `service uninstall`, `service status`, `service logs` and `service migrate`. Help and
 version use `help` and `version`. Parse failures use the recognized command/action when
@@ -1497,3 +1497,47 @@ and `POST api/annotations` with `action` (`create`, `update`, `delete`, `resolve
 fields. The hub proxies these routes with its existing authentication. Data lives under
 `<state-dir>/annotations/`, keyed by the absolute project root, shared by hub and standalone
 viewers using that state root. Consumer design repositories are never used for storage.
+
+
+## Publish
+
+`adg publish [project] [--state-dir=<path>] --json` returns one schema-version-1 envelope. The project defaults to
+normal discovery from the working directory. DOOP_URL and DOOP_AGENT_KEY are required environment variables.
+The command never writes project files. The result covers only completed remote mutations on failure.
+
+```ts
+type PublishData = {
+  project: string; complete: boolean; stateFile: string;
+  canvas: { id: string; url: string } | null;
+  branch: { branch: string; revision: string; defaultBranch: string;
+    defaultRef: string; draft: boolean; base: string | null };
+  pages: { id: string; name: string; url: string }[];
+  documents: { key: string; source: string; frame: string | null; frameId: string;
+    pageId: string; action: 'created' | 'updated' | 'skipped'; url: string }[];
+  removed: { key: string; source: string; frameId: string; comments: unknown[] }[];
+  orphaned: { id: string; key: string; specimen: string; source: string;
+    frameId: string; comments: unknown[] }[];
+  removedDrafts: string[];
+  summary: { created: number; updated: number; skipped: number; removed: number };
+};
+```
+
+`key` is the source path for a sheet, or `source#frame` for a surface. `specimen` is `source#frame`
+(`tokens.css#--token` for generated token entries). Frame IDs remain stable on replacements. `skipped` counts
+unchanged HTML documents; a skipped document may still move to preserve source order. Comments are raw Doop
+records, including resolved threads. A deletion removes the Doop frame; the report retains its comment records.
+Orphans are warnings after a successful publish (`ok:true`, `complete:true`, exit 0); they require human review.
+
+| Code | Kind / exit | Next action prerequisite |
+| --- | --- | --- |
+| `PUBLISH_CREDENTIALS_MISSING` | Error / 2 | Set both environment variables. |
+| `PUBLISH_AUTH_FAILED` | Error / 2 | Replace the rejected Doop agent key. |
+| `PUBLISH_UNREACHABLE` | Error / 2 | Restore connectivity to DOOP_URL. |
+| `PUBLISH_DOOP_FAILED` | Error / 2 | Inspect the canvas/state and remote tool failure. |
+| `PUBLISH_ORPHANED_ANCHORS` | Warning / 0 | Review the returned orphan IDs and source changes. |
+
+Next actions use `["adg","publish",<project>,"--state-dir",<state>,"--json"]` when project/state are known;
+otherwise they use `["adg","publish","--help","--json"]`. No action contains a key. Existing usage, Git,
+source-build, token, browser, state and I/O error codes retain their meanings. Missing credentials and failures
+before result assembly return `data:null`; later failures return `complete:false` with partial counts.
+The [publishing contract](publishing.md) defines sheet derivation, hash/revision semantics and draft merge rules.

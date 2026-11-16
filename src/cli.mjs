@@ -6,9 +6,10 @@ import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 import { CliError, createOutput, withHumanOutput } from './cli-output.mjs';
 
-export const commands = ['annotations', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect'];
+export const commands = ['publish', 'annotations', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect'];
 const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
 const usage = {
+  publish: '[project] [--state-dir=<path>] [--json]',
   annotations: '[list [--status=open|addressed|resolved|all] | read <id> | reply <id> --message=<text> | address <id> --message=<text> | resolve <id> | reopen <id>] [--state-dir=<path>] [--json]',
   open: `[directory] [--port=<n>] [--no-open] [--state-dir=<path>] ${targetOptions}`,
   link: `<viewer-url> ${targetOptions}`,
@@ -23,6 +24,7 @@ const usage = {
   impact: '(--source=<path>... [--part=<name>] | --token=<name>... | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --base=<rev> [--head=<rev>]) [--theme=both|light|dark] [--explain] [--state-dir=<path>] [--json]',
 };
 const details = {
+  publish: 'Publish generated layer sheets and surface frames to Doop. Read DOOP_URL and DOOP_AGENT_KEY from the environment; keep canvas state outside the project. Other branches publish changes to a Draft page.',
   annotations: 'List, read, reply to, address, resolve or reopen project annotations stored outside the repository. Run from the project directory.',
   migrate: 'Rename a project configuration and runtime imports, update editor paths and ignore entries, remove old generated files and regenerate declarations. Refuses mixed config names; safe to run again.',
   serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes. --print-key prints the key and exits; --rotate-key rotates the running hub key and exits. Forwarded data requests require a header or query key; direct-local requests are exempt.',
@@ -53,7 +55,7 @@ export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' } };
   const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
-const strings = { annotations: ['status', 'message', 'state-dir'], open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'part', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
+const strings = { publish: ['state-dir'], annotations: ['status', 'message', 'state-dir'], open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'part', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
@@ -118,8 +120,9 @@ const strings = { annotations: ['status', 'message', 'state-dir'], open: ['port'
         (values.contains !== undefined || values.locale !== undefined) && kinds[0] !== 'text' ||
         values.line !== undefined && (!/^[1-9]\d*$/.test(values.line) || !Number.isSafeInteger(Number(values.line)))) throw new CliError('USAGE_INVALID', 'Choose one nonempty owner input and compatible options; run adg owner --help.');
     }
+    if (command === 'publish' && values['state-dir'] !== undefined && !values['state-dir'].trim()) throw new CliError('USAGE_INVALID', 'Choose a nonempty state directory; run adg publish --help.');
     if (command === 'diff' && (typeof values.base !== 'string' || !values.base.trim())) throw new CliError('USAGE_INVALID', 'Set --base to a Git revision; run adg diff --help.');
-    if ((command === 'init' && positionals.length) || (['open', 'migrate'].includes(command) && positionals.length > 1) || (command === 'compare' && (values.all ? positionals.length || values.frame : positionals.length !== 1 || !values.frame))) throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
+    if ((command === 'init' && positionals.length) || (['open', 'migrate', 'publish'].includes(command) && positionals.length > 1) || (command === 'compare' && (values.all ? positionals.length || values.frame : positionals.length !== 1 || !values.frame))) throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
     if (command === 'link' && positionals.length !== 1) throw new CliError('USAGE_INVALID', 'Expected one viewer URL. Run adg link --help.');
     if (command === 'service' && (positionals.length !== 1 || !serviceActions.includes(positionals[0]) || (values.port !== undefined && positionals[0] !== 'install'))) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg service --help');
     if (command === 'root') {
@@ -194,7 +197,12 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
     if (!values.json && !values['print-key']) output.log('Hub key rotated.');
     return {data:values['print-key'] ? {action:'print-key',stateDirectory,key} : {action:'rotate-key',stateDirectory,rotated:true}};
   }
-  const config = await loadConfig(cwd);
+  const config = await loadConfig(command === 'publish' && positionals[0] ? path.resolve(cwd, positionals[0]) : cwd);
+  if (command === 'publish') {
+    const result = await (await import('./publish/index.mjs')).publish(config, { ...values, ...(values['state-dir'] ? { 'state-dir': path.resolve(cwd, values['state-dir']) } : {}) });
+    if (!values.json) { output.log(result.data.canvas.url); output.log(JSON.stringify(result.data.summary)); for (const warning of result.warnings) output.log(warning.message); }
+    return result;
+  }
   if (command === 'annotations') {
     const [action = 'list', id] = positionals;
     const stateDir = values['state-dir'] ? path.resolve(cwd, values['state-dir']) : undefined;

@@ -2,9 +2,6 @@
 
 [Roadmap](roadmap.md) · [Asset rules](asset-rules.md) · [Design toolkit](design-toolkit.md)
 
-Status: planned, [roadmap milestone 6](roadmap.md#6-doop-canvas-next). This document is the implementation contract
-for `adg publish`. When it lands, it describes current behavior.
-
 [Doop](https://github.com/kgoedecke/doop) is a self-hosted multiplayer canvas. Its frames render complete HTML
 documents, and its comments anchor to elements. ADG publishes a project's design library to one Doop canvas. People
 browse and comment there. TSX sources remain the only source of truth. ADG keeps sources, checks, `diff`, `owner`,
@@ -70,7 +67,7 @@ deleted when its branch merges. Proposals are reviewed and commented on in their
 
 The publish target is personal environment data. Project repositories keep no Doop endpoint, canvas id or key. The
 endpoint and agent key come from the environment (`DOOP_URL`, `DOOP_AGENT_KEY`). ADG records each project's canvas,
-page and frame ids in its state directory. ADG talks to Doop through its MCP endpoint.
+page and frame ids in its state directory. ADG talks to Doop through its MCP endpoint, using gzip request bodies for large documents.
 
 ## Not used
 
@@ -86,7 +83,46 @@ page and frame ids in its state directory. ADG talks to Doop through its MCP end
 Publishing relies on the frame order, host width and narrow-form rules in
 [States, frame names and fidelity](asset-rules.md#states-frame-names-and-fidelity).
 
-## Prototype
+## Commands and state
 
-`tooling/boards/` holds the hand-authored prototype behind this contract: a renderer with media query resolution,
-anchor carry-over and a minimal Doop MCP client. It is superseded and is removed when `adg publish` lands.
+```sh
+export DOOP_URL=https://doop.example
+export DOOP_AGENT_KEY=your-agent-key
+adg publish [project] --json
+adg publish [project] --state-dir=/path/to/private-state --json
+```
+
+`DOOP_URL` accepts the origin or its `/mcp` endpoint. No target configuration is written to the project.
+IDs and document hashes live in `<state-dir>/publish/<project-and-origin-hash>.json`; the default state directory
+is `~/.agent-design-gallery`. Use a separate state directory for a scratch canvas. Retain its state if you intend
+to re-publish to that same canvas. The endpoint, key and canvas IDs never enter design sources.
+
+Set `publish: { viewport: '1440x900' }` in `adg.config.mjs` to override the sheet presentation viewport.
+Sheet width is 1680 CSS pixels, with 48px padding and 32px gaps. Sheets form a vertical column with 120px gaps;
+surface sources form rows with 80px frame gaps and 120px row gaps. Drafts stack layer sections with 160px gaps.
+Chromium measures content-sized documents before upload. It closes before the command completes.
+Width/height media features support pixel and em/rem lengths (16px media-query em), ranges, lists and nested
+conditions. Remaining preference queries stay live. Surfaces retain the original compiled CSS.
+
+The default branch comes from `origin/HEAD`, falling back to a local `main` or `master`; detached HEAD is rejected.
+Draft selection compares generated content with the merge base, including imported changes and current working
+files. Deleted documents are reported and removed from an existing draft; a source deleted only on the branch
+has no current document to publish. On a default-branch publish, draft pages whose last published commit is an
+ancestor of that branch are removed. Squash/rebase merges need the draft branch merged or its page retired manually.
+
+Hash comparison excludes revision-only provenance changes: skipped documents retain their last published revision.
+A changed document carries the current HEAD revision, even when its current source includes uncommitted edits.
+HTML replacement retains the Doop frame ID and matches anchors by specimen and relative nth-of-type path.
+Structural moves inside a specimen can orphan an anchor; the result lists its ID, source, frame ID and matching
+comments. Deleted-document results include the comments removed with the frame. Orphans are warnings on a completed
+publish, with `PUBLISH_ORPHANED_ANCHORS` and a review/retry action; publishing does not resolve comments.
+
+Generated categories, token names/values, source captions and the theme button are derived UI. No authored board
+prose, architecture diagrams, studies or feature-internal helper sheets are published.
+
+## Verification
+
+Contract tests use an in-process fake Doop MCP server and local Chromium; `npm test` needs no external network.
+A maintainer smoke test uses a separate state directory, publishes ADG's own library, inspects every page with Doop
+screenshots, checks a fully skipped re-publish, retains a comment anchor through a source edit, and publishes one
+branch draft. Keep the scratch canvas link so the maintainer can delete it. Consumer pilots run separately.
