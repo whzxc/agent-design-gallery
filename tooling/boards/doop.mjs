@@ -2,7 +2,7 @@
 export async function call(name, args = {}) {
   const response = await fetch('https://doop.leow.cc/mcp', {
     method: 'POST', signal: AbortSignal.timeout(120000),
-    headers: { authorization: 'Bearer proxy-injected', 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+    headers: { authorization: `Bearer ${process.env.DOOP_AGENT_KEY ?? 'proxy-injected'}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
     body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'tools/call', params: { name, arguments: args } }),
   });
   const text = await response.text();

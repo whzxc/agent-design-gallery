@@ -14,7 +14,7 @@ Build and review with a running `adg open <arc> --no-open --port=4517`:
 node tooling/boards/render.mjs http://127.0.0.1:4517 <out-dir> light studies/board-01-foundations.tsx
 ```
 
-`render.mjs` writes compact standalone HTML (one document per board) and a PNG. `doop.mjs` is a minimal Doop MCP client for publishing a board as a single frame.
+`render.mjs` writes compact standalone HTML (one document per board) and a PNG. `doop.mjs` is a minimal Doop MCP client (agent key from `DOOP_AGENT_KEY`). `publish.mjs` creates one canvas and one frame per board, replacing HTML in place on re-runs; `shots.mjs` saves Doop server renders for review.
 
 Findings that need toolkit support before boards become an ADG feature:
 
