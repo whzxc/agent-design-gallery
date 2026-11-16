@@ -47,7 +47,7 @@ and service migration details.
 - `design/art/` holds SVG illustrations and brand artwork that sources import.
 - `design/fixtures/` holds representative content and state data. `design/studies/` holds temporary direction explorations only while they are active.
 - `design/implementation.json` optionally maps implementation files/symbols to design parts and frames; see [implementation mappings](#implementation-mappings).
-- `design/gallery.json` optionally arranges sources into groups for the viewer.
+- `design/gallery.json` optionally arranges sources into viewer groups and publishing chapters. Group titles name the boards, and listed sources become sections in order. A mixed-layer group creates a same-titled chapter on each layer page. Ungrouped component and module sources form directory chapters. Surface groups gather their separate frames into consecutive source rows.
 - `design/tsconfig.json` lets editors resolve the toolkit's types. `adg init` writes it; authoring commands refresh the ignored `design/.adg/` declarations it points to.
 - `output/design/` receives builds, renders and compare reports. Keep it and `design/.adg/` out of Git.
 
@@ -567,13 +567,20 @@ adg publish [project] --json
 adg publish [project] --state-dir=/path/to/scratch-state --json
 ```
 
-Set `DOOP_URL` and `DOOP_AGENT_KEY` in the environment. Publishing derives one Tokens sheet, one sheet per component
-or module source, and separate surface frames on the project's four layer pages. Documents start in light mode and
-include a light/dark switch. `publish: { viewport: '1440x900' }` configures presentation media queries for sheets;
-surfaces keep their real viewport. Publishing writes only external ADG state and Doop, never the project checkout.
+Set `DOOP_URL` and `DOOP_AGENT_KEY` in the environment. Publishing derives a visual Tokens board, component and module
+chapter boards, and separate surface frames on the project's four layer pages. A `gallery.json` group defines a chapter
+with its sources as sections, in listed order. A mixed-layer group creates a same-titled chapter on each layer page.
+Ungrouped component and module sources form directory chapters. A module folder's `index.tsx` uses its feature
+directory as the section title. Chapters and Tokens continue at a section boundary when they exceed the 4800px
+height budget; a single taller section stays intact.
+Boards sit side by side and present a large header with counts, a label column for each source and a 12-column grid
+of captioned specimens on wells. Surface groups gather source rows while preserving each frame's own viewport.
+Documents start in light mode and include a light/dark switch. `publish: { viewport: '1440x900' }` configures presentation
+media queries for boards. Publishing writes external ADG state and Doop.
 
 Run `check`, review the source changes, then publish. Re-publishing skips unchanged documents and replaces changed
-HTML in place, preserving matching comment anchors. Inspect `data.orphaned` and `data.removed[].comments` before
+HTML in place, preserving matching specimen and section comment anchors. The first chapter-board publish replaces
+existing per-source sheet frames and reports their removed comments. Inspect `data.orphaned` and `data.removed[].comments` before
 replying to feedback. On a non-default branch only changed documents publish to `Draft: <branch>`; merged draft
 pages retire on the next default-branch publish. See [publishing](publishing.md) for layout, state and merge rules,
 and the [agent interface](agent-interface.md#publish) for results and recovery.
@@ -858,7 +865,7 @@ export default {
 
 The canvas viewer is frozen for feature development. Doop owns browsing and comments; the Git `?base=<rev>` review page remains available.
 
-The viewer reads the same sources and rebuilds a source, and the sources that import it, when it is saved. A component source is one set of its forms; a surface source is one flow of its frames. Frame notes appear in the inspector. `gallery.json` lists groups of source paths; unlisted sources stay in directory groups. See the [README](../README.md) for viewer controls.
+The viewer reads the same sources and rebuilds a source, and the sources that import it, when it is saved. A component source is one set of its forms; a surface source is one flow of its frames. Frame notes appear in the inspector. `gallery.json` lists groups of source paths for both viewer grouping and publishing chapters; unlisted sources stay in directory groups. See the [README](../README.md) for viewer controls.
 
 Since 0.4.5, clicking a frame selects that variant. Clicking a source title selects its source; title clicks also retain copy-name behavior, while the copy icon alone leaves the selection unchanged. Escape clears the selection. Back restores the preceding selection and camera. Drag, pan, zoom, double-click and Enter focus remain available.
 

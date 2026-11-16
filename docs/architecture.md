@@ -397,15 +397,27 @@ content skipping, deletion reports and draft retirement. State is keyed by canon
 under the selected ADG state directory. Each mutation persists its returned IDs for later in-place updates.
 The CLI uses the shared schema-version-1 envelope and publish-specific recovery diagnostics.
 
-`documents.mjs` builds production entries through `buildSource(..., {write:false})`, derives token/source sheets,
-and emits standalone HTML with specimen identity, provenance and one theme-switch script. Feature helpers,
-studies and architecture sources do not become sheets. Local Chromium measures pending documents and closes
-before upload. `media.mjs` uses the existing css-tree parser to partially evaluate sheet viewport conditions;
-preference queries remain, and surface styles are unchanged. Fixed source-order rows replace packing.
+`documents.mjs` builds production entries through `buildSource(..., {write:false})` and derives chapter boards from
+`gallery.json` groups. A mixed-layer group splits into a same-titled chapter on each layer page. Ungrouped component
+and module sources form chapters by directory path. Each source becomes a section; a module folder's `index.tsx`
+uses its feature directory as the section title. Local Chromium measures specimens for the 12-column grid and
+splits chapters at section boundaries beyond the 4800px height budget. A single taller section stays intact.
+Surface frames keep their declared viewports and form source rows gathered by gallery groups.
 
-`anchors.mjs` parses old/new HTML with parse5, matches `data-specimen` plus relative nth-of-type paths, and inserts
-existing Doop IDs without rewriting unrelated markup. Unmatched anchors and deleted-frame comments are returned
-for review. `doop.mjs` reads only DOOP_URL/DOOP_AGENT_KEY and implements JSON/SSE MCP calls with bounded timeouts;
+`board.mjs` supplies shared document chrome, using project tokens with neutral fallbacks for chapter headers,
+source labels, specimen wells and captions. Boards sit side by side in chapter order. `token-board.mjs` renders
+paired light/dark colour swatches grouped by CSS comment headings or token-name prefix, type samples, shape,
+elevation, sizing and motion. It applies the same height budget and section-boundary continuation to Tokens.
+
+Generated documents carry section and specimen identity, provenance and one theme-switch script. The source
+selection includes production entries and excludes feature helpers, studies and architecture. Local Chromium closes
+before upload. `media.mjs` uses the existing css-tree parser to partially evaluate board viewport conditions against
+the presentation viewport; preference queries remain live, and surface styles retain their original viewport rules.
+
+`anchors.mjs` parses old/new HTML with parse5, matches section or specimen identity plus relative nth-of-type paths,
+and inserts existing Doop IDs. Unmatched anchors and deleted-frame comments are returned for review. The first
+chapter-board publish removes legacy per-source sheet frames from the existing canvas and includes their comments
+in the removal results. `doop.mjs` reads only DOOP_URL/DOOP_AGENT_KEY and implements JSON/SSE MCP calls with bounded timeouts;
 network, authentication and remote tool failures have separate codes. Fake MCP tests exercise the same client.
 
 Drafts derive both current and merge-base documents using the existing disposable revision-tree mechanism, compare

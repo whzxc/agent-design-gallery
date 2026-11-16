@@ -80,7 +80,7 @@ Legacy SVGs remain browsable with their existing geometric crops and relative em
 
 Sets and flows pack into sections, and sections into a stable world. Saving a source, imported component, artwork or tokens refreshes affected previews without moving the camera. Unchanged regions retain their positions; new or enlarged regions move below existing content. Use Arrange current group to compact after structural changes. Labels retain constant screen sizes and hide when they collide with chrome or other labels.
 
-Files group by directory unless `gallery.json` supplies project groups. Entries must point directly into configured source directories:
+Files group by directory unless `gallery.json` supplies project groups. The same groups define publishing chapters, with each title naming a board and each listed source becoming a section in order. Entries must identify configured source entries, including a module folder's `index.tsx`:
 
 ```json
 {
@@ -91,7 +91,7 @@ Files group by directory unless `gallery.json` supplies project groups. Entries 
 }
 ```
 
-Unlisted assets remain in directory groups. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Theme, sidebar, inspector, and per-directory camera and selection preferences stay in `~/.agent-design-gallery/state.json`, defaulting to `~/.agent-design-gallery/state.json`. Refreshing or reopening a directory restores its zoom, position, selected component and form. Canvas asset headings show the source's last modification time in local time; hover for the complete timestamp. `--state-dir` isolates preferences.
+Unlisted component and module sources publish in directory chapters. A mixed-layer group creates a chapter with the same title on each layer page. Surface sources keep separate frames, gathered into consecutive rows by their group. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Theme, sidebar, inspector, and per-directory camera and selection preferences stay in `~/.agent-design-gallery/state.json`, defaulting to `~/.agent-design-gallery/state.json`. Refreshing or reopening a directory restores its zoom, position, selected component and form. Canvas asset headings show the source's last modification time in local time; hover for the complete timestamp. `--state-dir` isolates preferences.
 
 ## Publish to Doop
 
@@ -101,9 +101,13 @@ export DOOP_AGENT_KEY=your-agent-key
 adg publish /path/to/project --json
 ```
 
-One project becomes one canvas with Tokens, Components, Modules and Surfaces pages. Sheets are generated from sources;
-surface frames retain their viewport. Every document has a light/dark switch, source identity and Git provenance.
+One project becomes one canvas with Tokens, Components, Modules and Surfaces pages. Component and module chapters
+publish as boards side by side, with a chapter header, source sections and captioned specimens on wells. Chapters and Tokens continue on another board at a section boundary when they exceed the 4800px height budget;
+a single taller section stays intact. The Tokens board presents paired light/dark swatches, type, shape,
+elevation, sizing and motion samples. Surface frames retain their viewport. Every document has a light/dark switch,
+source identity and Git provenance.
 Re-publishing skips unchanged content, preserves matching comment anchors and reports orphans and removed comments.
+The first chapter-board publish replaces existing per-source sheet frames and reports the comments removed with them.
 Other branches publish only changed documents to a draft page. Target IDs and hashes stay in `~/.agent-design-gallery`,
 or the selected `--state-dir`; nothing is written to the project. See [publishing](docs/publishing.md).
 

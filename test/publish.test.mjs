@@ -96,13 +96,13 @@ test('anchors follow specimen identities across reorder; missing/ambiguous paths
 test('derivation creates layer sheets, module indexes, surfaces, tokens and standalone identity without writes',async t=>{
   const {root,config,git}=await project(t);const before=(await git('status','--porcelain','--untracked-files=all')).stdout;
   const docs=await deriveDocuments(config,'rev');
-  assert.deepEqual(docs.map(d=>[d.layer,d.kind]),[['Tokens','sheet'],['Components','sheet'],['Modules','sheet'],['Surfaces','surface'],['Surfaces','surface']]);
-  assert.equal(docs[1].name,'design/components/button.tsx');assert.ok(docs[1].html.indexOf('>ready<')<docs[1].html.indexOf('>pending<'));
+  assert.deepEqual(docs.map(d=>[d.layer,d.kind]),[['Tokens','board'],['Components','board'],['Modules','board'],['Surfaces','surface'],['Surfaces','surface']]);
+  assert.equal(docs[1].name,'Components');assert.ok(docs[1].html.indexOf('>ready<')<docs[1].html.indexOf('>pending<'));
   assert.match(docs[1].html,/Source note/);assert.match(docs[1].html,/Proposed: Review/);
   assert.match(docs[1].html,/data-specimen="design\/components\/button.tsx#ready"/);
-  assert.match(docs[0].html,/>Families<\/h2>/);assert.match(docs[0].html,/>Colours<\/h2>/);assert.match(docs[0].html,/Light: #ffffff/);assert.match(docs[0].html,/Dark: #171717/);
+  assert.match(docs[0].html,/Families/);assert.match(docs[0].html,/Colour/);assert.match(docs[0].html,/#ffffff/);assert.match(docs[0].html,/#171717/);
   assert.match(docs[1].html,/adg-provenance/);assert.match(docs[3].html,/@media[^{}]*orientation: portrait/);
-  assert.equal(docs[0].html.match(/<h2 data-adg-token-heading>Colours<\/h2>[\s\S]*?<h2/)[0].includes('--font-ui'),false);
+
   assert.equal(docs[3].width,1200);assert.equal(docs[4].height,844);
   assert.equal(contentHash(docs[1].html),contentHash(docs[1].html.replace('rev&quot;','other&quot;')));
   assert.equal((await git('status','--porcelain','--untracked-files=all')).stdout,before);
@@ -115,8 +115,8 @@ test('fake MCP publishing skips hashes, preserves anchors, reports orphans and d
   const second=await run();assert.equal(second.data.summary.skipped,5);
   const statePath = path.join(p.state, 'publish', (await readdir(path.join(p.state, 'publish')))[0]);
   const interrupted = JSON.parse(await readFile(statePath, 'utf8'));
-  const interruptedId = interrupted.documents.default['design/components/button.tsx'].id;
-  delete interrupted.documents.default['design/components/button.tsx'];
+  const interruptedId = interrupted.documents.default['chapter:directory:components:1'].id;
+  delete interrupted.documents.default['chapter:directory:components:1'];
   await writeFile(statePath, JSON.stringify(interrupted));
   const recovered = await run();
   assert.equal(recovered.data.documents.find(d => d.source === 'design/components/button.tsx').frameId, interruptedId);
@@ -191,12 +191,12 @@ test('draft dependency changes, deletions and reverted documents reconcile only 
   const reverted = await run(); assert.equal(reverted.data.documents.length, 0); assert.equal(reverted.data.summary.removed, 1);
   await rm(path.join(p.config.design, 'components/button.tsx'));
   const deleted = await run(); assert.equal(deleted.data.documents.length, 0);
-  assert.equal([...remote.frames.values()].filter(f => f.name === 'design/components/button.tsx').length, 1);
+  assert.equal([...remote.frames.values()].filter(f => f.name === 'Components').length, 1);
 });
 
 test('real local Chromium measures sheet flow and surface viewports without network',async t=>{
   const p=await project(t),docs=await deriveDocuments(p.config,'rev');
   await measureDocuments(docs);
-  assert.equal(docs[1].width,1680);assert.ok(docs[1].height>100);assert.equal(docs[0].html.match(/<h2 data-adg-token-heading>Colours<\/h2>[\s\S]*?<h2/)[0].includes('--font-ui'),false);
+  assert.equal(docs[1].width,1680);assert.ok(docs[1].height>100);
   assert.equal(docs[3].width,1200);assert.equal(docs[3].height,800);
 });

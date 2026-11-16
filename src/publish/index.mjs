@@ -54,7 +54,7 @@ export async function publish(config, options = {}, dependencies = {}) {
     if (branch.draft) {
       const session = await prepareDiffInputs(config, [], { base: branch.base });
       try {
-        const previous = new Map((await deriveDocuments(session.before.config, branch.base)).map(doc => [doc.key, doc.hash]));
+        const previous = new Map((await deriveDocuments({ ...session.before.config, name: config.name }, branch.base)).map(doc => [doc.key, doc.hash]));
         documents = documents.filter(doc => previous.get(doc.key) !== doc.hash);
       } finally { await session.close(); }
     }
@@ -124,7 +124,7 @@ export async function publish(config, options = {}, dependencies = {}) {
         const old = await client.call('get_frame', { frame_id: frameId, expand_components: true });
         const carried = carryAnchors(old.html ?? old.frame?.html ?? '', doc.html);
         const comments = carried.orphaned.length ? commentsOf(await client.call('get_comments', { canvas_id: state.canvasId, frame_id: frameId, include_resolved: true })) : [];
-        data.orphaned.push(...carried.orphaned.map(anchor => ({ ...anchor, frameId, source: doc.source, comments: comments.filter(comment => (comment.elementId ?? comment.element_id) === anchor.id) })));
+        data.orphaned.push(...carried.orphaned.map(anchor => ({ ...anchor, frameId, source: anchor.source ?? doc.source, comments: comments.filter(comment => (comment.elementId ?? comment.element_id) === anchor.id) })));
         await client.call('set_frame_html', { frame_id: frameId, html: carried.html });
         await client.call('update_frame', { frame_id: frameId, ...placement });
         action = 'updated';
@@ -133,20 +133,29 @@ export async function publish(config, options = {}, dependencies = {}) {
         if (!frameId) throw new CliError('PUBLISH_DOOP_FAILED', 'Doop did not return a frame id.');
         action = 'created';
       }
-      previous[doc.key] = { id: frameId, hash: doc.hash, source: doc.source, width: doc.width, height: doc.height, placement };
+      previous[doc.key] = { id: frameId, hash: doc.hash, source: doc.source, sources: doc.sources ?? [doc.source], kind: doc.kind, width: doc.width, height: doc.height, placement };
       await save();
       data.summary[action]++;
-      data.documents.push({ key: doc.key, source: doc.source, frame: doc.frame ?? null, frameId, pageId, action, url: `${data.canvas.url}?page=${pageId}&frame=${frameId}` });
+      data.documents.push({ key: doc.key, source: doc.source, sources: doc.sources ?? [doc.source], name: doc.name, layer: doc.layer, kind: doc.kind, chapter: doc.chapter ?? null, part: doc.part ?? null, sourceCount: doc.sourceCount ?? (doc.sources?.length ?? 1), frameCount: doc.frameCount ?? 1, frame: doc.frame ?? null, frameId, pageId, action, url: `${data.canvas.url}?page=${pageId}&frame=${frameId}` });
     }
     const remove = async (key, record, records) => {
-      const comments = commentsOf(await client.call('get_comments', { canvas_id: state.canvasId, frame_id: record.id, include_resolved: true }));
-      await client.call('delete_frame', { frame_id: record.id });
-      data.removed.push({ key, source: record.source, frameId: record.id, comments });
+      // Retain the report across a retry if deletion succeeds but its response is lost.
+      const comments = record.removalComments ?? (frameIds.has(record.id)
+        ? commentsOf(await client.call('get_comments', { canvas_id: state.canvasId, frame_id: record.id, include_resolved: true }))
+        : []);
+      record.removalComments = comments;
+      await save();
+      if (frameIds.has(record.id)) await client.call('delete_frame', { frame_id: record.id });
+      data.removed.push({ key, source: record.source, sources: record.sources ?? [record.source], frameId: record.id, comments });
       data.summary.removed++;
       delete records[key]; await save();
     };
     const currentKeys = new Set(documents.map(doc => doc.key));
-    for (const [key, record] of Object.entries(previous)) if (!currentKeys.has(key)) await remove(key, record, previous);
+    const currentIds = new Set([...currentKeys].map(key => previous[key]?.id));
+    for (const [key, record] of Object.entries(previous)) if (!currentKeys.has(key)) {
+      if (currentIds.has(record.id)) { delete previous[key]; await save(); }
+      else await remove(key, record, previous);
+    }
     if (!branch.draft) for (const [name, draft] of Object.entries(state.drafts)) {
       if (await git(root, ['merge-base', '--is-ancestor', draft.revision, branch.defaultRef], true) === null) continue;
       const records = state.documents[`draft:${name}`] ?? {};
@@ -164,7 +173,10 @@ export async function publish(config, options = {}, dependencies = {}) {
     }
     if (JSON.stringify(canvas.pages) !== JSON.stringify(desired)) await client.call('set_canvas_pages', { canvas_id: state.canvasId, expectedPages: canvas.pages ?? [], pages: desired });
     await save();
-    data.pages = desired.map(page => ({ ...page, url: `${data.canvas.url}?page=${page.id}` }));
+    data.pages = desired.map(page => {
+      const documents = Object.values(state.documents).flatMap(Object.values).filter(document => document.placement?.pageId === page.id);
+      return { ...page, boardCount: documents.filter(document => document.kind === 'board').length, surfaceCount: documents.filter(document => document.kind === 'surface').length, url: `${data.canvas.url}?page=${page.id}` };
+    });
     data.complete = true;
     const warnings = data.orphaned.length ? [{ code: 'PUBLISH_ORPHANED_ANCHORS', message: `${data.orphaned.length} comment/link anchors have no matching element; inspect data.orphaned.`, next: nextActions('PUBLISH_ORPHANED_ANCHORS', { project: root, stateDirectory }) }] : [];
     return { data, warnings };

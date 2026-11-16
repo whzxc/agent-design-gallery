@@ -10,9 +10,6 @@ after the first consumer pilot. The `?base=<rev>` review page stays.
 
 ## Model
 
-Status: the chapter board model below replaces the first release's one-sheet-per-source layout, which stacked small
-sheets in one column and lost the board presentation. Until it lands, `adg publish` still emits per-source sheets.
-
 Tokens, components, modules and surfaces are assembly layers: they decide who owns a visual. A board is a view: it
 owns no visual, has no implementation binding and has no source file. Publishing derives every board from the source
 tree and the project's optional `gallery.json`. Nobody authors boards or writes board prose.
@@ -27,7 +24,7 @@ tree and the project's optional `gallery.json`. Nobody authors boards or writes 
 | Tokens board | `tokens.css`, presented as the [Tokens board](#tokens-board) describes |
 | Surface frame | One surface frame as its own Doop frame at its declared size. Surface sources form rows in declaration order; a `gallery.json` group gathers its surface sources into consecutive rows under its title |
 
-Pages stay layer-pure, so a group that mixes layers splits by layer: each layer's sources form a chapter with the
+Pages stay layer-pure. A group that mixes layers splits by layer: each layer's sources form a chapter with the
 group title on that layer's page, and surface sources become surface rows. Projects keep each group within one layer
 so no split leaves a one-source chapter. Boards carry no authored prose: ADG adds only titles, source
 paths, counts, frame names, source notes and proposal markers, so a board uses the source language. Matrices and other
@@ -74,8 +71,8 @@ Samples use neutral English text. Project artwork such as brand marks belongs to
 
 - Every published document is standalone HTML: the source's compiled CSS and frame markup, with no other scripts than
   the theme switch below.
-- A sheet is a tall document, so viewport media queries would answer for the sheet rather than its frames. Publishing
-  resolves `width`, `height` and `orientation` media queries in sheet CSS against the presentation viewport, 1440 × 900
+- A board is a tall document, so viewport media queries would answer for the board rather than its frames. Publishing
+  resolves `width`, `height` and `orientation` media queries in board CSS against the presentation viewport, 1440 × 900
   by default and configurable per project. It keeps preference queries such as reduced motion. Surface frames keep
   their CSS unchanged because each renders in its own viewport.
 - A frame with a declared width renders at that width. A frame without one renders at `max-content`.
@@ -85,21 +82,21 @@ Samples use neutral English text. Project artwork such as brand marks belongs to
 
 - Each specimen carries `data-specimen="<source>#<frame>"`, and each surface document carries it on its frame root.
   A comment maps to its owning source and frame through it.
-- Each document carries a provenance meta with the generator, the project-relative source path and the Git revision.
+- Each document carries a provenance meta with the generator, project-relative source paths and the Git revision.
   Publishing also writes a canvas style guide (Doop guidelines) stating that ADG generates the canvas, that frames are
   not edited in Doop and that changes go to the sources.
-- Publishing is one-way. A re-publish replaces HTML in place, and Doop keeps the previous version. It never recreates
-  a frame, which would lose comments and versions. Unchanged documents are skipped by content hash.
+- Publishing is one-way. A re-publish replaces retained board and surface HTML in place, preserving their Doop frame
+  IDs and versions. Unchanged documents are skipped by content hash.
 - Doop stamps `data-doop-id` on an element only when someone comments on or links to it. A re-publish carries every
-  existing id into the new HTML by stable landmarks: the specimen identity, then the `nth-of-type` path inside the
-  frame. Ids without a match are reported as orphaned. A removed source deletes its sheet, and the report names the
-  comments removed with it.
+  existing id into the new HTML by stable landmarks: the section or specimen identity, then the `nth-of-type` path
+  inside it. Ids without a match are reported as orphaned. Removing a source updates its chapter, and removing the
+  last source removes the board. Deleted-board results name the comments removed with the frame.
 - The comment loop: an agent reads comments, maps `data-specimen` to the source and frame, changes the source,
   re-publishes and replies. People resolve comments.
 
 ## Branch drafts
 
-Layer pages track the project's default branch. On another branch, `adg publish` writes only the sheets and surface
+Layer pages track the project's default branch. On another branch, `adg publish` writes only the boards and surface
 frames that the branch changes, compared with its merge base, to a page named `Draft: <branch>`. A draft page is
 deleted when its branch merges. Proposals are reviewed and commented on in their draft page.
 
@@ -112,8 +109,8 @@ page and frame ids in its state directory. ADG talks to Doop through its MCP end
 ## Not used
 
 - Doop components and variants: a second component model stored in Doop, which would duplicate the TSX components.
-  A sheet already groups a source's variants.
-- Doop tokens: `tokens.css` stays the only token source, and the Tokens sheet presents it.
+  A source section already groups its declared variants.
+- Doop tokens: `tokens.css` stays the only token source, and the Tokens board presents it.
 - Doop approval status: every re-publish clears it, and proposed frames already carry their review scope.
 - Prototype wiring: deferred until a concrete flow needs it. Wiring must not add Doop attributes to design sources.
 - Editing generated frames in Doop, by people or by Doop agents.
@@ -137,7 +134,10 @@ IDs and document hashes live in `<state-dir>/publish/<project-and-origin-hash>.j
 is `~/.agent-design-gallery`. Use a separate state directory for a scratch canvas. Retain its state if you intend
 to re-publish to that same canvas. The endpoint, key and canvas IDs never enter design sources.
 
-Set `publish: { viewport: '1440x900' }` in `adg.config.mjs` to override the sheet presentation viewport.
+The board height budget is 4800 CSS pixels. Chapters and Tokens split at section boundaries; an individual
+section taller than the budget remains intact. Gallery group titles must be distinct within each layer.
+
+Set `publish: { viewport: '1440x900' }` in `adg.config.mjs` to override the board presentation viewport.
 Boards on a page sit side by side in one row in chapter order with 240px gaps, tops aligned. Surface sources form
 rows with 80px frame gaps and 120px row gaps. Drafts place each layer's changed boards and surface rows in the same
 way, one band per layer.
@@ -153,13 +153,20 @@ ancestor of that branch are removed. Squash/rebase merges need the draft branch 
 
 Hash comparison excludes revision-only provenance changes: skipped documents retain their last published revision.
 A changed document carries the current HEAD revision, even when its current source includes uncommitted edits.
-HTML replacement retains the Doop frame ID and matches anchors by specimen and relative nth-of-type path.
+HTML replacement retains the Doop frame ID and matches anchors by section or specimen and relative nth-of-type path.
 Structural moves inside a specimen can orphan an anchor; the result lists its ID, source, frame ID and matching
 comments. Deleted-document results include the comments removed with the frame. Orphans are warnings on a completed
 publish, with `PUBLISH_ORPHANED_ANCHORS` and a review/retry action; publishing does not resolve comments.
 
 Generated categories, token names/values, source captions and the theme button are derived UI. No authored board
-prose, architecture diagrams, studies or feature-internal helper sheets are published.
+prose, architecture diagrams, studies or feature-internal helper sources are published.
+
+## Migration from per-source sheets
+
+The first publish with chapter boards replaces per-source sheet frames on the existing canvas. The layer pages and
+surface frames remain on that canvas. The publish result lists each removed frame and its comments under
+`data.removed`; inspect those comments when following up on the migration. Later publishes reconcile chapter boards
+and surface frames in place.
 
 ## Verification
 
