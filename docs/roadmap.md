@@ -76,7 +76,7 @@ checks those rules so retirement and layering no longer depend on cleanup rounds
 - Reverse ownership: `adg owner --part=<source>#<Export>` (or `--part=<source>` for whole-source bindings) returns the implementation bindings of a design part, so
   implementers find the counterpart to reuse.
 
-## 6. Doop canvas (implemented; consumer pilot next)
+## 6. Doop canvas (in progress: chapter boards)
 
 Doop replaces ADG's canvas for browsing and discussing designs. ADG keeps sources, checks and the agent commands. The
 [Doop publishing](publishing.md) contract owns the details. This replaces the in-canvas annotation plan: comments,
@@ -87,6 +87,9 @@ element anchors and the comment inbox come from Doop.
   anchor carry-over, unchanged-document skipping and branch drafts.
 - Runtime: omit `undefined`, `null` and `false` style values instead of serializing them.
 - The superseded `tooling/boards/` prototype is removed. Its viewport and anchor findings are covered by publishing tests.
+- Chapter boards: the ARC pilot showed that one sheet per source, stacked in one column with minimal styling, loses
+  the board presentation. Boards become chapters from `gallery.json` groups with the trial board presentation, a
+  visual Tokens board and side-by-side placement.
 - Consumer pilot: ARC first, then the other consumers, in separate tasks.
 
 Afterwards, expose the stable commands as an MCP server through ARC's MCP hub.

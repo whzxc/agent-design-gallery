@@ -10,25 +10,63 @@ after the first consumer pilot. The `?base=<rev>` review page stays.
 
 ## Model
 
-Tokens, components, modules and surfaces are assembly layers: they decide who owns a visual. A published sheet is a
-view: it owns no visual, has no implementation binding and has no source file. Publishing derives every sheet from the
-source tree. Nobody authors, classifies or maintains boards.
+Status: the chapter board model below replaces the first release's one-sheet-per-source layout, which stacked small
+sheets in one column and lost the board presentation. Until it lands, `adg publish` still emits per-source sheets.
+
+Tokens, components, modules and surfaces are assembly layers: they decide who owns a visual. A board is a view: it
+owns no visual, has no implementation binding and has no source file. Publishing derives every board from the source
+tree and the project's optional `gallery.json`. Nobody authors boards or writes board prose.
 
 | Doop | Derived from |
 | --- | --- |
 | Canvas | One project |
 | Page | One layer, in layer order: Tokens, Components, Modules, Surfaces |
-| Tokens sheet | `tokens.css`: colour roles with light and dark values, type scale, families, radii, shadows, sizes and motion |
-| Component or module sheet | One source file (a module folder publishes its `index.tsx`): every declared frame in declaration order, captioned with its frame name and source note; proposed frames are marked |
-| Surface frame | One surface frame as its own Doop frame at its declared size; the frames of one source form one row in declaration order |
+| Board (one Doop frame) | One chapter. A `gallery.json` group is a chapter; its title is the board title and its sources are its sections, in file order. Component and module sources in no group form one chapter per directory group. A chapter taller than the height budget continues on a second board, split at a section boundary |
+| Section | One component or module source (a module folder publishes its `index.tsx`) |
+| Specimen | One declared frame, in declaration order, captioned with its frame name, source note and proposal marker |
+| Tokens board | `tokens.css`, presented as the [Tokens board](#tokens-board) describes |
+| Surface frame | One surface frame as its own Doop frame at its declared size. Surface sources form rows in declaration order; a `gallery.json` group gathers its surface sources into consecutive rows under its title |
 
-Sheets carry no authored prose. ADG adds only the source path, frame names, source notes and proposal markers, so a
-sheet uses the source language. Sheets lay frames out in document flow at a fixed reading width: frames keep their
-natural size, and a frame wider than half the sheet takes a full row. Sheets and surface rows sit on their page in
-source order on a fixed grid; ADG computes no packing.
+A chapter lands on the page of its first source's layer. Boards carry no authored prose: ADG adds only titles, source
+paths, counts, frame names, source notes and proposal markers, so a board uses the source language. Matrices and other
+views of undeclared prop combinations are not published.
 
 Surfaces are separate frames for two reasons. A surface is a screen, which is the unit a Doop frame represents. A
 surface also needs its own viewport so its responsive layout renders at its real size.
+
+## Board presentation
+
+The visual reference is the trial board set from the prototype: `tooling/boards/arc/` and its kit
+`tooling/boards/arc/kit/board.tsx` at commit `1e2b897`. Published boards match its presentation, without its prose,
+its Chinese copy and its matrices. Boards style themselves from the project's tokens, with neutral fallbacks for any
+token a project does not define.
+
+- **Board**: 1680 CSS pixels wide, with 80px side padding, 64px top and 80px bottom padding on the surface colour.
+- **Header**: a chapter number in a filled pill, an uppercase eyebrow `<project> · <layer>`, the chapter title at
+  48/56 semibold, and on the right a meta line with source and frame counts. A rule separates it from the sections.
+- **Section**: a row with a top rule and 48px vertical padding, laid out as a 280px label column and a specimen area
+  with a 56px gap. The label column holds the source title (its file name) at 22/28 semibold and the
+  project-relative source path in the monospace caption style with a file icon.
+- **Specimen area**: a 12-column grid with 24px column and 32px row gaps. Each specimen spans the columns its rendered
+  width needs, well padding included, and takes the full row when wider than the area. Declaration order is kept.
+- **Specimen**: the frame centred on a well (canvas colour, card radius, 24px horizontal and 32px vertical padding,
+  96px minimum height, clipped), with a caption below it: the frame name in the monospace meta style, then the source
+  note and proposal marker in the tertiary meta style.
+
+## Tokens board
+
+The Tokens board follows the trial Foundations board. Sections:
+
+- **Colour**: one group per comment heading inside the `:root` block of `tokens.css` (a `/* Heading */` line before a
+  run of tokens). Without headings, groups follow the first segment of the token name. Each swatch is a 72px tile
+  split into the light value on the left and the dark value on the right, with the token name and both values below,
+  seven per row.
+- **Type**: one row per text size token with a sample line set in that size and its paired line height and weight
+  when names match, then family cards with a sample in each family.
+- **Shape, elevation, sizing and motion**: radius squares, shadow cards on the canvas colour, size bars at their
+  height, easing curves and duration bars.
+
+Samples use neutral English text. Project artwork such as brand marks belongs to components, not to this board.
 
 ## Rendering
 
@@ -98,8 +136,9 @@ is `~/.agent-design-gallery`. Use a separate state directory for a scratch canva
 to re-publish to that same canvas. The endpoint, key and canvas IDs never enter design sources.
 
 Set `publish: { viewport: '1440x900' }` in `adg.config.mjs` to override the sheet presentation viewport.
-Sheet width is 1680 CSS pixels, with 48px padding and 32px gaps. Sheets form a vertical column with 120px gaps;
-surface sources form rows with 80px frame gaps and 120px row gaps. Drafts stack layer sections with 160px gaps.
+Boards on a page sit side by side in one row in chapter order with 240px gaps, tops aligned. Surface sources form
+rows with 80px frame gaps and 120px row gaps. Drafts place each layer's changed boards and surface rows in the same
+way, one band per layer.
 Chromium measures content-sized documents before upload. It closes before the command completes.
 Width/height media features support pixel and em/rem lengths (16px media-query em), ranges, lists and nested
 conditions. Remaining preference queries stay live. Surfaces retain the original compiled CSS.
