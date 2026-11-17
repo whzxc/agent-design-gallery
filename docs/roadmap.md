@@ -87,6 +87,9 @@ that loaded slowly.
   placement, replacing the skyline packing. ARC accepts it first.
 - Publishing retirement: the CLI, configuration, JSON diagnostics, documentation and obsolete publishing tests are removed. The `?base=<rev>` review page stays.
 - Runtime (done): omit `undefined`, `null` and `false` style values instead of serializing them.
+- Review handoff: a review page that never shows a blank screen and reopens from a cache, one review theme following
+  the Mac's appearance, and one inline review sheet per change. The
+  [review handoff](design-toolkit.md#review-handoff) contract owns the details.
 - Annotations, next round: element anchors and a comment interaction modelled on
   [Doop](https://github.com/kgoedecke/doop)'s comments, after board view is accepted.
 
@@ -96,7 +99,5 @@ Afterwards, expose the stable commands as an MCP server through ARC's MCP hub.
 
 UI-side capabilities come first; these items follow milestone 6.
 
-- Review sheets: one composite image per change (frames, both themes, before and after), so a remote reviewer reads
-  one image instead of many.
 - Architecture owners: from a code path to the diagrams whose sidecar owners match it, so a review can tell whether a
   change needs a diagram update.

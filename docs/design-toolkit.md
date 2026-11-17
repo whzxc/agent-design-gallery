@@ -562,7 +562,11 @@ the consumer's normal approval process.
 
 ## Review handoff
 
-Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report carries one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted` (`data.review`), with no per-frame images.
+Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report embeds the review sheet inline as a Markdown image by its absolute path, then gives one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted` (`data.review`). It attaches no other screenshots.
+
+Review images show one theme: `system`, the Mac's current appearance (`defaults read -g AppleInterfaceStyle` reads `Dark`), otherwise light. `render` and `diff` accept `--theme=system` and report the resolved theme. Show the other theme as well only when the change alters theme-specific paint. Checks and diff verdicts still cover both themes.
+
+The review sheet is one PNG that `adg diff --base=<rev> --impacted` writes next to its `index.html` and reports as `data.review.sheet` (absolute path and resolved theme). It uses the system theme, or the theme `--theme` names when it names exactly one. A header names the project, the base and current revisions and the counts. Added frames show their new render; changed frames show before and after side by side; removed frames are listed by name. Each frame is labelled `<source>#<frame>`. The sheet is at most 1600 CSS pixels wide at device scale 2. Beyond 24 frames it shows the first 24 in source order and states how many more the review URL holds.
 
 | Need | Command |
 | --- | --- |
@@ -572,7 +576,9 @@ Set `--base=<rev>` to the commit where the task started. Added, removed and chan
 | Link to one frame or layer during interactive browsing | `adg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled` |
 | Export frame PNGs for automation | `adg render components/button --frame=disabled --theme=dark --out-dir=output/design/render --json` |
 
-When `<viewer-url>` has no asset, group, layer or token locator, `--base=<rev>` opens the project's Git frame review page (`?base=<rev>`). Both the hub viewer (`/p/<slug>/?base=<rev>` and `/i/<id>/?base=<rev>`) and direct `adg open --base=<rev>` render the same counts and both-theme before, after and difference panels for TSX and architecture frames, refreshing live when working-tree sources change. Switch scope tabs in the viewer to browse individual layers or tokens while retaining `?base=<rev>`.
+When `<viewer-url>` has no asset, group, layer or token locator, `--base=<rev>` opens the project's Git frame review page (`?base=<rev>`). Both the hub viewer (`/p/<slug>/?base=<rev>` and `/i/<id>/?base=<rev>`) and direct `adg open --base=<rev>` render the same counts and before, after and difference panels for TSX and architecture frames, refreshing live when working-tree sources change. Switch scope tabs in the viewer to browse individual layers or tokens while retaining `?base=<rev>`.
+
+The review page never shows a blank screen. Its chrome and a progress state appear at once, and a refresh keeps the previous result visible while it updates. It computes the viewer's current theme first and the other theme only when the viewer switches to it. Results are cached in the state directory by project, base commit, `HEAD`, a fingerprint of the working-tree files that differ from `HEAD`, and theme. Unchanged inputs reopen from the cache, and `adg diff --base=<rev> --impacted` writes the same cache entries, so a link from a change report opens without recomputing.
 
 `open` and `link` also accept an explicit locator (`--asset` with an optional `--frame`, `--group`, `--layer`, or `--tokens`, plus `--mode=query|path`) for interactive navigation. Source paths are relative to the design directory (or project root for `.mmd`) and include the extension. Passing a viewer URL to `adg link` without target flags cleans the URL, strips unrelated query parameters including access keys, and preserves or updates `base`. Share a reachable hub project URL for remote review and verify that it serves the changed checkout.
 
