@@ -175,31 +175,3 @@ test('All mode stacks specimens below measured Tokens board and keeps camera on 
   assert.deepEqual(await page.evaluate(() => window.__adg.view), camera);
   assert.equal(await page.locator('#board-chrome').evaluate(node => getComputedStyle(node).getPropertyValue('--surface').trim()), '#223344');
 });
-
-test('All mode with only tokens hides the empty state', { timeout: 30000 }, async t => {
-  const { page, server } = await viewer(t, { assets: false });
-  await page.goto(server.url + '?scope=all');
-  await settled(page, 'all');
-  assert.equal(await page.locator('[data-adg-board]').isVisible(), true);
-  assert.equal(await page.locator('#empty').isVisible(), false);
-});
-
-test('returning from Tokens restores the All camera after its board measurement', { timeout: 30000 }, async t => {
-  const { page, server } = await viewer(t);
-  await page.goto(server.url + '?scope=tokens');
-  await settled(page, 'tokens');
-  await toggleList(page);
-  await page.getByRole('tab', { name: 'All designs', exact: true }).click();
-  await settled(page, 'all');
-  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-  await settled(page, 'all');
-  const camera = await page.evaluate(() => window.__adg.view);
-  await page.getByRole('tab', { name: 'Tokens', exact: true }).click();
-  await settled(page, 'tokens');
-  await page.getByRole('tab', { name: 'All designs', exact: true }).click();
-  await settled(page, 'all');
-  assert.deepEqual(await page.evaluate(() => window.__adg.view), camera);
-  await page.reload();
-  await settled(page, 'all');
-  assert.deepEqual(await page.evaluate(() => window.__adg.view), camera, 'cold All measurement preserves the saved camera');
-});

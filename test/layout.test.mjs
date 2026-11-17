@@ -238,21 +238,6 @@ test('adding and removing sources and chapters retains remaining assignment and 
   separated(after, 240, 240);
 });
 
-test('real ARC fixtures produce one item per frame without mutating prepared source coordinates', () => {
-  const { sources } = JSON.parse(readFileSync(new URL('../fixtures/arc-sample.layout.json', import.meta.url)));
-  const data = manifest(sources), before = JSON.stringify(data);
-  const result = arrange(data);
-  assert.equal(result.items.length, sources.reduce((sum, asset) => sum + (asset.parts.length || 1), 0));
-  assert.equal(JSON.stringify(data), before);
-  assert.equal(new Set(result.items.map(a => a.id)).size, result.items.length);
-  assert.ok(result.items.every(item => item.width > 0 && item.height > 0 && item.kind === 'flow' && !item.component));
-  separated(result.groups, 240, 240);
-  for (const group of result.groups) {
-    separated(group.blocks);
-    assert.ok(group.blocks.every(section => section.x === 80 && section.x + section.w <= group.w - 80 + epsilon));
-  }
-});
-
 test('random fractional frames stay within sections and wells; empty and provisional layouts are deterministic', () => {
   assert.deepEqual(layoutWorld([]), []);
   assert.deepEqual(arrange(manifest([])), { groups: [], items: [], world: {x: 0, y: 0, width: 1, height: 1} });

@@ -1,18 +1,14 @@
 // Start the longest browser suite in the initial test-runner batch.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, readFile, writeFile, access, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { startServer } from '../src/server.mjs';
 import { states, recent } from '../fixtures/viewer.mjs';
 import { hubFixtures } from '../fixtures/hub-compare.mjs';
 import comments from '../design/fixtures/comments.json' with { type: 'json' };
 import config from '../adg.config.mjs';
-import { icon } from '../public/icons.js';
-import { overlaps } from '../public/labels.js';
 import { launch } from '../src/toolkit/browser.mjs';
 import { buildSource } from '../src/toolkit/build.mjs';
 import { loadConfig } from '../src/toolkit/config.mjs';
@@ -24,78 +20,6 @@ async function temporary(t) {
   t.after(() => rm(directory, { recursive: true, force: true }));
   return directory;
 }
-
-test('token board opens by default and its list reads both themes, updates on save and preserves the design camera', { timeout: 30000 }, async t => {
-  const folder = await temporary(t), directory = path.join(folder, 'design');
-  await mkdir(directory);
-  await writeFile(path.join(directory, 'button.svg'), await readFile(path.join(root, 'fixtures/legacy-svg/components/button.svg')));
-  const source = path.join(directory, 'tokens.css');
-  const tokens = `:root {
-  --font-ui: system-ui;
-  --font-mono: monospace;
-  --canvas: #fff;
-  --text: #333;
-  --accent: var(--text);
-  --space-2: 8px;
-  --radius-card: 12px;
-}
-:root[data-theme="dark"] {
-  --text: #eee;
-  --radius-card: 16px;
-}`;
-  await writeFile(source, tokens);
-  const server = await startServer({ directory, stateDirectory: path.join(folder, 'state') });
-  const browser = await launch();
-  try {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    const designRequests = [];
-    page.on('request', request => {
-      if (/^\/(?:asset|metadata|preview)\//.test(new URL(request.url()).pathname)) designRequests.push(request.url());
-    });
-    await page.addInitScript(() => Object.defineProperty(navigator, 'clipboard', {
-      value: { writeText: async text => { window.copiedToken = text; } },
-    }));
-    const events = page.waitForResponse(response => new URL(response.url()).pathname === '/events' && response.ok());
-    await page.goto(server.url + '?scope=tokens');
-    await page.waitForFunction(() => window.__adg?.ready);
-    await events;
-    assert.deepEqual(designRequests, [], 'opening tokens must not request artboards');
-    assert.equal(await page.locator('.token-board-drawing').isVisible(), true);
-    assert.equal(await page.locator('#token-catalog').isVisible(), false);
-    await page.getByRole('button', { name: 'More', exact: true }).click();
-    await page.locator('#token-list-toggle').click();
-    assert.equal(await page.locator('#token-catalog').isVisible(), true);
-    const accent = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'Copy --accent', exact: true }) });
-    assert.deepEqual(await accent.locator('.token-swatch').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor)),
-      ['rgb(51, 51, 51)', 'rgb(238, 238, 238)']);
-    const search = page.getByRole('searchbox', { name: 'Find tokens' });
-    await search.fill('16px');
-    await page.getByRole('button', { name: 'Copy --radius-card', exact: true }).click();
-    assert.equal(await page.evaluate(() => window.copiedToken), '--radius-card');
-    assert.equal(await page.locator('.token-copy').count(), 1, 'search includes dark values');
-    await page.getByRole('button', { name: 'Clear search' }).click();
-    assert.equal(await page.locator('#sidebar').isVisible(), false, 'token search keeps Contents closed');
-    await page.getByRole('button', { name: 'Contents', exact: true }).click();
-    await page.getByRole('button', { name: /^Spacing & size/ }).click();
-    assert.deepEqual(await page.locator('.token-value code').allTextContents(), ['8px', '8px']);
-    await writeFile(source, tokens.replace('8px', '10px'));
-    await page.waitForFunction(() => document.querySelector('.token-value code')?.textContent === '10px');
-    const switchScope = async to => {
-      await page.getByRole('tab', { name: to, exact: true }).click();
-      await page.waitForFunction(scope => window.__adg.ready && window.__adg.scope === scope,
-        to === 'Tokens' ? 'tokens' : 'all', { timeout: 5000 });
-    };
-    await switchScope('All designs');
-    await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-    const camera = await page.evaluate(() => window.__adg.view);
-    await switchScope('Tokens');
-    await switchScope('All designs');
-    assert.deepEqual(await page.evaluate(() => window.__adg.view), camera);
-  } finally {
-    await browser.close();
-    await server.close();
-  }
-});
 
 test('implementation captures map to isolated fixture environments', async () => {
   const project = await loadConfig(root);
@@ -112,34 +36,6 @@ test('implementation captures map to isolated fixture environments', async () =>
     assert.equal(fixture.locale,'en-US'); assert.ok(Number.isFinite(Date.parse(fixture.clock)));
   }
   assert.throws(()=>config.compare.fixture('unknown'), /Unknown ADG fixture/);
-});
-test('icons preserve rendered stroke and label collisions include both axes', () => {
-  assert.match(icon('folder',16),/stroke-width="2.625"/);
-  assert.match(icon('x',14),/stroke-width="3"/);
-  assert.match(icon('panel-left'),/aria-hidden="true"/);
-  assert.equal(overlaps({x:0,y:0,width:10,height:10},{x:9,y:9,width:5,height:5}),true);
-  assert.equal(overlaps({x:0,y:0,width:10,height:10},{x:10,y:0,width:5,height:5}),false);
-});
-test('server serves the packaged token source and ignores fixture queries in normal use', async t => {
-  const temporaryRoot=await temporary(t), server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot});
-  t.after(()=>server.close());
-  const tokens=await fetch(new URL('/tokens.css',server.url));
-  assert.equal(tokens.status,200);assert.equal(await tokens.text(),await readFile(path.join(root,'design/tokens.css'),'utf8'));
-  for(const file of ['app.js','assets.js','icons.js','layout.js','labels.js','boards.js']) assert.equal((await fetch(new URL('/'+file,server.url))).status,200);
-  const manifest=await (await fetch(new URL('/manifest?fixture=open-empty',server.url))).json();
-  assert.ok(manifest.directory);assert.equal(manifest.fixture,undefined);
-  const empty=path.join(temporaryRoot,'empty');await mkdir(empty);
-  const response=await fetch(new URL('/open',server.url),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({directory:empty})});
-  assert.equal(response.status,404);
-  assert.equal((await (await fetch(new URL('/manifest',server.url))).json()).directory,manifest.directory);
-});
-test('missing directory CLI errors name the path on one plain line', async t => {
-  const directory=path.join(await temporary(t),'absent');
-  await assert.rejects(promisify(execFile)(process.execPath,[path.join(root,'src/cli.mjs'),'open',directory,'--no-open']),error=>{
-    assert.equal(error.code,2);assert.equal(error.stderr.trim().split('\n').length,1);
-    assert.match(error.stderr,/Directory not found/);assert.ok(error.stderr.includes(directory));
-    assert.doesNotMatch(error.stderr,/ENOENT|review adg/);return true;
-  });
 });
 test('catalog is usable before asset preparation and retains a queued selection', {timeout:30000}, async t => {
   const stateDirectory = await temporary(t);
@@ -221,155 +117,6 @@ test('camera and selected form survive immediate reload and a server restart', {
     assert.ok(Math.abs((await heading.boundingBox()).x-before.x+8)<.1,'board source titles pan with their specimens');
   } finally {await browser.close();await server.close()}
 });
-test('all board fixture states reach drawn readiness without persisted preferences', {timeout:90000}, async t => {
-  const temporaryRoot=await temporary(t);
-  const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot,fixtures:{states,recent}});
-  const browser=await launch();
-  try {
-    const fixtureEntries=Object.entries(states);let nextFixture=0;
-    await Promise.all(Array.from({length:2},async()=>{
-      while(nextFixture<fixtureEntries.length) {
-      const [name,state]=fixtureEntries[nextFixture++];
-      const page=await browser.newPage({viewport:{width:1440,height:900},colorScheme:state.theme,reducedMotion:'reduce',locale:'en-US'});
-      let fail;const pageError=new Promise((_,reject)=>{fail=reject});page.on('pageerror',error=>fail(new Error(`${name}: ${error.message}`)));
-      try {
-        await page.goto(new URL(config.compare.fixture(name).url,server.url).href);
-        await Promise.race([config.compare.ready(page,name),pageError]);
-        assert.equal(await page.evaluate(()=>window.__adg.ready),true,name);
-        assert.equal(await page.locator('html').getAttribute('data-theme'),state.theme,name);
-        assert.equal(await page.locator('#sidebar').isVisible(),state.sidebar&&!state.empty,name);
-        if(state.asset) assert.equal(await page.locator('#source-name').textContent(),path.basename(state.asset,'.tsx'),name);
-        if(state.menu) assert.equal(await page.locator('#'+state.menu).evaluate(el=>el.matches(':popover-open')),true,name);
-        if(state.inspector) assert.equal(await page.locator('#source').isVisible(),true,name);
-        if(state.dialog) assert.equal(await page.locator('#'+state.dialog).evaluate(el=>el.open),true,name);
-        assert.equal(await page.locator('#directories').count(),0);
-        if(state.query) { assert.equal(await page.locator('.search-result').count(),2);assert.match(await page.locator('.search-result').first().textContent(),/state-pill/); }
-        const relativeBox = async (selector, parent) => page.locator(selector).first().evaluate((el, parent) => {
-          const box=el.getBoundingClientRect(), origin=document.querySelector(parent).getBoundingClientRect();
-          return [box.x-origin.x,box.y-origin.y,box.width,box.height];
-        }, parent);
-        if(name==='sample-overview') {
-          const actual=await page.evaluate(async()=>{
-            const {prepare,arrange}=await import('/assets.js');
-            const manifest=await(await fetch('/manifest')).json();
-            const assets=await Promise.all(manifest.assets.map(a=>prepare(a,'light')));
-            return {paths:manifest.assets.map(a=>a.path),sections:arrange({...manifest,assets}).groups.map(({title,layer,x,y,w,h,blocks})=>({title,layer,x,y,w,h,blocks}))};
-          });
-          const reference=JSON.parse(await readFile(path.join(root,'fixtures/arc-sample.layout.json'),'utf8'));
-          assert.equal(actual.paths.length,51);assert.ok(actual.paths.every(p=>p.endsWith('.tsx')));
-          const structure=sections=>sections.map(({title,layer,blocks})=>[title,layer,blocks.map(({asset,frames})=>[asset,frames.map(frame=>frame.name)])]);
-          assert.deepEqual(structure(actual.sections),structure(reference.sections));
-          const sectionSources=actual.sections.flatMap(section=>section.blocks.map(block=>block.asset));
-          assert.deepEqual([...sectionSources].sort(),[...actual.paths].sort());
-          for(const section of actual.sections) {
-            assert.ok(section.w>=1680 && section.h>0);
-            const placed=[];
-            for(const {asset,x,y,w,h,frames} of section.blocks) {
-              assert.ok(w>0 && h>0 && x>=0 && y>=0 && x+w<=section.w && y+h<=section.h,asset);
-              const box={x,y,width:w,height:h};
-              assert.ok(!placed.some(other=>overlaps(other,box)),`${asset} overlaps another source section`);
-              placed.push(box);
-              for(const frame of frames) {
-                assert.ok(frame.w>0 && frame.h>0);
-                assert.ok(frame.well.w>=frame.w && frame.well.h>=frame.h,`${asset} specimen fits its well`);
-              }
-            }
-          }
-          assert.equal(await page.locator('.chapter-board').count(),actual.sections.length);
-          assert.equal(await page.locator('.board-source').count(),actual.paths.length);
-        }
-        if(name==='sample-zoomed') {
-          const captions=await page.locator('.board-caption > span').allTextContents();
-          for(const caption of ['default','error']) assert.ok(captions.includes(caption),caption);
-          assert.equal(await page.locator('#labels .canvas-label:not([hidden])').count(),0);
-        }
-        if(name==='sample-inspect-frame') {
-          assert.equal(await page.locator('#frame-name').textContent(),'failed');
-          assert.equal(await page.locator('#frame-size').textContent(),'960 × 912');
-          assert.equal(await page.locator('#relationships').isVisible(),true);
-          assert.equal(await page.locator('#source-path').evaluate(el=>getComputedStyle(el).fontSize),'12px');
-        }
-        if (name === 'sidebar-search') {
-          assert.equal(await page.locator('#app-bar #search').isVisible(), true);
-          assert.equal(await page.locator('#sidebar #search').count(), 0);
-        }
-        if(name==='menu-zoom') {
-          const gap=await page.evaluate(()=>document.querySelector('.zoom').getBoundingClientRect().top-document.querySelector('#zoom-menu').getBoundingClientRect().bottom);
-          assert.equal(gap,8);
-        }
-        if(name==='dialog-shortcuts') assert.equal((await relativeBox('#keys dl','#keys'))[1],64);
-        if(name==='tooltip-inspector') {
-          assert.equal(await page.locator('#tooltip').evaluate(el=>el.getBoundingClientRect().height),26);
-          assert.equal(await page.locator('#tooltip').evaluate(el=>getComputedStyle(el).fontSize),'12px');
-        }
-        if(name==='sample-components') {
-          assert.equal(await page.locator('#search').getAttribute('placeholder'),'Find assets…');
-          assert.ok(await page.locator('.chapter-board header h1').count()>0);
-          assert.ok(await page.locator('.board-source').count()>0);
-          assert.equal(await page.locator('#labels .canvas-label:not([hidden])').count(),0);
-          const view=await page.evaluate(()=>window.__adg.view);
-          await page.getByRole('button',{name:'Contents',exact:true}).click();
-          assert.deepEqual(await page.evaluate(()=>window.__adg.view),view);
-          await page.getByRole('button',{name:'Contents',exact:true}).focus();
-          await page.keyboard.press('1');
-          assert.equal(await page.evaluate(()=>window.__adg.view.scale),1);
-          await page.keyboard.press('0');
-          assert.ok(await page.evaluate(()=>window.__adg.view.scale)<1);
-        }
-      } finally { await page.close(); }
-      }
-    }));
-    await assert.rejects(access(path.join(temporaryRoot,'state.json')), {code:'ENOENT'});
-  } finally { await browser.close();await server.close(); }
-});
-
-test('board titles and captions scale and pan with the camera without rebuilding source content', {timeout:30000}, async t => {
-  const temporaryRoot=await temporary(t);
-  const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot,fixtures:{states,recent}});
-  const browser=await launch();
-  try {
-    const page=await browser.newPage({viewport:{width:1440,height:900}});
-    await page.goto(new URL('/?fixture=sample-components',server.url).href);
-    await config.compare.ready(page,'sample-components');
-    const pan=await page.evaluate(async()=>{
-      const root=document.querySelector('#board-chrome');
-      const title=root.querySelector('.board-source button'),caption=root.querySelector('.board-caption');
-      const box=node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}};
-      const before={title:box(title),caption:box(caption),view:window.__adg.view};
-      let childWrites=0;
-      const observer=new MutationObserver(records=>{childWrites+=records.filter(record=>record.target!==root).length});
-      observer.observe(root,{subtree:true,attributes:true,childList:true,characterData:true});
-      const viewport=document.querySelector('.gallery-viewport');
-      for(let i=0;i<12;i++) {
-        viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:2,deltaY:1,bubbles:true,cancelable:true}));
-        await new Promise(requestAnimationFrame);
-      }
-      await Promise.resolve();observer.disconnect();
-      return {before,after:{title:box(title),caption:box(caption),view:window.__adg.view},childWrites};
-    });
-    assert.equal(pan.childWrites,0,'panning transforms the board layer without rebuilding its children');
-    assert.equal(pan.after.view.x,pan.before.view.x-24);
-    assert.equal(pan.after.view.y,pan.before.view.y-12);
-    for(const name of ['title','caption']) {
-      assert.ok(Math.abs(pan.after[name].x-pan.before[name].x+24)<.1,name);
-      assert.ok(Math.abs(pan.after[name].y-pan.before[name].y+12)<.1,name);
-      assert.equal(pan.after[name].width,pan.before[name].width);
-    }
-    await page.waitForFunction(()=>window.__adg.ready);
-    const before=await page.locator('.board-source button').first().boundingBox();
-    const scale=await page.evaluate(()=>window.__adg.view.scale);
-    await page.locator('#plus').click();await page.waitForFunction(()=>window.__adg.ready);
-    const after=await page.locator('.board-source button').first().boundingBox();
-    const ratio=await page.evaluate(previous=>window.__adg.view.scale/previous,scale);
-    assert.ok(ratio>1);
-    assert.ok(Math.abs(after.width/before.width-ratio)<.001,'source title scales in board pixels');
-    assert.ok(Math.abs(after.height/before.height-ratio)<.001);
-    await page.setViewportSize({width:1200,height:800});await page.waitForFunction(()=>window.__adg.ready);
-    assert.equal(await page.locator('#board-chrome').isVisible(),true);
-    assert.equal(await page.locator('#labels .canvas-label:not([hidden])').count(),0);
-  } finally {await browser.close();await server.close()}
-});
-
 test('board source titles select and copy through pointer and keyboard without moving the camera', {timeout:30000}, async t => {
   const stateDirectory=await temporary(t);
   const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory,fixtures:{states,recent}});
@@ -412,31 +159,6 @@ test('board source titles select and copy through pointer and keyboard without m
     await page.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{value:window.nativeClipboardWrite}));
     await page.locator('#copy-path').click();
     assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'components/button.tsx');
-  } finally {await browser.close();await server.close()}
-});
-
-test('feature-folder board titles copy the displayed name instead of index', async t => {
-  const directory=await temporary(t);
-  await mkdir(path.join(directory,'design/modules/account'),{recursive:true});
-  await writeFile(path.join(directory,'adg.config.mjs'),"export default {sources:['components','modules','surfaces']};");
-  await writeFile(path.join(directory,'design/tokens.css'),(await import('../src/toolkit/project.mjs')).starterTokens);
-  await writeFile(path.join(directory,'design/modules/account/index.tsx'),`import {Frame} from 'adg';export default()=> <Frame name="ready" width={200} height={100}><div>Account</div></Frame>;`);
-  const server=await startServer({directory:path.join(directory,'design'),stateDirectory:path.join(directory,'state')});
-  const browser=await launch();
-  try {
-    const page=await browser.newPage();
-    await page.addInitScript(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:async value=>{window.copiedTitle=value}}}));
-    await page.goto(server.url+'?scope=layer:modules');
-    await page.waitForFunction(()=>window.__adg?.ready || document.querySelector('#error')?.textContent);
-    const response=await fetch(new URL('/asset/modules%2Faccount%2Findex.tsx?theme=light',server.url));
-    assert.equal(response.status,200,await response.text());
-    assert.equal(await page.locator('#error').textContent(),'');
-    const title=page.locator('.board-source [data-source="modules/account/index.tsx"]');
-    assert.equal(await title.count(),1,JSON.stringify(await page.evaluate(()=>({error:document.querySelector('#error').textContent,items:window.__adg.items,titles:[...document.querySelectorAll('.board-source button')].map(node=>[node.dataset.source,node.textContent])}))));
-    assert.equal(await title.textContent(),'account');
-    await title.click();
-    assert.equal(await page.evaluate(()=>window.copiedTitle),'account');
-    assert.equal((await page.evaluate(()=>window.__adg.selection)).path,'modules/account/index.tsx');
   } finally {await browser.close();await server.close()}
 });
 

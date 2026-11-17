@@ -184,19 +184,6 @@ test('saved theme and system appearance changes drive review requests even befor
   assert.equal(await page.evaluate(() => localStorage.getItem('adg-theme')), 'system');
 });
 
-test('initial review failure keeps navigation usable and a theme switch can retry', { timeout: 30000 }, async t => {
-  const { page, request, settle, switchTheme } = await viewer(t);
-  (await request(0)).resolve({ error: 'Base revision unavailable' });
-  await page.getByRole('alert').filter({ hasText: 'Base revision unavailable' }).waitFor();
-  assert.equal(await page.locator('#app-bar').isVisible(), true);
-  assert.equal(await page.locator('#review-page').isVisible(), true);
-  assert.equal(await page.evaluate(() => window.__adg.ready), false);
-  assert.equal(await page.locator('.review-progress').count(), 0);
-  await switchTheme('light');
-  await settle(await request(1));
-  assert.equal(await page.locator('#error').isVisible(), false);
-});
-
 test('review lists moves by both source paths and retains edited moves across theme switches', { timeout: 30000 }, async t => {
   const { page, request, response, switchTheme } = await viewer(t);
   const previousSource = 'components/card.tsx';

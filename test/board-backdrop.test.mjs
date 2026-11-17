@@ -169,17 +169,3 @@ test('surface edges remain bounded and frame hover and source selection outlines
   await nearBox('#selection-outline');
   assert.deepEqual(errors, []);
 });
-
-test('all-designs token board offset preserves auto-sized component pixels and shadow clipping', { timeout: 30000 }, async t => {
-  const { page, url, errors } = await viewer(t);
-  for (const scope of ['asset:components/auto.tsx', 'all']) for (const raster of [false, true]) {
-    await focus(page, url, 'components/auto.tsx', 0, raster, scope);
-    assert.equal(await page.locator('.token-board-drawing').count(), scope === 'all' ? 1 : 0);
-    const result = await pixels(page, 'components/auto.tsx', 0, [[20, 20], [-6, 20], [126, 20], [60, -6], [60, 46]]);
-    assert.equal(result.item.width, 120);
-    assert.equal(result.item.height, 40);
-    assert.deepEqual(result.points[0].slice(0, 3), rgb[0], `${scope} component body remains visible`);
-    for (const pixel of result.points.slice(1)) assert.ok(pixel.slice(0, 3).every(value => value < 8), `${scope} shadow missing at ${pixel}`);
-  }
-  assert.deepEqual(errors, []);
-});

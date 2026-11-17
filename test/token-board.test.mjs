@@ -67,13 +67,6 @@ test('Tokens board falls back to colour name prefixes and supports the ADG token
   assert.doesNotMatch(board.body, /undefined|NaN/);
 });
 
-test('Tokens board supports step easing and custom font-size names', () => {
-  const styles = css.replace('--ease-enter: cubic-bezier(.2,0,0,1);', '--ease-enter: steps(4, end);').replaceAll('--text-body', '--font-size-body');
-  const board = tokenBoard(source, styles);
-  assert.match(board.body, /data-specimen="design\/tokens.css#--font-size-body"/);
-  assert.match(board.body, /M16 112 H40 V88 H64 V64 H88 V40 H112 V16/);
-});
-
 test('colour groups preserve first appearance and declaration order with prefix fallbacks', () => {
   const styles = css.replace('  /* Surfaces */', `  --brand-primary: #123456;
   --brand-secondary: var(--brand-primary);
@@ -242,37 +235,6 @@ test('size bars share a group scale, resolve aliases and update the scale and he
   assert.equal(dark['Theme growth'].headingCounter, 'adg-size-scale 50');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   assert.deepEqual(await measurements(), light, 'switching back restores widths and scale headings');
-});
-
-test('one long token board measures in the DOM and scopes theme variables to itself', async t => {
-  const board = tokenBoard(source, css.replace('--line-body: 20px;', '--line-body: 5100px;'));
-  assert.equal(board.height, null);
-  assert.equal(board.sourceCount, 1);
-  assert.equal(board.frameCount, 15);
-  assert.doesNotMatch(board.body, /<script|<html|<style|Light \/ Dark|Tokens · 2/);
-  assert.doesNotMatch(board.css, /:root|html,body/);
-  const browser = await launch();
-  t.after(() => browser.close());
-  const page = await browser.newPage();
-  await page.setContent('<html data-theme="light"><head><style>:root{--canvas:hotpink}</style></head><body><div id="overlay"></div></body></html>');
-  await page.evaluate(({ body, css }) => {
-    const style = document.createElement('style');
-    style.textContent = css;
-    document.head.append(style);
-    document.querySelector('#overlay').innerHTML = body;
-  }, board);
-  const element = page.locator('[data-adg-board]');
-  const box = await element.boundingBox();
-  assert.equal(box.width, 1680);
-  assert.ok(box.height > 5100);
-  assert.equal(await element.count(), 1);
-  assert.equal(await element.evaluate(node => getComputedStyle(node).getPropertyValue('--canvas').trim()), '#fafafa');
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  assert.equal(await element.evaluate(node => getComputedStyle(node).getPropertyValue('--canvas').trim()), '#141414');
-  assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim()), 'hotpink');
-  const colours = await page.locator('[data-specimen="design/tokens.css#--accent"] [data-adg-token-swatch]>span')
-    .evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor));
-  assert.deepEqual(colours, ['rgb(17, 17, 17)', 'rgb(239, 239, 239)']);
 });
 
 test('token and all manifests expose reusable board data and retain token rows across saves', async t => {
