@@ -3,7 +3,7 @@ import { HubBar, HubHeading, ProjectList, LiveInstances } from '../modules/hub-h
 import { homeFrames, hubNotes } from '../fixtures/hub';
 
 export default () => homeFrames.map(({ name, narrow, width, height }) => <Frame
-  name={name} width={width} height={height} note={hubNotes.proposed}
+  name={name} width={width} height={height} fixture={`hub-home-${name}`} capture={{ page: true, viewport: `${width}x${height}` }}
 >
   <div class="flex flex-col gap-8 bg-canvas p-3" style={{ width, height }}>
     <div class="self-start"><HubBar /></div>

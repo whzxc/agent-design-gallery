@@ -45,6 +45,18 @@
       [
         "Esc"
       ]
+    ],
+    [
+      "Comment",
+      [
+        "C"
+      ]
+    ],
+    [
+      "Hide or show comment pins",
+      [
+        "⇧C"
+      ]
     ]
   ],
   "keycap": {

@@ -5,6 +5,7 @@ const overview = { theme: 'dark', sidebar: false, camera: 'all' };
 const layerScope = { theme: 'light', sidebar: true, scope: 'layer:components', group: 'Essentials', camera: 'all' };
 const groupScope = { theme: 'light', sidebar: true, scope: 'group:Essentials', camera: 'all' };
 const topBars = { ...layerScope, themeChoice: 'system', sidebar: false, camera: 'group' };
+export const commentThreadState = { ...layerScope, sidebar: false, camera: 'origin', origin: [48, 100], scale: 2 };
 export const states = {
   'sample-components': { ...components },
   'sample-zoomed': { ...components, theme: 'dark', camera: 'group', minimap: true },

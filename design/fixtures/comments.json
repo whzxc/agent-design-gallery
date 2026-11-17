@@ -1,0 +1,48 @@
+{
+  "pinStates": [
+    "open",
+    "changed",
+    "resolved"
+  ],
+  "commentExample": {
+    "number": 1,
+    "target": "components / Essentials",
+    "displayName": "Button “Open”",
+    "messages": [
+      {
+        "author": "You",
+        "time": "2 minutes ago",
+        "text": "Could the Open action be more specific?"
+      },
+      {
+        "author": "Codex",
+        "time": "1 minute ago",
+        "text": "Open file would make the destination clearer."
+      }
+    ]
+  },
+  "resolvedExample": {
+    "number": 2,
+    "target": "components/field#default",
+    "messages": [
+      {
+        "author": "You",
+        "time": "5 minutes ago",
+        "text": "Keep the field label visible."
+      }
+    ]
+  },
+  "commentCanvas": {
+    "fixture": "canvas-comment-thread",
+    "clip": {
+      "x": 1010,
+      "y": 160,
+      "width": 420,
+      "height": 380
+    },
+    "pin": {
+      "x": 370,
+      "y": 56
+    }
+  }
+}

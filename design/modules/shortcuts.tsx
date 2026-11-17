@@ -1,23 +1,17 @@
-import { Frame } from 'adg';
-import { Drawing } from '../components/canvas';
+import { Frame, Icon } from 'adg';
 import { Panel } from '../components/panel';
-import { IconButton } from '../components/icon-button';
-import { Screen, Scrim } from '../components/canvas';
-import { scenes } from '../scenes/shortcuts';
 import shortcutFixtures from '../fixtures/shortcuts.json';
 
 export function Kbd({ label = '⌘F' }: { label?: string }) {
-  return <span class="inline-flex items-center justify-center shrink-0 h-[var(--keycap-size)] min-w-[var(--keycap-size)] px-[7px] bg-surface-sunken rounded-[var(--radius-keycap)] text-text-secondary text-meta font-mono leading-none">{label}</span>;
+  return <span class="inline-flex items-center justify-center shrink-0 h-[var(--keycap-size)] px-[7px] bg-surface-sunken rounded-[7px] text-text-secondary text-meta font-mono leading-none">{label}</span>;
 }
 export function Shortcuts({ shortcuts = [] }: { shortcuts?: string[][][] | any[] }) {
   return (
-    <Panel form="dialog" width={380}>
-      <div class="px-5 pt-5 pb-3">
+    <Panel form="dialog" width={380} height={382}>
+      <div class="relative px-5 pt-5 pb-3">
         <div class="flex items-center justify-between h-5">
           <h2 class="text-title font-[650] leading-5">Keyboard shortcuts</h2>
-          <div class="-mr-2">
-            <IconButton icon="x" />
-          </div>
+          <button type="button" aria-label="Close keyboard shortcuts" class="absolute top-[18px] right-4 grid size-(--control-size) place-items-center text-text-secondary"><Icon name="x" size={14} /></button>
         </div>
         <div class="mt-6">
           {shortcuts.map(([label, keys]) => (
@@ -36,38 +30,6 @@ export function Shortcuts({ shortcuts = [] }: { shortcuts?: string[][][] | any[]
   );
 }
 
-const frames = [
-  {
-    "name": "default",
-    "width": 480,
-    "height": 374,
-    "note": "Historical viewer layout from before the top bars.",
-    "chrome": [
-      {
-        "kind": "scrim"
-      },
-      {
-        "left": 50,
-        "top": 30,
-        "kind": "shortcuts"
-      }
-    ]
-  }
-] as const;
-
-export default () =>
-  frames.map(({ chrome, ...frame }) => (
-    <Frame {...frame}>
-      <Screen width={frame.width} height={frame.height} drawing={<Drawing nodes={scenes[frame.name]} />}>
-        {chrome.map(({ kind, left, top }: any) =>
-          kind === 'scrim' ? (
-            <Scrim />
-          ) : (
-            <div class="absolute" style={{ left, top }}>
-              <Shortcuts shortcuts={shortcutFixtures.items} />
-            </div>
-          ),
-        )}
-      </Screen>
-    </Frame>
-  ));
+export default () => <Frame name="default">
+  <div class="bg-canvas p-6"><Shortcuts shortcuts={shortcutFixtures.items} /></div>
+</Frame>;

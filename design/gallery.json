@@ -1,0 +1,34 @@
+{
+  "groups": [
+    {
+      "title": "Controls",
+      "assets": [
+        "components/button.tsx", "components/icon-button.tsx", "components/field.tsx",
+        "components/tree-row.tsx", "components/menu-item.tsx", "components/comment-pin.tsx"
+      ]
+    },
+    {
+      "title": "Frames and containers",
+      "assets": ["components/canvas.tsx", "components/panel.tsx", "components/toolbar.tsx", "components/tooltip.tsx"]
+    },
+    {
+      "title": "Viewer",
+      "assets": [
+        "modules/canvas.tsx", "modules/navigation.tsx", "modules/view-controls.tsx", "modules/menus.tsx",
+        "modules/inspector.tsx", "modules/comments.tsx", "modules/shortcuts.tsx", "modules/tokens.tsx"
+      ]
+    },
+    {
+      "title": "Project access",
+      "assets": ["modules/project-switcher.tsx", "modules/open-directory.tsx", "modules/hub-home.tsx", "modules/hub-access.tsx"]
+    },
+    {
+      "title": "Viewer layouts",
+      "assets": ["surfaces/canvas.tsx", "surfaces/tokens.tsx", "surfaces/inspector.tsx"]
+    },
+    {
+      "title": "Resident hub",
+      "assets": ["surfaces/hub-home.tsx", "surfaces/hub-switcher.tsx", "surfaces/hub-access.tsx"]
+    }
+  ]
+}

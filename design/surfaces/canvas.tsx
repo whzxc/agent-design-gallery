@@ -3,7 +3,11 @@ import { Screen, Scrim } from '../components/canvas';
 import { Contents, ScopeTabs, Sidebar } from '../modules/navigation';
 import { Inspector } from '../modules/inspector';
 import { OpenDialog } from '../modules/open-directory';
-import { Tools, AppBar, ViewerBars, ZoomBar } from '../modules/view-controls';
+import { Tools, AppBar } from '../modules/view-controls';
+import { ViewerBars, ZoomBar } from '../components/toolbar';
+import { CommentPin } from '../components/comment-pin';
+import { CommentThread } from '../modules/comments';
+import commentFixtures from '../fixtures/comments.json';
 import { ProjectPicker } from '../modules/project-switcher';
 import { Field } from '../components/field';
 import { Drawing } from '../components/canvas';
@@ -57,7 +61,21 @@ export function ViewerHeader({ scope, contentsOpen = false, detailsOpen = false,
   />;
 }
 
+const { commentCanvas, commentExample } = commentFixtures;
+const { clip, pin } = commentCanvas;
+
 export default () => [
+  <Frame name="comment-thread" width={clip.width} height={clip.height} fixture={commentCanvas.fixture}
+    capture={{ page: true, viewport: '1440x900', origin: `${clip.x} ${clip.y}` }}>
+    <div data-free class="relative bg-surface" style={{ width: clip.width, height: clip.height }}>
+      <div class="absolute" style={{ left: pin.x, top: pin.y - 26 }}>
+        <CommentPin number={commentExample.number} expanded />
+      </div>
+      <div class="absolute" style={{ left: pin.x - 332 - 12, top: pin.y - 26 }}>
+        <CommentThread thread={commentExample} />
+      </div>
+    </div>
+  </Frame>,
   ...viewerBarFrames.map(({ name, fixture, scope, panels }) => {
     const scene = renderScopeScenes.layer;
     const nodes = panels ? scene.nodes.map(node => {

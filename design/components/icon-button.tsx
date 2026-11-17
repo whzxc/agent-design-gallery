@@ -10,7 +10,7 @@ export function IconButton({
   icon?: string;
   disabled?: boolean;
 }) {
-  const color = form === 'active' ? 'bg-surface-sunken text-text' : 'text-text-secondary';
+  const color = form === 'active' ? 'bg-surface-sunken text-text' : form === 'pressed' ? 'bg-surface-sunken text-text-secondary' : 'text-text-secondary';
 
   return (
     <div

@@ -18,6 +18,10 @@
     {
       "name": "zoom-bar-minimap-pressed",
       "minimapPressed": true
+    },
+    {
+      "name": "zoom-bar-comment-pressed",
+      "commentPressed": true
     }
   ]
 }

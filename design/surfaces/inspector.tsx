@@ -15,7 +15,7 @@ function ViewerChrome({ chrome }: any) { return chrome.map(({ kind, left, top, n
 
 export default () =>
   frames.map(({ chrome, ...frame }) => (
-    <Frame {...frame}>
+    <Frame {...frame} fixture={`sample-inspect-${frame.name}`} capture={{ page: true, viewport: '1440x900' }}>
       <Screen width={frame.width} height={frame.height} drawing={<Drawing nodes={scenes[frame.name]} />}>
         <ViewerChrome chrome={chrome} />
       </Screen>

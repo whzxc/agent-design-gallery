@@ -14,9 +14,9 @@ The review platform is macOS with system UI fonts. The primary implementation vi
 
 The library declares component forms in `design/components/`, feature forms in `design/modules/`, and full layouts in `design/surfaces/`:
 
-- Components cover buttons, icon buttons, fields, rows, menu items, keycaps, panels, toolbars, tooltips and canvas primitives.
-- Modules cover canvas presentation, navigation, inspector, menus, directory opening, shortcuts, view controls, token catalog, project switching and resident hub states.
-- Surfaces cover canvas, token catalog, inspector, directory opening, resident hub home, hub switcher and access shell.
+- Components cover buttons, icon buttons, fields, rows, menu items, keycaps, panels, toolbars, tooltips and canvas primitives. The comment pin is shared by boards and review images, with open, changed and muted resolved forms.
+- Modules cover canvas presentation, navigation, inspector, menus, directory opening, shortcuts, view controls, token catalog, project switching and resident hub states. Comments owns the inline composer, open thread and both panel filters. View controls owns the Comment tool and open-comment count in the toolbars. The shortcuts dialog includes `C` and `⇧C`.
+- Surfaces cover canvas, token catalog, inspector, resident hub home, hub switcher and access shell. The canvas includes a captured region with a pin and its open thread.
 - Fixtures under `design/fixtures/` own representative content and capture records. Scenes and artwork remain supporting data.
 
 Each source contains only distinct appearances. Width-only reflow, locale-only copies and explanatory specimens are not declared forms. Surfaces use `fixture` and `capture` metadata when they describe an implemented page or region.
@@ -33,7 +33,7 @@ New visual directions are marked with `Frame proposed="<review scope>"` while re
 
 ## Gaps
 
-- Directory copy remains SVG-specific and disabled/pending submit states are not yet represented.
-- Keycap radius and minimap geometry still differ from parts of the runtime CSS.
+- The directory-opening module retains historical dialog forms. The current viewer has no browser directory dialog.
+- Minimap geometry still differs from the runtime CSS.
 - Some inspector and canvas captures retain historical crops while runtime header and scroll geometry continue to converge.
-- Hub compare fixtures remain a follow-up after the resident hub implementation settles.
+- Hub fixtures open the current regions with a fictional registry. The existing hub artwork still depicts the earlier sample registry and layout.

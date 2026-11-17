@@ -1019,72 +1019,6 @@
       },
       "design": [
         {
-          "source": "design/modules/view-controls.tsx",
-          "part": "ViewerBars"
-        }
-      ]
-    },
-    {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/view-controls.tsx",
-          "part": "ViewerBars"
-        }
-      ]
-    },
-    {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/view-controls.tsx",
-          "part": "ViewerTools"
-        }
-      ]
-    },
-    {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/view-controls.tsx",
-          "part": "ViewerTools"
-        }
-      ]
-    },
-    {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/view-controls.tsx",
-          "part": "ZoomBar"
-        }
-      ]
-    },
-    {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/view-controls.tsx",
-          "part": "ZoomBar"
-        }
-      ]
-    },
-    {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
           "source": "design/surfaces/canvas.tsx"
         }
       ]
@@ -1185,26 +1119,6 @@
       },
       "design": [
         {
-          "source": "design/surfaces/open-directory.tsx"
-        }
-      ]
-    },
-    {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/open-directory.tsx"
-        }
-      ]
-    },
-    {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
           "source": "design/surfaces/tokens.tsx"
         }
       ]
@@ -1216,6 +1130,116 @@
       "design": [
         {
           "source": "design/surfaces/tokens.tsx"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "file": "public/comments.js"
+      },
+      "design": [
+        {
+          "source": "design/components/comment-pin.tsx",
+          "part": "CommentPin"
+        },
+        {
+          "source": "design/modules/comments.tsx",
+          "part": "CommentComposer"
+        },
+        {
+          "source": "design/modules/comments.tsx",
+          "part": "CommentThread"
+        },
+        {
+          "source": "design/modules/comments.tsx",
+          "part": "CommentsPanel"
+        },
+        {
+          "source": "design/surfaces/canvas.tsx",
+          "frames": [
+            "comment-thread"
+          ]
+        },
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "ViewerTools"
+        },
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "ZoomBar"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "file": "public/comments.css"
+      },
+      "design": [
+        {
+          "source": "design/components/comment-pin.tsx",
+          "part": "CommentPin"
+        },
+        {
+          "source": "design/modules/comments.tsx",
+          "part": "CommentComposer"
+        },
+        {
+          "source": "design/modules/comments.tsx",
+          "part": "CommentThread"
+        },
+        {
+          "source": "design/modules/comments.tsx",
+          "part": "CommentsPanel"
+        },
+        {
+          "source": "design/surfaces/canvas.tsx",
+          "frames": [
+            "comment-thread"
+          ]
+        },
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "ViewerTools"
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "file": "public/app.js"
+      },
+      "design": [
+        {
+          "source": "design/components/comment-pin.tsx",
+          "part": "CommentPin"
+        },
+        {
+          "source": "design/surfaces/canvas.tsx",
+          "frames": [
+            "comment-thread"
+          ]
+        }
+      ]
+    },
+    {
+      "implementation": {
+        "file": "public/index.html"
+      },
+      "design": [
+        {
+          "source": "design/modules/comments.tsx",
+          "part": "CommentsPanel"
+        },
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "ViewerTools"
+        },
+        {
+          "source": "design/components/toolbar.tsx",
+          "part": "ZoomBar"
+        },
+        {
+          "source": "design/modules/shortcuts.tsx",
+          "part": "Shortcuts"
         }
       ]
     }
