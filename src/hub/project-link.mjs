@@ -5,14 +5,14 @@ import { defaultStateDirectory, registeredProject } from './registry.mjs';
 
 const hubFile = stateDirectory => path.join(stateDirectory, 'hub.json');
 
-export function hubPublicOrigin(value) {
+export function hubPublicOrigin(value, setting = 'ADG_PUBLIC_ORIGIN') {
   if (value === undefined) return null;
   try {
     const url = new URL(value);
     if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password &&
         url.pathname === '/' && !url.search && !url.hash) return url.origin;
   } catch {}
-  throw new CliError('USAGE_INVALID', 'Set ADG_PUBLIC_ORIGIN to an HTTP(S) origin, for example https://design.example.com.');
+  throw new CliError('USAGE_INVALID', `Set ${setting} to an HTTP(S) origin, for example https://design.example.com.`);
 }
 
 export async function publishHubAddress(stateDirectory, address) {

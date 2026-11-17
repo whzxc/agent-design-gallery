@@ -670,7 +670,9 @@ export function createComments({
   }
 
   function commentURL(thread) {
-    const url = new URL(window.location.href);
+    const current = new URL(window.location.href);
+    const url = thread.link ? new URL(thread.link) : current;
+    if (current.searchParams.has('base')) url.searchParams.set('base', current.searchParams.get('base'));
     url.pathname = viewerBase(url.pathname);
     for (const parameter of ['scope', 'group', 'asset', 'frame', 'element']) url.searchParams.delete(parameter);
     url.searchParams.set('comment', thread.number);

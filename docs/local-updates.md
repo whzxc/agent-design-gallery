@@ -61,8 +61,11 @@ adg service status
 
 If the recorded Node or CLI path changed, reinstall the service with its existing port and state directory. Preserve the registry, access key, preferences and caches. Restarting the hub briefly disconnects its viewer streams; a changed cache context makes the first visit rebuild measured geometry and previews. Independent `adg open` processes remain running; reopen those sessions separately when they need the updated runtime.
 
-Set `ADG_PUBLIC_ORIGIN` in the hub process environment when it should use a public HTTP(S) origin for comment
-links. A launch agent can set it in `EnvironmentVariables`. Use the origin alone, without a project path.
+Configure the public origin for comment links with `adg service install --public-origin=https://design.example.com`.
+Use the origin alone, without a project path. The command saves `ADG_PUBLIC_ORIGIN` in the LaunchAgent's
+`EnvironmentVariables` and reloads the job when its configuration changes. Later installs keep the existing public
+origin, port and state directory when those options are omitted. `adg service status` reports the configured
+`publicOrigin`. For a hub started directly with `adg serve`, set `ADG_PUBLIC_ORIGIN` in its environment.
 
 ## Verify delivery
 

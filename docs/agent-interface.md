@@ -177,7 +177,6 @@ Ownership-specific errors and recovery actions are listed under [Owner diagnosti
 | `STATE_INVALID` | 2 | Registry/preferences JSON or legacy migration input is invalid. | `["adg","--help","--json"]` | Inspect the reported state file before retrying. |
 | `HUB_KEY_INVALID` | 2 | Selected active hub key has an invalid format. | `["adg","serve","--rotate-key","--state-dir","/tmp/adg-state","--json"]` | Replace the invalid key; existing access will expire. |
 | `SERVICE_UNSUPPORTED` | 2 | Service action is unsupported on this platform. | `["adg","serve","--help","--json"]` | Use a foreground hub on this platform. |
-| `SERVICE_ALREADY_INSTALLED` | 2 | Install requested with an existing LaunchAgent. | `["adg","service","status","--state-dir","/tmp/adg-state","--json"]` | Inspect the existing installation. |
 | `SERVICE_FAILED` | 2 | launchctl inspect/bootstrap/bootout failed. | `["adg","service","logs","--state-dir","/tmp/adg-state","--json"]` | Inspect service diagnostics before retrying. |
 | `WATCH_FAILED` | 2 | Watcher stopped or background refresh could not complete. | `["adg","check","--read-only","--json"]` | Inspect project inputs before reopening the viewer. |
 | `SHUTDOWN_FAILED` | 2 | Owned-resource or adapter cleanup failed. | `["adg","--help","--json"]` | Inspect the reported resource before retrying. |

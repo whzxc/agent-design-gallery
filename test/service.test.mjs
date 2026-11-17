@@ -45,12 +45,56 @@ test('service install/status/uninstall observe job state through injected launch
   assert.equal(installed.envelope.data.service.stateDirectory,f.state);
   const plist=path.join(f.home,'Library/LaunchAgents',`${SERVICE_LABEL}.plist`);
   assert.match(await readFile(plist,'utf8'),/<string>4321<\/string>/);
-  const duplicate=await f.run('install');assert.equal(duplicate.exit,2);assert.equal(duplicate.envelope.error.code,'SERVICE_ALREADY_INSTALLED');
+  const repeated=await f.run('install');assert.equal(repeated.exit,0);assert.equal(repeated.envelope.data.port,4321);
+  assert.equal(f.calls.filter(args=>args[0]==='bootstrap').length,1);
   const status=await f.run('status');assert.equal(status.envelope.data.loaded,true);
   const removed=await f.run('uninstall');assert.equal(removed.exit,0);assert.equal(removed.envelope.data.retained,true);
   await assert.rejects(stat(plist),{code:'ENOENT'});assert.ok((await stat(f.state)).isDirectory());
   assert.equal((await f.run('status')).envelope.data.loaded,false);
   assert.ok(f.calls.every(args=>!args.includes('gui/501')));
+});
+
+test('service install persists the public origin across LaunchAgent regeneration', async t => {
+  const f = await fixture(t);
+  const plist = path.join(f.home, 'Library', 'LaunchAgents', `${SERVICE_LABEL}.plist`);
+  const origin = 'https://design.example.invalid';
+  const first = await f.run('install', ['--port=4321', '--public-origin=' + origin + '/']);
+  assert.equal(first.exit, 0);
+  assert.equal(first.envelope.data.service.publicOrigin, origin);
+  const original = await readFile(plist, 'utf8');
+  assert.match(original, /<key>EnvironmentVariables<\/key>\s*<dict>\s*<key>ADG_PUBLIC_ORIGIN<\/key><string>https:\/\/design\.example\.invalid<\/string>/);
+  const invalid = await f.run('install', ['--public-origin=' + origin + '/p/project/']);
+  assert.equal(invalid.envelope.error.code, 'USAGE_INVALID');
+  assert.equal(await readFile(plist, 'utf8'), original);
+  assert.equal(f.calls.filter(args => args[0] === 'bootout').length, 0);
+  assert.throws(() => parseCli(['service', 'status', '--public-origin=' + origin]), { code: 'USAGE_INVALID' });
+
+  const relocatedCLI = path.join(f.home, 'relocated-cli.mjs');
+  await writeFile(relocatedCLI, '');
+  const { data } = await service('install', { json: true }, { ...f.options, cliPath: relocatedCLI, output: () => {} });
+  assert.equal(data.port, 4321);
+  assert.equal(data.service.stateDirectory, f.state);
+  assert.equal(data.service.publicOrigin, origin);
+  assert.ok((await readFile(plist, 'utf8')).includes(relocatedCLI.split(path.sep).at(-1)));
+  assert.equal(f.calls.filter(args => args[0] === 'bootout').length, 1);
+  assert.equal(f.calls.filter(args => args[0] === 'bootstrap').length, 2);
+});
+
+test('a failed service reinstall restores the previous plist and loaded job', async t => {
+  const f = await fixture(t);
+  assert.equal((await f.run('install')).exit, 0);
+  const plist = path.join(f.home, 'Library', 'LaunchAgents', `${SERVICE_LABEL}.plist`);
+  const original = await readFile(plist, 'utf8');
+  let rejected = false;
+  const failed = await f.run('install', ['--public-origin=https://design.example.invalid'], {
+    run: async (command, args) => {
+      if (args[0] === 'bootstrap' && !rejected) { rejected = true; throw new Error('Bootstrap failed'); }
+      return f.options.run(command, args);
+    },
+  });
+  assert.equal(failed.envelope.error.code, 'SERVICE_FAILED');
+  assert.equal(await readFile(plist, 'utf8'), original);
+  assert.equal((await f.run('status')).envelope.data.state, 'running');
 });
 
 test('service logs contain two bounded rows, missing-file state and redacted keys',async t=>{

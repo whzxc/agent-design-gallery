@@ -96,8 +96,8 @@ Before images and removed frames take no comments.
 ## Links and live updates
 
 Opening a viewer URL with `?comment=<n>` selects the right scope, moves the camera to the pin and opens the thread.
-CLI results include the registered project link when a hub is running. For a standalone viewer,
-`adg link <viewer-url> --comment=<n>` prints a link, and **Copy link** copies the link for the current viewer.
+CLI results and **Copy link** use the registered project link when a hub is running. For a standalone viewer,
+`adg link <viewer-url> --comment=<n>` prints a link, and **Copy link** uses the current viewer URL.
 
 A change made anywhere, in another viewer or through the command line, reaches every open viewer of the project within
 two seconds without a reload. It does not disturb an open composer or reply draft.

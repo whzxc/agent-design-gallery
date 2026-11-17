@@ -247,13 +247,13 @@ The proxy_pass has no URI suffix; do not strip `/p/<slug>/` or `/i/<id>/`. Disab
 ### macOS resident service
 
 ```sh
-adg service install [--port 4310] [--state-dir /absolute/state/path]
+adg service install [--port 4310] [--state-dir /absolute/state/path] [--public-origin https://design.example.com]
 adg service status
 adg service logs
 adg service uninstall
 ```
 
-The LaunchAgent `org.agent-design-gallery.hub` starts the resident hub at login with RunAtLoad and keeps it running with KeepAlive. It binds loopback and uses the same registry/key and auth contract as `adg serve`. Installation records absolute Node and CLI paths in `~/Library/LaunchAgents/org.agent-design-gallery.hub.plist`, so launchd needs no shell PATH. Reinstall after moving the CLI or replacing the recorded Node installation.
+The LaunchAgent `org.agent-design-gallery.hub` starts the resident hub at login with RunAtLoad and keeps it running with KeepAlive. It binds loopback and uses the same registry/key and auth contract as `adg serve`. Installation records absolute Node and CLI paths in `~/Library/LaunchAgents/org.agent-design-gallery.hub.plist`, so launchd needs no shell PATH. Reinstall after moving the CLI or replacing the recorded Node installation. The public origin sets the base for comment links and is retained on subsequent installs.
 
 `status` prints JSON with installed/loaded state, PID, plist and log paths. `logs` prints the last 200 lines of each log. stdout and stderr go to `service.stdout.log` and `service.stderr.log` in the state directory. After an install with a custom state directory, status/logs/uninstall recover that directory from the plist when no override is given. Uninstall unloads the job and removes its plist, retaining registry, key, preferences and logs. Service commands on other platforms return an explicit unsupported error; `adg serve` remains available there.
 

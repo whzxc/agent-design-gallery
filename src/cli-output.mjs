@@ -60,7 +60,6 @@ export const errorCatalog = {
   COMMENT_FORBIDDEN: [2, 'comments', 'Read the comment thread to check who authored the message.'],
   HUB_KEY_INVALID: [2, 'rotate', 'Replace the invalid key; existing access will expire.'],
   SERVICE_UNSUPPORTED: [2, 'serve-help', 'Use a foreground hub on this platform.'],
-  SERVICE_ALREADY_INSTALLED: [2, 'status', 'Inspect the existing installation.'],
   SERVICE_FAILED: [2, 'logs', 'Inspect service diagnostics before retrying.'],
   WATCH_FAILED: [2, 'check', 'Inspect project inputs before reopening the viewer.'],
   SHUTDOWN_FAILED: [2, 'help', 'Inspect the reported resource before retrying.'],

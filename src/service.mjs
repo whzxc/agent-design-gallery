@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { defaultStateDirectory } from './hub/registry.mjs';
+import { hubPublicOrigin } from './hub/project-link.mjs';
 import { CliError } from './cli-output.mjs';
 import { commandFailure } from './toolkit/results.mjs';
 
@@ -17,13 +18,14 @@ const unxml = value => value.replace(/&(amp|lt|gt|quot|apos);/g, (_, entity) => 
   amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
 })[entity]);
 
-export function renderLaunchAgent({ nodePath, cliPath, stateDirectory, port = 4310 }) {
+export function renderLaunchAgent({ nodePath, cliPath, stateDirectory, port = 4310, publicOrigin }) {
   const args = [nodePath, cliPath, 'serve', '--port', String(port), '--state-dir', stateDirectory];
+  const environment = publicOrigin ? `\n  <key>EnvironmentVariables</key><dict>\n    <key>ADG_PUBLIC_ORIGIN</key><string>${xml(publicOrigin)}</string>\n  </dict>` : '';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>${SERVICE_LABEL}</string>
-  <key>ProgramArguments</key><array>${args.map(arg => `<string>${xml(arg)}</string>`).join('')}</array>
+  <key>ProgramArguments</key><array>${args.map(arg => `<string>${xml(arg)}</string>`).join('')}</array>${environment}
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>${xml(path.join(stateDirectory, 'service.stdout.log'))}</string>
@@ -35,6 +37,11 @@ export function renderLaunchAgent({ nodePath, cliPath, stateDirectory, port = 43
 function launchArguments(plist) {
   const array = plist?.match(/<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/)?.[1] ?? '';
   return [...array.matchAll(/<string>([\s\S]*?)<\/string>/g)].map(match => unxml(match[1]));
+}
+function launchPublicOrigin(plist) {
+  const environment = plist?.match(/<key>EnvironmentVariables<\/key>\s*<dict>([\s\S]*?)<\/dict>/)?.[1];
+  const value = environment?.match(/<key>ADG_PUBLIC_ORIGIN<\/key>\s*<string>([\s\S]*?)<\/string>/)?.[1];
+  return value === undefined ? undefined : unxml(value);
 }
 const readOptional = async file => {
   try { return await readFile(file, 'utf8'); }
@@ -56,7 +63,7 @@ function statusData(status, installedPlist, agentFile, stateDirectory) {
   return { label: SERVICE_LABEL, installed: installedPlist !== null, loaded: status !== null,
     state: status?.match(/^\s*state = (.+)$/m)?.[1] ?? null,
     pid: Number(status?.match(/^\s*pid = (\d+)$/m)?.[1]) || null,
-    plist: agentFile, stateDirectory,
+    plist: agentFile, stateDirectory, publicOrigin: launchPublicOrigin(installedPlist) ?? null,
     logs: { stdout: path.join(stateDirectory, 'service.stdout.log'), stderr: path.join(stateDirectory, 'service.stderr.log') } };
 }
 
@@ -142,8 +149,9 @@ export async function service(action, values = {}, {
   if (!['install','uninstall','status','logs','migrate'].includes(action)) throw new CliError('USAGE_INVALID','Expected adg service install|uninstall|status|logs|migrate; run adg service --help.');
   if (action === 'migrate') return migrateService(values,{home,run,nodePath,cliPath,uid,output});
   const agentFile=path.join(home,'Library','LaunchAgents',`${SERVICE_LABEL}.plist`);
-  const installedPlist=await readOptional(agentFile),installedArgs=launchArguments(installedPlist),stateFlag=installedArgs.indexOf('--state-dir');
-  const stateDirectory=path.resolve(values['state-dir'] ?? (action === 'install' ? undefined : stateFlag >= 0 ? installedArgs[stateFlag+1] : undefined) ?? defaultStateDirectory);
+  const installedPlist=await readOptional(agentFile),installedArgs=launchArguments(installedPlist);
+  const argument = flag => installedArgs.includes(flag) ? installedArgs[installedArgs.indexOf(flag) + 1] : undefined;
+  const stateDirectory=path.resolve(values['state-dir'] ?? argument('--state-dir') ?? defaultStateDirectory);
   const domain=`gui/${uid}`,target=`${domain}/${SERVICE_LABEL}`;
   const stdout=path.join(stateDirectory,'service.stdout.log'),stderr=path.join(stateDirectory,'service.stderr.log');
   if (action === 'logs') {
@@ -166,18 +174,33 @@ export async function service(action, values = {}, {
     output(`Uninstalled ${SERVICE_LABEL}. State and logs retained in ${stateDirectory}.`);
     return {data:{label:SERVICE_LABEL,plist:agentFile,stateDirectory,retained:true}};
   }
-  const port=values.port===undefined ? 4310 : Number(values.port);
+  const port=Number(values.port ?? argument('--port') ?? 4310);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new CliError('USAGE_INVALID','--port must be an integer from 1 to 65535.');
-  if (installedPlist !== null) throw new CliError('SERVICE_ALREADY_INSTALLED',`${SERVICE_LABEL} is already installed; run adg service uninstall before reinstalling.`);
+  const publicOrigin=hubPublicOrigin(values['public-origin'] ?? launchPublicOrigin(installedPlist),'--public-origin');
   const executable=await realpath(nodePath),entry=await realpath(cliPath);
+  const plist=renderLaunchAgent({nodePath:executable,cliPath:entry,stateDirectory,port,publicOrigin});
+  const previous=installedPlist === null ? null : await loadedJob(run,target);
+  if (previous !== null && installedPlist === plist) {
+    output(`${SERVICE_LABEL} is already installed and loaded.`);
+    return {data:{service:statusData(previous,plist,agentFile,stateDirectory),port}};
+  }
   await mkdir(path.dirname(agentFile),{recursive:true});await mkdir(stateDirectory,{recursive:true});
   await Promise.all([stdout,stderr].map(file=>writeFile(file,'',{flag:'a'})));
-  const plist=renderLaunchAgent({nodePath:executable,cliPath:entry,stateDirectory,port});
-  await writeFile(agentFile,plist);
-  try { await run('/bin/launchctl',['bootstrap',domain,agentFile]); }
+  if (previous !== null) await job(run,['bootout',target]);
+  try {
+    await writeFile(agentFile,plist);
+    await run('/bin/launchctl',['bootstrap',domain,agentFile]);
+  }
   catch (cause) {
-    await rm(agentFile,{force:true});
-    throw new CliError('SERVICE_FAILED',`Cannot install ${SERVICE_LABEL}: ${cause.stderr?.trim() || cause.message}`,{cause});
+    let message=`Cannot install ${SERVICE_LABEL}: ${cause.stderr?.trim() || cause.message}`;
+    try {
+      if (installedPlist === null) await rm(agentFile,{force:true});
+      else {
+        await writeFile(agentFile,installedPlist);
+        if (previous !== null) await job(run,['bootstrap',domain,agentFile]);
+      }
+    } catch (restore) { message += ` Could not restore the previous service: ${restore.message}`; }
+    throw new CliError('SERVICE_FAILED',message,{cause});
   }
   output(`Installed ${SERVICE_LABEL}. Logs: ${stdout} and ${stderr}.`);
   return {data:{service:statusData(await loadedJob(run,target),plist,agentFile,stateDirectory),port}};
