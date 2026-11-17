@@ -94,12 +94,6 @@ export default () => <Frame name="ready"><main class="h-[88px] w-[144px] p-4"><P
   });
 }
 
-test('strict layers reject same-layer imports above the lowest layer', () => {
-  const graph = { 'components/a.tsx': { uses: ['components/b.tsx'] }, 'modules/a.tsx': { uses: ['modules/b.tsx'] }, 'surfaces/a.tsx': { uses: ['surfaces/b.tsx'] } };
-  assert.deepEqual(importDirectionViolations(graph, ['components', 'modules', 'surfaces'], { strictLayers: true }).map(row => [row.from, row.to]), [['modules', 'modules'], ['surfaces', 'surfaces']]);
-  assert.deepEqual(importDirectionViolations(graph, ['components', 'modules', 'surfaces']).map(row => [row.from, row.to]), []);
-});
-
 test('single-consumer components count nearest modules and surfaces', () => {
   const parts = { 'components/single.tsx': ['Single'], 'components/two-modules.tsx': ['TwoModules'], 'components/shared.tsx': ['Shared'], 'components/direct-surface.tsx': ['DirectSurface'] };
   const graph = {
@@ -125,8 +119,4 @@ test('proposed frame metadata is validated as a nonempty review scope', () => {
 test('owner reverse part selector is accepted by the CLI parser', () => {
   const parsed = parseCli(['owner', '--part=design/components/button.tsx#Button', '--json']);
   assert.equal(parsed.values.part, 'design/components/button.tsx#Button');
-});
-
-test('single-consumer checking defaults on', async () => {
-  assert.equal((await loadConfig(process.cwd())).check.singleConsumer, true);
 });

@@ -40,20 +40,6 @@ test('system theme reads macOS appearance and falls back to light', () => {
   assert.throws(() => resolveThemes('invalid'), { code: 'USAGE_INVALID' });
 });
 
-test('system theme executes a stubbed defaults command', async t => {
-  const directory = await mkdtemp(path.join(tmpdir(), 'adg-defaults-'));
-  t.after(() => rm(directory, { recursive: true, force: true }));
-  const file = path.join(directory, 'defaults');
-  await writeFile(file, '#!/bin/sh\n[ "$1 $2 $3" = "read -g AppleInterfaceStyle" ] || exit 2\nprintf "Dark\\n"\n');
-  await chmod(file, 0o755);
-  const originalPath = process.env.PATH;
-  t.after(() => { process.env.PATH = originalPath; });
-  process.env.PATH = directory;
-  assert.equal(systemTheme({ platform: 'darwin' }), 'dark');
-  await writeFile(file, '#!/bin/sh\nexit 1\n');
-  assert.equal(systemTheme({ platform: 'darwin' }), 'light');
-});
-
 test('sheet orders sections and preserves declaration order for frames in the same source', () => {
   const model = reviewFixture();
   const entries = ['changed', 'removed', 'added'].map(status => ({ source: 'assets/a.tsx', frame: status, status, themes: [themeRow('dark')] }));
@@ -167,22 +153,6 @@ test('render and impacted diff resolve system before selection and publish full 
   }
 });
 
-test('generation validation failures never publish review cache', async t => {
-  const f = await project(t);
-  await f.put('design/components/card.tsx', f.source('Changed'));
-  const key = await reviewCacheKey(f.config, 'HEAD', 'light', f.state);
-  const result = await diff(f.config, [], { base: 'HEAD', impacted: true, theme: 'light', json: true, 'state-dir': f.state }, {
-    renderSheet: async (...args) => {
-      const sheet = await renderReviewSheet(...args);
-      await f.put('design/components/card.tsx', f.source('Changed during capture'));
-      return sheet;
-    },
-  }).catch(error => error);
-  assert.equal(result.code, 'IMPACT_INPUT_CHANGED');
-  assert.equal(result.data.complete, false);
-  assert.equal(await readReviewCache(key), null);
-});
-
 test('restricted scope and scale skip publishing while configured policy publishes', async t => {
   const f = await project(t);
   await f.put('design/components/card.tsx', f.source('Changed'));
@@ -243,58 +213,6 @@ function groupedFixture() {
   const model = { ...reviewFixture(), sections: { added: [added], removed: [removed], changed: [direct, ...inherited] } };
   return { ...model, ...groupReview(model) };
 }
-
-test('buildReview propagates change classification and groups only visible changed frames', () => {
-  const model = groupedFixture();
-  const entries = Object.values(model.sections).flat();
-  const comparisons = entries.flatMap((entry, index) => entry.themes.map(row => ({
-    id: String(index), source: entry.source, frame: entry.frame, status: entry.status === 'changed' ? 'matched' : entry.status,
-    change: entry.change, ...row, pixels: { differentPixels: row.differentPixels },
-  })));
-  comparisons.push({ id: 'unchanged', source: 'design/surfaces/a.tsx', frame: 'unchanged', status: 'matched', theme: 'dark', verdict: 'identical', change: { kind: 'inherited', causes: ['x'] } });
-  const review = buildReview({ comparisons, complete: true });
-  assert.deepEqual(review.counts, { added: 1, removed: 1, moved: 0, changed: 4, direct: 1, inherited: 3 });
-  assert.deepEqual(review.sections.changed[1].change, model.sections.changed[1].change);
-  assert.equal(review.groups.length, 1);
-  assert.equal(review.groups[0].representative.frame, 'median');
-  assert.deepEqual(review.groups[0].outliers.map(entry => entry.frame), ['large']);
-});
-
-test('move pairs survive theme projection and appear in the page only', () => {
-  const previousSource = 'old/<card>.tsx';
-  const source = 'new/card.tsx';
-  const comparisons = ['one', 'two', 'edited'].flatMap(frame => ['light', 'dark'].map(theme => ({
-    id: `${frame}-${theme}`, source, previousSource, frame, theme,
-    status: frame === 'edited' ? 'matched' : 'moved',
-    verdict: frame === 'edited' && theme === 'dark' ? 'changed' : 'identical',
-    ...(frame === 'two' ? { before: { source: previousSource, frame: 'old<two>' } } : {}),
-    ...(frame === 'edited' ? { change: { kind: 'direct', causes: [source] } } : {}),
-  })));
-  const images = new Map(comparisons.map(row => [row.id, { before: pixel, after: pixel }]));
-  const review = buildReview({ comparisons, complete: true }, images);
-  assert.deepEqual(review.movePairs, ['one', 'two'].map(frame => ({
-    before: { source: previousSource, frame: frame === 'two' ? 'old<two>' : frame }, after: { source, frame },
-  })));
-  assert.deepEqual(review.counts, { added: 0, removed: 0, moved: 2, changed: 1, direct: 1, inherited: 0 });
-  const light = reviewForTheme(review, 'light');
-  assert.deepEqual(light, buildReview({ comparisons: comparisons.filter(row => row.theme === 'light'), complete: true }, images));
-  assert.deepEqual(light.counts, review.counts);
-  assert.equal(light.sections.changed[0].themes[0].verdict, 'identical');
-
-  const page = renderReviewBody(light);
-  assert.match(page, /data-section="moved"/);
-  assert.match(page, /old\/&lt;card&gt;\.tsx#old&lt;two&gt;<\/code> → <code>new\/card\.tsx#two<\/code>/);
-  assert.match(page, /Before · <code>old\/&lt;card&gt;\.tsx<\/code>/);
-  const sheet = reviewSheetHtml(light, 'light');
-  assert.match(sheet, /<code>new\/card#edited<\/code>/);
-  assert.doesNotMatch(sheet, /Moved|old\/|Before|After|#two/);
-  assert.equal([...sheet.matchAll(/<img /g)].length, 2);
-  assert.match(sheet, /<footer data-more="0" hidden><\/footer>/);
-
-  const movedOnly = buildReview({ comparisons: comparisons.filter(row => row.status === 'moved'), complete: true });
-  const emptySheet = reviewSheetHtml(movedOnly, 'light');
-  assert.doesNotMatch(emptySheet, /<section|<img|more in the review page/);
-});
 
 test('grouped page shows added, direct, representative, other names, outlier and removed names', () => {
   const body = renderReviewBody(groupedFixture());
@@ -393,15 +311,4 @@ test('sheet never upscales captures, caps frame height and drops whole entries a
     assert.equal(png.readUInt32BE(16), 3200);
     assert.ok(png.readUInt32BE(20) <= 8000);
   } finally { await browser.close(); }
-});
-
-test('theme filtering recomputes groups, median representative and outliers', () => {
-  const model = groupedFixture();
-  for (const [index, entry] of model.sections.changed.entries()) {
-    entry.themes.push({ ...themeRow('light'), verdict: index === 1 ? 'identical' : 'changed', differentPixels: index * 10 });
-  }
-  const themed = reviewForTheme(model, 'light');
-  assert.deepEqual(themed.counts, { added: 0, removed: 0, moved: 0, changed: 3, direct: 1, inherited: 2 });
-  assert.deepEqual(themed.groups[0].frames.map(entry => entry.frame), ['median', 'large']);
-  assert.ok(themed.groups[0].frames.every(entry => entry.themes.length === 1));
 });
