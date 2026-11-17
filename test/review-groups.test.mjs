@@ -184,7 +184,7 @@ export default () => <Frame name="default"><Card/></Frame>;`);
     assert.deepEqual(persisted.comparisons.map(row => row.change), data.comparisons.map(row => row.change));
     if (impacted) {
       const key = await reviewCacheKey(current, 'HEAD', 'light', path.join(root, 'state'));
-      assert.equal(key.version, 4);
+      assert.equal(key.version, 5);
       const cached = await readReviewCache(key);
       assert.equal(cached.complete, false);
       assert.equal(cached.failures.length, 2);

@@ -238,11 +238,14 @@ test('move pairs survive theme projection and group into a text summary on the p
     id: `${frame}-${theme}`, source, previousSource, frame, theme,
     status: frame === 'edited' ? 'matched' : 'moved',
     verdict: frame === 'edited' && theme === 'dark' ? 'changed' : 'identical',
+    ...(frame === 'two' ? { before: { source: previousSource, frame: 'old<two>' } } : {}),
     ...(frame === 'edited' ? { change: { kind: 'direct', causes: [source] } } : {}),
   })));
   const images = new Map(comparisons.map(row => [row.id, { before: pixel, after: pixel }]));
   const review = buildReview({ comparisons, complete: true }, images);
-  assert.deepEqual(review.movePairs, ['one', 'two'].map(frame => ({ before: { source: previousSource, frame }, after: { source, frame } })));
+  assert.deepEqual(review.movePairs, ['one', 'two'].map(frame => ({
+    before: { source: previousSource, frame: frame === 'two' ? 'old<two>' : frame }, after: { source, frame },
+  })));
   assert.deepEqual(review.counts, { added: 0, removed: 0, moved: 2, changed: 1, direct: 1, inherited: 0 });
   const light = reviewForTheme(review, 'light');
   assert.deepEqual(light, buildReview({ comparisons: comparisons.filter(row => row.theme === 'light'), complete: true }, images));
@@ -254,7 +257,8 @@ test('move pairs survive theme projection and group into a text summary on the p
     assert.ok(start > html.indexOf('data-frame="edited"'));
     const summary = html.slice(start, html.indexOf('</section>', start));
     assert.match(summary, /<code>old\/&lt;card&gt;\.tsx<\/code> → <code>new\/card\.tsx<\/code> · 2 frames/);
-    assert.doesNotMatch(summary, /<img|#one|#two/);
+    assert.doesNotMatch(summary, /<img|#one/);
+    assert.match(summary, /old\/&lt;card&gt;\.tsx#old&lt;two&gt;<\/code> → <code>new\/card\.tsx#two<\/code>/);
     assert.match(html, /Before · <code>old\/&lt;card&gt;\.tsx<\/code>/);
     assert.equal([...html.matchAll(/<img /g)].length, 2);
   }

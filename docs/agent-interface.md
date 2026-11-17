@@ -334,9 +334,12 @@ Identity is `(project-relative source, frame name)`, with a comparison row per t
 Exact matches retain native CSS/device sizes. Added and removed frames retain nulls for
 the absent side. Same-name unmatched frames are paired using a Git rename, module feature-folder
 relocation, shared exported part name, then identical renders in both themes.
+Remaining frames with different names pair only when their pixels and CSS/device
+sizes match in both themes. In that pass, Git renames, feature-folder relocations
+and shared exported parts take precedence over unrelated render matches.
 Ambiguous candidates keep their added/removed rows with candidate references.
 Paired frames with identical pixels and CSS/device sizes in both themes are
-`moved`. A changed pair is direct and names its previous source.
+`moved`. A changed same-name pair is direct and names its previous source.
 A size change is a failed gate even when common pixels are equal. Architecture pairs
 use plain revision-local renders, independently of the viewer/render proposal overlays.
 
@@ -1577,5 +1580,7 @@ direct changes and outliers. Cells
 display in review order. Each shown group names up to eight other members and
 counts the rest.
 The page and sheet end with one moved entry, grouping pairs by source move
-and listing each frame count. The report format is
+and listing each frame count. For renamed pairs they also show both
+`<source>#<frame>` references. `data.review.movePairs` carries both names as
+`before.frame` and `after.frame`. The report format is
 `added A · removed R · moved M · changed N (direct D, inherited I)`.

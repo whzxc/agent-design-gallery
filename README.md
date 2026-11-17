@@ -280,8 +280,11 @@ entries remain available with `complete: false`. An incomplete diff exits 2.
 
 Review changes are grouped by cause. Reports state
 `added A · removed R · moved M · changed N (direct D, inherited I)`.
-Moved frames keep their identity when pixels and size match in both themes. The
-page and sheet summarize source moves and frame counts in one text entry.
+Moved frames keep their identity when pixels and size match in both themes.
+After same-name pairing, identical renders can also pair frames whose names
+changed. A related source breaks a tie when it identifies a unique pair.
+The page and sheet summarize source moves and show the previous and current
+`<source>#<frame>` for renamed pairs.
 Direct changes edit the frame source or its module folder. Inherited groups share
 the same changed dependencies, show a median-area representative, and expand to
 every member. Members above twice the median changed-pixel area appear as outliers.

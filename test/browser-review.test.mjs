@@ -204,7 +204,7 @@ test('review lists moves by both source paths and retains edited moves across th
   const moved = [
     { previousSource, source, frame: 'first' },
     { previousSource, source, frame: 'second' },
-    { previousSource, source: 'components/card/details.tsx', frame: 'details' },
+    { previousSource, source: 'components/card/details.tsx', frame: 'details', before: { source: previousSource, frame: 'old-details' } },
   ];
   for (const [index, theme] of ['dark', 'light'].entries()) {
     if (index) await switchTheme(theme);
@@ -218,9 +218,11 @@ test('review lists moves by both source paths and retains edited moves across th
     await page.waitForFunction(() => window.__adg?.ready);
     const summary = page.locator('.review-section').last();
     assert.equal(await summary.getAttribute('data-section'), 'moved');
-    assert.deepEqual(await summary.locator('li').allTextContents(), [
-      `${previousSource} → ${source} · 2 frames`,
-      `${previousSource} → components/card/details.tsx · 1 frame`,
+    assert.deepEqual(await summary.locator('[data-moved-count] > code').allTextContents(), [
+      previousSource, source, previousSource, 'components/card/details.tsx',
+    ]);
+    assert.deepEqual(await summary.locator('[data-moved-count] ul li').allTextContents(), [
+      `${previousSource}#old-details → components/card/details.tsx#details`,
     ]);
     assert.equal(await summary.locator('img').count(), 0);
     assert.equal((await page.locator('[data-kind="moved"]').textContent()).trim(), '3 moved');

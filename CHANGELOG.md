@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Recognize frames renamed during a move when both themes render identically. Prefer related sources, leave unresolved ties unpaired, and show the previous frame reference in review handoffs.
+
 - Pair relocated frames across revisions, validate moves in both themes, and summarize unchanged moves without images. Reserve review-sheet cells for the first addition and direct change before inherited representatives.
 
 - Render a compact two-column review sheet with a 12-cell budget, reserved inherited representatives and a 4000 CSS pixel height limit.

@@ -276,6 +276,7 @@ function diffBrowserDouble({ failClose = false } = {}) {
         }),
         evaluateHandle: async factory => ({ value: factory(), dispose: async () => {} }),
         evaluate: async (fn, args) => {
+          if (typeof args === 'string') return args;
           if (fn.name !== 'imageDifference') return;
           const decode = value => value === null ? null : image(1, 1, [10, 20, 30, 255]);
           return { pixels: args.compare.value(decode(args.before), decode(args.after)).pixels, png: png.toString('base64') };
@@ -300,12 +301,12 @@ test('diff gates size changes and additions/removals, advertises finished artifa
     document: () => `<div data-adg-frame="${name}" style="width:${width}px;"></div>` });
   let built = { support: [], frames: [
     { source: 'design/components/a.tsx', frame: 'same', status: 'matched', before: frame('same'), after: frame('same', 11) },
-    { source: 'design/components/added.tsx', frame: 'fresh', status: 'added', before: null, after: frame('fresh') },
+    { source: 'design/components/added.tsx', frame: 'fresh', status: 'added', before: null, after: frame('fresh', 12) },
     { source: 'design/components/deleted.tsx', frame: 'gone', status: 'removed', before: frame('gone'), after: null },
   ].map(row => ({ ...row, matchKind: row.status === 'matched' ? 'exact' : 'unmatched', matchCandidates: [] })) };
   const base = { root, rev: 'HEAD', sha: (await git(root, 'rev-parse', 'HEAD')).stdout.trim() };
   // Real revision builds are covered below; the capture/cleanup boundary needs only prepared documents.
-  const prepareInputs = async () => ({ base, before: { config }, environment: {}, warnings: [],
+  const prepareInputs = async () => ({ base, before: { config }, after: { config }, environment: {}, warnings: [],
     sources: built.frames.map(row => row.source), translateDiagnostic: value => value,
     buildFrames: async () => built, close: async () => {} });
   const error = await diff(config, [], options, { prepareInputs, launchBrowser: async () => browser }).then(() => assert.fail('Expected a changed gate'), error => error);

@@ -29,7 +29,7 @@ export async function reviewCacheKey(config, rev, theme, stateDirectory = path.j
       fingerprint.update('deleted');
     }
   }
-  const identity = { version: 4, project, base: base.sha, head, fingerprint: fingerprint.digest('hex'), theme };
+  const identity = { version: 5, project, base: base.sha, head, fingerprint: fingerprint.digest('hex'), theme };
   return { ...identity, directory: path.join(stateDirectory, 'cache', 'reviews', hash(project), hash(JSON.stringify(identity))) };
 }
 

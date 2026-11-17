@@ -190,12 +190,13 @@ async function writePair(output, pair, thresholds, reviewImages) {
     if (!pair.pixels.classes.antialiasing.withinThreshold || !pair.pixels.classes.bitmap_resampling.withinThreshold) reasons.push('threshold_exceeded');
   }
   const ref = { source: row.source, frame: row.frame };
+  const beforeRef = row.previousSource ? { source: row.previousSource, frame: row.previousFrame } : ref;
   const comparison = {
     id: JSON.stringify([row.source, row.frame, theme, ...(row.support ? ['support'] : [])]), ...ref, theme,
     status: row.status, matchKind: row.matchKind, matchCandidates: row.matchCandidates, change: row.change,
     ...(row.previousSource ? { previousSource: row.previousSource } : {}),
     relation: pair.parent ? 'parent_crop' : 'revision',
-    before: pair.parent?.ref ?? (pair.before ? (row.previousSource ? { ...ref, source: row.previousSource } : ref) : null), after: pair.after ? ref : null,
+    before: pair.parent?.ref ?? (pair.before ? beforeRef : null), after: pair.after ? ref : null,
     beforeSize, afterSize, parent: pair.parent ?? null, snapshots: pair.snapshots ?? null, pixels: pair.pixels,
     verdict: reasons.length ? 'changed' : pair.parent ? 'structural' : 'identical', reasons,
     note: { before: row.before?.note ?? null, after: row.after?.note ?? null },

@@ -32,8 +32,8 @@ export function buildReview(data, imagesById = new Map(), { label } = {}) {
     const key = JSON.stringify([row.source, row.frame]);
     if (row.status === 'moved') {
       if (!moves.has(key)) moves.set(key, {
-        before: { source: row.previousSource, frame: row.frame },
-        after: { source: row.source, frame: row.frame },
+        before: row.before ?? { source: row.previousSource, frame: row.frame },
+        after: row.after ?? { source: row.source, frame: row.frame },
       });
       continue;
     }
@@ -156,11 +156,15 @@ export function renderReviewMoves(pairs) {
   const groups = new Map();
   for (const { before, after } of pairs) {
     const key = JSON.stringify([before.source, after.source]);
-    if (!groups.has(key)) groups.set(key, { from: before.source, to: after.source, count: 0 });
-    groups.get(key).count++;
+    if (!groups.has(key)) groups.set(key, { from: before.source, to: after.source, count: 0, renamed: [] });
+    const group = groups.get(key);
+    group.count++;
+    if (before.frame !== after.frame) group.renamed.push({ before, after });
   }
-  return `<ul class="review-names">${[...groups.values()].map(({ from, to, count }) =>
-    `<li data-moved-count="${count}"><code>${escapeHtml(from)}</code> → <code>${escapeHtml(to)}</code> · ${count} ${count === 1 ? 'frame' : 'frames'}</li>`
+  const frameLabel = ({ source, frame }) => `<code>${escapeHtml(`${source}#${frame}`)}</code>`;
+  return `<ul class="review-names">${[...groups.values()].map(({ from, to, count, renamed }) =>
+    `<li data-moved-count="${count}"><code>${escapeHtml(from)}</code> → <code>${escapeHtml(to)}</code> · ${count} ${count === 1 ? 'frame' : 'frames'}${
+      renamed.length ? `<ul>${renamed.map(({ before, after }) => `<li>${frameLabel(before)} → ${frameLabel(after)}</li>`).join('')}</ul>` : ''}</li>`
   ).join('')}</ul>`;
 }
 

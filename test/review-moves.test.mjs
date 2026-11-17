@@ -9,7 +9,7 @@ import { diff } from '../src/toolkit/diff.mjs';
 import { pairFrameMoves } from '../src/toolkit/move-pairing.mjs';
 import { starterTokens } from '../src/toolkit/project.mjs';
 
-test('moves use relation precedence, reject ambiguous ownership, and only render viable names', async () => {
+test('same-name moves use relation precedence and retain ambiguous ownership', async () => {
   const config = { root: '/project', design: '/project/design' };
   const inputs = { before: { config }, after: { config },
     renames: [{ before: 'design/modules/card.tsx', after: 'design/components/git.tsx' }] };
@@ -47,7 +47,35 @@ test('moves use relation precedence, reject ambiguous ownership, and only render
   const ambiguous = result.find(item => item.source === oldAmbiguous.source);
   assert.equal(ambiguous.status, 'removed');
   assert.deepEqual(ambiguous.matchCandidates, newAmbiguous.map(({ source, frame }) => ({ source, frame })));
-  assert.deepEqual(calls, [['light', [oldRender, newRender, missing, missingAfter]], ['dark', [oldRender, newRender]]]);
+  assert.deepEqual(calls, [
+    ['light', [oldRender, newRender, missing, missingAfter]], ['dark', [oldRender, newRender]],
+    ['light', [oldAmbiguous, currentFolder, currentPart, ...newAmbiguous, unrelated]],
+  ]);
+});
+
+test('renamed identical renders prefer related sources and leave ties unpaired', async () => {
+  const config = { root: '/project', design: '/project/design' };
+  const inputs = { before: { config }, after: { config } };
+  const make = (source, frame, status) => ({
+    source: `design/modules/${source}.tsx`, frame, status, matchCandidates: [],
+    [status === 'added' ? 'after' : 'before']: { name: frame, owners: [] },
+  });
+  const old = make('card', 'hover', 'removed');
+  const related = make('card/index', 'card-hover', 'added');
+  const unrelated = make('other', 'other-hover', 'added');
+  const oldSame = make('same', 'same', 'removed');
+  const newSame = make('same/index', 'same', 'added');
+  const oldTie = make('list', 'empty', 'removed');
+  const ties = ['first', 'second'].map(source => make(source, `${source}-empty`, 'added'));
+  const fingerprint = async rows => new Map(rows.map(row => [row, row.frame.endsWith('empty') ? 'empty' : 'hover']));
+  const result = await pairFrameMoves([old, related, unrelated, oldTie, ...ties, oldSame, newSame], inputs, fingerprint);
+  assert.deepEqual(result.filter(row => row.previousSource).map(row => [row.previousSource, row.previousFrame, row.source, row.frame]), [
+    [old.source, 'hover', related.source, 'card-hover'],
+    [oldSame.source, 'same', newSame.source, 'same'],
+  ]);
+  assert.ok(result.includes(unrelated));
+  assert.deepEqual(result.find(row => row.source === oldTie.source).matchCandidates, ties.map(({ source, frame }) => ({ source, frame })));
+  assert.ok(result.filter(row => row.frame.endsWith('empty')).every(row => ['added', 'removed'].includes(row.status)));
 });
 
 test('real Git diff pairs moves and retains dark-only changes in a light review', { timeout: 60000 }, async t => {
@@ -69,11 +97,12 @@ export default () => <Frame name="owned"><Badge/></Frame>;`;
 export { Shared };
 export default () => <Frame name="reuse"><Shared color="${color}"/></Frame>;`;
   const [gitOld, gitNew, moduleOld, moduleNew, partOld, partNew, renderOld, renderNew, darkOld, darkNew,
-    ambiguousOld, ambiguousDuplicate, ambiguousNew, reuseOld, reuseNew] = [
+    ambiguousOld, ambiguousDuplicate, ambiguousNew, reuseOld, reuseNew, renamedOld, renamedNew, changedOld, changedNew] = [
     'components/git-before', 'components/git-after', 'modules/card', 'modules/card/index',
     'components/part-before', 'components/part-after', 'components/render-before', 'components/render-after',
     'components/dark-before', 'components/dark-after', 'components/ambiguous-before', 'components/ambiguous-copy',
     'components/ambiguous-after', 'components/reuse-before', 'components/reuse-after',
+    'modules/automations', 'modules/automations/index', 'modules/prefs', 'modules/prefs/index',
   ].map(source => 'design/' + source + '.tsx');
   await put('adg.config.mjs', 'export default {};');
   await put('.gitignore', 'output/\nstate/\ndesign/.adg/\n');
@@ -89,29 +118,34 @@ export default () => <Frame name="shared"><Shared color="#123456"/></Frame>;`);
   await put(ambiguousOld, plain('ambiguous', '#554433'));
   await put(ambiguousDuplicate, plain('ambiguous', '#554433', { tag: 'span' }));
   await put(reuseOld, reuse('#514012'));
+  await put(renamedOld, plain('card-hover', '#214173'));
+  await put(changedOld, plain('details', '#248248', { dark: '#414141' }));
   git('init', '-q');
   git('add', '.');
   git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'base');
   git('mv', gitOld, gitNew);
-  for (const file of [moduleOld, partOld, renderOld, darkOld, ambiguousOld, ambiguousDuplicate, reuseOld]) await remove(file);
+  for (const file of [moduleOld, partOld, renderOld, darkOld, ambiguousOld, ambiguousDuplicate, reuseOld, renamedOld, changedOld]) await remove(file);
   await put(moduleNew, plain('feature', '#234567', { dark: '#555555' }));
   await put(partNew, own('#ab1234'));
   await put(renderNew, plain('render', '#987654', { tag: 'span' }));
   await put(darkNew, plain('dark', '#112233', { dark: '#333333' }));
   await put(ambiguousNew, plain('ambiguous', '#554433', { tag: 'section' }));
   await put(reuseNew, reuse('#821201'));
+  await put(renamedNew, plain('automations-card-hover', '#214173', { tag: 'section' }));
+  await put(changedNew, plain('prefs-details', '#248248', { dark: '#515151' }));
   const config = await loadConfig(root);
   const options = { base: 'HEAD', theme: 'light', json: true, 'state-dir': path.join(root, 'state') };
   const runtime = { renderSheet: async () => null };
   const ref = (source, frame) => ({ source, frame });
 
-  const onlyMoves = await diff(config, [gitOld, gitNew, renderOld, renderNew], options, runtime);
+  const onlyMoves = await diff(config, [gitOld, gitNew, renderOld, renderNew, renamedOld, renamedNew], options, runtime);
   assert.equal(onlyMoves.data.verdict, 'identical');
-  assert.equal(onlyMoves.data.summary.moved, 2);
+  assert.equal(onlyMoves.data.summary.moved, 3);
   assert.deepEqual(onlyMoves.data.reasons, []);
   assert.deepEqual(onlyMoves.data.review.movePairs, [
     { before: ref(gitOld, 'git'), after: ref(gitNew, 'git') },
     { before: ref(renderOld, 'render'), after: ref(renderNew, 'render') },
+    { before: ref(renamedOld, 'card-hover'), after: ref(renamedNew, 'automations-card-hover') },
   ]);
   for (const row of onlyMoves.data.comparisons) {
     assert.equal(row.status, 'moved');
@@ -146,7 +180,7 @@ export default () => <Frame name="shared"><Shared color="#123456"/></Frame>;`);
   assert.equal(impacted.complete, true);
   assert.deepEqual(impacted.review.movePairs, onlyMoves.data.review.movePairs);
   assert.deepEqual([impacted.review.added, impacted.review.removed, impacted.review.moved, impacted.review.changed,
-    impacted.review.direct, impacted.review.inherited], [3, 4, 2, 2, 2, 0]);
+    impacted.review.direct, impacted.review.inherited], [4, 5, 3, 2, 2, 0]);
   const owned = impacted.comparisons.find(row => row.source === partNew);
   assert.equal(owned.previousSource, partOld);
   assert.equal(owned.verdict, 'changed');
@@ -154,8 +188,9 @@ export default () => <Frame name="shared"><Shared color="#123456"/></Frame>;`);
   assert.equal(ordinary.length, 7);
   assert.ok(ordinary.every(row => ['added', 'removed'].includes(row.status) && !row.previousSource));
   assert.equal(ordinary.find(row => row.source === ambiguousNew).matchCandidates.length, 2);
+  assert.deepEqual(impacted.comparisons.filter(row => [changedOld, changedNew].includes(row.source)).map(row => row.status).sort(), ['added', 'removed']);
   assert.ok(impacted.comparisons.every(row => row.theme === 'light'));
-  assert.equal(impacted.impact.coverage.renderedRows, impacted.comparisons.length + 4);
-  assert.equal(impacted.impact.coverage.deletedRows, 4);
+  assert.equal(impacted.impact.coverage.renderedRows, impacted.comparisons.length + 5);
+  assert.equal(impacted.impact.coverage.deletedRows, 5);
   assert.deepEqual(JSON.parse(await readFile(impacted.reportPath, 'utf8')).review, impacted.review);
 });
