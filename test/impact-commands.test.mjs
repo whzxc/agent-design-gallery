@@ -44,7 +44,7 @@ test('impacted commands capture/evaluate literal jobs, retain static checks, and
   const emptyCheck = await check(config, [], options, silent, silent, noBrowser);
   assert.equal(emptyCheck.data.summary.evaluations, 0); assert.equal(emptyCheck.data.impact.coverage.exclusions.not_checked, 4);
   assert.equal(emptyCheck.data.impact.coverage.scope, 'partial');
-  const emptyDiff = await diff(config, [], options, { ...noBrowser, log: silent });
+  const emptyDiff = await diff(config, [], options, { log: silent });
   assert.equal(emptyDiff.data.summary.comparisons, 0); assert.equal(emptyDiff.data.verdict, 'identical');
   assert.equal(emptyDiff.data.impact.coverage.basis, 'proven');
   assert.equal(JSON.parse(await readFile(emptyDiff.data.reportPath)).impact.coverage.proofComplete, true);

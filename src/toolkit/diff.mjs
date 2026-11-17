@@ -12,6 +12,9 @@ import { CliError, classifyError, asCliError, nextActions } from '../cli-output.
 import { withImpacted } from './impact-selection.mjs';
 import { resolveDiffPolicy } from './diff-policy.mjs';
 import { buildReview, reviewDocumentHtml } from '../../public/review.js';
+import { resolveThemes, systemTheme } from './theme.mjs';
+import { renderReviewSheet, reviewForTheme } from './review-sheet.mjs';
+import { reviewCacheKey, writeReviewCache } from '../review-cache.mjs';
 
 const metadata = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const safeName = name => encodeURIComponent(name).replace(/\./g, '%2E');
@@ -137,14 +140,31 @@ async function writePair(output, pair, thresholds, reviewImages) {
 }
 
 /** Exact ordinary frames and evidence-backed structural part comparisons. */
-export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock, session, onReview } = {}) {
-  if (options.impacted && !session) return withImpacted(config, args, options, 'diff', selected =>
-    diff(config, args, options, { launchBrowser, prepareInputs, log, clock, session: selected, onReview }));
-  const started = performance.now(), scale = Number(options.scale ?? 2), themeOption = options.theme ?? 'both';
+export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock, session, onReview, readSystemTheme = systemTheme, renderSheet = renderReviewSheet, sheetTheme } = {}) {
+  const started = performance.now(), scale = Number(options.scale ?? 2);
   if (!Number.isFinite(scale) || scale <= 0) throw new CliError('USAGE_INVALID', 'Invalid --scale; use a positive number.');
-  if (!['both', 'light', 'dark'].includes(themeOption)) throw new CliError('USAGE_INVALID', 'Choose --theme=both, light, or dark.');
+  const themes = resolveThemes(options.theme, readSystemTheme);
+  sheetTheme ??= themes.length === 1 ? themes[0] : readSystemTheme();
+  options = { ...options, theme: themes.length === 2 ? 'both' : themes[0] };
   if (options['out-dir'] === '') throw new CliError('USAGE_INVALID', 'Set --out-dir to a directory.');
-  const themes = themeOption === 'both' ? ['light', 'dark'] : [themeOption];
+  if (options.impacted && !session) {
+    const keys = !args.length && options.frame === undefined && scale === 2
+      ? await Promise.all(themes.map(theme => reviewCacheKey(config, options.base, theme, options['state-dir']))) : [];
+    let reviewModel, outcome, failure;
+    try {
+      outcome = await withImpacted(config, args, options, 'diff', selected =>
+        diff(config, args, options, { launchBrowser, prepareInputs, log, clock, session: selected, readSystemTheme, renderSheet, sheetTheme,
+          onReview: model => { reviewModel = model; onReview?.(model); } }));
+    } catch (error) { failure = error; }
+    // withImpacted has now verified the generation and closed the real input trees.
+    const data = outcome?.data ?? failure?.data;
+    if (data?.complete && (!failure || failure.code === 'DIFF_FAILED')) {
+      try { await Promise.all(keys.map(key => writeReviewCache(key, reviewForTheme(reviewModel, key.theme)))); }
+      catch (error) { throw commandFailure(error, data, outcome?.warnings ?? failure.warnings); }
+    }
+    if (failure) throw failure;
+    return outcome;
+  }
   const output = options['out-dir'] === undefined ? path.join(config.output, 'diff') : path.resolve(config.root, options['out-dir']);
   const timings = { prepareMs: 0, buildMs: 0, captureMs: 0, compareMs: 0, writeMs: 0, totalMs: 0 };
   const warnings = [], completed = [], reviewImages = new Map();
@@ -172,10 +192,10 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
       summary: { sources: inputs.sources.length, frames: 0, comparisons: 0, supportComparisons: 0, isolationCaptures: 0,
         added: 0, removed: 0, matched: 0, identical: 0, structural: 0, changed: 0,
         classPixels: Object.fromEntries(classNames.map(name => [name, 0])) },
-      review: { added: 0, removed: 0, changed: 0 },
+      review: { added: 0, removed: 0, changed: 0, sheet: null },
       differencePalette: { equal: '#00000000', imperceptible: '#64748b', antialiasing: '#f59e0b', boundary_bleed: '#0ea5e9', bitmap_resampling: '#a855f7', other: '#ff00ff' }, reportPath: null, indexPath: null, timings,
     };
-    await timed('writeMs', () => Promise.all(['frames', 'support', 'report.json', 'index.html'].map(entry =>
+    await timed('writeMs', () => Promise.all(['frames', 'support', 'report.json', 'index.html', 'review-sheet.png'].map(entry =>
       rm(path.join(output, entry), { recursive: true, force: true }))));
     if (session ? session.chosen.some(row => row.source.endsWith('.mmd') && session.themes.some(theme => session.scheduled(row, theme))) : inputs.sources.length) browser = await launchBrowser();
     const built = await timed('buildMs', () => inputs.buildFrames({ browser }));
@@ -233,6 +253,12 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
         throw failures[0].error;
       }
     }
+    if (options.impacted) await timed('writeMs', async () => {
+      await mkdir(output, { recursive: true });
+      browser ??= await launchBrowser();
+      const model = buildReview({ ...data, complete: true }, reviewImages, { label: config.name ?? path.basename(config.root) });
+      data.review.sheet = await renderSheet(browser, model, sheetTheme, path.join(output, 'review-sheet.png'), completed);
+    });
   } catch (error) {
     if (inputs) {
       if (error.message) error.message = inputs.translateDiagnostic(error.message);
@@ -260,7 +286,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     }
   }
   const reviewModel = buildReview(data, reviewImages, { label: config.name ?? path.basename(config.root) });
-  data.review = reviewModel.counts;
+  data.review = { ...reviewModel.counts, sheet: data.review.sheet };
   onReview?.(reviewModel);
   timings.totalMs = performance.now() - started;
   data.reportPath = path.join(output, 'report.json');

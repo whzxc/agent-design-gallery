@@ -100,6 +100,8 @@ h3 { font-size:var(--text-meta); color:var(--text-tertiary); font-weight:550; li
 .token-radius { height:48px; border:1px solid var(--border); background:var(--surface-sunken); }
 #token-status { margin:16px 0; color:var(--text-secondary); }
 #review-page { inset:var(--panel-top) 12px 12px; display:flex; flex-direction:column; overflow:hidden; }
+.review-progress { display:flex; align-items:center; gap:12px; flex:none; padding:12px 20px; border-bottom:1px solid var(--border); color:var(--text-secondary); font-size:var(--text-meta); }
+.review-progress progress { width:96px; height:6px; accent-color:var(--accent); }
 .review-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 20px; padding:16px 20px; border-bottom:1px solid var(--border); flex:none; }
 .review-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 12px; min-width:0; }
 .review-heading h1 { font-size:var(--text-title); font-weight:650; line-height:20px; margin:0; }

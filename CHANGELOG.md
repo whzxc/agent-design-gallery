@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Cache review handoffs by project, Git revisions, working-tree content and theme. Show immediate progress, preserve results during live refresh and compute additional themes on demand.
+- Support `--theme=system` for render and diff and generate a single-theme inline review sheet with revisions, counts and up to 24 labelled frames. Impacted diffs warm the hub cache.
+
 - Give board specimens a single backdrop and let shadows and focus rings extend into isolated well padding. Keep screen edges on surface frames.
 - Group every Tokens section by source headings and draw proportionally scaled horizontal size bars.
 

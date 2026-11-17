@@ -282,6 +282,7 @@ type Location = {
 
 ```ts
 type RenderData = {
+  themes: Theme[];                       // resolved themes, including --theme=system
   project: string;
   outputDirectory: string;
   complete: boolean;
@@ -314,7 +315,7 @@ usage warning without changing the exit.
 ### Diff
 
 ```sh
-adg diff [source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]
+adg diff [source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json]
 adg diff --base=HEAD --json
 adg diff modules/toolbar --base=HEAD~1 --frame=compact --theme=both --out-dir=output/review --json
 ```
@@ -459,7 +460,7 @@ type DiffData = {
       bitmap_resampling: number, other: number
     }
   },
-  review: { added: number, removed: number, changed: number },
+  review: { added: number, removed: number, changed: number, sheet: { path: string, theme: Theme } | null },
   differencePalette: Record<string, string>, reportPath: string | null, indexPath: string | null,
   timings: {
     prepareMs: number, buildMs: number, captureMs: number,
@@ -575,7 +576,7 @@ adg owner --token=--accent --json
 ```
 
 Exactly one nonempty `--file`, `--text`, `--color` or `--token` is required. There are
-no positional source operands. All modes accept `--theme=both|light|dark` (default
+no positional source operands. All modes accept `--theme=both|light|dark|system` (default
 `both`), `--state-dir=<path>` and `--json`. `--state-dir` resolves from invocation cwd;
 it defaults to `$XDG_STATE_HOME/agent-design-gallery`, or
 `~/.local/state/agent-design-gallery`. Repeated mode/modifier flags, unknown flags, extra
@@ -829,7 +830,7 @@ project-root grammar. Hypothetical token candidates assume unchanged Tailwind cl
 `--base` compares its exact commit with staged, unstaged and untracked working files;
 `--head` selects a second exact commit instead. No merge-base or triple-dot inference.
 
-Options are `--theme=both|light|dark` (default both), `--state-dir`, `--explain` and `--json`.
+Options are `--theme=both|light|dark|system` (default both), `--state-dir`, `--explain` and `--json`.
 The query accepts no positional operands, `--scale`, `--observe` or `--impacted`.
 Use `--impacted` on render/check/diff as described below. Empty values, mixed families and repeated single-valued flags fail
 `USAGE_INVALID`. Help/version and sanitation follow the common contract.
@@ -1497,3 +1498,25 @@ and `POST api/annotations` with `action` (`create`, `update`, `delete`, `resolve
 fields. The hub proxies these routes with its existing authentication. Data lives under
 `<state-dir>/annotations/`, keyed by the absolute project root, shared by hub and standalone
 viewers using that state root. Consumer design repositories are never used for storage.
+
+### Review handoff cache and sheet
+
+`render` and `diff` accept `--theme=system`. On macOS it resolves through
+`defaults read -g AppleInterfaceStyle` (`Dark` selects dark); otherwise it resolves
+to light. JSON capture/comparison themes and selection themes contain the resolved
+`light` or `dark` value. Default comparison coverage remains both themes.
+
+An impacted diff writes `review-sheet.png` beside `index.html` and reports its
+absolute path and resolved theme in `data.review.sheet`. An explicit single theme
+selects that theme; otherwise the sheet follows system appearance. The sheet names
+the project, revisions and counts, labels frames as `<source>#<frame>`, and includes
+the first 24 frames in source order. Changed frames pair before and after, added
+frames show after, and removed frames are named. A footer reports overflow.
+Its width is at most 1600 CSS pixels and its device scale is 2.
+
+The hub requests only the current viewer theme. Its chrome and progress status
+appear immediately, and refresh retains the preceding result. Complete reviews
+are cached under the state directory by project, resolved base, HEAD, working-tree
+content fingerprint and theme. Impacted CLI diffs populate the same entries.
+Switching themes computes the missing theme, and source changes invalidate the
+cache through the existing live refresh.

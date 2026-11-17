@@ -1,0 +1,35 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { reviewCacheKey, readReviewCache, writeReviewCache } from '../src/review-cache.mjs';
+
+test('review cache hits identical inputs and misses edits, HEAD, base and theme', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-review-key-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim();
+  git('init', '-q'); git('config', 'user.email', 'test@example.com'); git('config', 'user.name', 'Test');
+  await writeFile(path.join(root, 'source'), 'one');
+  git('add', '.'); git('commit', '-qm', 'one');
+  const base = git('rev-parse', 'HEAD');
+  const config = { root };
+  const state = path.join(tmpdir(), path.basename(root) + '-state');
+  t.after(() => rm(state, { recursive: true, force: true }));
+  const key = await reviewCacheKey(config, base, 'light', state);
+  assert.equal(await readReviewCache(key), null);
+  await writeReviewCache(key, { counts: { added: 1 } });
+  assert.deepEqual(await readReviewCache(await reviewCacheKey(config, base, 'light', state)), { counts: { added: 1 } });
+  await writeFile(path.join(root, 'source'), 'two');
+  const edited = await reviewCacheKey(config, base, 'light', state);
+  assert.notEqual(key.directory, edited.directory);
+  assert.equal(await readReviewCache(edited), null);
+  git('add', '.'); git('commit', '-qm', 'two');
+  const committed = await reviewCacheKey(config, base, 'light', state);
+  assert.notEqual(edited.directory, committed.directory);
+  assert.notEqual(committed.directory, (await reviewCacheKey(config, 'HEAD', 'light', state)).directory);
+  assert.notEqual(committed.directory, (await reviewCacheKey(config, base, 'dark', state)).directory);
+  await writeFile(path.join(root, 'new'), 'untracked');
+  assert.notEqual(committed.directory, (await reviewCacheKey(config, base, 'light', state)).directory);
+});

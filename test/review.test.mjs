@@ -122,7 +122,8 @@ export default () => [
     },
   );
   assert.ok(diffError?.data);
-  assert.deepEqual(diffError.data.review, { added: 1, removed: 1, changed: 1 });
+  const { added, removed, changed } = diffError.data.review;
+  assert.deepEqual({ added, removed, changed }, { added: 1, removed: 1, changed: 1 });
   assert.equal(diffError.data.indexPath, path.join(project, 'output/design/diff/index.html'));
   assert.match(logs[0] ?? '', /^changed: 1 added, 1 removed, 1 changed \(\d+ frames\)\./);
 
@@ -179,7 +180,7 @@ export default () => [
     await unauthPage.getByRole('heading', { name: 'Key required' }).waitFor();
     await unauthContext.close();
 
-    const context = await browser.newContext({ extraHTTPHeaders: forwarded });
+    const context = await browser.newContext({ extraHTTPHeaders: forwarded, colorScheme: 'dark' });
     const page = await context.newPage({ viewport: { width: 1440, height: 900 } });
     await page.goto(`${projectViewerUrl}?key=${key}&base=${baseSha}`);
     await page.waitForFunction(() => window.__adg?.ready && window.__adg?.scope === 'review');
@@ -189,13 +190,13 @@ export default () => [
     assert.deepEqual(counts, { added: 1, removed: 1, changed: 1 });
     assert.equal(await page.locator('#review-page').isVisible(), true);
     assert.equal(await page.locator('.review-frame').count(), 3);
-    // `themed` card shows both light and dark rows with Before / After / Difference panes.
+    // The viewer requests its current theme with Before / After / Difference panes.
     const themedCard = page.locator('.review-frame[data-frame="themed"]');
     assert.deepEqual(
       await themedCard.locator('.review-theme').evaluateAll(nodes => nodes.map(node => node.dataset.themeRow)),
-      ['light', 'dark'],
+      ['dark'],
     );
-    assert.equal(await themedCard.locator('img[src^="data:image/png;base64,"]').count(), 6);
+    assert.equal(await themedCard.locator('img[src^="data:image/png;base64,"]').count(), 3);
     assert.equal(git('status', '--porcelain'), statusBefore, 'hub review must not dirty the consumer checkout');
 
     // Live SSE update when working-tree source changes: restore `legacy` so removed drops to 0.
@@ -229,7 +230,11 @@ export default () => [
   git('commit', '-qm', 'settled');
   const settled = await diff(config, [], { base: 'HEAD', impacted: true, 'state-dir': stateDirectory, json: true }, { log: () => {} });
   assert.equal(settled.data.verdict, 'identical');
-  assert.deepEqual(settled.data.review, { added: 0, removed: 0, changed: 0 });
+  const settledCounts = settled.data.review;
+  assert.deepEqual(
+    { added: settledCounts.added, removed: settledCounts.removed, changed: settledCounts.changed },
+    { added: 0, removed: 0, changed: 0 },
+  );
   await assert.rejects(access(path.join(project, 'output/design/diff/frames')));
   const settledHtml = await readFile(settled.data.indexPath, 'utf8');
   assert.match(settledHtml, /No added, removed, or changed frames/);

@@ -392,3 +392,17 @@ metadata, build payloads and catalog caches are not overwritten. A source delete
 since base has no artboard; CLI rendering reports selected deletions in its base JSON
 envelope. Unsupported kinds or type changes retain the current drawing and report the
 comparison limit in the Inspector note. There is no viewer chrome addition.
+
+## Review handoff
+
+`src/review-cache.mjs` owns the shared CLI/hub review identity and atomic JSON
+publication. Keys include the physical project root, resolved base commit, HEAD,
+changed tracked and untracked working-tree bytes, and resolved theme. Ignored
+generated output is excluded. The server deduplicates in-flight requests for an
+identity and serves complete cached review models directly. CLI impacted diffs
+publish those models after producing their artifacts.
+
+The viewer requests its current theme and retains the preceding review while a
+live refresh or theme switch runs. Progress and chrome remain visible. Diff output
+also includes a single-theme, DPR-2 review sheet alongside the self-contained HTML
+review; its source-ordered selection stops at 24 frames and reports overflow.

@@ -93,7 +93,7 @@ Files group by directory unless `gallery.json` supplies chapters, with each titl
 
 Unlisted sources form directory chapters. A mixed-layer group splits into a same-titled chapter in each layer view; keep project groups within one layer. A module folder shows its `index.tsx` under the feature directory name. Projects own their TSX sources, artwork, tokens, configuration and Git history. Preferences stay in `~/.agent-design-gallery/state.json`; `--state-dir` isolates them. Refreshing or reopening a directory restores its camera and selection. Source labels show modification times.
 
-Change reports carry one reachable `?base=<rev>` review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted`. Comments use ADG annotations.
+Change reports embed the single-theme `data.review.sheet.path` PNG inline, then carry one reachable `?base=<rev>` review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted`. Comments use ADG annotations.
 
 ## Design toolkit
 
@@ -256,3 +256,18 @@ adg service uninstall
 The LaunchAgent `org.agent-design-gallery.hub` starts the resident hub at login with RunAtLoad and keeps it running with KeepAlive. It binds loopback and uses the same registry/key and auth contract as `adg serve`. Installation records absolute Node and CLI paths in `~/Library/LaunchAgents/org.agent-design-gallery.hub.plist`, so launchd needs no shell PATH. Reinstall after moving the CLI or replacing the recorded Node installation.
 
 `status` prints JSON with installed/loaded state, PID, plist and log paths. `logs` prints the last 200 lines of each log. stdout and stderr go to `service.stdout.log` and `service.stderr.log` in the state directory. After an install with a custom state directory, status/logs/uninstall recover that directory from the plist when no override is given. Uninstall unloads the job and removes its plist, retaining registry, key, preferences and logs. Service commands on other platforms return an explicit unsupported error; `adg serve` remains available there.
+
+### Review handoff
+
+Run `adg diff --base=<rev> --impacted --theme=system --json` and embed
+`data.review.sheet.path` inline as a Markdown image, followed by the review URL
+from `adg link <viewer-url> --base=<rev>` and the added, removed and changed counts.
+The sheet follows macOS appearance, or light on other platforms; `render` also
+accepts `--theme=system`. Explicit light/dark overrides the sheet theme. Default
+diff comparison coverage remains both themes. The sheet includes up to 24 frames,
+with before/after pairs for changes and names for removals.
+
+Review links show progress immediately and retain visible results during refresh.
+The current theme loads first; another theme is computed on switch. The state
+directory caches results by project, base, HEAD, working-tree fingerprint and theme.
+An impacted CLI diff warms the same cache used by the hub.

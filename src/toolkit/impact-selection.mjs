@@ -5,12 +5,15 @@ import { groupImpactFrames } from './impact-output.mjs';
 import { commandFailure } from './results.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { resolveThemes } from './theme.mjs';
 
 export const impactRowKey = (row, theme) => JSON.stringify([row.source, row.frame, theme]);
 
 /** Keep fresh proofs, captures and final generation validation in one owned operation. */
 export async function withImpacted(config, args, options, command, work) {
-  if (typeof options.base !== 'string' || !options.base.trim() || options.frame === '' || options.theme !== undefined && !['both', 'light', 'dark'].includes(options.theme)) throw new CliError('USAGE_INVALID', 'Choose --impacted --base=<rev> and a valid frame/theme selection.');
+  const themes = resolveThemes(options.theme);
+  options = { ...options, theme: themes.length === 2 ? 'both' : themes[0] };
+  if (typeof options.base !== 'string' || !options.base.trim() || options.frame === '') throw new CliError('USAGE_INVALID', 'Choose --impacted --base=<rev> and a valid frame/theme selection.');
   let outcome, failure, selection, workMs = 0;
   const warnings = [];
   function discardProofs() {
@@ -26,7 +29,6 @@ export async function withImpacted(config, args, options, command, work) {
       consume: async session => {
         const { rows, views, assessments, inputs, data } = session;
         const sources = await selectedSources(views[1].config, views[0].config, views[1].config.root, new Set(rows.map(row => row.source)), args);
-        const themes = options.theme && options.theme !== 'both' ? [options.theme] : ['light', 'dark'];
         const chosen = rows.filter(row => sources.includes(row.source) && (options.frame === undefined || row.frame === options.frame));
         if (options.frame !== undefined && !chosen.length) {
           throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${options.frame}; choose a frame present on either side.`);

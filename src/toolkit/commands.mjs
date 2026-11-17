@@ -10,6 +10,7 @@ import { commandFailure, cleanup, emptySelection } from './results.mjs';
 import { loadImplementationMap, validateImplementationMap } from './implementation-map.mjs';
 import { withImpacted } from './impact-selection.mjs';
 import { mappingFacts, frameOwners } from './source-facts.mjs';
+import { resolveThemes, systemTheme } from './theme.mjs';
 
 function frameStructure(frame) {
   return frame.html
@@ -340,21 +341,20 @@ export async function check(config, args = [], options = {}, log = console.log, 
   } finally { if (browser) await cleanup(() => browser.close(), primary); }
 }
 
-export async function render(config, args = [], options = {}, log = console.log, { launchBrowser = launch, session } = {}) {
+export async function render(config, args = [], options = {}, log = console.log, { launchBrowser = launch, session, readSystemTheme = systemTheme } = {}) {
+  const themes = resolveThemes(options.theme, readSystemTheme);
+  options = { ...options, theme: themes.length === 2 ? 'both' : themes[0] };
   if (options.impacted && !session) return withImpacted(config, args, options, 'render', selected =>
     render(config, args, options, log, { launchBrowser, session: selected }));
   const output = options['out-dir'] ? path.resolve(config.root, options['out-dir']) : config.output;
   /** @type {import('./results.mjs').RenderData} */
-  const data = { project: config.root, outputDirectory: output, complete: false, impact: session?.selection ?? null, base: null, captures: [], deleted: [] };
+  const data = { project: config.root, outputDirectory: output, complete: false, impact: session?.selection ?? null, base: null, themes, captures: [], deleted: [] };
   const warnings = [], completed = [], failures = [];
   let browser, primary;
   try {
     const scale = Number(options.scale ?? 2);
     if (!(Number.isFinite(scale) && scale > 0)) throw new CliError('USAGE_INVALID', 'Invalid --scale; use a positive number');
-    const themeOption = options.theme ?? 'both';
-    if (!['both', 'light', 'dark'].includes(themeOption)) throw new CliError('USAGE_INVALID', 'Choose --theme=both, light, or dark.');
     if (options['out-dir'] === '') throw new CliError('USAGE_INVALID', 'Set --out-dir to a directory.');
-    const themes = themeOption === 'both' ? ['light', 'dark'] : [themeOption];
     let base, additional = [];
     if (!session && options.base !== undefined && (!args.length || args.some(arg => arg.endsWith('.mmd')))) {
       const git = await import('./arch-git.mjs');

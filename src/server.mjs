@@ -28,6 +28,7 @@ import { tokenBoard } from './boards/token-board.mjs';
 import { sourceRelationships } from '../public/relationships.js';
 import { resolveScope } from '../public/assets.js';
 import { diff } from './toolkit/diff.mjs';
+import { reviewCacheKey, readReviewCache } from './review-cache.mjs';
 const digest = value => createHash('sha256').update(value).digest('hex');
 const tokenFile = 'tokens.css';
 function tokenSourcePath(directory, project) {
@@ -41,6 +42,7 @@ export async function startServer({
   port = 0,
   stateDirectory = defaultState,
   annotationStateDirectory = stateDirectory,
+  reviewStateDirectory = annotationStateDirectory,
   fixtures = null,
   readOnly = false,
   instanceId = randomUUID(),
@@ -65,7 +67,7 @@ export async function startServer({
     revision = 0,
     closing = false,
     buildStore, viewerCache, codePaths=new Set();
-  const overlayStores = new Map(), overlayHashes = new Set(), activeReviews = new Set();
+  const overlayStores = new Map(), overlayHashes = new Set(), activeReviews = new Set(), pendingReviews = new Map();
   let resettingOverlays = false;
   const knownBuilds = new Map(), legacyDependencies = new Map(), failedSources=new Set(), dirtyBuilds=new Set();
   const describe=built=>({...built,css:undefined,frames:built.frames.map(({html,...frame})=>frame)});
@@ -446,29 +448,33 @@ export async function startServer({
       throw new CliError('DIRECTORY_NOT_FOUND', 'No project is open.');
     const data = baseManifest();
     const { layers } = resolveScope(data, sources, 'all');
-    const reviewDir = path.join(stateDirectory, 'cache', digest(root), 'review', randomUUID());
-    let review = null;
-    const task = (async () => {
-      try {
-        await diff(activeProject, [], {
-          base: baseParam,
-          impacted: true,
-          'out-dir': reviewDir,
-          'state-dir': stateDirectory,
-          json: true,
-        }, { log: () => {}, onReview: value => { review = value; } });
-      } catch (error) {
-        if (error.code !== 'DIFF_FAILED') throw error;
-      } finally {
-        await rm(reviewDir, { recursive: true, force: true }).catch(() => {});
-      }
-      if (!review) throw new CliError('INTERNAL_ERROR', 'Review output was not produced.');
-      return { ...data, scope: 'review', layers, assets: [], base: review.base, review: { ...review, label: data.label } };
-    })();
-    activeReviews.add(task);
-    try { return await task; }
-    finally { activeReviews.delete(task); }
+    const theme = url.searchParams.get('theme') === 'dark' ? 'dark' : 'light';
+    const key = await reviewCacheKey(activeProject, baseParam, theme, reviewStateDirectory);
+    const wrap = review => ({ ...data, scope: 'review', layers, assets: [], base: { ...review.base, rev: baseParam }, review: { ...review, base: { ...review.base, rev: baseParam }, label: data.label } });
+    const cached = await readReviewCache(key);
+    if (cached) return wrap(cached);
+    if (!pendingReviews.has(key.directory)) {
+      const task = (async () => {
+        let review;
+        try {
+          await diff(activeProject, [], {
+            base: baseParam, impacted: true, theme,
+            'out-dir': path.join(key.directory, 'artifacts'),
+            'state-dir': reviewStateDirectory, json: true,
+          }, { log: () => {}, onReview: value => { review = value; } });
+        } catch (error) {
+          if (error.code !== 'DIFF_FAILED') throw error;
+        }
+        if (!review) throw new CliError('INTERNAL_ERROR', 'Review output was not produced.');
+        return review;
+      })();
+      pendingReviews.set(key.directory, task);
+      activeReviews.add(task);
+      task.finally(() => { pendingReviews.delete(key.directory); activeReviews.delete(task); }).catch(() => {});
+    }
+    return wrap(await pendingReviews.get(key.directory));
   }
+
   async function sourceBuild(name) {
     const endBuild = perfSpan('build', name);
     let built;

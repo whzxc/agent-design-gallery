@@ -31,6 +31,7 @@ let manifest,
   catalog = null,
   tokenManifest = null,
   reviewManifest = null,
+  reviewLoading = false,
   tokenCategory = null,
   tokenList = false,
   tokenHeight = 0,
@@ -211,9 +212,9 @@ function toggleSidebar(value = !sidebar) {
 }
 function updateChrome() {
   updateSwitcherLabels();
-  const opened = !!(reviewManifest ?? tokenManifest ?? catalog ?? manifest)?.directory;
+  const opened = scopeRequest === 'review' || !!(reviewManifest ?? tokenManifest ?? catalog ?? manifest)?.directory;
   const showTokens = !!tokenManifest && tokenList;
-  const showReview = !!reviewManifest;
+  const showReview = scopeRequest === 'review' || !!reviewManifest;
   $('#token-list-toggle').hidden = !tokenManifest;
   $('#token-list-toggle').textContent = tokenList ? 'Board view' : 'List view';
   const canInspect = opened && !showTokens && !showReview && !!selected;
@@ -249,8 +250,8 @@ const media = matchMedia("(prefers-color-scheme: dark)");
 const modifiedDate = new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 window.__adg = {
   ready: false,
-  get metadataComplete() {return !!reviewManifest || !!tokenManifest || (!!manifest && !manifest.loading);},
-  get scope() {return (reviewManifest ?? tokenManifest)?.scope ?? initializedScope;},
+  get metadataComplete() {return !reviewLoading && (!!reviewManifest || !!tokenManifest || (!!manifest && !manifest.loading));},
+  get scope() {return scopeRequest === 'review' ? 'review' : (reviewManifest ?? tokenManifest)?.scope ?? initializedScope;},
   get review() {return reviewManifest?.review ?? null;},
   get cachePending() {return cacheWrites+loading+queued.length;},
   get cacheFlush() {return flushCache();},
@@ -304,7 +305,7 @@ async function api(url, data, keepalive = false, signal) {
   return result;
 }
 function preferences() {
-  if (reviewManifest || tokenManifest || onlyFrame) return { theme };
+  if (scopeRequest === 'review' || reviewManifest || tokenManifest || onlyFrame) return { theme };
   return {
     view,
     scope: initializedScope,
@@ -962,8 +963,8 @@ function draw() {
   const endDrawing = globalThis.__adgTiming?.span('drawing');
   raf = 0;
   drawBackground();
-  if ((tokenManifest && tokenList) || reviewManifest) {
-    window.__adg.ready = true;
+  if ((tokenManifest && tokenList) || scopeRequest === 'review' || reviewManifest) {
+    window.__adg.ready = scopeRequest === 'review' ? !!reviewManifest && !reviewLoading : true;
     window.__adg.revision = (reviewManifest ?? tokenManifest)?.revision;
     if (fixtureState) document.documentElement.dataset.fixtureReady = fixtureState.name;
     endDrawing?.(); return;
@@ -1164,14 +1165,17 @@ function applyTheme() {
 }
 for (const b of $("#themes").children)
   b.onclick = () => {
+    const previousTheme = effectiveTheme;
     theme = b.dataset.theme;
+    localStorage.setItem('adg-theme', theme);
     applyTheme();
-    if (!reviewManifest) void refresh(true);
+    if (previousTheme !== effectiveTheme || scopeRequest !== 'review') void refresh(true);
     save();
   };
 media.addEventListener("change", () => {
+  const previousTheme = effectiveTheme;
   applyTheme();
-  if (!reviewManifest) void refresh(true);
+  if (previousTheme !== effectiveTheme || scopeRequest !== 'review') void refresh(true);
 });
 viewport.addEventListener(
   "wheel",
@@ -1576,19 +1580,51 @@ function applyReviewManifest(data) {
   scopeRequest = 'review';
   fixtureState = null;
   if (previous?.directory !== data.directory) {
-    theme = data.theme;
     sidebar = false;
-    applyTheme();
   }
   for (const element of document.querySelectorAll('.directory-name')) element.textContent = data.label;
   $('#app-directory').title = data.directory || '';
   document.title = `${data.label} · Review — Agent Design Gallery`;
   const url = viewURL(location.href, 'review');
   if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
+  const scrollTop = $('#review-page .review-scroll')?.scrollTop ?? 0;
   renderReview($('#review-page'), data.review);
+  $('#review-page .review-scroll').scrollTop = scrollTop;
+  if (!performance.getEntriesByName('adg-review-content', 'mark').length) performance.mark('adg-review-content');
   updateChrome();
   annotationUI.render();
   renderNav();
+  requestDraw();
+}
+function setReviewLoading(value) {
+  reviewLoading = value;
+  const container = $('#review-page');
+  container.setAttribute('aria-busy', String(value));
+  container.querySelector('.review-progress')?.remove();
+  if (value) {
+    if (!container.firstElementChild) {
+      const header = document.createElement('header');
+      header.className = 'review-header';
+      const title = document.createElement('h1');
+      title.id = 'review-title';
+      title.textContent = (tokenManifest ?? catalog ?? manifest)?.label || 'Design review';
+      header.append(title);
+      container.append(header);
+      for (const element of document.querySelectorAll('.directory-name')) element.textContent = title.textContent;
+      renderScopeTabs({ scope: 'review', layers: [] });
+    }
+    const progress = document.createElement('div');
+    progress.className = 'review-progress';
+    progress.setAttribute('role', 'status');
+    const indicator = document.createElement('progress');
+    indicator.setAttribute('aria-label', 'Review progress');
+    const text = document.createElement('span');
+    text.textContent = `${reviewManifest ? 'Updating' : 'Loading'} ${effectiveTheme} review…`;
+    progress.append(indicator, text);
+    container.querySelector('.review-header').after(progress);
+  }
+  updateChrome();
+  if (value && !performance.getEntriesByName('adg-review-progress', 'mark').length) performance.mark('adg-review-progress');
   requestDraw();
 }
 async function applyManifest(data, force = false) {
@@ -1850,7 +1886,9 @@ async function refresh(force = false) {
     if (routeError) throw routeError;
     if (scopeRequest === 'review') {
       window.__adg.ready = false;
-      const signal = refreshController.signal, data = await api('review', null, false, signal);
+      setReviewLoading(true);
+      const query = new URLSearchParams({ theme: effectiveTheme });
+      const signal = refreshController.signal, data = await api(`review?${query}`, null, false, signal);
       signal.throwIfAborted();
       applyReviewManifest(data);
       error("");
@@ -1873,12 +1911,19 @@ async function refresh(force = false) {
     if(e.name!=='AbortError')error(e.message);
     else if(!refreshController.signal.aborted)pending=true;
   } finally {
+    if (reviewLoading && !pending) setReviewLoading(false);
     fetching = false;
     if (pending) {
       pending = false;
       await refresh(true);
     }
   }
+}
+if (scopeRequest === 'review') {
+  const savedTheme = localStorage.getItem('adg-theme');
+  if (['system', 'light', 'dark'].includes(savedTheme)) theme = savedTheme;
+  applyTheme();
+  initSwitcher();
 }
 await refresh();
 if(fixtureState) { try { await applyFixture(); } catch(e) { error(e.message); } }
@@ -1927,6 +1972,6 @@ document.addEventListener("keydown", (e) => {
   viewport.focus({ preventScroll: true });
 });
 
-initSwitcher();
+if (scopeRequest !== 'review') initSwitcher();
 
 $('#token-list-toggle').onclick = () => {tokenList=!tokenList;updateChrome();requestDraw();};
