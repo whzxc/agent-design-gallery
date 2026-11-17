@@ -1519,8 +1519,10 @@ An impacted diff writes `review-sheet.png` beside `index.html` and reports its
 absolute path and resolved theme in `data.review.sheet`. An explicit single theme
 selects that theme; otherwise the sheet follows system appearance. The sheet names
 the project, revisions and counts, labels frames as `<source>#<frame>`, and includes
-the first 24 frames in source order. Changed frames pair before and after, added
-frames show after, and removed frames are named. A footer reports overflow.
+up to 12 cells in two columns. A before/after pair uses one cell. Added frames
+show after, and removed frames are named. Captures only scale down and are at most
+480 CSS pixels tall. The sheet stops at 4000 CSS pixels and the footer counts the
+frames left to view.
 Its width is at most 1600 CSS pixels and its device scale is 2.
 
 The hub requests only the current viewer theme. Its chrome and progress status
@@ -1562,6 +1564,8 @@ average of the middle values. The representative is nearest to that median,
 with source order breaking ties. An outlier exceeds twice the median.
 
 The page shows added, direct and inherited groups; groups expand to all members.
-The sheet uses the same order and up to 24 individual images, counting a
-before/after pair as two. Other inherited members and removals are named.
+The sheet reserves cells for representatives first in group order, then
+allocates remaining cells to additions, direct changes and outliers. Cells
+display in review order. Each shown group names up to eight other members and
+counts the rest.
 Reports use `changed N (direct D, inherited I)`.

@@ -264,7 +264,7 @@ Run `adg diff --base=<rev> --impacted --theme=system --json` and embed
 from `adg link <viewer-url> --base=<rev>` and the added, removed and changed counts.
 The sheet follows macOS appearance, or light on other platforms; `render` also
 accepts `--theme=system`. Explicit light/dark overrides the sheet theme. Default
-diff comparison coverage remains both themes. The sheet includes up to 24 frames,
+diff comparison coverage remains both themes. The sheet includes up to 12 cells in two columns,
 with before/after pairs for changes and names for removals.
 
 Review links show progress immediately and retain visible results during refresh.
@@ -282,8 +282,11 @@ Review changes are grouped by cause. Reports state `changed N (direct D, inherit
 Direct changes edit the frame source or its module folder. Inherited groups share
 the same changed dependencies, show a median-area representative, and expand to
 every member. Members above twice the median changed-pixel area appear as outliers.
-The sheet spends its 24-image budget on added frames, direct changes, group
-representatives and outliers.
+The sheet reserves cells for inherited representatives first, then fills the
+remaining budget with additions, direct changes and outliers. Before/after pairs
+share a cell. Captures only scale down, to at most 480 CSS pixels tall. The sheet
+stops at 4000 CSS pixels, names up to eight other members per group and reports
+how many frames remain on the review page.
 
 `adg check` emits non-failing chapter warnings for component/module sources outside
 `gallery.json` chapters (`CHAPTER_SOURCES_UNASSIGNED`) and chapters above 12 sources

@@ -2,13 +2,15 @@
 
 ## Unreleased
 
+- Render a compact two-column review sheet with a 12-cell budget, reserved inherited representatives and a 4000 CSS pixel height limit.
+
 - Group review changes into direct edits and shared inherited causes, with median-area representatives and outliers. Expand inherited groups in the page and spend the sheet image budget on distinct review entries.
 - Warn about component/module sources without chapters and chapters containing more than 12 sources, without failing checks.
 
 - Keep review frames available when a source fails at either revision. List source errors in the viewer, HTML and sheet, cache partial results, and retain incomplete diff status.
 
 - Cache review handoffs by project, Git revisions, working-tree content and theme. Show immediate progress, preserve results during live refresh and compute additional themes on demand.
-- Support `--theme=system` for render and diff and generate a single-theme inline review sheet with revisions, counts and up to 24 labelled frames. Impacted diffs warm the hub cache.
+- Support `--theme=system` for render and diff and generate a single-theme inline review sheet with revisions, counts and up to 12 labelled cells. Impacted diffs warm the hub cache.
 
 - Give board specimens a single backdrop and let shadows and focus rings extend into isolated well padding. Keep screen edges on surface frames.
 - Group every Tokens section by source headings and draw proportionally scaled horizontal size bars.

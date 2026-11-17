@@ -62,7 +62,7 @@ test('sheet orders added, direct and removed and retains declared order within e
   assert.deepEqual([...html.matchAll(/data-frame="([^"]+)"/g)].map(match => match[1]), ['added', 'changed', 'removed']);
 });
 
-test('sheet uses one theme, a 24-PNG budget and a DPR2 PNG', async t => {
+test('sheet uses one theme, a 12-cell budget and a DPR2 PNG', async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'adg-sheet-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const model = reviewFixture();
@@ -70,10 +70,10 @@ test('sheet uses one theme, a 24-PNG budget and a DPR2 PNG', async t => {
   assert.ok(Object.values(reviewForTheme(model, 'dark').sections).flat().every(entry => entry.themes.length === 1));
   const html = reviewSheetHtml(model, 'dark');
   assert.match(html, /Review &lt;Demo&gt;/);
-  assert.match(html, /1 more frames in the review URL/);
-  assert.match(html, /data-source="design\/z-23/);
+  assert.match(html, /13 more frames in the review URL/);
+  assert.match(html, /data-source="design\/z-11/);
   assert.doesNotMatch(html, /data-frame="changed"/);
-  assert.equal([...html.matchAll(/<img /g)].length, 24);
+  assert.equal([...html.matchAll(/<img /g)].length, 12);
   const browser = await launch();
   try {
     const file = path.join(root, 'review.png');
@@ -82,7 +82,7 @@ test('sheet uses one theme, a 24-PNG budget and a DPR2 PNG', async t => {
     assert.equal(png.readUInt32BE(16), 3200);
     const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, colorScheme: 'dark' });
     await page.setContent(html);
-    assert.equal(await page.locator('article').count(), 24);
+    assert.equal(await page.locator('article').count(), 12);
     assert.equal(await page.locator('article').first().getAttribute('data-source'), 'design/z-00.tsx');
     assert.equal(await page.locator('article').first().locator('img').count(), 1);
     assert.equal(await page.locator('.removed img').count(), 0);
@@ -255,25 +255,58 @@ test('grouped sheet counts representative and outlier pairs individually and lis
   assert.doesNotMatch(html, /Difference/);
 });
 
-test('sheet never splits a pair to fill the remaining image budget', () => {
+test('sheet reserves representatives before added and direct changes and truncates group member names', () => {
   const model = groupedFixture();
-  model.sections.added = Array.from({ length: 21 }, (_, index) => ({ ...model.sections.added[0], frame: `added-${index}` }));
+  const [direct, inherited] = model.sections.changed;
+  model.sections.changed = [direct, ...Array.from({ length: 13 }, (_, i) => ({ ...inherited, frame: `member-${i}` }))];
+  model.sections.added = Array.from({ length: 14 }, (_, i) => ({ ...model.sections.added[0], frame: `added-${i}` }));
   const html = reviewSheetHtml(model, 'dark');
-  assert.equal([...html.matchAll(/<img /g)].length, 23);
-  assert.match(html, /data-frame="direct"/);
-  assert.doesNotMatch(html, /data-frame="median"/);
-  assert.match(html, /3 more frames in the review URL/);
+  assert.equal([...html.matchAll(/<article /g)].length, 12);
+  assert.equal([...html.matchAll(/<img /g)].length, 13);
+  assert.match(html, /data-frame="member-0" data-priority="0"/);
+  assert.ok(html.indexOf('data-frame="added-0"') < html.indexOf('data-frame="member-0"'));
+  assert.doesNotMatch(html, /data-frame="direct"/);
+  assert.equal([...html.matchAll(/<li><code>/g)].length, 8);
+  assert.match(html, /4 other members/);
+  assert.match(html, /16 more frames in the review URL/);
   assert.match(html, /#removed/);
 });
 
-test('sheet counts missing captures as zero PNGs while retaining the error placeholder', () => {
-  const model = groupedFixture();
-  model.sections.added = Array.from({ length: 23 }, (_, index) => ({ ...model.sections.added[0], frame: `added-${index}` }));
-  model.sections.changed = [{ ...model.sections.changed[0], themes: [{ ...themeRow('dark'), images: { before: pixel, after: null } }] }];
-  const html = reviewSheetHtml(model, 'dark');
-  assert.equal([...html.matchAll(/<img /g)].length, 24);
-  assert.match(html, /Capture unavailable/);
-  assert.doesNotMatch(html, /more frames/);
+test('sheet never upscales captures, caps frame height and drops whole entries at the height limit', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-sheet-height-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const browser = await launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, colorScheme: 'dark' });
+    const image = async (width, height) => {
+      await page.setContent(`<div style="width:${width}px;height:${height}px;background:#394459"></div>`);
+      return 'data:image/png;base64,' + (await page.locator('div').screenshot()).toString('base64');
+    };
+    const small = await image(80, 40), tall = await image(120, 900);
+    const model = groupedFixture();
+    const sample = model.sections.added[0];
+    model.sections = { added: [
+      { ...sample, themes: [{ ...themeRow('dark'), afterSize: { width: 40, height: 20 }, images: { after: small } }] },
+      { ...sample, frame: 'tall', themes: [{ ...themeRow('dark'), afterSize: { width: 120, height: 900 }, images: { after: tall } }] },
+    ], changed: [], removed: [] };
+    await page.setContent(reviewSheetHtml(model, 'dark'));
+    const boxes = await page.locator('img').evaluateAll(images => images.map(img => [img.clientWidth, img.clientHeight]));
+    assert.deepEqual(boxes, [[40, 20], [64, 480]]);
+    const row = { ...themeRow('dark'), afterSize: { width: 120, height: 900 }, beforeSize: { width: 120, height: 900 }, images: { before: tall, after: tall } };
+    model.sections = { added: [], removed: [], changed: Array.from({ length: 12 }, (_, i) => ({
+      ...sample, status: 'changed', frame: `group-${i}`, themes: [row],
+      change: { kind: 'inherited', causes: [`design/${i}/${'long-cause-'.repeat(75)}.tsx`] },
+    })) };
+    const html = reviewSheetHtml(model, 'dark');
+    await page.setContent(html);
+    await page.locator('img').evaluateAll(images => Promise.all(images.map(img => img.decode())));
+    assert.ok((await page.locator('body').boundingBox()).height > 4000);
+    const file = path.join(root, 'review.png');
+    await renderReviewSheet(browser, model, 'dark', file);
+    const png = await readFile(file);
+    assert.equal(png.readUInt32BE(16), 3200);
+    assert.ok(png.readUInt32BE(20) <= 8000);
+  } finally { await browser.close(); }
 });
 
 test('theme filtering recomputes groups, median representative and outliers', () => {
