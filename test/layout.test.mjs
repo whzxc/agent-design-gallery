@@ -335,3 +335,31 @@ test('fit and prepared component wrap helpers retain their existing geometry', (
   assert.ok(bounds(rows(forms.map(p => ({w: p.width, h: p.height})), width, 48, 64)).h <
     bounds(rows(forms.map(p => ({w: p.width, h: p.height})), 1600, 48, 64)).h);
 });
+
+test('tall boards widen in twelve-column steps and reflow declarations without resizing frames', () => {
+  const asset = source('modules/tall.tsx', Array.from({length: 40}, () => [800, 600]));
+  const data = manifest([asset], [{title:'Tall',assets:[asset.path]}]);
+  const {groups} = arrange(data);
+  const [wide] = groups;
+  assert.ok(wide.w > 1680);
+  assert.ok(wide.w <= 1680 + 3 * 1208);
+  assert.ok(wide.h <= 2 * wide.w || wide.w === 1680 + 3 * 1208);
+  assert.deepEqual(wide.blocks[0].frames.map(frame=>frame.id), asset.parts.map(part=>part.id));
+  for (const frame of wide.blocks[0].frames) assert.deepEqual([frame.w,frame.h],[800,600]);
+  separated(wide.blocks[0].frames.map(frame=>frame.well));
+  assert.equal(wide.blocks[0].label.w,280);
+  assert.equal(wide.header.x,80);
+  assert.deepEqual(arrange(data).groups,groups);
+});
+
+test('a saved board alone changes width and can return to its base width', () => {
+  const small = board('small',100,100), tall = board('tall',600,800);
+  tall.blocks[0].frames = Array.from({length:60}, (_,i)=>({...tall.blocks[0].frames[0],id:String(i)}));
+  const before = layoutWorld([small,board('tall',600,800)]);
+  const after = layoutWorld([small,tall],{previousGroups:before});
+  assert.equal(after[0].w,before[0].w);
+  assert.equal(after[1].w,5304);
+  const reset = layoutWorld([small,board('tall',600,800)],{previousGroups:after});
+  assert.equal(reset[1].w,1680);
+  assert.equal(reset[0].w,before[0].w);
+});

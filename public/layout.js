@@ -64,14 +64,14 @@ export function specimenPaintCrop(asset, crop) {
   return {...crop, x:left, y:top, width:right-left, height:bottom-top};
 }
 
-function layoutSection(section, width, y) {
+function layoutSection(section, width, y, columns = boardGeometry.columns) {
   const g = boardGeometry;
   const areaWidth = width - g.side * 2 - g.label - g.sectionGap;
-  const columnWidth = (areaWidth + g.columnGap) / g.columns;
+  const columnWidth = (areaWidth + g.columnGap) / columns;
   let column = 0, rowY = g.sectionPadding + 1, rowHeight = 0;
   const frames = section.frames.map(frame => {
-    const span = Math.min(g.columns, Math.max(1, Math.ceil((frame.w + g.wellX * 2 + g.columnGap) / columnWidth)));
-    if (column + span > g.columns) {
+    const span = Math.min(columns, Math.max(1, Math.ceil((frame.w + g.wellX * 2 + g.columnGap) / columnWidth)));
+    if (column + span > columns) {
       column = 0;
       rowY += rowHeight + g.rowGap;
       rowHeight = 0;
@@ -98,14 +98,12 @@ function layoutSection(section, width, y) {
   };
 }
 
-function layoutBoard(board) {
+function layoutBoardAtWidth(board, w, columns) {
   const g = boardGeometry;
-  const widest = Math.max(0, ...board.blocks.flatMap(section => section.frames.map(frame => frame.w + g.wellX * 2)));
-  const w = Math.max(g.width, g.side * 2 + g.label + g.sectionGap + widest);
   const headerHeight = 28 + 16 + lineCount(board.title, Math.max(1, w - g.side * 2 - 440 - 64), 26) * 56 + 56;
   let y = g.top + headerHeight;
   const blocks = board.blocks.map(section => {
-    const placed = layoutSection(section, w, y);
+    const placed = layoutSection(section, w, y, columns);
     y += placed.h;
     return placed;
   });
@@ -113,6 +111,18 @@ function layoutBoard(board) {
     header: { x: g.side, y: g.top, w: w - g.side * 2, h: headerHeight },
     sourceCount: blocks.length, frameCount: blocks.reduce((sum, section) => sum + section.frames.length, 0), blocks,
   };
+}
+
+function layoutBoard(board) {
+  const g = boardGeometry;
+  const baseArea = g.width - g.side * 2 - g.label - g.sectionGap;
+  const widest = Math.max(0, ...board.blocks.flatMap(section => section.frames.map(frame => frame.w + g.wellX * 2)));
+  const initialWidth = Math.max(g.width, g.side * 2 + g.label + g.sectionGap + widest);
+  let result = layoutBoardAtWidth(board, initialWidth, g.columns);
+  for (let multiplier = 2; multiplier <= 4 && result.h > 2 * result.w; multiplier++) {
+    result = layoutBoardAtWidth(board, initialWidth + (multiplier - 1) * (baseArea + g.columnGap), g.columns * multiplier);
+  }
+  return result;
 }
 
 function placeColumns(boards, count, previous = []) {
