@@ -562,7 +562,7 @@ the consumer's normal approval process.
 
 ## Review handoff
 
-Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report embeds the review sheet inline as a Markdown image by its absolute path, then gives one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted` (`data.review`). It attaches no other screenshots.
+Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report embeds the review sheet inline as a Markdown image by its absolute path, then gives one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed`, `moved` and `changed` counts from `adg diff --base=<rev> --impacted` (`data.review`). It attaches no other screenshots.
 
 Review images show one theme: `system`, the Mac's current appearance (`defaults read -g AppleInterfaceStyle` reads `Dark`), otherwise light. `render` and `diff` accept `--theme=system` and report the resolved theme. Show the other theme as well only when the change alters theme-specific paint. Checks and diff verdicts still cover both themes.
 
@@ -571,13 +571,22 @@ Changed frames are grouped by cause:
 - An **inherited** change is a frame whose own source is unchanged and that changed only through imported sources. Inherited frames group by the set of changed sources that reaches them, as the `diff --impacted` reasons report it.
 - An inherited frame whose changed-pixel area exceeds twice its group's median is an **outlier**.
 
-`data.review` splits `changed` into `direct` and `inherited` and lists the groups with their causes and frames. A change report states the counts as `changed N (direct D, inherited I)`.
+A frame whose source file moved keeps its identity. A removed and an added frame with the same frame name pair up when their sources are related, in this order:
+- a Git rename;
+- a module file that became a feature folder (`modules/x.tsx` to `modules/x/index.tsx` or another file in `modules/x/`);
+- the same exported part name;
+- an identical render in both themes.
+
+A paired frame is compared like any other frame. When its pixels and size are identical in both themes, it is **moved**. Otherwise it is a direct change that names its previous source. Moved frames are neither added nor removed.
+
+`data.review` reports `moved` with its pairs, splits `changed` into `direct` and `inherited`, and lists the groups with their causes and frames. A change report states the counts as `added A · removed R · moved M · changed N (direct D, inherited I)`.
 
 The review sheet and the review page show these entries in order:
 1. added frames;
 2. direct changes;
 3. one entry per inherited group, giving its cause and frame count, one representative before and after (the member with the median changed area, the first in source order on a tie) and the names of the other members;
-4. the outliers individually under their group.
+4. the outliers individually under their group;
+5. moved frames, as one entry that names the source moves and counts their frames, without images.
 
 The page expands a group to every member.
 
@@ -585,7 +594,7 @@ The review sheet is one PNG that `adg diff --base=<rev> --impacted` writes next 
 
 - **Header**: the project, the base and current revisions and the counts.
 - **Cells**: entries flow in the order above through two columns, 1600 CSS pixels wide in total at device scale 2. Each image fills one cell labelled `<source>#<frame>`: an added frame shows its new render, and a changed frame shows before and after side by side within the cell. A frame scales down to fit its cell, at most 480 CSS pixels tall, and never scales up. Removed frames are listed by name.
-- **Budget**: at most 12 images, where a before-and-after pair is one image. Each inherited group's representative is reserved a place first, in group order. Added frames, direct changes and outliers fill the remaining places in the order above. Other group members take no place.
+- **Budget**: at most 12 images, where a before-and-after pair is one image. Places are reserved first, until the budget runs out: one for the first added frame, one for the first direct change, then one for each inherited group's representative, in group order. Every kind of change that occurred therefore shows at least one image. The remaining places go to the other added frames, direct changes and outliers, in the order above. Other group members take no place.
 - **Group text**: a group names its cause, its frame count and at most eight other members, and counts the rest.
 - **Height**: at most 4000 CSS pixels. Entries that do not fit are not drawn.
 
