@@ -83,12 +83,13 @@ Doop was trialled as an external browsing and comment canvas and dropped: the bo
 generator, ADG annotations already cover comments, and publishing added a service, a sync step and per-frame iframes
 that loaded slowly.
 
-- Board view: chapters from `gallery.json` groups with the trial board presentation, a visual Tokens board and column
-  placement, replacing the skyline packing. ARC accepts it first.
-- Publishing retirement: the CLI, configuration, JSON diagnostics, documentation and obsolete publishing tests are removed. The `?base=<rev>` review page stays.
+- Board view (done): chapters from `gallery.json` groups with the trial board presentation, a visual Tokens board,
+  column placement and tall-board widening, replacing the skyline packing. ARC and the client accepted it.
+- Publishing retirement (done): the CLI, configuration, JSON diagnostics, documentation and obsolete publishing tests are removed. The `?base=<rev>` review page stays.
 - Runtime (done): omit `undefined`, `null` and `false` style values instead of serializing them.
-- Review handoff: a review page that never shows a blank screen and reopens from a cache, one review theme following
-  the Mac's appearance, and one inline review sheet per change. The
+- Review handoff (done): a review page that never shows a blank screen and reopens from a cache, one review theme
+  following the Mac's appearance, changes grouped by cause, moved and renamed frames recognized, and one compact
+  inline review sheet per change. The
   [review handoff](design-toolkit.md#review-handoff) contract owns the details.
 - Annotations, next round: element anchors and a comment interaction modelled on
   [Doop](https://github.com/kgoedecke/doop)'s comments, after board view is accepted.
