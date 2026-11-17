@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { setTimeout as delay } from 'node:timers/promises';
 import { defaultStateDirectory } from './hub/registry.mjs';
 import { hubPublicOrigin } from './hub/project-link.mjs';
 import { CliError } from './cli-output.mjs';
@@ -184,12 +185,22 @@ export async function service(action, values = {}, {
     output(`${SERVICE_LABEL} is already installed and loaded.`);
     return {data:{service:statusData(previous,plist,agentFile,stateDirectory),port}};
   }
+  const bootstrap = async () => {
+    for (let attempt = 0;; attempt++) {
+      try { return await run('/bin/launchctl',['bootstrap',domain,agentFile]); }
+      catch (cause) {
+        // launchd can still be releasing the previous job after bootout returns.
+        if (previous === null || cause.code !== 5 || attempt === 5) throw cause;
+        await delay(100 * 2 ** attempt);
+      }
+    }
+  };
   await mkdir(path.dirname(agentFile),{recursive:true});await mkdir(stateDirectory,{recursive:true});
   await Promise.all([stdout,stderr].map(file=>writeFile(file,'',{flag:'a'})));
   if (previous !== null) await job(run,['bootout',target]);
   try {
     await writeFile(agentFile,plist);
-    await run('/bin/launchctl',['bootstrap',domain,agentFile]);
+    await bootstrap();
   }
   catch (cause) {
     let message=`Cannot install ${SERVICE_LABEL}: ${cause.stderr?.trim() || cause.message}`;
@@ -197,7 +208,7 @@ export async function service(action, values = {}, {
       if (installedPlist === null) await rm(agentFile,{force:true});
       else {
         await writeFile(agentFile,installedPlist);
-        if (previous !== null) await job(run,['bootstrap',domain,agentFile]);
+        if (previous !== null) await bootstrap();
       }
     } catch (restore) { message += ` Could not restore the previous service: ${restore.message}`; }
     throw new CliError('SERVICE_FAILED',message,{cause});

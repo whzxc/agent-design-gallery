@@ -97,6 +97,21 @@ test('a failed service reinstall restores the previous plist and loaded job', as
   assert.equal((await f.run('status')).envelope.data.state, 'running');
 });
 
+test('reinstall retries when launchd is still releasing the previous job', async t => {
+  const f = await fixture(t);
+  assert.equal((await f.run('install')).exit, 0);
+  let attempts = 0;
+  const reinstalled = await f.run('install', ['--public-origin=https://design.example.invalid'], {
+    run: async (command, args) => {
+      if (args[0] === 'bootstrap' && ++attempts === 1) throw Object.assign(new Error('Bootstrap failed: 5'), { code: 5 });
+      return f.options.run(command, args);
+    },
+  });
+  assert.equal(reinstalled.exit, 0);
+  assert.equal(reinstalled.envelope.data.service.publicOrigin, 'https://design.example.invalid');
+  assert.equal(attempts, 2);
+});
+
 test('service logs contain two bounded rows, missing-file state and redacted keys',async t=>{
   const f=await fixture(t);
   await mkdir(f.state);
