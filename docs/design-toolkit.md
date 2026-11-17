@@ -577,7 +577,9 @@ A frame whose source file moved keeps its identity. A removed and an added frame
 - the same exported part name;
 - an identical render in both themes.
 
-A paired frame is compared like any other frame. When its pixels and size are identical in both themes, it is **moved**. Otherwise it is a direct change that names its previous source. Moved frames are neither added nor removed.
+A frame renamed during a move pairs up too: a removed and an added frame whose names differ form a pair when their renders, pixels and size, are identical in both themes, and neither frame belongs to a same-name pair. When several candidates match, the one from the related source wins. A remaining tie stays unpaired.
+
+A paired frame is compared like any other frame. When its pixels and size are identical in both themes, it is **moved**. Otherwise it is a direct change that names its previous source. Moved frames are neither added nor removed, and a renamed one names its previous `<source>#<frame>`.
 
 `data.review` reports `moved` with its pairs, splits `changed` into `direct` and `inherited`, and lists the groups with their causes and frames. A change report states the counts as `added A · removed R · moved M · changed N (direct D, inherited I)`.
 
