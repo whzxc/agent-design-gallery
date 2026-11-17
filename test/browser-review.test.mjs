@@ -197,6 +197,39 @@ test('initial review failure keeps navigation usable and a theme switch can retr
   assert.equal(await page.locator('#error').isVisible(), false);
 });
 
+test('review lists moves by both source paths and retains edited moves across theme switches', { timeout: 30000 }, async t => {
+  const { page, request, response, switchTheme } = await viewer(t);
+  const previousSource = 'components/card.tsx';
+  const source = 'components/card/index.tsx';
+  const moved = [
+    { previousSource, source, frame: 'first' },
+    { previousSource, source, frame: 'second' },
+    { previousSource, source: 'components/card/details.tsx', frame: 'details' },
+  ];
+  for (const [index, theme] of ['dark', 'light'].entries()) {
+    if (index) await switchTheme(theme);
+    const pending = await request(index);
+    const payload = response(theme, index + 1);
+    const comparisons = moved.map(row => ({ ...row, theme, status: 'moved', verdict: 'identical' }));
+    comparisons.push({ previousSource, source, frame: 'edited', theme, status: 'matched',
+      verdict: theme === 'dark' ? 'changed' : 'identical', change: { kind: 'direct', causes: [source] } });
+    payload.review = buildReview({ comparisons, complete: true });
+    pending.resolve(payload);
+    await page.waitForFunction(() => window.__adg?.ready);
+    const summary = page.locator('.review-section').last();
+    assert.equal(await summary.getAttribute('data-section'), 'moved');
+    assert.deepEqual(await summary.locator('li').allTextContents(), [
+      `${previousSource} → ${source} · 2 frames`,
+      `${previousSource} → components/card/details.tsx · 1 frame`,
+    ]);
+    assert.equal(await summary.locator('img').count(), 0);
+    assert.equal((await page.locator('[data-kind="moved"]').textContent()).trim(), '3 moved');
+    const edited = page.locator('[data-section="direct"] [data-frame="edited"]');
+    assert.equal(await edited.locator('[data-side="before"] figcaption').textContent(), `Before · ${previousSource}`);
+    assert.equal(await edited.locator('[data-theme-row]').getAttribute('data-theme-row'), theme);
+  }
+});
+
 
 test('inherited groups collapse to a median pair and expand every other member without duplicate outliers', { timeout: 30000 }, async t => {
   const { page, request, response } = await viewer(t);

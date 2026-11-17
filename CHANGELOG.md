@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pair relocated frames across revisions, validate moves in both themes, and summarize unchanged moves without images. Reserve review-sheet cells for the first addition and direct change before inherited representatives.
+
 - Render a compact two-column review sheet with a 12-cell budget, reserved inherited representatives and a 4000 CSS pixel height limit.
 
 - Group review changes into direct edits and shared inherited causes, with median-area representatives and outliers. Expand inherited groups in the page and spend the sheet image budget on distinct review entries.

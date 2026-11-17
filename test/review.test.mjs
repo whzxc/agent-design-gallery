@@ -122,10 +122,10 @@ export default () => [
     },
   );
   assert.ok(diffError?.data);
-  const { added, removed, changed } = diffError.data.review;
-  assert.deepEqual({ added, removed, changed }, { added: 1, removed: 1, changed: 1 });
+  const { added, removed, moved, changed } = diffError.data.review;
+  assert.deepEqual({ added, removed, moved, changed }, { added: 1, removed: 1, moved: 0, changed: 1 });
   assert.equal(diffError.data.indexPath, path.join(project, 'output/design/diff/index.html'));
-  assert.match(logs[0] ?? '', /^changed: 1 added, 1 removed, 1 changed \(\d+ frames\)\./);
+  assert.match(logs[0] ?? '', /^changed: 1 added, 1 removed, 0 moved, 1 changed \(\d+ frames\)\./);
 
   await assert.rejects(access(stalePath));
   const indexHtml = await readFile(diffError.data.indexPath, 'utf8');
@@ -187,7 +187,7 @@ export default () => [
     assert.equal(page.url(), reviewUrl);
 
     const counts = await page.evaluate(() => window.__adg.review?.counts);
-    assert.deepEqual(counts, { added: 1, removed: 1, changed: 1, direct: 1, inherited: 0 });
+    assert.deepEqual(counts, { added: 1, removed: 1, moved: 0, changed: 1, direct: 1, inherited: 0 });
     assert.equal(await page.locator('#review-page').isVisible(), true);
     assert.equal(await page.locator('.review-frame').count(), 2);
     assert.equal(await page.locator('[data-section="removed"] img').count(), 0);
@@ -221,7 +221,7 @@ export default () => [
 ];\n`,
     );
     await page.waitForFunction(() => window.__adg?.ready && window.__adg?.review?.counts?.removed === 0);
-    assert.deepEqual(await page.evaluate(() => window.__adg.review.counts), { added: 1, removed: 0, changed: 1, direct: 1, inherited: 0 });
+    assert.deepEqual(await page.evaluate(() => window.__adg.review.counts), { added: 1, removed: 0, moved: 0, changed: 1, direct: 1, inherited: 0 });
     await context.close();
   } finally {
     await browser.close();
@@ -234,10 +234,10 @@ export default () => [
   assert.equal(settled.data.verdict, 'identical');
   const settledCounts = settled.data.review;
   assert.deepEqual(
-    { added: settledCounts.added, removed: settledCounts.removed, changed: settledCounts.changed },
-    { added: 0, removed: 0, changed: 0 },
+    { added: settledCounts.added, removed: settledCounts.removed, moved: settledCounts.moved, changed: settledCounts.changed },
+    { added: 0, removed: 0, moved: 0, changed: 0 },
   );
   await assert.rejects(access(path.join(project, 'output/design/diff/frames')));
   const settledHtml = await readFile(settled.data.indexPath, 'utf8');
-  assert.match(settledHtml, /No added, removed, or changed frames/);
+  assert.match(settledHtml, /No added, removed, moved, or changed frames/);
 });

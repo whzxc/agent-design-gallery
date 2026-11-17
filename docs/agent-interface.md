@@ -332,8 +332,11 @@ finite positive number. A relative output directory resolves from the project ro
 
 Identity is `(project-relative source, frame name)`, with a comparison row per theme.
 Exact matches retain native CSS/device sizes. Added and removed frames retain nulls for
-the absent side. Rename candidates remain separate added/removed rows with
-`matchKind:renamed_or_unknown` and candidate references; diff never silently pairs them.
+the absent side. Same-name unmatched frames are paired using a Git rename, module feature-folder
+relocation, shared exported part name, then identical renders in both themes.
+Ambiguous candidates keep their added/removed rows with candidate references.
+Paired frames with identical pixels and CSS/device sizes in both themes are
+`moved`. A changed pair is direct and names its previous source.
 A size change is a failed gate even when common pixels are equal. Architecture pairs
 use plain revision-local renders, independently of the viewer/render proposal overlays.
 
@@ -400,7 +403,8 @@ type ComparisonReason =
 type DiffComparison = {
   id: string,
   source: ProjectPath, frame: string, theme: Theme,
-  status: 'matched' | 'added' | 'removed',
+  status: 'matched' | 'added' | 'removed' | 'moved',
+  previousSource?: ProjectPath,
   matchKind: 'exact' | 'unmatched' | 'renamed_or_unknown',
   matchCandidates: FrameRef[],
   relation: 'revision' | 'parent_crop',
@@ -453,7 +457,7 @@ type DiffData = {
   verdict: Verdict | null, reasons: ComparisonReason[],
   summary: {
     sources: number, frames: number, comparisons: number, supportComparisons: number, isolationCaptures: number,
-    added: number, removed: number, matched: number,
+    added: number, removed: number, moved: number, matched: number,
     identical: number, structural: number, changed: number,
     classPixels: {
       imperceptible: number, antialiasing: number, boundary_bleed: number,
@@ -461,7 +465,8 @@ type DiffData = {
     }
   },
   review: {
-    added: number, removed: number, changed: number,
+    added: number, removed: number, moved: number, changed: number,
+    movePairs: Array<{ before: FrameRef, after: FrameRef }>,
     direct: number, inherited: number,
     groups: Array<{
       causes: ProjectPath[], frames: Array<{ source: ProjectPath, frame: string }>,
@@ -481,6 +486,8 @@ type DiffData = {
 
 `id` is an opaque deterministic encoding of source/frame/theme and selected/support role.
 `before` points to the parent for `parent_crop`; its `beforeSize` describes the crop.
+For a relocation, `before.source` and `previousSource` name the base source.
+Move verification checks both themes even when only one capture theme is selected.
 Ordinary rows have null `parent`, `snapshots` and snapshot paths. The absent image, ref
 and size in an ordinary added/removed row are null. `reasons` explain the gate; snapshot
 findings carry a code, equality domain, context (`part` or `parent`), property path and
@@ -564,7 +571,7 @@ All referenced artifacts are written before their completed row is advertised. E
 cleans prior `frames/`, `support/`, `report.json` and `index.html` entries inside
 `outputDirectory` before writing new captures, then writes a self-contained `index.html`
 review page with inline `data:image/png;base64,...` images and `data.review` frame counts
-(`added`, `removed`, `changed`, excluding matched frames whose themes are all `identical`).
+(`added`, `removed`, `moved`, `changed`, excluding ordinary matched frames whose themes are all `identical`).
 Failed runs keep completed rows from that run and, when writable, a partial manifest and
 review page. `reportPath:null` and `indexPath:null` mean the manifest/review write failed.
 
@@ -1564,8 +1571,11 @@ average of the middle values. The representative is nearest to that median,
 with source order breaking ties. An outlier exceeds twice the median.
 
 The page shows added, direct and inherited groups; groups expand to all members.
-The sheet reserves cells for representatives first in group order, then
-allocates remaining cells to additions, direct changes and outliers. Cells
+The sheet reserves cells for the first addition, first direct change and inherited
+representatives in group order, then allocates remaining cells to additions,
+direct changes and outliers. Cells
 display in review order. Each shown group names up to eight other members and
 counts the rest.
-Reports use `changed N (direct D, inherited I)`.
+The page and sheet end with one moved entry, grouping pairs by source move
+and listing each frame count. The report format is
+`added A · removed R · moved M · changed N (direct D, inherited I)`.

@@ -20,7 +20,7 @@ const themeRow = theme => ({ theme, verdict: theme === 'light' ? 'identical' : '
 function reviewFixture() {
   return {
     label: 'Review <Demo>', base: { rev: 'HEAD~1', sha: 'base-sha' }, current: { head: 'current-sha' }, complete: true,
-    counts: { added: 24, removed: 1, changed: 1, direct: 1, inherited: 0 },
+    counts: { added: 24, removed: 1, moved: 0, changed: 1, direct: 1, inherited: 0 }, movePairs: [],
     sections: {
       added: Array.from({ length: 24 }, (_, i) => ({ source: `design/z-${String(i).padStart(2, '0')}.tsx`, frame: 'new', status: 'added', themes: [themeRow('light'), themeRow('dark')] })),
       removed: [{ source: 'design/a.tsx', frame: 'removed', status: 'removed', themes: [themeRow('light'), themeRow('dark')] }],
@@ -66,14 +66,15 @@ test('sheet uses one theme, a 12-cell budget and a DPR2 PNG', async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'adg-sheet-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const model = reviewFixture();
-  assert.deepEqual(reviewForTheme(model, 'light').counts, { added: 24, removed: 1, changed: 0, direct: 0, inherited: 0 });
+  assert.deepEqual(reviewForTheme(model, 'light').counts, { added: 24, removed: 1, moved: 0, changed: 0, direct: 0, inherited: 0 });
   assert.ok(Object.values(reviewForTheme(model, 'dark').sections).flat().every(entry => entry.themes.length === 1));
   const html = reviewSheetHtml(model, 'dark');
   assert.match(html, /Review &lt;Demo&gt;/);
   assert.match(html, /13 more frames in the review URL/);
-  assert.match(html, /data-source="design\/z-11/);
-  assert.doesNotMatch(html, /data-frame="changed"/);
-  assert.equal([...html.matchAll(/<img /g)].length, 12);
+  assert.match(html, /data-source="design\/z-10/);
+  assert.doesNotMatch(html, /data-source="design\/z-11/);
+  assert.match(html, /data-frame="changed" data-priority="1"/);
+  assert.equal([...html.matchAll(/<img /g)].length, 13);
   const browser = await launch();
   try {
     const file = path.join(root, 'review.png');
@@ -120,7 +121,7 @@ test('render and impacted diff resolve system before selection and publish full 
   assert.deepEqual(error.data.review.sheet, { path: path.join(f.config.output, 'diff/review-sheet.png'), theme: 'dark' });
   assert.equal((await readFile(error.data.review.sheet.path)).readUInt32BE(16), 3200);
   const cached = await readReviewCache(key);
-  assert.deepEqual(cached.counts, { added: 0, removed: 0, changed: 1, direct: 1, inherited: 0 });
+  assert.deepEqual(cached.counts, { added: 0, removed: 0, moved: 0, changed: 1, direct: 1, inherited: 0 });
   assert.deepEqual(cached.sections.changed[0].themes.map(row => row.theme), ['dark']);
   const repeated = await diff(f.config, [], options, { readSystemTheme: () => 'dark', renderSheet: async (...args) => {
     assert.equal(await readReviewCache(key) !== null, true);
@@ -173,7 +174,7 @@ test('restricted scope and scale skip publishing while configured policy publish
   const customKey = await reviewCacheKey(config, 'HEAD', 'light', f.state);
   const result = await diff(config, [], options).catch(error => error);
   assert.equal(result.code, 'DIFF_FAILED');
-  assert.deepEqual((await readReviewCache(customKey)).counts, { added: 0, removed: 0, changed: 1, direct: 1, inherited: 0 });
+  assert.deepEqual((await readReviewCache(customKey)).counts, { added: 0, removed: 0, moved: 0, changed: 1, direct: 1, inherited: 0 });
 });
 
 test('failed sources appear escaped above built frames in HTML and the sheet header', async () => {
@@ -223,11 +224,47 @@ test('buildReview propagates change classification and groups only visible chang
   })));
   comparisons.push({ id: 'unchanged', source: 'design/surfaces/a.tsx', frame: 'unchanged', status: 'matched', theme: 'dark', verdict: 'identical', change: { kind: 'inherited', causes: ['x'] } });
   const review = buildReview({ comparisons, complete: true });
-  assert.deepEqual(review.counts, { added: 1, removed: 1, changed: 4, direct: 1, inherited: 3 });
+  assert.deepEqual(review.counts, { added: 1, removed: 1, moved: 0, changed: 4, direct: 1, inherited: 3 });
   assert.deepEqual(review.sections.changed[1].change, model.sections.changed[1].change);
   assert.equal(review.groups.length, 1);
   assert.equal(review.groups[0].representative.frame, 'median');
   assert.deepEqual(review.groups[0].outliers.map(entry => entry.frame), ['large']);
+});
+
+test('move pairs survive theme projection and group into a text summary on the page and sheet', () => {
+  const previousSource = 'old/<card>.tsx';
+  const source = 'new/card.tsx';
+  const comparisons = ['one', 'two', 'edited'].flatMap(frame => ['light', 'dark'].map(theme => ({
+    id: `${frame}-${theme}`, source, previousSource, frame, theme,
+    status: frame === 'edited' ? 'matched' : 'moved',
+    verdict: frame === 'edited' && theme === 'dark' ? 'changed' : 'identical',
+    ...(frame === 'edited' ? { change: { kind: 'direct', causes: [source] } } : {}),
+  })));
+  const images = new Map(comparisons.map(row => [row.id, { before: pixel, after: pixel }]));
+  const review = buildReview({ comparisons, complete: true }, images);
+  assert.deepEqual(review.movePairs, ['one', 'two'].map(frame => ({ before: { source: previousSource, frame }, after: { source, frame } })));
+  assert.deepEqual(review.counts, { added: 0, removed: 0, moved: 2, changed: 1, direct: 1, inherited: 0 });
+  const light = reviewForTheme(review, 'light');
+  assert.deepEqual(light, buildReview({ comparisons: comparisons.filter(row => row.theme === 'light'), complete: true }, images));
+  assert.deepEqual(light.counts, review.counts);
+  assert.equal(light.sections.changed[0].themes[0].verdict, 'identical');
+
+  for (const [html, summarySelector] of [[renderReviewBody(light), 'data-section="moved"'], [reviewSheetHtml(light, 'light'), 'class="moved"']]) {
+    const start = html.indexOf(summarySelector);
+    assert.ok(start > html.indexOf('data-frame="edited"'));
+    const summary = html.slice(start, html.indexOf('</section>', start));
+    assert.match(summary, /<code>old\/&lt;card&gt;\.tsx<\/code> → <code>new\/card\.tsx<\/code> · 2 frames/);
+    assert.doesNotMatch(summary, /<img|#one|#two/);
+    assert.match(html, /Before · <code>old\/&lt;card&gt;\.tsx<\/code>/);
+    assert.equal([...html.matchAll(/<img /g)].length, 2);
+  }
+  assert.match(reviewSheetHtml(light, 'light'), /0 added · 0 removed · 2 moved · 1 changed/);
+  assert.match(reviewSheetHtml(light, 'light'), /data-more="0"/);
+
+  const movedOnly = buildReview({ comparisons: comparisons.filter(row => row.status === 'moved'), complete: true });
+  for (const html of [renderReviewBody(movedOnly), reviewSheetHtml(movedOnly, 'light')]) {
+    assert.doesNotMatch(html, /<img|No added/);
+  }
 });
 
 test('grouped page shows added, direct, representative, other names, outlier and removed names', () => {
@@ -255,21 +292,29 @@ test('grouped sheet counts representative and outlier pairs individually and lis
   assert.doesNotMatch(html, /Difference/);
 });
 
-test('sheet reserves representatives before added and direct changes and truncates group member names', () => {
+test('sheet reserves the first addition, first direct change and group representatives before filling cells', () => {
   const model = groupedFixture();
   const [direct, inherited] = model.sections.changed;
   model.sections.changed = [direct, ...Array.from({ length: 13 }, (_, i) => ({ ...inherited, frame: `member-${i}` }))];
   model.sections.added = Array.from({ length: 14 }, (_, i) => ({ ...model.sections.added[0], frame: `added-${i}` }));
   const html = reviewSheetHtml(model, 'dark');
   assert.equal([...html.matchAll(/<article /g)].length, 12);
-  assert.equal([...html.matchAll(/<img /g)].length, 13);
-  assert.match(html, /data-frame="member-0" data-priority="0"/);
+  assert.equal([...html.matchAll(/<img /g)].length, 14);
+  assert.match(html, /data-frame="added-0" data-priority="0"/);
+  assert.match(html, /data-frame="direct" data-priority="1"/);
+  assert.match(html, /data-frame="member-0" data-priority="2"/);
   assert.ok(html.indexOf('data-frame="added-0"') < html.indexOf('data-frame="member-0"'));
-  assert.doesNotMatch(html, /data-frame="direct"/);
   assert.equal([...html.matchAll(/<li><code>/g)].length, 8);
   assert.match(html, /4 other members/);
   assert.match(html, /16 more frames in the review URL/);
   assert.match(html, /#removed/);
+
+  model.sections.changed.push(...Array.from({ length: 10 }, (_, i) => ({ ...inherited,
+    frame: `other-group-${i}`, change: { kind: 'inherited', causes: [`cause-${i}`] },
+  })));
+  const saturated = reviewSheetHtml(model, 'dark');
+  assert.deepEqual([...saturated.matchAll(/data-frame="([^"]+)" data-priority="\d+"/g)].map(match => match[1]),
+    ['added-0', 'direct', 'member-0', ...Array.from({ length: 9 }, (_, i) => `other-group-${i}`)]);
 });
 
 test('sheet never upscales captures, caps frame height and drops whole entries at the height limit', async t => {
@@ -293,16 +338,30 @@ test('sheet never upscales captures, caps frame height and drops whole entries a
     const boxes = await page.locator('img').evaluateAll(images => images.map(img => [img.clientWidth, img.clientHeight]));
     assert.deepEqual(boxes, [[40, 20], [64, 480]]);
     const row = { ...themeRow('dark'), afterSize: { width: 120, height: 900 }, beforeSize: { width: 120, height: 900 }, images: { before: tall, after: tall } };
-    model.sections = { added: [], removed: [], changed: Array.from({ length: 12 }, (_, i) => ({
+    model.sections = { added: [], removed: [{ ...sample, status: 'removed' }], changed: Array.from({ length: 12 }, (_, i) => ({
       ...sample, status: 'changed', frame: `group-${i}`, themes: [row],
       change: { kind: 'inherited', causes: [`design/${i}/${'long-cause-'.repeat(75)}.tsx`] },
     })) };
+    model.movePairs = ['first', 'second'].map(frame => ({ before: { source: 'old.tsx', frame }, after: { source: 'new.tsx', frame } }));
+    model.counts.moved = model.movePairs.length;
     const html = reviewSheetHtml(model, 'dark');
     await page.setContent(html);
     await page.locator('img').evaluateAll(images => Promise.all(images.map(img => img.decode())));
     assert.ok((await page.locator('body').boundingBox()).height > 4000);
     const file = path.join(root, 'review.png');
-    await renderReviewSheet(browser, model, 'dark', file);
+    await renderReviewSheet({ newPage: async options => {
+      const sheetPage = await browser.newPage(options);
+      return {
+        setContent: html => sheetPage.setContent(html), evaluate: fn => sheetPage.evaluate(fn), close: () => sheetPage.close(),
+        locator: selector => ({ screenshot: async options => {
+          assert.equal(await sheetPage.locator('.removed').count(), 0);
+          assert.match(await sheetPage.locator('.moved li').textContent(), /old\.tsx → new\.tsx · 2 frames/);
+          const retained = await sheetPage.locator('article').count();
+          assert.equal(await sheetPage.locator('footer').textContent(), `${12 - retained + 1} more frames in the review URL.`);
+          await sheetPage.locator(selector).screenshot(options);
+        } }),
+      };
+    } }, model, 'dark', file);
     const png = await readFile(file);
     assert.equal(png.readUInt32BE(16), 3200);
     assert.ok(png.readUInt32BE(20) <= 8000);
@@ -315,7 +374,7 @@ test('theme filtering recomputes groups, median representative and outliers', ()
     entry.themes.push({ ...themeRow('light'), verdict: index === 1 ? 'identical' : 'changed', differentPixels: index * 10 });
   }
   const themed = reviewForTheme(model, 'light');
-  assert.deepEqual(themed.counts, { added: 0, removed: 0, changed: 3, direct: 1, inherited: 2 });
+  assert.deepEqual(themed.counts, { added: 0, removed: 0, moved: 0, changed: 3, direct: 1, inherited: 2 });
   assert.deepEqual(themed.groups[0].frames.map(entry => entry.frame), ['median', 'large']);
   assert.ok(themed.groups[0].frames.every(entry => entry.themes.length === 1));
 });

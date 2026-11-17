@@ -19,7 +19,7 @@ function frame(source, area, causes = ['design/components/button.tsx'], kind = '
 
 function review(changed) {
   return { complete: false, failures: [{ source: 'broken.tsx' }], verdict: null,
-    counts: { added: 1, removed: 1, changed: changed.length },
+    counts: { added: 1, removed: 1, moved: 0, changed: changed.length },
     sections: { added: [{ source: 'new.tsx' }], removed: [{ source: 'old.tsx' }], changed } };
 }
 
@@ -35,7 +35,7 @@ test('cause sets are canonical, distinct, inherited-only and retain frame refere
   const input = review([direct, first, second, third]);
   const snapshot = JSON.stringify(input);
   const grouped = groupReview(input);
-  assert.deepEqual(grouped.counts, { added: 1, removed: 1, changed: 4, direct: 1, inherited: 3 });
+  assert.deepEqual(grouped.counts, { added: 1, removed: 1, moved: 0, changed: 4, direct: 1, inherited: 3 });
   assert.deepEqual(grouped.groups.map(group => group.causes), [['x.tsx', 'z.tsx'], ['x.tsx']]);
   assert.equal(grouped.groups[0].frames[0], first);
   assert.equal(grouped.groups[0].frames[1], second);
@@ -184,7 +184,7 @@ export default () => <Frame name="default"><Card/></Frame>;`);
     assert.deepEqual(persisted.comparisons.map(row => row.change), data.comparisons.map(row => row.change));
     if (impacted) {
       const key = await reviewCacheKey(current, 'HEAD', 'light', path.join(root, 'state'));
-      assert.equal(key.version, 3);
+      assert.equal(key.version, 4);
       const cached = await readReviewCache(key);
       assert.equal(cached.complete, false);
       assert.equal(cached.failures.length, 2);

@@ -28,8 +28,8 @@ test('CLI prewarming, concurrent hub misses and invalidation share the global re
     await writeFile(file, text);
   };
   const git = (...args) => execFileSync('git', ['-C', project, ...args], { encoding: 'utf8' }).trim();
-  const source = color => `import { Frame } from 'adg';
-export default () => <Frame name="sample"><div style={{ width: 24, height: 24, background: '${color}' }} /></Frame>;
+  const source = (color, frame = 'sample') => `import { Frame } from 'adg';
+export default () => <Frame name="${frame}"><div style={{ width: 24, height: 24, background: '${color}' }} /></Frame>;
 `;
   const card = 'design/components/card.tsx';
   await put('adg.config.mjs', 'export default { name: "Review cache fixture" };\n');
@@ -124,7 +124,7 @@ export default () => <Frame name="sample"><div style={{ width: 24, height: 24, b
       assert.notEqual(key.directory, previousKey.directory);
       assert.equal(await readReviewCache(key), null);
       const review = await requestReview(rev);
-      assert.deepEqual(review.counts, { ...counts, direct: counts.changed, inherited: 0 });
+      assert.deepEqual(review.counts, { ...counts, moved: 0, direct: counts.changed, inherited: 0 });
       assert.equal(review.current.head, git('rev-parse', 'HEAD'));
       assert.deepEqual({ ...await readReviewCache(key), label: 'project' }, review);
       const beforeHit = launches.mock.callCount();
@@ -136,7 +136,7 @@ export default () => <Frame name="sample"><div style={{ width: 24, height: 24, b
 
     await put(card, source('#00cc00'));
     const edited = await expectMiss({ added: 0, removed: 0, changed: 1 });
-    await put('design/components/new.tsx', source('#cc00cc'));
+    await put('design/components/new.tsx', source('#cc00cc', 'new'));
     await expectMiss({ added: 1, removed: 0, changed: 1 });
     await rm(path.join(project, card));
     await expectMiss({ added: 1, removed: 1, changed: 0, direct: 0, inherited: 0 });
@@ -164,7 +164,7 @@ export default () => <Frame name="sample"><div style={{ width: 24, height: 24, b
     const result = JSON.parse(stdout);
     assert.equal(result.data.complete, true);
     assert.equal(result.data.thresholds.imperceptible.maxChannelDelta, 3);
-    assert.deepEqual((await readReviewCache(key))?.counts, { added: 1, removed: 1, changed: 0, direct: 0, inherited: 0 });
+    assert.deepEqual((await readReviewCache(key))?.counts, { added: 1, removed: 1, moved: 0, changed: 0, direct: 0, inherited: 0 });
 
     // Reopen the real hub so it reads the changed project policy and only persisted caches survive.
     await hub.close();

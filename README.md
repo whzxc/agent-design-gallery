@@ -52,7 +52,7 @@ adg link https://gallery.example/p/project/ --base=<rev>
 adg open ./design --base=<rev> --no-open
 ```
 
-Set `--base=<rev>` to the task's starting commit. Git supplies the added, removed and changed frames. A change report carries one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted`, with no per-frame images. The hub and direct viewer serve the same review page at `?base=<rev>`, showing counts at the top followed by added, removed and changed frames in both themes (`light` and `dark`) with before, after and difference side by side. Targeted `--asset`, `--frame`, `--group`, `--layer`, `--tokens` and `--mode=path` links remain available for interactive navigation, and `adg render` exports frame PNGs for automation. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
+Set `--base=<rev>` to the task's starting commit. Embed the single-theme review sheet and report its Git-derived counts with one reachable URL from `adg link <viewer-url> --base=<rev>`. The hub and direct viewer serve the same review at `?base=<rev>`. Targeted `--asset`, `--frame`, `--group`, `--layer`, `--tokens` and `--mode=path` links remain available for interactive navigation. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
 
 Every command accepts `--json`: finite commands return one versioned envelope, while foreground `open`/`serve` stream NDJSON events. `render` PNGs are in `data.captures`, with CSS and PNG pixel dimensions. See the [agent CLI interface](docs/agent-interface.md) for schemas, exits and recovery actions.
 
@@ -93,7 +93,7 @@ Files group by directory unless `gallery.json` supplies chapters, with each titl
 
 Unlisted sources form directory chapters. A mixed-layer group splits into a same-titled chapter in each layer view; keep project groups within one layer. A module folder shows its `index.tsx` under the feature directory name. Projects own their TSX sources, artwork, tokens, configuration and Git history. Preferences stay in `~/.agent-design-gallery/state.json`; `--state-dir` isolates them. Refreshing or reopening a directory restores its camera and selection. Source labels show modification times.
 
-Change reports embed the single-theme `data.review.sheet.path` PNG inline, then carry one reachable `?base=<rev>` review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted`. Comments use ADG annotations.
+Change reports embed the single-theme `data.review.sheet.path` PNG inline, then carry one reachable `?base=<rev>` review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed`, `moved` and `changed` counts from `adg diff --base=<rev> --impacted`. Comments use ADG annotations.
 
 ## Design toolkit
 
@@ -122,7 +122,7 @@ Builds produce standalone HTML and renders produce `<frame>-light.png` and `<fra
 `adg diff --base=<rev>` overwrites `<configured output>/diff` and writes a self-contained
 `index.html` review page, per-frame/theme before, after and difference PNGs, plus
 `report.json` for Git and working-tree sources, including added/removed frames. `index.html`
-shows the `added`, `removed` and `changed` frame counts (`data.review`) at the top, followed
+shows the `added`, `removed`, `moved` and `changed` frame counts (`data.review`) at the top, followed
 by each affected frame in both themes with before, after and difference side by side. Existing
 frames require exact pixels and size. New part Frames can declare `parent` and use
 consumer `diff.thresholds`; a `structural` batch requires full existing-frame coverage
@@ -261,7 +261,7 @@ The LaunchAgent `org.agent-design-gallery.hub` starts the resident hub at login 
 
 Run `adg diff --base=<rev> --impacted --theme=system --json` and embed
 `data.review.sheet.path` inline as a Markdown image, followed by the review URL
-from `adg link <viewer-url> --base=<rev>` and the added, removed and changed counts.
+from `adg link <viewer-url> --base=<rev>` and the added, removed, moved and changed counts.
 The sheet follows macOS appearance, or light on other platforms; `render` also
 accepts `--theme=system`. Explicit light/dark overrides the sheet theme. Default
 diff comparison coverage remains both themes. The sheet includes up to 12 cells in two columns,
@@ -278,12 +278,16 @@ and error while showing the remaining sources. JSON includes
 `failures: [{ source, side, code, message }]`; partial review artifacts and cache
 entries remain available with `complete: false`. An incomplete diff exits 2.
 
-Review changes are grouped by cause. Reports state `changed N (direct D, inherited I)`.
+Review changes are grouped by cause. Reports state
+`added A · removed R · moved M · changed N (direct D, inherited I)`.
+Moved frames keep their identity when pixels and size match in both themes. The
+page and sheet summarize source moves and frame counts in one text entry.
 Direct changes edit the frame source or its module folder. Inherited groups share
 the same changed dependencies, show a median-area representative, and expand to
 every member. Members above twice the median changed-pixel area appear as outliers.
-The sheet reserves cells for inherited representatives first, then fills the
-remaining budget with additions, direct changes and outliers. Before/after pairs
+The sheet reserves cells for the first addition, the first direct change and
+inherited representatives in that order, then fills the remaining budget with
+additions, direct changes and outliers. Before/after pairs
 share a cell. Captures only scale down, to at most 480 CSS pixels tall. The sheet
 stops at 4000 CSS pixels, names up to eight other members per group and reports
 how many frames remain on the review page.

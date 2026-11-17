@@ -1,18 +1,20 @@
 import { groupReview } from '../../public/review-groups.js';
-import { renderReviewFailures } from '../../public/review.js';
+import { renderReviewFailures, renderReviewMoves } from '../../public/review.js';
 import { browserTask, readyResources } from './browser.mjs';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
 ));
 
-/** Match the model produced by a single-theme diff, including its counts. */
+/** Project the captures to one theme while keeping the classification of each move. */
 export function reviewForTheme(review, theme) {
   const sections = Object.fromEntries(Object.entries(review.sections).map(([kind, entries]) => [kind,
     entries.map(entry => ({ ...entry, themes: entry.themes.filter(row => row.theme === theme) }))
-      .filter(entry => entry.themes.length && (kind !== 'changed' || entry.themes.some(row => row.verdict === 'changed'))),
+      .filter(entry => entry.themes.length && (kind !== 'changed' || entry.previousSource || entry.themes.some(row => row.verdict === 'changed'))),
   ]));
-  const themed = { ...review, sections, counts: Object.fromEntries(Object.entries(sections).map(([kind, entries]) => [kind, entries.length])) };
+  const themed = { ...review, sections, counts: {
+    ...review.counts, added: sections.added.length, removed: sections.removed.length, changed: sections.changed.length,
+  } };
   return { ...themed, ...groupReview(themed) };
 }
 
@@ -24,9 +26,12 @@ export function reviewSheetHtml(review, theme, frameOrder = []) {
   const added = [...review.sections.added].sort(compare);
   const direct = review.sections.changed.filter(entry => entry.change?.kind !== 'inherited').sort(compare);
   const removed = [...review.sections.removed].sort(compare);
+  const moves = review.movePairs ?? [];
   const representatives = grouped.groups.map(group => group.representative);
-  const priority = new Map([...new Set([...representatives, ...added, ...direct,
-    ...grouped.groups.flatMap(group => group.outliers)])].slice(0, 12).map((entry, index) => [entry, index]));
+  const [firstAdded, ...otherAdded] = added;
+  const [firstDirect, ...otherDirect] = direct;
+  const priority = new Map([...new Set([firstAdded, firstDirect, ...representatives, ...otherAdded, ...otherDirect,
+    ...grouped.groups.flatMap(group => group.outliers)].filter(Boolean))].slice(0, 12).map((entry, index) => [entry, index]));
   const name = entry => `<code>${escapeHtml(entry.source)}#${escapeHtml(entry.frame)}</code>`;
   const card = (entry, label, group) => {
     if (!priority.has(entry)) return '';
@@ -37,9 +42,10 @@ export function reviewSheetHtml(review, theme, frameOrder = []) {
       const sizeInfo = row?.[`${side}Size`];
       const width = sizeInfo && sizeInfo.width * Math.min(1, 480 / sizeInfo.height);
       const size = Number.isFinite(width) && width > 0 ? ` style="width:${width}px"` : '';
+      const previousSource = side === 'before' ? entry.previousSource : null;
       const image = src?.startsWith('data:image/png;base64,')
-        ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(`${entry.source}#${entry.frame} (${side})`)}"${size}>` : '<p>Capture unavailable</p>';
-      return `<figure><figcaption>${side === 'before' ? 'Before' : 'After'}</figcaption>${image}</figure>`;
+        ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(`${previousSource ?? entry.source}#${entry.frame} (${side})`)}"${size}>` : '<p>Capture unavailable</p>';
+      return `<figure><figcaption>${side === 'before' ? 'Before' : 'After'}${previousSource ? ` · <code>${escapeHtml(previousSource)}</code>` : ''}</figcaption>${image}</figure>`;
     }).join('');
     const others = group?.frames.filter(member => member !== entry) ?? [];
     const details = group ? `<div class="group-details"><p>${group.frames.length} frames · ${group.causes.map(cause => `<code>${escapeHtml(cause)}</code>`).join(', ')}</p>
@@ -57,8 +63,9 @@ export function reviewSheetHtml(review, theme, frameOrder = []) {
   ].join('');
   const removedList = removed.length ? `<section class="removed"><h2>Removed</h2><ul>${removed.map(entry =>
     `<li data-frame="${escapeHtml(entry.frame)}" data-removed>${name(entry)}</li>`).join('')}</ul></section>` : '';
-  const total = added.length + review.sections.changed.length + removed.length;
-  const more = total - priority.size - removed.length;
+  const movedList = moves.length ? `<section class="moved"><h2>Moved</h2>${renderReviewMoves(moves)}</section>` : '';
+  const total = added.length + review.sections.changed.length + removed.length + moves.length;
+  const more = added.length + review.sections.changed.length - priority.size;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(review.label)} review</title>
 <style>
 :root { color-scheme: light; --canvas:#ecece9; --surface:#fff; --text:#1c1c1a; --muted:#5b5b57; --border:#e2e2de; }
@@ -80,17 +87,18 @@ h2 span { font-weight:400; flex:none; }
 figure { flex:1; min-width:0; margin:0; }
 figcaption { margin-bottom:4px; font-size:13px; }
 img { display:block; max-width:100%; height:auto; max-height:480px; object-fit:contain; object-position:left top; }
-.group-details, .removed { font-size:13px; overflow-wrap:anywhere; }
-.group-details ul, .removed ul { margin:4px 0; padding-left:20px; }
-.removed { margin-top:12px; }
+.group-details, .removed, .moved { font-size:13px; overflow-wrap:anywhere; }
+.group-details ul, .removed ul, .moved ul { margin:4px 0; padding-left:20px; }
+.removed, .moved { margin-top:12px; }
 footer { margin-top:12px; color:var(--muted); }
 </style></head><body data-theme="${escapeHtml(theme)}">
 <header><h1>${escapeHtml(review.label)}</h1>
 <p class="revisions"><code>${escapeHtml(review.base.rev)} (${escapeHtml(review.base.sha)}) → working tree (${escapeHtml(review.current.head)})</code></p>
-<p>${grouped.counts.added} added · ${grouped.counts.removed} removed · ${grouped.counts.changed} changed (direct ${grouped.counts.direct}, inherited ${grouped.counts.inherited}) · ${escapeHtml(theme)}</p>${renderReviewFailures(review.failures)}</header>
+<p>${grouped.counts.added} added · ${grouped.counts.removed} removed · ${grouped.counts.moved} moved · ${grouped.counts.changed} changed (direct ${grouped.counts.direct}, inherited ${grouped.counts.inherited}) · ${escapeHtml(theme)}</p>${renderReviewFailures(review.failures)}</header>
 <div class="cells">${cards}</div>
 ${removedList}
-${total ? '' : '<p>No added, removed, or changed frames.</p>'}
+${movedList}
+${total ? '' : '<p>No added, removed, moved, or changed frames.</p>'}
 <footer data-more="${more}">${more} more frames in the review URL.</footer>
 </body></html>`;
 }
@@ -103,16 +111,22 @@ export async function renderReviewSheet(browser, review, theme, file, frameOrder
       await page.evaluate(readyResources);
       await page.evaluate(() => {
         const footer = document.querySelector('footer');
-        const removed = document.querySelector('.removed');
-        const removals = [...document.querySelectorAll('[data-removed]')].reverse();
+        const removed = [...document.querySelectorAll('[data-removed]')].reverse();
+        const [firstMove, ...otherMoves] = document.querySelectorAll('[data-moved-count]');
         const cells = [...document.querySelectorAll('[data-priority]')]
           .sort((a, b) => Number(b.dataset.priority) - Number(a.dataset.priority));
         let more = Number(footer.dataset.more);
-        for (const entry of [...removals, ...cells]) {
+        // Keep the first source move visible when the sheet has room for a summary.
+        const overflowOrder = [...removed, ...otherMoves.reverse(), ...cells];
+        if (firstMove) overflowOrder.push(firstMove);
+        for (const entry of overflowOrder) {
           if (document.body.getBoundingClientRect().height <= 4000) break;
+          const summary = entry.closest('section');
           entry.remove();
-          if (removed && !removed.querySelector('li')) removed.remove();
-          footer.textContent = `${++more} more frames in the review URL.`;
+          if (summary && !summary.querySelector('li')) summary.remove();
+          more += Number(entry.dataset.movedCount ?? 1);
+          footer.dataset.more = more;
+          footer.textContent = `${more} more frames in the review URL.`;
         }
       });
       await page.locator('body').screenshot({ path: file, animations: 'disabled', caret: 'hide' });

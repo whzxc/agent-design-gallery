@@ -27,8 +27,16 @@ function themeSummary(item) {
 
 export function buildReview(data, imagesById = new Map(), { label } = {}) {
   const grouped = new Map();
+  const moves = new Map();
   for (const row of data.comparisons ?? []) {
     const key = JSON.stringify([row.source, row.frame]);
+    if (row.status === 'moved') {
+      if (!moves.has(key)) moves.set(key, {
+        before: { source: row.previousSource, frame: row.frame },
+        after: { source: row.source, frame: row.frame },
+      });
+      continue;
+    }
     let entry = grouped.get(key);
     if (!entry) {
       entry = {
@@ -36,6 +44,7 @@ export function buildReview(data, imagesById = new Map(), { label } = {}) {
         frame: row.frame,
         status: row.status,
         change: row.change,
+        previousSource: row.previousSource,
         rows: new Map(),
       };
       grouped.set(key, entry);
@@ -66,8 +75,10 @@ export function buildReview(data, imagesById = new Map(), { label } = {}) {
       sections.added.push({ source: entry.source, frame: entry.frame, status: 'added', themes: orderedThemes });
     } else if (entry.status === 'removed') {
       sections.removed.push({ source: entry.source, frame: entry.frame, status: 'removed', themes: orderedThemes });
-    } else if (orderedThemes.some(item => item.verdict === 'changed')) {
-      sections.changed.push({ source: entry.source, frame: entry.frame, status: 'changed', change: entry.change, themes: orderedThemes });
+    } else if (entry.previousSource || orderedThemes.some(item => item.verdict === 'changed')) {
+      // Core classifies moves across both themes, even when only one theme is displayed.
+      sections.changed.push({ source: entry.source, frame: entry.frame, status: 'changed', change: entry.change,
+        ...(entry.previousSource ? { previousSource: entry.previousSource } : {}), themes: orderedThemes });
     }
   }
 
@@ -82,19 +93,21 @@ export function buildReview(data, imagesById = new Map(), { label } = {}) {
     counts: {
       added: sections.added.length,
       removed: sections.removed.length,
+      moved: moves.size,
       changed: sections.changed.length,
     },
+    movePairs: [...moves.values()],
     sections,
   };
   return { ...review, ...groupReview(review) };
 }
 
-function renderSide(side, label, src, absentLabel, alt, theme) {
+function renderSide(side, label, src, absentLabel, alt, theme, source) {
   const diffClass = side === 'difference' ? ' review-stage-diff' : '';
   const body = src
     ? `<div class="review-stage${diffClass}" data-stage-theme="${escapeHtml(theme)}"><img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy"></div>`
     : `<div class="review-absent">${escapeHtml(absentLabel)}</div>`;
-  return `<figure class="review-pane" data-side="${escapeHtml(side)}"><figcaption>${escapeHtml(label)}</figcaption>${body}</figure>`;
+  return `<figure class="review-pane" data-side="${escapeHtml(side)}"><figcaption>${escapeHtml(label)}${source ? ` · <code>${escapeHtml(source)}</code>` : ''}</figcaption>${body}</figure>`;
 }
 
 function renderFrameCard(item, { paired = false, label: statusLabel = item.status } = {}) {
@@ -104,9 +117,11 @@ function renderFrameCard(item, { paired = false, label: statusLabel = item.statu
     const summary = themeSummary(themeItem);
     const sides = item.status === 'added' ? ['after'] : paired ? ['before', 'after'] : ['before', 'after', 'difference'];
     const absentLabels = { before: 'Absent at base', after: 'Removed in working tree', difference: 'No difference image' };
-    const panes = sides.map(side => renderSide(
-      side, side[0].toUpperCase() + side.slice(1), themeItem.images[side], absentLabels[side], `${label} (${theme} ${side})`, theme,
-    )).join('');
+    const panes = sides.map(side => {
+      const source = side === 'before' ? item.previousSource : null;
+      const alt = `${source ? `${source}#${item.frame}` : label} (${theme} ${side})`;
+      return renderSide(side, side[0].toUpperCase() + side.slice(1), themeItem.images[side], absentLabels[side], alt, theme, source);
+    }).join('');
     return `<div class="review-theme" data-theme-row="${escapeHtml(theme)}" data-verdict="${escapeHtml(themeItem.verdict)}">
       <div class="review-theme-head">
         <span class="review-theme-name">${escapeHtml(theme)}</span>
@@ -135,6 +150,18 @@ export function renderReviewFailures(failures = []) {
 
 function renderNames(entries) {
   return `<ul class="review-names">${entries.map(entry => `<li data-source="${escapeHtml(entry.source)}" data-frame="${escapeHtml(entry.frame)}" data-status="${escapeHtml(entry.status)}"><code>${escapeHtml(entry.source)}#${escapeHtml(entry.frame)}</code></li>`).join('')}</ul>`;
+}
+
+export function renderReviewMoves(pairs) {
+  const groups = new Map();
+  for (const { before, after } of pairs) {
+    const key = JSON.stringify([before.source, after.source]);
+    if (!groups.has(key)) groups.set(key, { from: before.source, to: after.source, count: 0 });
+    groups.get(key).count++;
+  }
+  return `<ul class="review-names">${[...groups.values()].map(({ from, to, count }) =>
+    `<li data-moved-count="${count}"><code>${escapeHtml(from)}</code> → <code>${escapeHtml(to)}</code> · ${count} ${count === 1 ? 'frame' : 'frames'}</li>`
+  ).join('')}</ul>`;
 }
 
 function sameFrame(left, right) {
@@ -167,6 +194,7 @@ export function renderReviewBody(review) {
     ['direct', 'Direct changes', direct, items => items.map(item => renderFrameCard(item)).join('')],
     ['inherited', 'Inherited changes', grouped.groups ?? [], items => items.map(renderGroup).join('')],
     ['removed', 'Removed', review.sections?.removed ?? [], renderNames],
+    ['moved', 'Moved', review.movePairs ?? [], renderReviewMoves],
   ];
   const renderedSections = sectionSpecs
     .filter(([, , items]) => items.length > 0)
@@ -177,7 +205,7 @@ export function renderReviewBody(review) {
     .join('');
   const empty = renderedSections
     ? ''
-    : `<p class="review-empty" role="status">No added, removed, or changed frames against <code>${escapeHtml(review.base?.rev ?? 'base')}</code>.</p>`;
+    : `<p class="review-empty" role="status">No added, removed, moved, or changed frames against <code>${escapeHtml(review.base?.rev ?? 'base')}</code>.</p>`;
 
   return `<header class="review-header">
     <div class="review-heading">
@@ -187,6 +215,7 @@ export function renderReviewBody(review) {
     <div class="review-counts" data-review-counts>
       <span class="review-count" data-kind="added"><strong>${counts.added}</strong> added</span>
       <span class="review-count" data-kind="removed"><strong>${counts.removed}</strong> removed</span>
+      <span class="review-count" data-kind="moved"><strong>${counts.moved}</strong> moved</span>
       <span class="review-count" data-kind="changed"><strong>${counts.changed}</strong> changed (direct ${counts.direct}, inherited ${counts.inherited})</span>
     </div>
   </header>

@@ -63,6 +63,12 @@ export async function withImpacted(config, args, options, command, work) {
         const finalize = data => {
           const coverage = selection.coverage;
           coverage.renderedRows = command === 'diff' ? data.summary.comparisons + data.summary.supportComparisons : command === 'check' ? data.summary.evaluations : data.captures.length;
+          if (command === 'diff') {
+            // A revision comparison of a move covers both original impact rows.
+            const pairedRows = (data.comparisons ?? []).filter(row => row.previousSource).length;
+            coverage.renderedRows += pairedRows;
+            coverage.deletedRows -= pairedRows;
+          }
           const deleted = command === 'render' ? coverage.deletedRows : 0;
           coverage.uncoveredRows = Math.max(0, coverage.expectedRows - coverage.renderedRows - coverage.provenRows - deleted);
           coverage.scope = failures.length ? 'partial' : !coverage.expectedRows ? 'empty' : coverage.uncoveredRows || args.length || options.frame !== undefined || themes.length !== 2 ? 'partial' : 'full';
@@ -76,7 +82,7 @@ export async function withImpacted(config, args, options, command, work) {
           changes: inputs.changes.map(change => Object.fromEntries(['before', 'after'].map(side => [side,
             change[side] === null ? null : path.posix.relative(inputs.projectPrefix || '.', change[side])]))),
           close: async () => {},
-          buildFrames: async ({ browser }) => inputs.session.buildFrames({ browser, materialized: views.map(view => view.built), failures,
+          buildFrames: async ({ browser, deferParts }) => inputs.session.buildFrames({ browser, deferParts, materialized: views.map(view => view.built), failures,
             frame: options.frame, sources: [...new Set(chosen.filter(row => themes.some(theme => scheduled(row, theme))).map(row => row.source))] }) };
         const workStarted = performance.now();
         try { outcome = await work(session); } catch (cause) { failure = cause; outcome = { data: cause.data, warnings: cause.warnings ?? [] }; }

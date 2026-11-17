@@ -196,8 +196,8 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
       slash(path.relative(root, path.join(base.root, name))))])].filter(name => changed.has(name));
     let closed = false;
     return {
-      base, before, after, sources, changes, globalChanges, warnings, translateDiagnostic: translate, environment: { configDependencies, baseMigration },
-      async buildFrames({ browser, materialized, failures: previousFailures = [], sources: requestedSources = sources, frame: requestedFrame = options.frame } = {}) {
+      base, before, after, sources, renames, changes, globalChanges, warnings, translateDiagnostic: translate, environment: { configDependencies, baseMigration },
+      async buildFrames({ browser, materialized, failures: previousFailures = [], sources: requestedSources = sources, frame: requestedFrame = options.frame, deferParts = false } = {}) {
         if (closed) throw new CliError('SOURCE_BUILD_FAILED', 'Diff inputs are closed; prepare a new comparison.');
         const built = materialized ? materialized.map(values => new Map(values)) : [new Map(), new Map()], snapshots = [new Map(), new Map()];
         const failures = [...previousFailures];
@@ -223,36 +223,43 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
         if (requestedFrame !== undefined && !frames.some(row => row.frame === requestedFrame) && !failures.length) {
           throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${requestedFrame}; choose a frame present on either side.`);
         }
-        const support = [], parents = new Map();
-        const selected = new Map(frames.map(row => [frameKey(row), row]));
-        for (const row of frames.filter(row => row.status === 'added' && row.after.parent)) {
-          if (failed.has(row.source)) continue;
-          const ref = row.after.parent, key = frameKey({ source: ref.source, frame: ref.frame });
-          if (!parents.has(key)) {
-            await build(before, 0, ref.source);
-            await build(after, 1, ref.source);
-            if (failed.has(ref.source)) {
-              failures.push({ source: row.source, side: 'current', code: 'DIFF_REFERENCE_INVALID', message: `${row.source}: ${row.frame}: parent source ${ref.source} failed to build.` });
-              failed.add(row.source);
-              continue;
+        const result = { frames, before: built[0], after: built[1], support: [], failures };
+        // Diff pairs moves before linking structural additions to their parents.
+        const prepareParts = async () => {
+          const { frames, support } = result, parents = new Map();
+          const selected = new Map(frames.map(row => [frameKey(row), row]));
+          for (const row of frames.filter(row => row.status === 'added' && row.after.parent)) {
+            if (failed.has(row.source)) continue;
+            const ref = row.after.parent, key = frameKey({ source: ref.source, frame: ref.frame });
+            if (!parents.has(key)) {
+              await build(before, 0, ref.source);
+              await build(after, 1, ref.source);
+              if (failed.has(ref.source)) {
+                failures.push({ source: row.source, side: 'current', code: 'DIFF_REFERENCE_INVALID', message: `${row.source}: ${row.frame}: parent source ${ref.source} failed to build.` });
+                failed.add(row.source);
+                continue;
+              }
+              const old = built[0].get(ref.source)?.frames.find(frame => frame.name === ref.frame);
+              const current = built[1].get(ref.source)?.frames.find(frame => frame.name === ref.frame);
+              if (!old || !current) throw new CliError('DIFF_REFERENCE_INVALID', `${row.source}: ${row.frame}: parent ${ref.source}: ${ref.frame} must exist at both revisions.`);
+              const parent = selected.get(key) ?? { source: ref.source, frame: ref.frame, before: old, after: current, status: 'matched', matchKind: 'exact', matchCandidates: [] };
+              parents.set(key, parent);
+              if (!selected.has(key)) support.push(parent);
             }
-            const old = built[0].get(ref.source)?.frames.find(frame => frame.name === ref.frame);
-            const current = built[1].get(ref.source)?.frames.find(frame => frame.name === ref.frame);
-            if (!old || !current) throw new CliError('DIFF_REFERENCE_INVALID', `${row.source}: ${row.frame}: parent ${ref.source}: ${ref.frame} must exist at both revisions.`);
-            const parent = selected.get(key) ?? { source: ref.source, frame: ref.frame, before: old, after: current, status: 'matched', matchKind: 'exact', matchCandidates: [] };
-            parents.set(key, parent);
-            if (!selected.has(key)) support.push(parent);
+            row.parentRow = parents.get(key);
           }
-          row.parentRow = parents.get(key);
-        }
-        const candidates = frames.filter(row => row.matchKind === 'renamed_or_unknown');
-        if (candidates.length) warnings.push({
-          code: 'DIFF_RENAMED_OR_UNKNOWN',
-          message: `Unmatched frames have rename candidates: ${candidates.map(row => frameKey(row)).join(', ')}.`, next: [],
-        });
-        for (const source of failed) for (const values of built) values.delete(source);
-        return { frames: frames.filter(row => !failed.has(row.source) && (requestedFrame === undefined || row.frame === requestedFrame)),
-          before: built[0], after: built[1], support: support.filter(row => !failed.has(row.source)), failures };
+          const candidates = frames.filter(row => row.matchKind === 'renamed_or_unknown');
+          if (candidates.length) warnings.push({
+            code: 'DIFF_RENAMED_OR_UNKNOWN',
+            message: `Unmatched frames have rename candidates: ${candidates.map(row => frameKey(row)).join(', ')}.`, next: [],
+          });
+          for (const source of failed) for (const values of built) values.delete(source);
+          result.frames = frames.filter(row => !failed.has(row.source));
+          result.support = support.filter(row => !failed.has(row.source));
+        };
+        if (deferParts) result.prepareParts = prepareParts;
+        else await prepareParts();
+        return result;
       },
       async close() { closed = true; await tree.close(); },
     };

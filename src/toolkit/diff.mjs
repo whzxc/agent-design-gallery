@@ -1,9 +1,11 @@
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import { launch, loadFrame, browserTask, readyResources } from './browser.mjs';
 import { prepareDiffInputs } from './diff-inputs.mjs';
+import { pairFrameMoves } from './move-pairing.mjs';
 import { currentHead } from './arch-git.mjs';
 import { sourceDirectories, sourceFeature } from './project.mjs';
 import { pixelComparator, imageDifference } from './pixel-diff.mjs';
@@ -20,6 +22,7 @@ import { reviewCacheKey, writeReviewCache } from '../review-cache.mjs';
 const metadata = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const safeName = name => encodeURIComponent(name).replace(/\./g, '%2E');
 const classNames = ['imperceptible', 'antialiasing', 'boundary_bleed', 'bitmap_resampling', 'other'];
+const allThemes = ['light', 'dark'];
 
 /** Git owns direct changes; impact reasons own inherited cause sets when available. */
 export function reviewChange(row, inputs, built, selection = null) {
@@ -61,13 +64,18 @@ function frameFailure(error, row, theme) {
   return failure;
 }
 
-async function capturePair(browser, row, theme, scale, context) {
+async function capturePair(browser, row, theme, scale, context, cachedTheme) {
   const captures = { before: null, after: null };
   let page;
   try {
     for (const side of ['before', 'after']) {
       if (!row[side]) continue;
       page ??= await browserTask(browser, () => browser.newPage({ deviceScaleFactor: scale, locale: 'en-US', timezoneId: 'UTC' }));
+      if (!context?.targets.has(frameIdentity(row)) && cachedTheme?.has(row[side])) {
+        captures[side] = cachedTheme.get(row[side]);
+        cachedTheme.delete(row[side]);
+        continue;
+      }
       await loadFrame(page, row[side], theme);
       captures[side] = await browserTask(browser, async () => {
         await page.evaluate(readyResources);
@@ -88,6 +96,36 @@ async function capturePair(browser, row, theme, scale, context) {
     await cleanup(() => page?.close(), failure);
     throw failure;
   }
+}
+
+// Normalize decoded screenshot pixels before hashing so PNG encoding does not affect matching.
+async function renderFingerprints(browser, candidates, theme, scale, cachedTheme, concurrency) {
+  const fingerprints = new Map();
+  for (let start = 0; start < candidates.length; start += concurrency) {
+    const results = await Promise.allSettled(candidates.slice(start, start + concurrency).map(async row => {
+      const pair = await capturePair(browser, row, theme, scale, null);
+      const frame = row.before ?? row.after, capture = pair.before ?? pair.after;
+      let failure;
+      try {
+        const pixels = await browserTask(browser, () => pair.page.evaluate(async base64 => {
+          const image = new Image();
+          image.src = 'data:image/png;base64,' + base64;
+          await image.decode();
+          const canvas = document.createElement('canvas');
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          canvas.getContext('2d', { colorSpace: 'srgb' }).drawImage(image, 0, 0);
+          return canvas.toDataURL('image/png');
+        }, capture.png.toString('base64')));
+        cachedTheme.set(frame, capture);
+        fingerprints.set(row, createHash('sha256').update(JSON.stringify(capture.size)).update(pixels).digest('hex'));
+      } catch (error) { failure = frameFailure(error, row, theme); throw failure; }
+      finally { await cleanup(() => pair.page.close(), failure); }
+    }));
+    const failed = results.find(result => result.status === 'rejected');
+    if (failed) throw failed.reason;
+  }
+  return fingerprints;
 }
 
 async function comparePair(browser, pair, thresholds, context) {
@@ -117,6 +155,14 @@ async function comparePair(browser, pair, thresholds, context) {
   } catch (error) { throw frameFailure(error, pair.row, pair.theme); }
 }
 
+function revisionReasons(pair) {
+  const before = pair.before?.size, after = pair.after?.size;
+  const reasons = [];
+  if (before && after && Object.keys(before).some(key => before[key] !== after[key])) reasons.push('size_changed');
+  if (!pair.parent && pair.pixels.differentPixels) reasons.push('pixels_changed');
+  return reasons;
+}
+
 async function writePair(output, pair, thresholds, reviewImages) {
   const { row, theme } = pair;
   const directory = path.join(output, row.support ? 'support' : 'frames', ...row.source.split('/').map(safeName), safeName(row.frame), theme);
@@ -133,21 +179,23 @@ async function writePair(output, pair, thresholds, reviewImages) {
   };
   const beforeSize = pair.before?.size ?? null, afterSize = pair.after?.size ?? null;
   const reasons = [];
-  if (!pair.parent && row.status !== 'matched') reasons.push(row.status);
+  if (!pair.parent && row.status !== 'matched' && row.status !== 'moved') reasons.push(row.status);
   if (row.matchKind === 'renamed_or_unknown') reasons.push('renamed_or_unknown');
-  if (beforeSize && afterSize && Object.keys(beforeSize).some(key => beforeSize[key] !== afterSize[key])) reasons.push('size_changed');
+  reasons.push(...revisionReasons(pair));
   if (pair.parent) {
     if (pair.snapshots.findings.length) reasons.push('snapshot_mismatch');
     if (pair.parentChanged) reasons.push('parent_changed');
     if (pair.singleTheme) reasons.push('theme_coverage_incomplete');
     if (pair.pixels.classes.other.pixels) reasons.push('other_pixels');
     if (!pair.pixels.classes.antialiasing.withinThreshold || !pair.pixels.classes.bitmap_resampling.withinThreshold) reasons.push('threshold_exceeded');
-  } else if (pair.pixels.differentPixels) reasons.push('pixels_changed');
+  }
   const ref = { source: row.source, frame: row.frame };
   const comparison = {
     id: JSON.stringify([row.source, row.frame, theme, ...(row.support ? ['support'] : [])]), ...ref, theme,
     status: row.status, matchKind: row.matchKind, matchCandidates: row.matchCandidates, change: row.change,
-    relation: pair.parent ? 'parent_crop' : 'revision', before: pair.parent?.ref ?? (pair.before ? ref : null), after: pair.after ? ref : null,
+    ...(row.previousSource ? { previousSource: row.previousSource } : {}),
+    relation: pair.parent ? 'parent_crop' : 'revision',
+    before: pair.parent?.ref ?? (pair.before ? (row.previousSource ? { ...ref, source: row.previousSource } : ref) : null), after: pair.after ? ref : null,
     beforeSize, afterSize, parent: pair.parent ?? null, snapshots: pair.snapshots ?? null, pixels: pair.pixels,
     verdict: reasons.length ? 'changed' : pair.parent ? 'structural' : 'identical', reasons,
     note: { before: row.before?.note ?? null, after: row.after?.note ?? null },
@@ -155,7 +203,7 @@ async function writePair(output, pair, thresholds, reviewImages) {
     metadata: { before: row.before ? { locale: row.before.locale ?? null, proposed: row.before.proposed ?? null, fixture: row.before.fixture ?? null, capture: row.before.capture ?? null } : null,
       after: row.after ? { locale: row.after.locale ?? null, proposed: row.after.proposed ?? null, fixture: row.after.fixture ?? null, capture: row.after.capture ?? null } : null }, paths,
   };
-  if (!row.support) {
+  if (!row.support && row.status !== 'moved') {
     reviewImages.set(comparison.id, {
       before: pair.before ? `data:image/png;base64,${pair.before.png.toString('base64')}` : null,
       after: pair.after ? `data:image/png;base64,${pair.after.png.toString('base64')}` : null,
@@ -203,6 +251,9 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
   const output = options['out-dir'] === undefined ? path.join(config.output, 'diff') : path.resolve(config.root, options['out-dir']);
   const timings = { prepareMs: 0, buildMs: 0, captureMs: 0, compareMs: 0, writeMs: 0, totalMs: 0 };
   const warnings = [], completed = [], reviewImages = new Map();
+  const hiddenMoveReasons = new Set(), pendingMoveComparisons = new Map();
+  const cachedCaptures = new Map(allThemes.map(theme => [theme, new Map()]));
+  const concurrency = Math.min(4, availableParallelism());
   const thresholds = config.diff?.thresholds ?? resolveDiffPolicy().thresholds;
   let inputs, browser, data, primary, context;
   const timed = async (name, work) => {
@@ -225,18 +276,29 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
         ...metadata.dependencies, locale: 'en-US', timezone: 'UTC', ...inputs.environment, baseThresholds: inputs.before.config.diff.thresholds },
       impact: session?.selection ?? null, classifierVersion: 1, thresholds, comparisons: [], support: [], failures: [], verdict: null, reasons: [],
       summary: { sources: inputs.sources.length, frames: 0, comparisons: 0, supportComparisons: 0, isolationCaptures: 0,
-        added: 0, removed: 0, matched: 0, identical: 0, structural: 0, changed: 0,
+        added: 0, removed: 0, moved: 0, matched: 0, identical: 0, structural: 0, changed: 0,
         classPixels: Object.fromEntries(classNames.map(name => [name, 0])) },
-      review: { added: 0, removed: 0, changed: 0, direct: 0, inherited: 0, groups: [], sheet: null },
+      review: { added: 0, removed: 0, moved: 0, changed: 0, direct: 0, inherited: 0, groups: [], movePairs: [], sheet: null },
       differencePalette: { equal: '#00000000', imperceptible: '#64748b', antialiasing: '#f59e0b', boundary_bleed: '#0ea5e9', bitmap_resampling: '#a855f7', other: '#ff00ff' }, reportPath: null, indexPath: null, timings,
     };
     await timed('writeMs', () => Promise.all(['frames', 'support', 'report.json', 'index.html', 'review-sheet.png'].map(entry =>
       rm(path.join(output, entry), { recursive: true, force: true }))));
     if (session ? session.chosen.some(row => row.source.endsWith('.mmd') && session.themes.some(theme => session.scheduled(row, theme))) : inputs.sources.length) browser = await launchBrowser();
-    const built = await timed('buildMs', () => inputs.buildFrames({ browser }));
-    for (const row of [...built.frames, ...built.support]) row.change = reviewChange(row, inputs, built, session?.selection);
+    const built = await timed('buildMs', () => inputs.buildFrames({ browser, deferParts: true }));
     data.failures = built.failures ?? [];
     if (session) built.frames = built.frames.filter(row => themes.some(theme => session.scheduled(row, theme)));
+    const moveThemes = [...new Set([...themes, ...allThemes])];
+    built.frames = await pairFrameMoves(built.frames, inputs, async (candidates, theme) => {
+      browser ??= await launchBrowser();
+      return timed('captureMs', () => renderFingerprints(browser, candidates, theme, scale, cachedCaptures.get(theme), concurrency));
+    }, moveThemes);
+    if (themes.length === 1) {
+      const offThemeCaptures = cachedCaptures.get(moveThemes[1]);
+      const pairedFrames = new Set(built.frames.filter(row => row.previousSource).flatMap(row => [row.before, row.after]));
+      for (const frame of offThemeCaptures.keys()) if (!pairedFrames.has(frame)) offThemeCaptures.delete(frame);
+    }
+    if (built.prepareParts) await timed('buildMs', built.prepareParts);
+    for (const row of [...built.frames, ...built.support]) row.change ??= reviewChange(row, inputs, built, session?.selection);
     context = partContext(built, inputs, scale, themes, clock);
     for (const warning of inputs.warnings) if (!warnings.includes(warning)) warnings.push(warning);
     data.summary.frames = built.frames.length;
@@ -247,9 +309,9 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     const selectedOrder = new Map(built.frames.flatMap(row => themes.map(theme => comparisonIdentity(row, theme))).map((key, index) => [key, index]));
     const supportKeys = new Set(built.support.map(frameIdentity));
     const ordinary = [...built.frames.filter(row => !row.parentRow), ...built.support.map(row => ({ ...row, support: true }))];
-    const ordinaryJobs = ordinary.flatMap(row => themes.filter(theme => !session || row.support || session.scheduled(row, theme)).map(theme => ({ row, theme })));
+    const ordinaryJobs = ordinary.flatMap(row => (row.previousSource ? moveThemes :
+      themes.filter(theme => !session || row.support || session.scheduled(row, theme))).map(theme => ({ row, theme })));
     const partJobs = built.frames.filter(row => row.parentRow).flatMap(row => themes.filter(theme => !session || session.scheduled(row, theme)).map(theme => ({ row, theme })));
-    const concurrency = Math.min(4, availableParallelism());
     for (const jobs of [ordinaryJobs, partJobs]) for (let start = 0; start < jobs.length; start += concurrency) {
       const failures = [], openPairs = [];
       const phase = async (name, items, work) => {
@@ -264,9 +326,26 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
         const batch = jobs.slice(start, start + concurrency);
         openPairs.push(...await phase('captureMs', batch, job => job.row.parentRow
           ? browserTask(browser, () => capturePart(browser, job.row, job.theme, context)).catch(error => { throw frameFailure(error, job.row, job.theme); })
-          : capturePair(browser, job.row, job.theme, scale, context)));
+          : capturePair(browser, job.row, job.theme, scale, context, cachedCaptures.get(job.theme))));
         const compared = await phase('compareMs', openPairs, pair => comparePair(browser, pair, thresholds, context));
-        const rows = await phase('writeMs', compared, pair => writePair(output, pair, thresholds, reviewImages));
+        const selected = compared.flatMap(pair => {
+          const { row } = pair;
+          if (!row.previousSource) return [pair];
+          const pairs = pendingMoveComparisons.get(row) ?? [];
+          pairs.push(pair);
+          if (pairs.length < allThemes.length) { pendingMoveComparisons.set(row, pairs); return []; }
+          pendingMoveComparisons.delete(row);
+          if (pairs.every(item => revisionReasons(item).length === 0)) {
+            row.status = 'moved';
+            data.summary.matched--;
+            data.summary.moved++;
+          }
+          for (const item of pairs) if (!themes.includes(item.theme)) {
+            for (const reason of revisionReasons(item)) hiddenMoveReasons.add(reason);
+          }
+          return pairs.filter(item => themes.includes(item.theme));
+        });
+        const rows = await phase('writeMs', selected, pair => writePair(output, pair, thresholds, reviewImages));
         for (const row of rows) {
           context?.comparisons.set(comparisonIdentity(row, row.theme), row);
           if (supportKeys.has(frameIdentity(row))) { data.support.push(row); data.summary.supportComparisons++; }
@@ -315,8 +394,8 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     `${new Set(data.failures.map(failure => failure.source)).size} source(s) could not be compared; review the source failures.`, { data }), data, warnings);
   data.complete = !primary;
   if (!primary) {
-    data.verdict = data.summary.changed || data.support.some(row => row.verdict === 'changed') ? 'changed' : data.summary.structural ? 'structural' : 'identical';
-    data.reasons = [...new Set([...completed, ...data.support].flatMap(row => row.reasons))];
+    data.verdict = data.summary.changed || hiddenMoveReasons.size || data.support.some(row => row.verdict === 'changed') ? 'changed' : data.summary.structural ? 'structural' : 'identical';
+    data.reasons = [...new Set([...completed, ...data.support].flatMap(row => row.reasons).concat([...hiddenMoveReasons]))];
     if (data.summary.structural && data.selection.existingCoverage !== 'full') {
       data.verdict = 'changed'; data.reasons.push('existing_coverage_incomplete');
     }
@@ -326,7 +405,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     }
   }
   const reviewModel = buildReview(data, reviewImages, { label: config.name ?? path.basename(config.root) });
-  data.review = { ...reviewModel.counts, groups: (reviewModel.groups ?? []).map(group => ({
+  data.review = { ...reviewModel.counts, movePairs: reviewModel.movePairs ?? [], groups: (reviewModel.groups ?? []).map(group => ({
     causes: group.causes, frames: group.frames.map(({ source, frame }) => ({ source, frame })),
     representative: { source: group.representative.source, frame: group.representative.frame },
     outliers: group.outliers.map(({ source, frame }) => ({ source, frame })), medianArea: group.medianArea,
@@ -349,7 +428,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     if (sourceFailureOnly) primary.reviewCacheable = true;
     throw primary;
   }
-  if (!options.json) log(`${data.verdict}: ${data.review.added} added, ${data.review.removed} removed, ${data.review.changed} changed (${data.summary.frames} frames). ${data.indexPath}`);
+  if (!options.json) log(`${data.verdict}: ${data.review.added} added, ${data.review.removed} removed, ${data.review.moved} moved, ${data.review.changed} changed (${data.summary.frames} frames). ${data.indexPath}`);
   if (data.verdict === 'changed') throw new CliError('DIFF_FAILED', 'Design differences require review.', { data, warnings });
   return { data, warnings };
 }
