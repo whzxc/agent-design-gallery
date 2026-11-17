@@ -6,7 +6,36 @@ import { tmpdir } from 'node:os';
 import { launch } from '../src/toolkit/browser.mjs';
 import { startHub } from '../src/hub.mjs';
 import { startServer } from '../src/server.mjs';
-import { addRoot, listProjects } from '../src/hub/registry.mjs';
+import { addRoot, listProjects, removeRoot } from '../src/hub/registry.mjs';
+
+test('shared repository-name links recover a unique registered route and keep the review revision', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-hub-link-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const stateDirectory = path.join(root, 'state');
+  const register = async parent => {
+    const directory = path.join(root, parent, 'project');
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, 'adg.config.mjs'), 'export default {};');
+    await addRoot(directory, 0, stateDirectory);
+    return directory;
+  };
+  const first = await register('old');
+  await register('repos');
+  const third = await register('other');
+  await removeRoot(first, stateDirectory);
+  const hub = await startHub({ port: 0, stateDirectory });
+  t.after(() => hub.close());
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  const original = new URL('p/project/?base=HEAD#review', hub.url);
+  await page.goto(original.href);
+  await page.getByText('Unknown project; run adg root scan.').waitFor();
+  assert.equal(page.url(), original.href);
+  await removeRoot(third, stateDirectory);
+  await page.reload();
+  await page.waitForURL(new URL('p/project-repos/?base=HEAD#review', hub.url).href);
+});
 
 test('hub routes existing viewers by stable slug and keeps browser paths read-only', async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'adg-hub-'));
