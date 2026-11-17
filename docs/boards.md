@@ -35,7 +35,10 @@ theme, with neutral fallbacks for any token a project does not define.
 
 - **Board**: 1680 pixels wide, with 80px side padding, 64px top and 80px bottom padding on the surface colour. A board
   widens when a specimen needs more room: its specimen area grows to the widest specimen plus well padding, and the
-  12-column grid widens with it. Nothing is clipped.
+  12-column grid widens with it. Nothing is clipped. A tall board widens too: while it is more than twice as tall as it
+  is wide, its specimen area grows by another 12 columns (1184px plus one 24px gap), up to four times the base area,
+  and its specimens reflow in declaration order. The rule is deterministic per board, so saving a source changes only
+  that board's width.
 - **Header**: a chapter number in a filled pill, an uppercase eyebrow `<project> · <layer>`, the chapter title at
   48/56 semibold, and on the right a meta line with the chapter's source and frame counts. A rule separates it from the
   sections.
