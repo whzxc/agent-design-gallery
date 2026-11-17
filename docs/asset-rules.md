@@ -26,6 +26,15 @@ A visual unit used inside one module only stays in that module until a second fe
 
 Fixtures and artwork support these layers; they are not additional UI layers or gallery sources.
 
+### Chapters
+
+`design/gallery.json` groups the sources into chapters, and each chapter is one [board](boards.md). Every component and
+module source belongs to a chapter; surfaces join chapters once there are more than a few. A chapter is one feature
+area or one family of building blocks within one layer, usually 3 to 12 sources, with an English title that names the
+area, such as `Controls` or `Timeline`. Order chapters from general to specific, and sources within a chapter in
+reading order. Split a chapter along feature lines when it grows past about 12 sources. `adg check` warns about
+sources in no chapter and about chapters with more than 12 sources.
+
 ## Tokens
 
 Token names state a role, such as `--radius-control` or `--line-reading`, never their value, such as `--radius-6` or `--gray-200`. A numbered series of ordinal steps, such as chart channels, is allowed.

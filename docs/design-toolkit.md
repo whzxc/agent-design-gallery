@@ -566,7 +566,22 @@ Set `--base=<rev>` to the commit where the task started. Added, removed and chan
 
 Review images show one theme: `system`, the Mac's current appearance (`defaults read -g AppleInterfaceStyle` reads `Dark`), otherwise light. `render` and `diff` accept `--theme=system` and report the resolved theme. Show the other theme as well only when the change alters theme-specific paint. Checks and diff verdicts still cover both themes.
 
-The review sheet is one PNG that `adg diff --base=<rev> --impacted` writes next to its `index.html` and reports as `data.review.sheet` (absolute path and resolved theme). It uses the system theme, or the theme `--theme` names when it names exactly one. A header names the project, the base and current revisions and the counts. Added frames show their new render; changed frames show before and after side by side; removed frames are listed by name. Each frame is labelled `<source>#<frame>`. The sheet is at most 1600 CSS pixels wide at device scale 2. Beyond 24 frames it shows the first 24 in source order and states how many more the review URL holds.
+Changed frames are grouped by cause:
+- A **direct** change is a frame whose own source changed. For a module folder, any file in that folder counts as its own source.
+- An **inherited** change is a frame whose own source is unchanged and that changed only through imported sources. Inherited frames group by the set of changed sources that reaches them, as the `diff --impacted` reasons report it.
+- An inherited frame whose changed-pixel area exceeds twice its group's median is an **outlier**.
+
+`data.review` splits `changed` into `direct` and `inherited` and lists the groups with their causes and frames. A change report states the counts as `changed N (direct D, inherited I)`.
+
+The review sheet and the review page show these entries in order:
+1. added frames;
+2. direct changes;
+3. one entry per inherited group, giving its cause and frame count, one representative before and after (the member with the median changed area, the first in source order on a tie) and the names of the other members;
+4. the outliers individually under their group.
+
+The page expands a group to every member.
+
+The review sheet is one PNG that `adg diff --base=<rev> --impacted` writes next to its `index.html` and reports as `data.review.sheet` (absolute path and resolved theme). It uses the system theme, or the theme `--theme` names when it names exactly one. A header names the project, the base and current revisions and the counts. Added frames show their new render; changed frames show before and after side by side; removed frames are listed by name. Each frame is labelled `<source>#<frame>`. The sheet is at most 1600 CSS pixels wide at device scale 2. The sheet holds at most 24 images in the order above, where a group's representative and outliers count but its other members do not. It states how many more the review URL holds.
 
 | Need | Command |
 | --- | --- |
