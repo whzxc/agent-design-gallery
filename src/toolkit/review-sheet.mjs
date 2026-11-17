@@ -63,14 +63,14 @@ export function reviewSheetHtml(review, theme, frameOrder = [], designDirs = { b
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(review.label)}</title>
 <style>
 :root { color-scheme:light; --canvas:#f5f5f3; --text:#20211f; --muted:#575953; --border:#d0d1cc; }
-.added { --accent:#235c38; --edge:#95b89f; --tint:#edf5ee; }
-.changed { --accent:#76500f; --edge:#c5ad77; --tint:#faf3e2; }
-.removed { --accent:#923a3a; --edge:#c89595; --tint:#faeded; }
+.added { --accent:#235c38; --edge:#95b89f; }
+.changed { --accent:#76500f; --edge:#c5ad77; }
+.removed { --accent:#923a3a; --edge:#c89595; }
 @media (prefers-color-scheme: dark) {
   :root { color-scheme:dark; --canvas:#121212; --text:#efefed; --muted:#b3b3ae; --border:#52534e; }
-  .added { --accent:#a4d5ae; --edge:#557a60; --tint:#1a2820; }
-  .changed { --accent:#edd097; --edge:#8d7547; --tint:#2c2519; }
-  .removed { --accent:#e9aaaa; --edge:#925e5e; --tint:#302020; }
+  .added { --accent:#a4d5ae; --edge:#557a60; }
+  .changed { --accent:#edd097; --edge:#8d7547; }
+  .removed { --accent:#e9aaaa; --edge:#925e5e; }
 }
 * { box-sizing:border-box; }
 body { margin:0; padding:24px; width:1600px; max-width:100%; background:var(--canvas); color:var(--text); font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
@@ -81,13 +81,13 @@ h2 { margin:0 0 8px; color:var(--accent); font-size:18px; }
 body > section { margin-top:16px; }
 code { font-family:ui-monospace,Menlo,Consolas,monospace; overflow-wrap:anywhere; }
 .cells { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; align-items:start; margin:0; padding:0; list-style:none; }
-.cells > * { min-width:0; padding:8px 12px; border:1px solid var(--edge); border-radius:8px; background:var(--tint); font-size:14px; }
+.cells > * { min-width:0; padding:8px 12px; border:1px solid var(--edge); border-radius:8px; font-size:14px; }
 .label { display:flex; gap:10px; align-items:baseline; font-weight:600; }
-.label span { flex:none; color:var(--accent); }
+.label span { flex:none; }
 .images { display:flex; align-items:center; gap:8px; margin-top:8px; }
 .capture { flex:1; min-width:0; }
 .changed .capture:first-child img { margin-inline-start:auto; }
-.arrow { color:var(--accent); flex:none; font-size:20px; line-height:1; }
+.arrow { color:var(--muted); flex:none; font-size:20px; line-height:1; }
 img { display:block; max-width:100%; height:auto; max-height:480px; object-fit:contain; object-position:left top; }
 footer { margin-top:12px; color:var(--muted); }
 </style></head><body data-theme="${escapeHtml(theme)}">

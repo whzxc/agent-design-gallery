@@ -106,7 +106,13 @@ test('sheet uses one theme, a 12-cell budget and a DPR2 PNG', async t => {
       }));
       assert.ok(sections.every(section => section.columns === 2 && section.firstCellTop > section.headingBottom));
       assert.ok(sections.slice(1).every((section, index) => section.headingBottom > sections[index].bottom));
-      for (const token of ['color', 'backgroundColor', 'borderColor']) assert.equal(new Set(sections.map(section => section[token])).size, 3);
+      for (const token of ['color', 'borderColor']) assert.equal(new Set(sections.map(section => section[token])).size, 3);
+      assert.ok(sections.every(section => section.backgroundColor === 'rgba(0, 0, 0, 0)'));
+      assert.deepEqual(await page.locator('.arrow').evaluate(arrow => {
+        const style = getComputedStyle(arrow);
+        const footer = getComputedStyle(document.querySelector('footer'));
+        return [style.backgroundColor, style.color === footer.color];
+      }), ['rgba(0, 0, 0, 0)', true]);
     }
     const images = await page.locator('.changed .images > *').evaluateAll(items => items.map(item => ({
       text: item.textContent, left: item.getBoundingClientRect().left, right: item.getBoundingClientRect().right,
