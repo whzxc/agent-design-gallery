@@ -278,22 +278,22 @@ and error while showing the remaining sources. JSON includes
 `failures: [{ source, side, code, message }]`; partial review artifacts and cache
 entries remain available with `complete: false`. An incomplete diff exits 2.
 
-Review changes are grouped by cause. Reports state
-`added A · removed R · moved M · changed N (direct D, inherited I)`.
+The review page and `data.review` retain counts and group changes by cause.
 Moved frames keep their identity when pixels and size match in both themes.
 After same-name pairing, identical renders can also pair frames whose names
 changed. A related source breaks a tie when it identifies a unique pair.
-The page and sheet summarize source moves and show the previous and current
+The page summarizes source moves and shows the previous and current
 `<source>#<frame>` for renamed pairs.
 Direct changes edit the frame source or its module folder. Inherited groups share
 the same changed dependencies, show a median-area representative, and expand to
 every member. Members above twice the median changed-pixel area appear as outliers.
 The sheet reserves cells for the first addition, the first direct change and
 inherited representatives in that order, then fills the remaining budget with
-additions, direct changes and outliers. Before/after pairs
-share a cell. Captures only scale down, to at most 480 CSS pixels tall. The sheet
-stops at 4000 CSS pixels, names up to eight other members per group and reports
-how many frames remain on the review page.
+additions, direct changes and outliers. A before → after pair shares a cell.
+Labels use the design-relative path without its extension and `#frame`, with
+`+N` on inherited representatives. Captures only scale down, to at most 480 CSS
+pixels tall. The sheet stops at 4000 CSS pixels and adds a closing line only
+when entries are omitted.
 
 `adg check` emits non-failing chapter warnings for component/module sources outside
 `gallery.json` chapters (`CHAPTER_SOURCES_UNASSIGNED`) and chapters above 12 sources

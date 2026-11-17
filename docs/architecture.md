@@ -405,7 +405,8 @@ publish those models after producing their artifacts.
 The viewer requests its current theme and retains the preceding review while a
 live refresh or theme switch runs. Progress and chrome remain visible. Diff output
 also includes a single-theme, DPR-2 review sheet alongside the self-contained HTML
-review; its source-ordered selection stops at 24 frames and reports overflow.
+review. The sheet separates Added, Changed and Removed with tinted sections,
+uses up to 12 image cells and reports overflow in a closing line.
 
 Source build failures are isolated during review, including failures at the base
 revision. The viewer, HTML review and sheet header list each failed source, side

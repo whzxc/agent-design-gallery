@@ -583,7 +583,7 @@ A paired frame is compared like any other frame. When its pixels and size are id
 
 `data.review` reports `moved` with its pairs, splits `changed` into `direct` and `inherited`, and lists the groups with their causes and frames.
 
-The review sheet and the review page show these entries in order:
+The review page shows these entries in order:
 1. added frames;
 2. direct changes;
 3. one entry per inherited group, giving its cause and frame count, one representative before and after (the member with the median changed area, the first in source order on a tie) and the names of the other members;

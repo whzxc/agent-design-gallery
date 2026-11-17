@@ -54,12 +54,16 @@ test('system theme executes a stubbed defaults command', async t => {
   assert.equal(systemTheme({ platform: 'darwin' }), 'light');
 });
 
-test('sheet orders added, direct and removed and retains declared order within each section', () => {
+test('sheet orders sections and preserves declaration order for frames in the same source', () => {
   const model = reviewFixture();
-  const entries = ['changed', 'removed', 'added'].map(status => ({ source: 'design/a.tsx', frame: status, status, themes: [themeRow('dark')] }));
+  const entries = ['changed', 'removed', 'added'].map(status => ({ source: 'assets/a.tsx', frame: status, status, themes: [themeRow('dark')] }));
+  entries[1].source = 'old-design/a.tsx';
   model.sections = Object.fromEntries(entries.map(entry => [entry.status, [entry]]));
-  const html = reviewSheetHtml(model, 'dark', entries);
-  assert.deepEqual([...html.matchAll(/data-frame="([^"]+)"/g)].map(match => match[1]), ['added', 'changed', 'removed']);
+  const firstAdded = { ...entries[2], frame: 'first' };
+  model.sections.added.push(firstAdded);
+  const html = reviewSheetHtml(model, 'dark', [firstAdded, ...entries], { before: 'old-design', after: 'assets' });
+  assert.deepEqual([...html.matchAll(/<code>([^<]+)<\/code>/g)].map(match => match[1]), ['a#first', 'a#added', 'a#changed', 'a#removed']);
+  assert.deepEqual([...html.matchAll(/<h2>([^<]+)<\/h2>/g)].map(match => match[1]), ['Added', 'Changed', 'Removed']);
 });
 
 test('sheet uses one theme, a 12-cell budget and a DPR2 PNG', async t => {
@@ -70,7 +74,7 @@ test('sheet uses one theme, a 12-cell budget and a DPR2 PNG', async t => {
   assert.ok(Object.values(reviewForTheme(model, 'dark').sections).flat().every(entry => entry.themes.length === 1));
   const html = reviewSheetHtml(model, 'dark');
   assert.match(html, /Review &lt;Demo&gt;/);
-  assert.match(html, /13 more frames in the review URL/);
+  assert.match(html, /\+13 more in the review page/);
   assert.match(html, /data-source="design\/z-10/);
   assert.doesNotMatch(html, /data-source="design\/z-11/);
   assert.match(html, /data-frame="changed" data-priority="1"/);
@@ -90,6 +94,25 @@ test('sheet uses one theme, a 12-cell budget and a DPR2 PNG', async t => {
     assert.equal(await page.locator('article').nth(2).locator('img').count(), 1);
     assert.equal(await page.locator('body').evaluate(body => body.scrollWidth), 1600);
     assert.equal(await page.locator('body').evaluate(body => getComputedStyle(body).backgroundColor), 'rgb(18, 18, 18)');
+    for (const theme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: theme });
+      const sections = await page.locator('body > section').evaluateAll(sections => sections.map(section => {
+        const cells = section.querySelector('.cells');
+        const { color } = getComputedStyle(section.querySelector('h2'));
+        const { backgroundColor, borderColor } = getComputedStyle(cells.firstElementChild);
+        return { color, backgroundColor, borderColor, columns: getComputedStyle(cells).gridTemplateColumns.split(' ').length,
+          headingBottom: section.querySelector('h2').getBoundingClientRect().bottom, firstCellTop: cells.getBoundingClientRect().top,
+          bottom: section.getBoundingClientRect().bottom };
+      }));
+      assert.ok(sections.every(section => section.columns === 2 && section.firstCellTop > section.headingBottom));
+      assert.ok(sections.slice(1).every((section, index) => section.headingBottom > sections[index].bottom));
+      for (const token of ['color', 'backgroundColor', 'borderColor']) assert.equal(new Set(sections.map(section => section[token])).size, 3);
+    }
+    const images = await page.locator('.changed .images > *').evaluateAll(items => items.map(item => ({
+      text: item.textContent, left: item.getBoundingClientRect().left, right: item.getBoundingClientRect().right,
+    })));
+    assert.deepEqual(images.map(item => item.text), ['', '→', '']);
+    assert.ok(images[0].right < images[1].left && images[1].right < images[2].left);
   } finally { await browser.close(); }
 });
 
@@ -231,7 +254,7 @@ test('buildReview propagates change classification and groups only visible chang
   assert.deepEqual(review.groups[0].outliers.map(entry => entry.frame), ['large']);
 });
 
-test('move pairs survive theme projection and group into a text summary on the page and sheet', () => {
+test('move pairs survive theme projection and appear in the page only', () => {
   const previousSource = 'old/<card>.tsx';
   const source = 'new/card.tsx';
   const comparisons = ['one', 'two', 'edited'].flatMap(frame => ['light', 'dark'].map(theme => ({
@@ -252,23 +275,19 @@ test('move pairs survive theme projection and group into a text summary on the p
   assert.deepEqual(light.counts, review.counts);
   assert.equal(light.sections.changed[0].themes[0].verdict, 'identical');
 
-  for (const [html, summarySelector] of [[renderReviewBody(light), 'data-section="moved"'], [reviewSheetHtml(light, 'light'), 'class="moved"']]) {
-    const start = html.indexOf(summarySelector);
-    assert.ok(start > html.indexOf('data-frame="edited"'));
-    const summary = html.slice(start, html.indexOf('</section>', start));
-    assert.match(summary, /<code>old\/&lt;card&gt;\.tsx<\/code> → <code>new\/card\.tsx<\/code> · 2 frames/);
-    assert.doesNotMatch(summary, /<img|#one/);
-    assert.match(summary, /old\/&lt;card&gt;\.tsx#old&lt;two&gt;<\/code> → <code>new\/card\.tsx#two<\/code>/);
-    assert.match(html, /Before · <code>old\/&lt;card&gt;\.tsx<\/code>/);
-    assert.equal([...html.matchAll(/<img /g)].length, 2);
-  }
-  assert.match(reviewSheetHtml(light, 'light'), /0 added · 0 removed · 2 moved · 1 changed/);
-  assert.match(reviewSheetHtml(light, 'light'), /data-more="0"/);
+  const page = renderReviewBody(light);
+  assert.match(page, /data-section="moved"/);
+  assert.match(page, /old\/&lt;card&gt;\.tsx#old&lt;two&gt;<\/code> → <code>new\/card\.tsx#two<\/code>/);
+  assert.match(page, /Before · <code>old\/&lt;card&gt;\.tsx<\/code>/);
+  const sheet = reviewSheetHtml(light, 'light');
+  assert.match(sheet, /<code>new\/card#edited<\/code>/);
+  assert.doesNotMatch(sheet, /Moved|old\/|Before|After|#two/);
+  assert.equal([...sheet.matchAll(/<img /g)].length, 2);
+  assert.match(sheet, /<footer data-more="0" hidden><\/footer>/);
 
   const movedOnly = buildReview({ comparisons: comparisons.filter(row => row.status === 'moved'), complete: true });
-  for (const html of [renderReviewBody(movedOnly), reviewSheetHtml(movedOnly, 'light')]) {
-    assert.doesNotMatch(html, /<img|No added/);
-  }
+  const emptySheet = reviewSheetHtml(movedOnly, 'light');
+  assert.doesNotMatch(emptySheet, /<section|<img|more in the review page/);
 });
 
 test('grouped page shows added, direct, representative, other names, outlier and removed names', () => {
@@ -285,15 +304,14 @@ test('grouped page shows added, direct, representative, other names, outlier and
   assert.doesNotMatch(body.slice(body.indexOf('data-section="removed"')), /<img/);
 });
 
-test('grouped sheet counts representative and outlier pairs individually and lists other members', () => {
+test('grouped sheet uses only the title, section names, frame labels and the representative suffix', () => {
   const html = reviewSheetHtml(groupedFixture(), 'dark');
   assert.deepEqual([...html.matchAll(/<article data-source="[^"]+" data-frame="([^"]+)"/g)].map(match => match[1]), ['added', 'direct', 'median', 'large']);
   assert.equal([...html.matchAll(/<img /g)].length, 7);
-  assert.match(html, /base&lt;token&gt;\.tsx/);
-  assert.match(html, /3 frames/);
-  assert.match(html, /design\/surfaces\/a\.tsx#small/);
-  assert.match(html, /1 more frames in the review URL/);
-  assert.doesNotMatch(html, /Difference/);
+  assert.match(html, /<header><h1>Review &lt;Demo&gt;<\/h1><\/header>/);
+  assert.match(html, /<code>surfaces\/b#median<\/code><span>\+2<\/span>/);
+  assert.match(html, /<code>surfaces\/c#large<\/code><\/div>/);
+  assert.doesNotMatch(html, /base-sha|current-sha|HEAD~1|base&lt;token&gt;|surfaces\/a#small|Representative|Outlier|Direct|Before|After|Difference|more in the review page/);
 });
 
 test('sheet reserves the first addition, first direct change and group representatives before filling cells', () => {
@@ -308,9 +326,8 @@ test('sheet reserves the first addition, first direct change and group represent
   assert.match(html, /data-frame="direct" data-priority="1"/);
   assert.match(html, /data-frame="member-0" data-priority="2"/);
   assert.ok(html.indexOf('data-frame="added-0"') < html.indexOf('data-frame="member-0"'));
-  assert.equal([...html.matchAll(/<li><code>/g)].length, 8);
-  assert.match(html, /4 other members/);
-  assert.match(html, /16 more frames in the review URL/);
+  assert.match(html, /<code>surfaces\/a#member-0<\/code><span>\+12<\/span>/);
+  assert.match(html, /\+4 more in the review page/);
   assert.match(html, /#removed/);
 
   model.sections.changed.push(...Array.from({ length: 10 }, (_, i) => ({ ...inherited,
@@ -342,7 +359,7 @@ test('sheet never upscales captures, caps frame height and drops whole entries a
     const boxes = await page.locator('img').evaluateAll(images => images.map(img => [img.clientWidth, img.clientHeight]));
     assert.deepEqual(boxes, [[40, 20], [64, 480]]);
     const row = { ...themeRow('dark'), afterSize: { width: 120, height: 900 }, beforeSize: { width: 120, height: 900 }, images: { before: tall, after: tall } };
-    model.sections = { added: [], removed: [{ ...sample, status: 'removed' }], changed: Array.from({ length: 12 }, (_, i) => ({
+    model.sections = { added: [], removed: Array.from({ length: 100 }, (_, i) => ({ ...sample, status: 'removed', frame: `removed-${i}` })), changed: Array.from({ length: 12 }, (_, i) => ({
       ...sample, status: 'changed', frame: `group-${i}`, themes: [row],
       change: { kind: 'inherited', causes: [`design/${i}/${'long-cause-'.repeat(75)}.tsx`] },
     })) };
@@ -358,10 +375,10 @@ test('sheet never upscales captures, caps frame height and drops whole entries a
       return {
         setContent: html => sheetPage.setContent(html), evaluate: fn => sheetPage.evaluate(fn), close: () => sheetPage.close(),
         locator: selector => ({ screenshot: async options => {
-          assert.equal(await sheetPage.locator('.removed').count(), 0);
-          assert.match(await sheetPage.locator('.moved li').textContent(), /old\.tsx → new\.tsx · 2 frames/);
-          const retained = await sheetPage.locator('article').count();
-          assert.equal(await sheetPage.locator('footer').textContent(), `${12 - retained + 1} more frames in the review URL.`);
+          const removed = await sheetPage.locator('.removed li').count();
+          assert.ok(removed > 0 && removed < 100);
+          assert.equal(await sheetPage.locator('article').count(), 12);
+          assert.equal(await sheetPage.locator('footer').textContent(), `+${100 - removed} more in the review page`);
           await sheetPage.locator(selector).screenshot(options);
         } }),
       };

@@ -7,7 +7,7 @@ import { launch, loadFrame, browserTask, readyResources } from './browser.mjs';
 import { prepareDiffInputs } from './diff-inputs.mjs';
 import { pairFrameMoves } from './move-pairing.mjs';
 import { currentHead } from './arch-git.mjs';
-import { sourceDirectories, sourceFeature } from './project.mjs';
+import { relative, sourceDirectories, sourceFeature } from './project.mjs';
 import { pixelComparator, imageDifference } from './pixel-diff.mjs';
 import { partContext, captureEvidence, capturePart, isolateParent, frameIdentity, comparisonIdentity } from './part-diff.mjs';
 import { commandFailure, cleanup, emptySelection } from './results.mjs';
@@ -374,7 +374,8 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
       await mkdir(output, { recursive: true });
       browser ??= await launchBrowser();
       const model = buildReview({ ...data, complete: !data.failures.length }, reviewImages, { label: config.name ?? path.basename(config.root) });
-      data.review.sheet = await renderSheet(browser, model, sheetTheme, path.join(output, 'review-sheet.png'), completed);
+      const designDirs = { before: relative(inputs.before.config, inputs.before.config.design), after: relative(config, config.design) };
+      data.review.sheet = await renderSheet(browser, model, sheetTheme, path.join(output, 'review-sheet.png'), completed, designDirs);
     });
   } catch (error) {
     if (inputs) {

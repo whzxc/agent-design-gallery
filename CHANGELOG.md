@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Simplify review sheets to the project title and tinted Added, Changed and Removed sections. Show changed pairs with an arrow and inherited representatives with a `+N` label.
+
 - Recognize frames renamed during a move when both themes render identically. Prefer related sources, leave unresolved ties unpaired, and show the previous frame reference in review handoffs.
 
 - Pair relocated frames across revisions, validate moves in both themes, and summarize unchanged moves without images. Reserve review-sheet cells for the first addition and direct change before inherited representatives.
