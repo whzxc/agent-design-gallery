@@ -11,18 +11,20 @@ import { loadConfig } from '../src/toolkit/config.mjs';
 import { starterTokens } from '../src/toolkit/project.mjs';
 import { render } from '../src/toolkit/commands.mjs';
 import { diff } from '../src/toolkit/diff.mjs';
+import { buildReview, renderReviewBody } from '../public/review.js';
+import { groupReview } from '../public/review-groups.js';
 import { readReviewCache, reviewCacheKey } from '../src/review-cache.mjs';
 
 const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1kAAAAASUVORK5CYII=';
-const themeRow = theme => ({ theme, verdict: theme === 'light' ? 'identical' : 'changed', images: { before: pixel, after: pixel } });
+const themeRow = theme => ({ theme, verdict: theme === 'light' ? 'identical' : 'changed', differentPixels: 1, images: { before: pixel, after: pixel } });
 function reviewFixture() {
   return {
     label: 'Review <Demo>', base: { rev: 'HEAD~1', sha: 'base-sha' }, current: { head: 'current-sha' }, complete: true,
-    counts: { added: 24, removed: 1, changed: 1 },
+    counts: { added: 24, removed: 1, changed: 1, direct: 1, inherited: 0 },
     sections: {
       added: Array.from({ length: 24 }, (_, i) => ({ source: `design/z-${String(i).padStart(2, '0')}.tsx`, frame: 'new', status: 'added', themes: [themeRow('light'), themeRow('dark')] })),
       removed: [{ source: 'design/a.tsx', frame: 'removed', status: 'removed', themes: [themeRow('light'), themeRow('dark')] }],
-      changed: [{ source: 'design/b.tsx', frame: 'changed', status: 'changed', themes: [themeRow('light'), themeRow('dark')] }],
+      changed: [{ source: 'design/b.tsx', frame: 'changed', status: 'changed', change: { kind: 'direct', causes: ['design/b.tsx'] }, themes: [themeRow('light'), themeRow('dark')] }],
     },
   };
 }
@@ -52,24 +54,26 @@ test('system theme executes a stubbed defaults command', async t => {
   assert.equal(systemTheme({ platform: 'darwin' }), 'light');
 });
 
-test('sheet retains declared frame order across change statuses within a source', () => {
+test('sheet orders added, direct and removed and retains declared order within each section', () => {
   const model = reviewFixture();
   const entries = ['changed', 'removed', 'added'].map(status => ({ source: 'design/a.tsx', frame: status, status, themes: [themeRow('dark')] }));
   model.sections = Object.fromEntries(entries.map(entry => [entry.status, [entry]]));
   const html = reviewSheetHtml(model, 'dark', entries);
-  assert.deepEqual([...html.matchAll(/data-frame="([^"]+)"/g)].map(match => match[1]), ['changed', 'removed', 'added']);
+  assert.deepEqual([...html.matchAll(/data-frame="([^"]+)"/g)].map(match => match[1]), ['added', 'changed', 'removed']);
 });
 
-test('sheet uses one theme, source ordering, first 24 frames and a DPR2 PNG', async t => {
+test('sheet uses one theme, a 24-PNG budget and a DPR2 PNG', async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'adg-sheet-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const model = reviewFixture();
-  assert.deepEqual(reviewForTheme(model, 'light').counts, { added: 24, removed: 1, changed: 0 });
+  assert.deepEqual(reviewForTheme(model, 'light').counts, { added: 24, removed: 1, changed: 0, direct: 0, inherited: 0 });
   assert.ok(Object.values(reviewForTheme(model, 'dark').sections).flat().every(entry => entry.themes.length === 1));
   const html = reviewSheetHtml(model, 'dark');
   assert.match(html, /Review &lt;Demo&gt;/);
-  assert.match(html, /2 more frames in the review URL/);
-  assert.doesNotMatch(html, /data-source="design\/z-22/);
+  assert.match(html, /1 more frames in the review URL/);
+  assert.match(html, /data-source="design\/z-23/);
+  assert.doesNotMatch(html, /data-frame="changed"/);
+  assert.equal([...html.matchAll(/<img /g)].length, 24);
   const browser = await launch();
   try {
     const file = path.join(root, 'review.png');
@@ -79,9 +83,9 @@ test('sheet uses one theme, source ordering, first 24 frames and a DPR2 PNG', as
     const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, colorScheme: 'dark' });
     await page.setContent(html);
     assert.equal(await page.locator('article').count(), 24);
-    assert.equal(await page.locator('article').first().getAttribute('data-source'), 'design/a.tsx');
-    assert.equal(await page.locator('article').first().locator('img').count(), 0);
-    assert.equal(await page.locator('article').nth(1).locator('img').count(), 2);
+    assert.equal(await page.locator('article').first().getAttribute('data-source'), 'design/z-00.tsx');
+    assert.equal(await page.locator('article').first().locator('img').count(), 1);
+    assert.equal(await page.locator('.removed img').count(), 0);
     assert.equal(await page.locator('article').nth(2).locator('img').count(), 1);
     assert.equal(await page.locator('body').evaluate(body => body.scrollWidth), 1600);
     assert.equal(await page.locator('body').evaluate(body => getComputedStyle(body).backgroundColor), 'rgb(18, 18, 18)');
@@ -116,7 +120,7 @@ test('render and impacted diff resolve system before selection and publish full 
   assert.deepEqual(error.data.review.sheet, { path: path.join(f.config.output, 'diff/review-sheet.png'), theme: 'dark' });
   assert.equal((await readFile(error.data.review.sheet.path)).readUInt32BE(16), 3200);
   const cached = await readReviewCache(key);
-  assert.deepEqual(cached.counts, { added: 0, removed: 0, changed: 1 });
+  assert.deepEqual(cached.counts, { added: 0, removed: 0, changed: 1, direct: 1, inherited: 0 });
   assert.deepEqual(cached.sections.changed[0].themes.map(row => row.theme), ['dark']);
   const repeated = await diff(f.config, [], options, { readSystemTheme: () => 'dark', renderSheet: async (...args) => {
     assert.equal(await readReviewCache(key) !== null, true);
@@ -169,7 +173,7 @@ test('restricted scope and scale skip publishing while configured policy publish
   const customKey = await reviewCacheKey(config, 'HEAD', 'light', f.state);
   const result = await diff(config, [], options).catch(error => error);
   assert.equal(result.code, 'DIFF_FAILED');
-  assert.deepEqual((await readReviewCache(customKey)).counts, { added: 0, removed: 0, changed: 1 });
+  assert.deepEqual((await readReviewCache(customKey)).counts, { added: 0, removed: 0, changed: 1, direct: 1, inherited: 0 });
 });
 
 test('failed sources appear escaped above built frames in HTML and the sheet header', async () => {
@@ -191,4 +195,94 @@ test('failed sources appear escaped above built frames in HTML and the sheet hea
     assert.match(html, /\(after\)/);
   }
   assert.deepEqual(buildReview({ complete: false, failures, comparisons: [] }).failures, failures);
+});
+
+function groupedFixture() {
+  const added = { source: 'design/components/new.tsx', frame: 'added', status: 'added', themes: [themeRow('dark')] };
+  const removed = { ...added, frame: 'removed', status: 'removed' };
+  const changed = (source, frame, kind, area) => ({
+    source, frame, status: 'changed', change: { kind, causes: ['design/components/base<token>.tsx'] },
+    themes: [{ ...themeRow('dark'), differentPixels: area }],
+  });
+  const direct = changed('design/components/base.tsx', 'direct', 'direct', 10);
+  const inherited = [
+    changed('design/surfaces/a.tsx', 'small', 'inherited', 10),
+    changed('design/surfaces/b.tsx', 'median', 'inherited', 20),
+    changed('design/surfaces/c.tsx', 'large', 'inherited', 100),
+  ];
+  const model = { ...reviewFixture(), sections: { added: [added], removed: [removed], changed: [direct, ...inherited] } };
+  return { ...model, ...groupReview(model) };
+}
+
+test('buildReview propagates change classification and groups only visible changed frames', () => {
+  const model = groupedFixture();
+  const entries = Object.values(model.sections).flat();
+  const comparisons = entries.flatMap((entry, index) => entry.themes.map(row => ({
+    id: String(index), source: entry.source, frame: entry.frame, status: entry.status === 'changed' ? 'matched' : entry.status,
+    change: entry.change, ...row, pixels: { differentPixels: row.differentPixels },
+  })));
+  comparisons.push({ id: 'unchanged', source: 'design/surfaces/a.tsx', frame: 'unchanged', status: 'matched', theme: 'dark', verdict: 'identical', change: { kind: 'inherited', causes: ['x'] } });
+  const review = buildReview({ comparisons, complete: true });
+  assert.deepEqual(review.counts, { added: 1, removed: 1, changed: 4, direct: 1, inherited: 3 });
+  assert.deepEqual(review.sections.changed[1].change, model.sections.changed[1].change);
+  assert.equal(review.groups.length, 1);
+  assert.equal(review.groups[0].representative.frame, 'median');
+  assert.deepEqual(review.groups[0].outliers.map(entry => entry.frame), ['large']);
+});
+
+test('grouped page shows added, direct, representative, other names, outlier and removed names', () => {
+  const body = renderReviewBody(groupedFixture());
+  assert.match(body, /changed \(direct 1, inherited 3\)/);
+  assert.match(body, /base&lt;token&gt;\.tsx/);
+  assert.deepEqual([...body.matchAll(/data-section="([^"]+)"/g)].map(match => match[1]), ['added', 'direct', 'inherited', 'removed']);
+  assert.match(body, /<summary role="button">Show all 3 frames<\/summary>/);
+  const inherited = body.slice(body.indexOf('data-section="inherited"'), body.indexOf('data-section="removed"'));
+  assert.doesNotMatch(inherited, /data-side="difference"/);
+  assert.match(inherited, /Representative/);
+  assert.match(inherited, /Outlier/);
+  assert.match(inherited, /design\/surfaces\/a\.tsx#small/);
+  assert.doesNotMatch(body.slice(body.indexOf('data-section="removed"')), /<img/);
+});
+
+test('grouped sheet counts representative and outlier pairs individually and lists other members', () => {
+  const html = reviewSheetHtml(groupedFixture(), 'dark');
+  assert.deepEqual([...html.matchAll(/<article data-source="[^"]+" data-frame="([^"]+)"/g)].map(match => match[1]), ['added', 'direct', 'median', 'large']);
+  assert.equal([...html.matchAll(/<img /g)].length, 7);
+  assert.match(html, /base&lt;token&gt;\.tsx/);
+  assert.match(html, /3 frames/);
+  assert.match(html, /design\/surfaces\/a\.tsx#small/);
+  assert.match(html, /1 more frames in the review URL/);
+  assert.doesNotMatch(html, /Difference/);
+});
+
+test('sheet never splits a pair to fill the remaining image budget', () => {
+  const model = groupedFixture();
+  model.sections.added = Array.from({ length: 21 }, (_, index) => ({ ...model.sections.added[0], frame: `added-${index}` }));
+  const html = reviewSheetHtml(model, 'dark');
+  assert.equal([...html.matchAll(/<img /g)].length, 23);
+  assert.match(html, /data-frame="direct"/);
+  assert.doesNotMatch(html, /data-frame="median"/);
+  assert.match(html, /3 more frames in the review URL/);
+  assert.match(html, /#removed/);
+});
+
+test('sheet counts missing captures as zero PNGs while retaining the error placeholder', () => {
+  const model = groupedFixture();
+  model.sections.added = Array.from({ length: 23 }, (_, index) => ({ ...model.sections.added[0], frame: `added-${index}` }));
+  model.sections.changed = [{ ...model.sections.changed[0], themes: [{ ...themeRow('dark'), images: { before: pixel, after: null } }] }];
+  const html = reviewSheetHtml(model, 'dark');
+  assert.equal([...html.matchAll(/<img /g)].length, 24);
+  assert.match(html, /Capture unavailable/);
+  assert.doesNotMatch(html, /more frames/);
+});
+
+test('theme filtering recomputes groups, median representative and outliers', () => {
+  const model = groupedFixture();
+  for (const [index, entry] of model.sections.changed.entries()) {
+    entry.themes.push({ ...themeRow('light'), verdict: index === 1 ? 'identical' : 'changed', differentPixels: index * 10 });
+  }
+  const themed = reviewForTheme(model, 'light');
+  assert.deepEqual(themed.counts, { added: 0, removed: 0, changed: 3, direct: 1, inherited: 2 });
+  assert.deepEqual(themed.groups[0].frames.map(entry => entry.frame), ['median', 'large']);
+  assert.ok(themed.groups[0].frames.every(entry => entry.themes.length === 1));
 });

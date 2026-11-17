@@ -196,3 +196,32 @@ test('initial review failure keeps navigation usable and a theme switch can retr
   await settle(await request(1));
   assert.equal(await page.locator('#error').isVisible(), false);
 });
+
+
+test('inherited groups collapse to a median pair and expand every other member without duplicate outliers', { timeout: 30000 }, async t => {
+  const { page, request, response } = await viewer(t);
+  const first = await request(0);
+  const payload = response('dark');
+  const pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1kAAAAASUVORK5CYII=';
+  const comparisons = [10, 20, 100].map((differentPixels, index) => ({
+    id: String(index), source: `design/surfaces/page-${index}.tsx`, frame: `inherited-${index}`,
+    status: 'matched', theme: 'dark', verdict: 'changed', pixels: { differentPixels },
+    change: { kind: 'inherited', causes: ['design/components/button.tsx'] },
+  }));
+  const images = new Map(comparisons.map(row => [row.id, { before: pixel, after: pixel, difference: pixel }]));
+  payload.review = buildReview({ comparisons, complete: true }, images, { label: 'Grouped review' });
+  first.resolve(payload);
+  await page.waitForFunction(() => window.__adg?.ready);
+  const group = page.locator('.review-group');
+  assert.equal(await group.count(), 1);
+  assert.equal(await group.locator('[data-frame="inherited-1"] img').count(), 2);
+  assert.equal(await group.locator('.review-frame[data-frame="inherited-2"]').count(), 1);
+  assert.equal(await group.locator('[data-side="difference"]').count(), 0);
+  assert.equal(await group.locator('.review-frame[data-frame="inherited-0"]').isVisible(), false);
+  await group.getByText('Show all 3 frames', { exact: true }).click();
+  assert.equal(await group.locator('.review-frame[data-frame="inherited-0"]').isVisible(), true);
+  assert.equal(await group.locator('.review-frame').count(), 3);
+  assert.equal(await group.locator('.review-frame[data-frame="inherited-2"]').count(), 1);
+  await group.getByText('Show all 3 frames', { exact: true }).press('Enter');
+  assert.equal(await group.locator('.review-frame[data-frame="inherited-0"]').isVisible(), false);
+});

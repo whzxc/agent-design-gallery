@@ -2,8 +2,8 @@ import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { availableParallelism } from 'node:os';
 import { buildSource } from './build.mjs';
-import { selectSources, relative, loadTokens, sourceDirectories, archFiles, featureFolderProblems } from './project.mjs';
-import { importDirectionViolations, singleConsumerComponents } from './asset-rules.mjs';
+import { selectSources, relative, loadTokens, sourceDirectories, archFiles, featureFolderProblems, readGroups, listSources } from './project.mjs';
+import { importDirectionViolations, singleConsumerComponents, chapterWarnings } from './asset-rules.mjs';
 import { launch, loadFrame, browserTask } from './browser.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
 import { commandFailure, cleanup, emptySelection } from './results.mjs';
@@ -221,6 +221,11 @@ export async function check(config, args = [], options = {}, log = console.log, 
     else warnings.push(classifyError(failure).error);
   };
   try {
+    const directories = sourceDirectories(config);
+    const chapterFiles = listSources(config.design, directories).map(file => path.relative(config.design, file).split(path.sep).join('/'));
+    const chapters = chapterWarnings(chapterFiles, readGroups(config.design, directories), directories);
+    warnings.push(...chapters);
+    if (!options.json) for (const warning of chapters) log(`WARNING ${warning.message}`);
     const mapping = await loadImplementationMap(config);
     const files = session ? session.sources.map(source => path.join(config.root, source)).filter(existsSync) : selectSources(config, args, { write });
     data.sources = files.map(file => relative(config, file));

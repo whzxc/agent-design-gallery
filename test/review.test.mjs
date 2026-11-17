@@ -134,7 +134,7 @@ export default () => [
   assert.match(indexHtml, /data:image\/png;base64,/);
   assert.match(indexHtml, /<strong>1<\/strong> added/);
   assert.match(indexHtml, /<strong>1<\/strong> removed/);
-  assert.match(indexHtml, /<strong>1<\/strong> changed/);
+  assert.match(indexHtml, /<strong>1<\/strong> changed \(direct 1, inherited 0\)/);
   assert.doesNotMatch(indexHtml, /data-frame="steady"/);
   assert.match(indexHtml, /data-frame="fresh" data-status="added"/);
   assert.match(indexHtml, /data-frame="legacy" data-status="removed"/);
@@ -187,9 +187,11 @@ export default () => [
     assert.equal(page.url(), reviewUrl);
 
     const counts = await page.evaluate(() => window.__adg.review?.counts);
-    assert.deepEqual(counts, { added: 1, removed: 1, changed: 1 });
+    assert.deepEqual(counts, { added: 1, removed: 1, changed: 1, direct: 1, inherited: 0 });
     assert.equal(await page.locator('#review-page').isVisible(), true);
-    assert.equal(await page.locator('.review-frame').count(), 3);
+    assert.equal(await page.locator('.review-frame').count(), 2);
+    assert.equal(await page.locator('[data-section="removed"] img').count(), 0);
+    assert.equal(await page.locator('[data-section="direct"] .review-frame').count(), 1);
     // The viewer requests its current theme with Before / After / Difference panes.
     const themedCard = page.locator('.review-frame[data-frame="themed"]');
     assert.deepEqual(
@@ -219,7 +221,7 @@ export default () => [
 ];\n`,
     );
     await page.waitForFunction(() => window.__adg?.ready && window.__adg?.review?.counts?.removed === 0);
-    assert.deepEqual(await page.evaluate(() => window.__adg.review.counts), { added: 1, removed: 0, changed: 1 });
+    assert.deepEqual(await page.evaluate(() => window.__adg.review.counts), { added: 1, removed: 0, changed: 1, direct: 1, inherited: 0 });
     await context.close();
   } finally {
     await browser.close();

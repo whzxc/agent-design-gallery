@@ -1,4 +1,4 @@
-import { isFeatureEntry, sourceFeature } from './project.mjs';
+import { isFeatureEntry, isFeatureInternal, sourceFeature } from './project.mjs';
 
 // Production sources are ordered from lower to higher layers. Studies are explorations.
 export function importDirectionViolations(graph, sources, { strictLayers = false } = {}) {
@@ -48,6 +48,29 @@ export function singleConsumerComponents(graph, sources, partsBySource) {
       }
       if (consumers.size < 2) warnings.push({ code: 'SINGLE_CONSUMER_COMPONENT', source, part, consumers: [...consumers].sort(), message: `${source}#${part} is reached by ${consumers.size} distinct higher-layer source${consumers.size === 1 ? '' : 's'}; move it back to its feature or add another feature consumer` });
     }
+  }
+  return warnings;
+}
+
+/** Chapter guidance never changes the check verdict. Paths are design-relative. */
+export function chapterWarnings(files, groups, sources) {
+  const production = sources.filter(source => source !== 'studies');
+  const requiredLayers = new Set(production.slice(0, Math.min(2, production.length - 1)));
+  files = files.filter(file => !isFeatureInternal(file, sources));
+  const inventory = new Set(files);
+  const assigned = new Set(groups.flatMap(group => group.assets));
+  const missing = files.filter(file => requiredLayers.has(file.split('/')[0]) && !assigned.has(file)).sort();
+  const warnings = [];
+  if (missing.length) warnings.push({
+    code: 'CHAPTER_SOURCES_UNASSIGNED', count: missing.length, paths: missing,
+    message: `${missing.length} component/module sources have no gallery.json chapter: ${missing.join(', ')}.`, next: [],
+  });
+  for (const group of groups) {
+    const paths = [...new Set(group.assets.filter(source => inventory.has(source)))];
+    if (paths.length > 12) warnings.push({
+      code: 'CHAPTER_TOO_LARGE', chapter: group.title, count: paths.length, paths,
+      message: `Chapter "${group.title}" has ${paths.length} sources; split it into feature chapters of about 3 to 12 sources.`, next: [],
+    });
   }
   return warnings;
 }

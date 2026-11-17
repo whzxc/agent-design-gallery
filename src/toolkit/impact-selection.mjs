@@ -72,7 +72,10 @@ export async function withImpacted(config, args, options, command, work) {
         const next = [{ argv: ['adg', command, ...(command === 'diff' ? [`--base=${options.base}`] : command === 'check' ? ['--read-only'] : []),
           ...(options.scale !== undefined && command !== 'check' ? [`--scale=${options.scale}`] : []), '--json'], reason: 'Evaluate the full project without impact filtering.' }];
         session.selection = selection; session.sources = sources; session.chosen = chosen; session.themes = themes; session.scheduled = scheduled;
-        session.diffInputs = { ...inputs.session, sources, close: async () => {},
+        session.diffInputs = { ...inputs.session, sources,
+          changes: inputs.changes.map(change => Object.fromEntries(['before', 'after'].map(side => [side,
+            change[side] === null ? null : path.posix.relative(inputs.projectPrefix || '.', change[side])]))),
+          close: async () => {},
           buildFrames: async ({ browser }) => inputs.session.buildFrames({ browser, materialized: views.map(view => view.built), failures,
             frame: options.frame, sources: [...new Set(chosen.filter(row => themes.some(theme => scheduled(row, theme))).map(row => row.source))] }) };
         const workStarted = performance.now();

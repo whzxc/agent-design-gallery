@@ -277,3 +277,14 @@ revision. The viewer, HTML review and sheet header list each failed source, side
 and error while showing the remaining sources. JSON includes
 `failures: [{ source, side, code, message }]`; partial review artifacts and cache
 entries remain available with `complete: false`. An incomplete diff exits 2.
+
+Review changes are grouped by cause. Reports state `changed N (direct D, inherited I)`.
+Direct changes edit the frame source or its module folder. Inherited groups share
+the same changed dependencies, show a median-area representative, and expand to
+every member. Members above twice the median changed-pixel area appear as outliers.
+The sheet spends its 24-image budget on added frames, direct changes, group
+representatives and outliers.
+
+`adg check` emits non-failing chapter warnings for component/module sources outside
+`gallery.json` chapters (`CHAPTER_SOURCES_UNASSIGNED`) and chapters above 12 sources
+(`CHAPTER_TOO_LARGE`). Organize chapters by feature, usually 3 to 12 sources each.

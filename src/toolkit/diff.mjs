@@ -5,6 +5,7 @@ import { availableParallelism } from 'node:os';
 import { launch, loadFrame, browserTask, readyResources } from './browser.mjs';
 import { prepareDiffInputs } from './diff-inputs.mjs';
 import { currentHead } from './arch-git.mjs';
+import { sourceDirectories, sourceFeature } from './project.mjs';
 import { pixelComparator, imageDifference } from './pixel-diff.mjs';
 import { partContext, captureEvidence, capturePart, isolateParent, frameIdentity, comparisonIdentity } from './part-diff.mjs';
 import { commandFailure, cleanup, emptySelection } from './results.mjs';
@@ -19,6 +20,40 @@ import { reviewCacheKey, writeReviewCache } from '../review-cache.mjs';
 const metadata = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const safeName = name => encodeURIComponent(name).replace(/\./g, '%2E');
 const classNames = ['imperceptible', 'antialiasing', 'boundary_bleed', 'bitmap_resampling', 'other'];
+
+/** Git owns direct changes; impact reasons own inherited cause sets when available. */
+export function reviewChange(row, inputs, built, selection = null) {
+  const changed = new Set((inputs.changes ?? []).flatMap(change => [change.before, change.after]).filter(Boolean));
+  const sides = [inputs.before, inputs.after ?? inputs.before];
+  const own = [...changed].filter(name => sides.some(({ config }) => {
+    const design = path.relative(config.root, config.design).split(path.sep).join('/');
+    const relativeSource = path.posix.relative(design, row.source);
+    const feature = sourceFeature(relativeSource, sourceDirectories(config));
+    return name === row.source || feature !== relativeSource && name.startsWith(path.posix.join(design, feature) + '/');
+  }));
+  if (own.length) return { kind: 'direct', causes: own.sort() };
+  const causes = new Set();
+  if (selection) {
+    const facts = new Map(selection.facts.map(fact => [fact.id, fact]));
+    for (const group of selection.frames) {
+      if (group.source !== row.source || !group.frames.includes(row.frame)) continue;
+      for (const entry of group.rows) for (const reason of entry.reasons ?? []) {
+        const source = facts.get(reason.fact)?.source;
+        if (source && reason.scope !== 'support') causes.add(source);
+      }
+    }
+  } else {
+    for (const [index, side] of sides.entries()) {
+      const source = [built.before, built.after][index]?.get(row.source);
+      for (const dependency of source?.dependencies ?? []) {
+        const name = path.relative(side.config.root, dependency).split(path.sep).join('/');
+        if (changed.has(name)) causes.add(name);
+      }
+    }
+    for (const name of inputs.globalChanges ?? []) causes.add(name);
+  }
+  return { kind: 'inherited', causes: [...causes].sort() };
+}
 
 function frameFailure(error, row, theme) {
   const failure = asCliError(error, 'RENDER_FAILED');
@@ -111,7 +146,7 @@ async function writePair(output, pair, thresholds, reviewImages) {
   const ref = { source: row.source, frame: row.frame };
   const comparison = {
     id: JSON.stringify([row.source, row.frame, theme, ...(row.support ? ['support'] : [])]), ...ref, theme,
-    status: row.status, matchKind: row.matchKind, matchCandidates: row.matchCandidates,
+    status: row.status, matchKind: row.matchKind, matchCandidates: row.matchCandidates, change: row.change,
     relation: pair.parent ? 'parent_crop' : 'revision', before: pair.parent?.ref ?? (pair.before ? ref : null), after: pair.after ? ref : null,
     beforeSize, afterSize, parent: pair.parent ?? null, snapshots: pair.snapshots ?? null, pixels: pair.pixels,
     verdict: reasons.length ? 'changed' : pair.parent ? 'structural' : 'identical', reasons,
@@ -192,13 +227,14 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
       summary: { sources: inputs.sources.length, frames: 0, comparisons: 0, supportComparisons: 0, isolationCaptures: 0,
         added: 0, removed: 0, matched: 0, identical: 0, structural: 0, changed: 0,
         classPixels: Object.fromEntries(classNames.map(name => [name, 0])) },
-      review: { added: 0, removed: 0, changed: 0, sheet: null },
+      review: { added: 0, removed: 0, changed: 0, direct: 0, inherited: 0, groups: [], sheet: null },
       differencePalette: { equal: '#00000000', imperceptible: '#64748b', antialiasing: '#f59e0b', boundary_bleed: '#0ea5e9', bitmap_resampling: '#a855f7', other: '#ff00ff' }, reportPath: null, indexPath: null, timings,
     };
     await timed('writeMs', () => Promise.all(['frames', 'support', 'report.json', 'index.html', 'review-sheet.png'].map(entry =>
       rm(path.join(output, entry), { recursive: true, force: true }))));
     if (session ? session.chosen.some(row => row.source.endsWith('.mmd') && session.themes.some(theme => session.scheduled(row, theme))) : inputs.sources.length) browser = await launchBrowser();
     const built = await timed('buildMs', () => inputs.buildFrames({ browser }));
+    for (const row of [...built.frames, ...built.support]) row.change = reviewChange(row, inputs, built, session?.selection);
     data.failures = built.failures ?? [];
     if (session) built.frames = built.frames.filter(row => themes.some(theme => session.scheduled(row, theme)));
     context = partContext(built, inputs, scale, themes, clock);
@@ -290,7 +326,11 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     }
   }
   const reviewModel = buildReview(data, reviewImages, { label: config.name ?? path.basename(config.root) });
-  data.review = { ...reviewModel.counts, sheet: data.review.sheet };
+  data.review = { ...reviewModel.counts, groups: (reviewModel.groups ?? []).map(group => ({
+    causes: group.causes, frames: group.frames.map(({ source, frame }) => ({ source, frame })),
+    representative: { source: group.representative.source, frame: group.representative.frame },
+    outliers: group.outliers.map(({ source, frame }) => ({ source, frame })), medianArea: group.medianArea,
+  })), sheet: data.review.sheet };
   onReview?.(reviewModel);
   timings.totalMs = performance.now() - started;
   data.reportPath = path.join(output, 'report.json');

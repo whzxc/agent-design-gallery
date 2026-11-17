@@ -460,7 +460,16 @@ type DiffData = {
       bitmap_resampling: number, other: number
     }
   },
-  review: { added: number, removed: number, changed: number, sheet: { path: string, theme: Theme } | null },
+  review: {
+    added: number, removed: number, changed: number,
+    direct: number, inherited: number,
+    groups: Array<{
+      causes: ProjectPath[], frames: Array<{ source: ProjectPath, frame: string }>,
+      representative: { source: ProjectPath, frame: string },
+      outliers: Array<{ source: ProjectPath, frame: string }>, medianArea: number
+    }>,
+    sheet: { path: string, theme: Theme } | null
+  },
   differencePalette: Record<string, string>, reportPath: string | null, indexPath: string | null,
   timings: {
     prepareMs: number, buildMs: number, captureMs: number,
@@ -1526,3 +1535,33 @@ revision. The viewer, HTML review and sheet header list each failed source, side
 and error while showing the remaining sources. JSON includes
 `failures: [{ source, side, code, message }]`; partial review artifacts and cache
 entries remain available with `complete: false`. An incomplete diff exits 2.
+
+### Chapter warnings
+
+These warnings do not add findings or change the exit code.
+
+| Code | Fields | Meaning |
+| --- | --- | --- |
+| `CHAPTER_SOURCES_UNASSIGNED` | `count`, `paths` | One warning lists component/module sources without a chapter. Paths are relative to the design directory. |
+| `CHAPTER_TOO_LARGE` | `chapter`, `count`, `paths` | One warning per chapter with more than 12 distinct existing sources. |
+
+Chapter guidance applies to configured component/module layers, including custom
+layer names and module feature-folder entries. Surfaces and studies are optional.
+
+### Review cause groups
+
+Each comparison carries `change: { kind: 'direct' | 'inherited', causes: ProjectPath[] }`.
+Direct means Git changed the source itself, or any file in its module feature
+folder. Inherited causes use the changed inputs that reach the frame in the
+operation's impact reasons. Groups combine the same sorted cause set.
+
+`data.review.changed` equals `direct + inherited`. Groups list inherited frame
+references, a median-area representative and outliers. Area uses changed pixels
+(the maximum across selected themes). For an even group, median area is the
+average of the middle values. The representative is nearest to that median,
+with source order breaking ties. An outlier exceeds twice the median.
+
+The page shows added, direct and inherited groups; groups expand to all members.
+The sheet uses the same order and up to 24 individual images, counting a
+before/after pair as two. Other inherited members and removals are named.
+Reports use `changed N (direct D, inherited I)`.

@@ -124,7 +124,7 @@ export default () => <Frame name="sample"><div style={{ width: 24, height: 24, b
       assert.notEqual(key.directory, previousKey.directory);
       assert.equal(await readReviewCache(key), null);
       const review = await requestReview(rev);
-      assert.deepEqual(review.counts, counts);
+      assert.deepEqual(review.counts, { ...counts, direct: counts.changed, inherited: 0 });
       assert.equal(review.current.head, git('rev-parse', 'HEAD'));
       assert.deepEqual({ ...await readReviewCache(key), label: 'project' }, review);
       const beforeHit = launches.mock.callCount();
@@ -139,10 +139,10 @@ export default () => <Frame name="sample"><div style={{ width: 24, height: 24, b
     await put('design/components/new.tsx', source('#cc00cc'));
     await expectMiss({ added: 1, removed: 0, changed: 1 });
     await rm(path.join(project, card));
-    await expectMiss({ added: 1, removed: 1, changed: 0 });
+    await expectMiss({ added: 1, removed: 1, changed: 0, direct: 0, inherited: 0 });
     git('add', '.');
     git('commit', '-qm', 'fixture update');
-    await expectMiss({ added: 1, removed: 1, changed: 0 });
+    await expectMiss({ added: 1, removed: 1, changed: 0, direct: 0, inherited: 0 });
     const settled = await expectMiss({ added: 0, removed: 0, changed: 0 }, 'HEAD');
     assert.notEqual(settled.base.sha, edited.base.sha);
   });
@@ -164,7 +164,7 @@ export default () => <Frame name="sample"><div style={{ width: 24, height: 24, b
     const result = JSON.parse(stdout);
     assert.equal(result.data.complete, true);
     assert.equal(result.data.thresholds.imperceptible.maxChannelDelta, 3);
-    assert.deepEqual((await readReviewCache(key))?.counts, { added: 1, removed: 1, changed: 0 });
+    assert.deepEqual((await readReviewCache(key))?.counts, { added: 1, removed: 1, changed: 0, direct: 0, inherited: 0 });
 
     // Reopen the real hub so it reads the changed project policy and only persisted caches survive.
     await hub.close();

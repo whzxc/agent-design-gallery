@@ -1,3 +1,5 @@
+import { groupReview } from './review-groups.js';
+
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
 ));
@@ -33,6 +35,7 @@ export function buildReview(data, imagesById = new Map(), { label } = {}) {
         source: row.source,
         frame: row.frame,
         status: row.status,
+        change: row.change,
         rows: new Map(),
       };
       grouped.set(key, entry);
@@ -64,12 +67,12 @@ export function buildReview(data, imagesById = new Map(), { label } = {}) {
     } else if (entry.status === 'removed') {
       sections.removed.push({ source: entry.source, frame: entry.frame, status: 'removed', themes: orderedThemes });
     } else if (orderedThemes.some(item => item.verdict === 'changed')) {
-      sections.changed.push({ source: entry.source, frame: entry.frame, status: 'changed', themes: orderedThemes });
+      sections.changed.push({ source: entry.source, frame: entry.frame, status: 'changed', change: entry.change, themes: orderedThemes });
     }
   }
 
   const fallbackLabel = data.project ? data.project.split(/[\\/]/).filter(Boolean).at(-1) : 'Design review';
-  return {
+  const review = {
     label: label || fallbackLabel || 'Design review',
     base: data.base ?? { rev: 'HEAD', sha: '' },
     current: data.current ?? { kind: 'working_tree', head: null },
@@ -83,6 +86,7 @@ export function buildReview(data, imagesById = new Map(), { label } = {}) {
     },
     sections,
   };
+  return { ...review, ...groupReview(review) };
 }
 
 function renderSide(side, label, src, absentLabel, alt, theme) {
@@ -93,27 +97,30 @@ function renderSide(side, label, src, absentLabel, alt, theme) {
   return `<figure class="review-pane" data-side="${escapeHtml(side)}"><figcaption>${escapeHtml(label)}</figcaption>${body}</figure>`;
 }
 
-function renderFrameCard(item) {
-  const label = `${item.source} · ${item.frame}`;
+function renderFrameCard(item, { paired = false, label: statusLabel = item.status } = {}) {
+  const label = `${item.source}#${item.frame}`;
   const themeBlocks = item.themes.map(themeItem => {
     const theme = themeItem.theme;
     const summary = themeSummary(themeItem);
+    const sides = item.status === 'added' ? ['after'] : paired ? ['before', 'after'] : ['before', 'after', 'difference'];
+    const absentLabels = { before: 'Absent at base', after: 'Removed in working tree', difference: 'No difference image' };
+    const panes = sides.map(side => renderSide(
+      side, side[0].toUpperCase() + side.slice(1), themeItem.images[side], absentLabels[side], `${label} (${theme} ${side})`, theme,
+    )).join('');
     return `<div class="review-theme" data-theme-row="${escapeHtml(theme)}" data-verdict="${escapeHtml(themeItem.verdict)}">
       <div class="review-theme-head">
         <span class="review-theme-name">${escapeHtml(theme)}</span>
         <span class="review-theme-meta">${escapeHtml(summary)}</span>
       </div>
-      <div class="review-columns">
-        ${renderSide('before', 'Before', themeItem.images.before, 'Absent at base', `${label} (${theme} before)`, theme)}
-        ${renderSide('after', 'After', themeItem.images.after, 'Removed in working tree', `${label} (${theme} after)`, theme)}
-        ${renderSide('difference', 'Difference', themeItem.images.difference, 'No difference image', `${label} (${theme} difference)`, theme)}
+      <div class="review-columns" style="--review-columns:${sides.length}">
+        ${panes}
       </div>
     </div>`;
   }).join('');
   return `<article class="review-frame" data-source="${escapeHtml(item.source)}" data-frame="${escapeHtml(item.frame)}" data-status="${escapeHtml(item.status)}">
     <header class="review-frame-head">
-      <h3><code>${escapeHtml(item.source)}</code><span class="review-dot">·</span><span>${escapeHtml(item.frame)}</span></h3>
-      <span class="review-status-pill" data-status="${escapeHtml(item.status)}">${escapeHtml(item.status)}</span>
+      <h3><code>${escapeHtml(label)}</code></h3>
+      <span class="review-status-pill" data-status="${escapeHtml(item.status)}">${escapeHtml(statusLabel)}</span>
     </header>
     <div class="review-themes">${themeBlocks}</div>
   </article>`;
@@ -126,22 +133,46 @@ export function renderReviewFailures(failures = []) {
   ).join('')}</ul></section>`;
 }
 
+function renderNames(entries) {
+  return `<ul class="review-names">${entries.map(entry => `<li data-source="${escapeHtml(entry.source)}" data-frame="${escapeHtml(entry.frame)}" data-status="${escapeHtml(entry.status)}"><code>${escapeHtml(entry.source)}#${escapeHtml(entry.frame)}</code></li>`).join('')}</ul>`;
+}
+
+function sameFrame(left, right) {
+  return left.source === right.source && left.frame === right.frame;
+}
+
+function renderGroup(group) {
+  const others = group.frames.filter(entry => !sameFrame(entry, group.representative));
+  const remaining = others.filter(entry => !group.outliers.some(outlier => sameFrame(entry, outlier)));
+  const causes = group.causes.map(cause => `<code>${escapeHtml(cause)}</code>`).join(', ');
+  return `<article class="review-group">
+    <header class="review-group-head"><h3>${causes}</h3><span>${group.frames.length} frames</span></header>
+    ${renderFrameCard(group.representative, { paired: true, label: 'Representative' })}
+    ${others.length ? renderNames(others) : ''}
+    ${group.outliers.map(entry => renderFrameCard(entry, { paired: true, label: 'Outlier' })).join('')}
+    ${remaining.length ? `<details class="review-group-members"><summary role="button">Show all ${group.frames.length} frames</summary><div class="review-section-list">${remaining.map(entry => renderFrameCard(entry, { paired: true, label: 'Inherited' })).join('')}</div></details>` : ''}
+  </article>`;
+}
+
 export function renderReviewBody(review) {
-  const counts = review.counts ?? { added: 0, removed: 0, changed: 0 };
+  const grouped = { ...review, ...groupReview(review) };
+  const { counts } = grouped;
   const baseLabel = review.base?.sha
     ? `${review.base.rev} (${shortSha(review.base.sha)})`
     : (review.base?.rev ?? 'base');
   const headLabel = review.current?.head ? `working tree (${shortSha(review.current.head)})` : 'working tree';
+  const direct = (review.sections?.changed ?? []).filter(entry => entry.change?.kind !== 'inherited');
   const sectionSpecs = [
-    ['added', 'Added', review.sections?.added ?? []],
-    ['removed', 'Removed', review.sections?.removed ?? []],
-    ['changed', 'Changed', review.sections?.changed ?? []],
+    ['added', 'Added', review.sections?.added ?? [], items => items.map(item => renderFrameCard(item)).join('')],
+    ['direct', 'Direct changes', direct, items => items.map(item => renderFrameCard(item)).join('')],
+    ['inherited', 'Inherited changes', grouped.groups ?? [], items => items.map(renderGroup).join('')],
+    ['removed', 'Removed', review.sections?.removed ?? [], renderNames],
   ];
   const renderedSections = sectionSpecs
     .filter(([, , items]) => items.length > 0)
-    .map(([kind, title, items]) => `<section class="review-section" data-section="${kind}">
-      <h2 class="review-section-title">${escapeHtml(title)} <span class="review-section-count">${items.length}</span></h2>
-      <div class="review-section-list">${items.map(renderFrameCard).join('')}</div>
+    .map(([kind, title, items, render]) => `<section class="review-section" data-section="${kind}">
+      <h2 class="review-section-title">${escapeHtml(title)} <span class="review-section-count">${kind === 'inherited' ? counts.inherited : items.length}</span></h2>
+      <div class="review-section-list">${render(items)}</div>
     </section>`)
     .join('');
   const empty = renderedSections
@@ -156,7 +187,7 @@ export function renderReviewBody(review) {
     <div class="review-counts" data-review-counts>
       <span class="review-count" data-kind="added"><strong>${counts.added}</strong> added</span>
       <span class="review-count" data-kind="removed"><strong>${counts.removed}</strong> removed</span>
-      <span class="review-count" data-kind="changed"><strong>${counts.changed}</strong> changed</span>
+      <span class="review-count" data-kind="changed"><strong>${counts.changed}</strong> changed (direct ${counts.direct}, inherited ${counts.inherited})</span>
     </div>
   </header>
   <div class="review-scroll">${renderReviewFailures(review.failures)}${renderedSections}${empty}</div>`;
@@ -188,6 +219,13 @@ export const REVIEW_STYLES = `
 .review-frame-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border); background:var(--surface); }
 .review-frame-head h3 { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px; margin:0; font-size:var(--text-body); font-weight:600; color:var(--text); }
 .review-frame-head code { font:var(--text-meta)/1.4 var(--font-mono); color:var(--text-secondary); }
+.review-group { display:flex; flex-direction:column; gap:14px; padding:16px; border:1px solid var(--border); border-radius:var(--radius-menu); }
+.review-group-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+.review-group-head h3 { margin:0; font:var(--text-meta)/1.5 var(--font-mono); overflow-wrap:anywhere; }
+.review-group-head span { flex:none; color:var(--text-secondary); }
+.review-names { margin:0; padding-left:20px; font:var(--text-meta)/1.6 var(--font-mono); overflow-wrap:anywhere; }
+.review-group-members summary { cursor:pointer; color:var(--text-secondary); }
+.review-group-members[open] summary { margin-bottom:14px; }
 .review-dot { color:var(--text-tertiary); }
 .review-status-pill { flex:none; padding:2px 8px; border-radius:999px; background:var(--surface-sunken); font-size:var(--text-caption); font-weight:600; text-transform:capitalize; color:var(--text-secondary); }
 .review-themes { display:flex; flex-direction:column; gap:1px; background:var(--border); }
@@ -195,7 +233,7 @@ export const REVIEW_STYLES = `
 .review-theme-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
 .review-theme-name { font-size:var(--text-meta); font-weight:650; text-transform:capitalize; color:var(--text); }
 .review-theme-meta { font:var(--text-caption)/1.4 var(--font-mono); color:var(--text-tertiary); }
-.review-columns { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; align-items:start; }
+.review-columns { display:grid; grid-template-columns:repeat(var(--review-columns, 3), minmax(0, 1fr)); gap:12px; align-items:start; }
 @media (max-width:900px) { .review-columns { grid-template-columns:1fr; } }
 .review-pane { margin:0; display:flex; flex-direction:column; gap:6px; min-width:0; }
 .review-pane figcaption { font-size:var(--text-caption); font-weight:550; color:var(--text-secondary); }

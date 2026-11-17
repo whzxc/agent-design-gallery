@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, realpath, rm, symlink } from 'node:fs/promises';
-import { resolveBase, materializeBase, sourceRenames, revisionValue, revisionError } from './arch-git.mjs';
+import { resolveBase, materializeBase, sourceRenames, revisionValue, revisionError, revisionChanges } from './arch-git.mjs';
+import { configInputFiles } from './input-generation.mjs';
 import { loadConfig, legacyConfigFile } from './config.mjs';
 import { selectSources, relative } from './project.mjs';
 import { buildSource } from './build.mjs';
@@ -186,9 +187,16 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
       const current = path.relative(root, path.join(base.root, rename.after));
       return outside(old) || outside(current) ? [] : [{ before: slash(old), after: slash(current) }];
     });
+    const changes = (await revisionChanges(base)).map(change => Object.fromEntries(['before', 'after'].map(side => [side,
+      change[side] === null ? null : slash(path.relative(root, path.join(base.root, change[side])))])));
+    const changed = new Set(changes.flatMap(change => [change.before, change.after]).filter(Boolean));
+    const configFiles = await Promise.all([before, after].map(async side =>
+      (await configInputFiles(side.config)).map(file => relative(side.config, file))));
+    const globalChanges = [...new Set([...configFiles.flat(), ...configDependencies.changedFiles.map(name =>
+      slash(path.relative(root, path.join(base.root, name))))])].filter(name => changed.has(name));
     let closed = false;
     return {
-      base, before, after, sources, warnings, translateDiagnostic: translate, environment: { configDependencies, baseMigration },
+      base, before, after, sources, changes, globalChanges, warnings, translateDiagnostic: translate, environment: { configDependencies, baseMigration },
       async buildFrames({ browser, materialized, failures: previousFailures = [], sources: requestedSources = sources, frame: requestedFrame = options.frame } = {}) {
         if (closed) throw new CliError('SOURCE_BUILD_FAILED', 'Diff inputs are closed; prepare a new comparison.');
         const built = materialized ? materialized.map(values => new Map(values)) : [new Map(), new Map()], snapshots = [new Map(), new Map()];
