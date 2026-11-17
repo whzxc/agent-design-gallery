@@ -132,7 +132,17 @@ export async function initSwitcher() {
     const [projects, instances] = await Promise.all(responses.map(response => response.json()));
     targets = [...projects.map(item => ({ ...item, kind: 'p' })), ...instances.map(item => ({ ...item, kind: 'i' }))];
     current = targets.find(item => item.kind === kind && (item.slug ?? item.id) === route[2]);
-    if (!current) return;
+    if (!current) {
+      if (kind === 'p') {
+        const matches = projects.filter(project => project.path.split(/[/\\]/).at(-1) === route[2]);
+        if (matches.length === 1) {
+          const url = new URL(location.href);
+          url.pathname = matches[0].url + url.pathname.slice(route[0].length);
+          location.replace(url);
+        }
+      }
+      return;
+    }
     document.body.append(menu);
     for (const trigger of triggers) {
       trigger.setAttribute('aria-expanded', 'false');
