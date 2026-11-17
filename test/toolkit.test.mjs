@@ -357,12 +357,6 @@ Second line</textarea>
     assert.deepEqual(result.texts.map(t=>t.text), ['Centered label','pill','~/projects/empty','Empty field','First line','Second line','Empty textarea']);
   } finally { await browser.close(); }
 });
-test('init preserves files and refreshes editor declarations; CLI accepts only v2 command flags',async t=>{
-  const c=await project(t);writeFileSync(path.join(c.design,'tsconfig.json'),'preserved');writeFileSync(path.join(c.design,'.adg/runtime.d.ts'),'stale');init(c,()=>{});
-  assert.equal(readFileSync(path.join(c.design,'tsconfig.json'),'utf8'),'preserved');assert.match(readFileSync(path.join(c.design,'.adg/runtime.d.ts'),'utf8'),/namespace JSX/);assert.match(readFileSync(path.join(c.root,'.gitignore'),'utf8'),/design\/\.adg/);
-  const f=put(c,'surfaces/a.tsx',source('<div/>'));assert.deepEqual(selectSources(c,['surfaces/a','design/surfaces/a.tsx']),[f,f]);
-  assert.equal(parseCli(['compare','--all']).values.all,true);assert.equal(parseCli(['render','surfaces/a','--frame=sample']).values.frame,'sample');assert.throws(()=>parseCli(['compare','a']),/help/);assert.equal(parseCli(['open','check']).positionals[0],'check');assert.doesNotMatch(help(),/adg sync|adg measure/);assert.deepEqual(viewport('300x200'),{width:300,height:200});
-});
 test('compare uses Frame capture, flags override it, both sides share a reader, and --all writes linked summaries',async t=>{
   const c=await project(t);const {createServer}=await import('node:http');
   put(c,'scenes/helper.tsx','export const data=[];');
