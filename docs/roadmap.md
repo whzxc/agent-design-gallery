@@ -76,7 +76,7 @@ checks those rules so retirement and layering no longer depend on cleanup rounds
 - Reverse ownership: `adg owner --part=<source>#<Export>` (or `--part=<source>` for whole-source bindings) returns the implementation bindings of a design part, so
   implementers find the counterpart to reuse.
 
-## 6. Board view (in progress)
+## 6. Board view (done, 0.15.0)
 
 The viewer presents the design library as chapter boards. The [board view](boards.md) contract owns the details.
 Doop was trialled as an external browsing and comment canvas and dropped: the board presentation came from ADG's own
@@ -88,11 +88,12 @@ that loaded slowly.
 - Publishing retirement (done): the CLI, configuration, JSON diagnostics, documentation and obsolete publishing tests are removed. The `?base=<rev>` review page stays.
 - Runtime (done): omit `undefined`, `null` and `false` style values instead of serializing them.
 - Review handoff (done): a review page that never shows a blank screen and reopens from a cache, one review theme
-  following the Mac's appearance, changes grouped by cause, moved and renamed frames recognized, and one compact
-  inline review sheet per change. The
+  following the Mac's appearance, changes grouped by cause, moved and renamed frames recognized, and one minimal
+  inline review sheet per change, grouped into Added, Changed and Removed. The
   [review handoff](design-toolkit.md#review-handoff) contract owns the details.
-- Comments: threads pinned to elements, frames, sources and chapters, a comment tool, one panel and an
-  agent command line. The [comments](comments.md) contract owns the details.
+- Comments (done): threads pinned to elements, frames, sources and chapters, a comment tool, one panel, review-page
+  comments, public thread links and an agent command line, replacing annotations. The user accepted it. The
+  [comments](comments.md) contract owns the details.
 
 Afterwards, expose the stable commands as an MCP server through ARC's MCP hub.
 
