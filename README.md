@@ -1,6 +1,6 @@
 # Agent Design Gallery
 
-Build, check and browse a repository's TSX design library as boards in a local viewer or resident multi-project hub. Review changes against Git and leave ADG annotations on frames.
+Build, check and browse a repository's TSX design library as boards in a local viewer or resident multi-project hub. Review changes against Git and discuss them in comment threads pinned to frames.
 
 ```sh
 npm install -g @whzxc/agent-design-gallery
@@ -52,7 +52,7 @@ adg link https://gallery.example/p/project/ --base=<rev>
 adg open ./design --base=<rev> --no-open
 ```
 
-Set `--base=<rev>` to the task's starting commit. Embed the single-theme review sheet and report its Git-derived counts with one reachable URL from `adg link <viewer-url> --base=<rev>`. The hub and direct viewer serve the same review at `?base=<rev>`. Targeted `--asset`, `--frame`, `--group`, `--layer`, `--tokens` and `--mode=path` links remain available for interactive navigation. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
+Set `--base=<rev>` to the task's starting commit. Embed the single-theme review sheet and give one reachable URL from `adg link <viewer-url> --base=<rev>`. The hub and direct viewer serve the same review at `?base=<rev>`. Targeted `--asset`, `--frame`, `--group`, `--layer`, `--tokens` and `--mode=path` links remain available for interactive navigation. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
 
 Every command accepts `--json`: finite commands return one versioned envelope, while foreground `open`/`serve` stream NDJSON events. `render` PNGs are in `data.captures`, with CSS and PNG pixel dimensions. See the [agent CLI interface](docs/agent-interface.md) for schemas, exits and recovery actions.
 
@@ -93,7 +93,7 @@ Files group by directory unless `gallery.json` supplies chapters, with each titl
 
 Unlisted sources form directory chapters. A mixed-layer group splits into a same-titled chapter in each layer view; keep project groups within one layer. A module folder shows its `index.tsx` under the feature directory name. Projects own their TSX sources, artwork, tokens, configuration and Git history. Preferences stay in `~/.agent-design-gallery/state.json`; `--state-dir` isolates them. Refreshing or reopening a directory restores its camera and selection. Source labels show modification times.
 
-Change reports embed the single-theme `data.review.sheet.path` PNG inline, then carry one reachable `?base=<rev>` review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed`, `moved` and `changed` counts from `adg diff --base=<rev> --impacted`. Comments use ADG annotations.
+Change reports embed the single-theme `data.review.sheet.path` PNG inline, then carry one reachable `?base=<rev>` review URL from `adg link <viewer-url> --base=<rev>`. [Comments](docs/comments.md) are threads pinned to the library.
 
 ## Design toolkit
 
@@ -261,11 +261,11 @@ The LaunchAgent `org.agent-design-gallery.hub` starts the resident hub at login 
 
 Run `adg diff --base=<rev> --impacted --theme=system --json` and embed
 `data.review.sheet.path` inline as a Markdown image, followed by the review URL
-from `adg link <viewer-url> --base=<rev>` and the added, removed, moved and changed counts.
+from `adg link <viewer-url> --base=<rev>`.
 The sheet follows macOS appearance, or light on other platforms; `render` also
 accepts `--theme=system`. Explicit light/dark overrides the sheet theme. Default
-diff comparison coverage remains both themes. The sheet includes up to 12 cells in two columns,
-with before/after pairs for changes and names for removals.
+diff comparison coverage remains both themes. The sheet groups frames into tinted Added,
+Changed and Removed sections with before → after pairs and almost no text.
 
 Review links show progress immediately and retain visible results during refresh.
 The current theme loads first; another theme is computed on switch. The state

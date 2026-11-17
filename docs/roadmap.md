@@ -80,7 +80,7 @@ checks those rules so retirement and layering no longer depend on cleanup rounds
 
 The viewer presents the design library as chapter boards. The [board view](boards.md) contract owns the details.
 Doop was trialled as an external browsing and comment canvas and dropped: the board presentation came from ADG's own
-generator, ADG annotations already cover comments, and publishing added a service, a sync step and per-frame iframes
+generator, comments belong in ADG itself, and publishing added a service, a sync step and per-frame iframes
 that loaded slowly.
 
 - Board view (done): chapters from `gallery.json` groups with the trial board presentation, a visual Tokens board,
@@ -91,8 +91,9 @@ that loaded slowly.
   following the Mac's appearance, changes grouped by cause, moved and renamed frames recognized, and one compact
   inline review sheet per change. The
   [review handoff](design-toolkit.md#review-handoff) contract owns the details.
-- Annotations, next round: element anchors and a comment interaction modelled on
-  [Doop](https://github.com/kgoedecke/doop)'s comments, after board view is accepted.
+- Comments, next round: threads pinned to elements, frames, sources and chapters, a comment tool, one panel and an
+  agent command line, modelled on [Doop](https://github.com/kgoedecke/doop)'s comments and replacing the unusable
+  annotations. The [comments](comments.md) contract owns the details.
 
 Afterwards, expose the stable commands as an MCP server through ARC's MCP hub.
 

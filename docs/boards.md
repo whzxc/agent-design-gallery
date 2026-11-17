@@ -96,10 +96,10 @@ behaviour; `?scope=tokens` opens the board.
 ## Interaction
 
 Existing viewer behaviour keeps working on boards: selection, the inspector, element hover and selection, Uses and
-Used by, annotations, Back, Fit, the minimap, search, keyboard shortcuts, accessible asset buttons and fixture states.
+Used by, comments, Back, Fit, the minimap, search, keyboard shortcuts, accessible asset buttons and fixture states.
 Clicking a section's source title selects the source and copies its name. Clicking a specimen selects that frame.
-Annotations stay anchored to their frame. Architecture diagrams keep their own scope, and the `?base=<rev>` review page
-is unchanged.
+[Comments](comments.md) stay anchored to their targets. Architecture diagrams keep their own scope, and the
+`?base=<rev>` review page keeps its layout.
 
 ## Performance
 

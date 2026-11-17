@@ -1497,26 +1497,24 @@ The internal [live verification harness](../tooling/inspect-audit.mjs) compares 
 DOM/style/Range and AX reads. It is used by tests and acceptance, including box, inherited-style, token-scope and
 missing-theme corruption cases; its findings and counters are not part of inspect's public schema or exits.
 
-## Annotations
+## Comments
 
-Run from the consumer project directory. `adg annotations --json` (or `annotations list`)
-returns the project's annotations, including resolved notes. `adg annotations read <id> --json`
-returns the full record; `adg annotations resolve <id> --json` marks it resolved. All three
-use the standard JSON envelope. `--state-dir` selects the same external state root used
-by `open` or `serve`.
+Run from the project directory. `adg comments` lists, reads, replies to and resolves comment threads as
+[comments](comments.md) defines. Each command uses the standard JSON envelope; `--state-dir` selects the same
+state root as `open` or `serve`. An unknown thread exits 2 with a recovery command that lists the open threads.
 
-Records contain an ID, display number, source, frame name, normalized frame `x`/`y`,
-Git `revision` (null outside Git), note, status and timestamps. `element` is optional;
-round 1 uses coordinate anchors. The creation revision remains attached when edited.
-The viewer shows open notes for the selected source/frame. Click Annotations, then the
-frame to add a note; click a point or note to edit. Move places the point on the next
-frame click. Resolve hides the callout; Delete removes the record.
+A thread record contains `id`, `number`, `status` (`open` or `resolved`), `anchor`, `target`, `revision`,
+`messages`, `createdAt`, `updatedAt`, `resolvedAt`, `resolvedBy` and `link`. `anchor` holds `kind` (`element`,
+`frame`, `source` or `chapter`), `source`, `frame`, `layer`, `chapter`, `element` (`{ id }` or null), the point
+`x`/`y` relative to the target and the frame-relative point `frameX`/`frameY`, each null where it does not apply.
+`target` is the placement snapshot: `label`, and for elements `tag`, `text` and `owner` (`<source>#<Export>`).
+A message contains `id`, `author` (`{ kind: 'user' }` or `{ kind: 'agent', name }`), `text`, `at` and
+`editedAt`. `read` adds `state` (`attached`, `changed` or `gone`), `elementBox` and `commands.inspect`.
 
-The existing viewer server provides `GET api/annotations`, `GET api/annotations?id=<id>`,
-and `POST api/annotations` with `action` (`create`, `update`, `delete`, `resolve`) and record
-fields. The hub proxies these routes with its existing authentication. Data lives under
-`<state-dir>/annotations/`, keyed by the absolute project root, shared by hub and standalone
-viewers using that state root. Consumer design repositories are never used for storage.
+The viewer server provides `GET api/comments`, `GET api/comments?id=<id>` and `POST api/comments` with an
+`action`: `create`, `reply`, `edit`, `delete`, `delete-thread`, `move`, `resolve` or `reopen`. Every change emits
+a `comments` event on the viewer's existing event stream. The hub proxies these routes with its existing
+authentication.
 
 ### Review handoff cache and sheet
 
@@ -1527,13 +1525,8 @@ to light. JSON capture/comparison themes and selection themes contain the resolv
 
 An impacted diff writes `review-sheet.png` beside `index.html` and reports its
 absolute path and resolved theme in `data.review.sheet`. An explicit single theme
-selects that theme; otherwise the sheet follows system appearance. The sheet names
-the project, revisions and counts, labels frames as `<source>#<frame>`, and includes
-up to 12 cells in two columns. A before/after pair uses one cell. Added frames
-show after, and removed frames are named. Captures only scale down and are at most
-480 CSS pixels tall. The sheet stops at 4000 CSS pixels and the footer counts the
-frames left to view.
-Its width is at most 1600 CSS pixels and its device scale is 2.
+selects that theme; otherwise the sheet follows system appearance. The
+[review handoff](design-toolkit.md#review-handoff) contract owns the sheet's layout.
 
 The hub requests only the current viewer theme. Its chrome and progress status
 appear immediately, and refresh retains the preceding result. Complete reviews
@@ -1543,7 +1536,7 @@ Switching themes computes the missing theme, and source changes invalidate the
 cache through the existing live refresh.
 
 Source build failures are isolated during review, including failures at the base
-revision. The viewer, HTML review and sheet header list each failed source, side
+revision. The viewer, HTML review and sheet list each failed source, side
 and error while showing the remaining sources. JSON includes
 `failures: [{ source, side, code, message }]`; partial review artifacts and cache
 entries remain available with `complete: false`. An incomplete diff exits 2.
@@ -1574,13 +1567,8 @@ average of the middle values. The representative is nearest to that median,
 with source order breaking ties. An outlier exceeds twice the median.
 
 The page shows added, direct and inherited groups; groups expand to all members.
-The sheet reserves cells for the first addition, first direct change and inherited
-representatives in group order, then allocates remaining cells to additions,
-direct changes and outliers. Cells
-display in review order. Each shown group names up to eight other members and
-counts the rest.
-The page and sheet end with one moved entry, grouping pairs by source move
-and listing each frame count. For renamed pairs they also show both
-`<source>#<frame>` references. `data.review.movePairs` carries both names as
-`before.frame` and `after.frame`. The report format is
-`added A · removed R · moved M · changed N (direct D, inherited I)`.
+The page ends with one moved entry, grouping pairs by source move and listing
+each frame count; renamed pairs show both `<source>#<frame>` references.
+`data.review.movePairs` carries both names as `before.frame` and `after.frame`.
+The [review handoff](design-toolkit.md#review-handoff) contract owns the sheet's
+selection and layout.

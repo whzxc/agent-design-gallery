@@ -2,7 +2,7 @@
 
 [Asset rules and adoption](asset-rules.md) · [Agent CLI interface](agent-interface.md) · [ADG design](design.md) · [Architecture](architecture.md) · [Performance](performance.md)
 
-A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `adg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, and presents the library as boards in the viewer (`adg <directory>`), with ADG annotations and a Git review page.
+A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `adg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, and presents the library as boards in the viewer (`adg <directory>`), with comments and a Git review page.
 
 This document is the source format and authoring command contract. The [agent CLI interface](agent-interface.md) defines `--json` output, command data schemas, exit codes and recovery actions. The [design asset rules](asset-rules.md) define layers, ownership, states, frame naming, fidelity and lifecycle, with an adoption guide for existing projects. A project's own mapping and governance documents keep its direction, declared forms, implementation locations, approval process and concrete gaps.
 
@@ -562,7 +562,7 @@ the consumer's normal approval process.
 
 ## Review handoff
 
-Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report embeds the review sheet inline as a Markdown image by its absolute path, then gives one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed`, `moved` and `changed` counts from `adg diff --base=<rev> --impacted` (`data.review`). It attaches no other screenshots.
+Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report embeds the review sheet inline as a Markdown image by its absolute path, then gives one reachable review URL from `adg link <viewer-url> --base=<rev>`. It attaches no other screenshots and does not restate revisions, counts or changed files.
 
 Review images show one theme: `system`, the Mac's current appearance (`defaults read -g AppleInterfaceStyle` reads `Dark`), otherwise light. `render` and `diff` accept `--theme=system` and report the resolved theme. Show the other theme as well only when the change alters theme-specific paint. Checks and diff verdicts still cover both themes.
 
@@ -581,7 +581,7 @@ A frame renamed during a move pairs up too: a removed and an added frame whose n
 
 A paired frame is compared like any other frame. When its pixels and size are identical in both themes, it is **moved**. Otherwise it is a direct change that names its previous source. Moved frames are neither added nor removed, and a renamed one names its previous `<source>#<frame>`.
 
-`data.review` reports `moved` with its pairs, splits `changed` into `direct` and `inherited`, and lists the groups with their causes and frames. A change report states the counts as `added A · removed R · moved M · changed N (direct D, inherited I)`.
+`data.review` reports `moved` with its pairs, splits `changed` into `direct` and `inherited`, and lists the groups with their causes and frames.
 
 The review sheet and the review page show these entries in order:
 1. added frames;
@@ -592,15 +592,13 @@ The review sheet and the review page show these entries in order:
 
 The page expands a group to every member.
 
-The review sheet is one PNG that `adg diff --base=<rev> --impacted` writes next to its `index.html` and reports as `data.review.sheet` (absolute path and resolved theme). It uses the system theme, or the theme `--theme` names when it names exactly one. The sheet is a compact contact sheet that reads at a glance inline in a chat; the review page holds the rest.
+The review sheet is one PNG that `adg diff --base=<rev> --impacted` writes next to its `index.html` and reports as `data.review.sheet` (absolute path and resolved theme). It uses the system theme, or the theme `--theme` names when it names exactly one. The sheet shows what changed and almost no text, so it reads at a glance inline in a chat; the review page holds the details.
 
-- **Header**: the project, the base and current revisions and the counts.
-- **Cells**: entries flow in the order above through two columns, 1600 CSS pixels wide in total at device scale 2. Each image fills one cell labelled `<source>#<frame>`: an added frame shows its new render, and a changed frame shows before and after side by side within the cell. A frame scales down to fit its cell, at most 480 CSS pixels tall, and never scales up. Removed frames are listed by name.
+- **Title**: the project name. The sheet shows no revisions, counts, theme, causes or changed files.
+- **Sections**: Added, Changed and Removed, in that order. A section appears only when it has entries, starts on its own row under its name, and never mixes with another. Each section has its own light colour, green for Added, amber for Changed and red for Removed: a faint tint behind its cells and a stronger tone for its name and cell edges, readable in both themes. Changed holds the direct changes, the inherited groups' representatives and the outliers, in the order above, with no label telling them apart. Moved frames are not shown, since their pixels did not change.
+- **Cells**: cells flow through two columns, 1600 CSS pixels wide in total at device scale 2. A cell's only text is its label: the source path relative to the design directory without its extension, then `#` and the frame name, as in `modules/files#source-local`. An inherited group's cell adds `+N` for the N other members it stands for. An added frame shows its render. A changed frame shows before and after side by side with an arrow pointing from before to after between them, and no Before or After labels. A frame scales down to fit its cell, at most 480 CSS pixels tall, and never scales up. The Removed section lists its frames by label, without images.
 - **Budget**: at most 12 images, where a before-and-after pair is one image. Places are reserved first, until the budget runs out: one for the first added frame, one for the first direct change, then one for each inherited group's representative, in group order. Every kind of change that occurred therefore shows at least one image. The remaining places go to the other added frames, direct changes and outliers, in the order above. Other group members take no place.
-- **Group text**: a group names its cause, its frame count and at most eight other members, and counts the rest.
-- **Height**: at most 4000 CSS pixels. Entries that do not fit are not drawn.
-
-A closing line states how many more frames the review URL holds.
+- **Height**: at most 4000 CSS pixels. Entries that do not fit are not drawn. Only then does a closing line, `+N more in the review page`, count the frames left out.
 
 | Need | Command |
 | --- | --- |
@@ -879,7 +877,7 @@ export default {
 
 ## Viewer conventions
 
-The viewer presents the design library as [boards](boards.md) and uses ADG annotations for comments. The Git `?base=<rev>` review page shows frame changes.
+The viewer presents the design library as [boards](boards.md) and uses [comments](comments.md) for discussion. The Git `?base=<rev>` review page shows frame changes.
 
 The viewer reads the same sources and rebuilds a source, and the sources that import it, when it is saved. Each `gallery.json` group defines a chapter board, and each listed source becomes a section in file order. Unlisted sources form directory chapters. Mixed-layer groups split by layer; keep each project group within one layer. Surfaces use the same board presentation as other layers, with specimens at their rendered sizes. Headers, source labels and specimen captions scale with the camera. Source saves reflow the affected board and boards below it in the same column while preserving the camera. Arrange recomputes the column assignment. See the [README](../README.md) for viewer controls.
 
