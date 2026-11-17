@@ -7,7 +7,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { startServer } from '../src/server.mjs';
-import { states, recent, commentThreadState } from '../fixtures/viewer.mjs';
+import { states, recent } from '../fixtures/viewer.mjs';
 import { hubFixtures } from '../fixtures/hub-compare.mjs';
 import comments from '../design/fixtures/comments.json' with { type: 'json' };
 import config from '../adg.config.mjs';
@@ -106,7 +106,7 @@ test('implementation captures map to isolated fixture environments', async () =>
   assert.equal(new Set(declared).size, declared.length);
   for (const name of declared) {
     const fixture=config.compare.fixture(name);
-    const state = name === comments.commentCanvas.fixture ? commentThreadState : states[name];
+    const state = name === comments.commentCanvas.fixture ? states['scope-layer'] : states[name];
     assert.equal(fixture.url, hubFixtures[name] ?? `/?fixture=${name}`);
     assert.equal(fixture.theme, Object.hasOwn(hubFixtures, name) ? 'light' : state.theme);
     assert.equal(fixture.locale,'en-US'); assert.ok(Number.isFinite(Date.parse(fixture.clock)));

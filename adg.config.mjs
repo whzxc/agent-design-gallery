@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { startServer } from './src/server.mjs';
-import { states, recent, assetModifiedAt, commentThreadState } from './fixtures/viewer.mjs';
+import { states, recent, assetModifiedAt } from './fixtures/viewer.mjs';
 import { commentFile } from './src/comments.mjs';
 import { loadConfig } from './src/toolkit/config.mjs';
 import comments from './design/fixtures/comments.json' with { type: 'json' };
@@ -11,7 +11,7 @@ import { hubFixtures, readyFixtureHub, startFixtureHub } from './fixtures/hub-co
 const clock = '2026-01-01T00:00:00Z';
 const fixtureStates = {
   ...states,
-  [comments.commentCanvas.fixture]: commentThreadState,
+  [comments.commentCanvas.fixture]: { ...states['scope-layer'], sidebar: false, camera: 'origin', origin: [48, 100], scale: 2 },
 };
 let fixtureStore;
 let selectedFixture;
