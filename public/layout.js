@@ -29,8 +29,8 @@ export function blockForAsset(asset) {
   const parts = asset.parts.length ? asset.parts : [{ ...asset.full, id: 'full', name: 'Full sheet' }];
   const box = bounds(parts.map(p => ({ x: p.x, y: p.y, w: p.width, h: p.height })));
   const previewCrop = asset.component ? {
-    id: 'overview', name: 'All forms', x: box.x - 24, y: box.y - 36,
-    width: box.w + 48, height: box.h + 60,
+    id: 'overview', name: 'All forms', x: box.x - 24, y: box.y - 32,
+    width: box.w + 48, height: box.h + 64,
   } : undefined;
   const filename = asset.path.split('/').at(-1);
   return {
@@ -43,6 +43,25 @@ export function blockForAsset(asset) {
       crop: { x: part.x, y: part.y, w: part.width, h: part.height },
     })),
   };
+}
+
+// The paint window is bounded by the well padding and neighbouring legacy frames.
+export function specimenPaintCrop(asset, crop) {
+  if (asset.layer?.toLowerCase() === 'surfaces' || asset.path.startsWith('surfaces/')) return crop;
+  let left = crop.x - 24, right = crop.x + crop.width + 24;
+  let top = crop.y - 32, bottom = crop.y + crop.height + 32;
+  if (asset.component && asset.format !== 'tsx') for (const other of asset.parts) {
+    if (other.id === crop.id) continue;
+    if (other.y < bottom && other.y + other.height > top) {
+      if (other.x >= crop.x + crop.width) right = Math.min(right, (crop.x + crop.width + other.x) / 2);
+      if (other.x + other.width <= crop.x) left = Math.max(left, (crop.x + other.x + other.width) / 2);
+    }
+    if (other.x < right && other.x + other.width > left) {
+      if (other.y >= crop.y + crop.height) bottom = Math.min(bottom, (crop.y + crop.height + other.y) / 2);
+      if (other.y + other.height <= crop.y) top = Math.max(top, (crop.y + other.y + other.height) / 2);
+    }
+  }
+  return {...crop, x:left, y:top, width:right-left, height:bottom-top};
 }
 
 function layoutSection(section, width, y) {
@@ -147,7 +166,7 @@ export function layoutWorld(input, { previousGroups = [] } = {}) {
 }
 
 export function componentWrapWidth(parts) {
-  const area = parts.reduce((sum, part) => sum + (part.width + 32) * (part.height + 48), 0);
+  const area = parts.reduce((sum, part) => sum + (part.width + 48) * (part.height + 64), 0);
   return Math.min(6400, Math.max(1600, Math.ceil(Math.sqrt(area * 1.6))));
 }
 export function fitArea(width, height, sidebar = true, inspector = false) {

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Give board specimens a single backdrop and let shadows and focus rings extend into isolated well padding. Keep screen edges on surface frames.
+- Group every Tokens section by source headings and draw proportionally scaled horizontal size bars.
+
 - Retire `adg publish`, its command help, JSON diagnostics and `publish` configuration. Remove the obsolete publishing tests and documentation.
 - Present design sources as chapter boards with a visual Tokens board, responsive specimen spans and deterministic layer columns. Preserve source/frame selection, annotations and Git-based review handoff.
 

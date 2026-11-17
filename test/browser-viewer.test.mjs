@@ -480,10 +480,17 @@ test('TSX board specimens retain frame sizes, exact previews, notes, caches and 
           } finally {URL.revokeObjectURL(optimized);URL.revokeObjectURL(original);URL.revokeObjectURL(compact)}
         }
       }
-      return {paths:data.assets.map(a=>a.path),parts:set.parts,blocks:world.groups.flatMap(g=>g.blocks).map(b=>({kind:b.kind,w:b.w,h:b.h,frames:b.frames})),note:set.parts[0].note,version:data.assets.find(a=>a.path===set.path).version,crops,items:world.items.map(({id,path,x,y,width,height,group})=>({id,path,x,y,width,height,group}))};
+      const document=new DOMParser().parseFromString(set.source,'image/svg+xml');
+      const windows=[...document.querySelectorAll('foreignObject')].map(node=>Object.fromEntries(['x','y','width','height','overflow'].map(name=>[name,node.getAttribute(name)])));
+      return {paths:data.assets.map(a=>a.path),parts:set.parts,windows,blocks:world.groups.flatMap(g=>g.blocks).map(b=>({kind:b.kind,w:b.w,h:b.h,frames:b.frames})),note:set.parts[0].note,version:data.assets.find(a=>a.path===set.path).version,crops,items:world.items.map(({id,path,x,y,width,height,group})=>({id,path,x,y,width,height,group}))};
     });
     assert.deepEqual(result.paths,['components/forms.tsx','surfaces/flow.tsx']);
-    assert.deepEqual(result.parts.map(p=>[p.x,p.y]),[[0,0],[0,68],[732,68]]);assert.equal(result.note,'Note 0');
+    assert.deepEqual(result.parts.map(p=>[p.x,p.y]),[[0,0],[0,84],[748,84]]);assert.equal(result.note,'Note 0');
+    assert.deepEqual(result.windows, [
+      {x:'-24',y:'-32',width:'948',height:'84',overflow:'hidden'},
+      {x:'-24',y:'52',width:'748',height:'94',overflow:'hidden'},
+      {x:'724',y:'52',width:'548',height:'104',overflow:'hidden'},
+    ]);
     assert.equal(result.blocks.length,2);
     assert.deepEqual(result.blocks.map(b=>b.frames.map(f=>[f.w,f.h])),[[[900,20],[700,30],[500,40]],[[100,50],[100,50]]]);
     assert.equal(result.items.length,5);

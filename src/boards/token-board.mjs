@@ -1,6 +1,8 @@
 import { parseTokens, themeCss } from '../toolkit/tokens.mjs';
 import { escape } from '../toolkit/html.mjs';
-import { boardCss, boardHeader, sectionMarkup, boardWidth } from './board.mjs';
+import { boardCss, boardHeader, sectionMarkup, boardWidth, specimenWidth } from './board.mjs';
+
+const sizeTrackWidth = (specimenWidth - 32) / 2;
 
 const tokenStyles = `
 [data-adg-token-groups]{display:flex;flex-direction:column;gap:40px}
@@ -23,7 +25,13 @@ const tokenStyles = `
 [data-adg-shadow-grid]{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:32px;padding:40px;border-radius:var(--radius-card,12px);background:var(--canvas,#f0f0ee)}
 [data-adg-shadow]{height:120px;margin-bottom:16px;border-radius:var(--radius-card,12px);background:var(--surface,#fff)}
 [data-adg-size-list]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 32px;align-items:start}
-[data-adg-size]{width:100%;min-height:1px;margin-bottom:10px;border-radius:var(--radius-field,8px);background:var(--surface-subtle,var(--surface-section,#e9e9e4));border:1px solid var(--border,#deded9);box-sizing:border-box}
+[data-adg-size-group]{--adg-size-maximum:var(--adg-size-maximum-light);--adg-size-scale:calc(${sizeTrackWidth}px / var(--adg-size-maximum))}
+[data-adg-size-track]{height:16px;margin-bottom:10px;background:var(--canvas,#f0f0ee)}
+[data-adg-size]{--adg-size-length:var(--adg-size-length-light);width:calc(var(--adg-size-length) * var(--adg-size-scale));height:100%;background:var(--action,var(--accent,#333))}
+:where([data-theme="dark"]) [data-adg-size-group],[data-adg-board][data-theme="dark"] [data-adg-size-group]{--adg-size-maximum:var(--adg-size-maximum-dark)}
+:where([data-theme="dark"]) [data-adg-size],[data-adg-board][data-theme="dark"] [data-adg-size]{--adg-size-length:var(--adg-size-length-dark)}
+[data-adg-size-scale]{font-size:clamp(0px,calc((1 - var(--adg-size-scale)) * 100000px),13px);font-weight:400;counter-reset:adg-size-scale round(calc(var(--adg-size-scale) * 100))}
+[data-adg-size-scale]::after{content:" · " counter(adg-size-scale) "%"}
 [data-adg-motion-grid]{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:32px 24px;align-items:start}
 [data-adg-easing]{display:block;width:100%;height:128px;margin-bottom:12px;border-radius:var(--radius-card,12px);background:var(--canvas,#f0f0ee);color:var(--text,#20201e)}
 [data-adg-duration-track]{height:12px;margin:24px 0 20px;border-radius:6px;background:var(--canvas,#f0f0ee);overflow:hidden}
@@ -31,7 +39,7 @@ const tokenStyles = `
 [data-adg-type-extras]{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 24px}
 `;
 
-function colourGroups(css, names) {
+function tokenHeadings(css) {
   const root = /:root\s*\{([\s\S]*?)\}/.exec(css)?.[1] ?? '';
   const headings = new Map();
   let heading;
@@ -41,6 +49,10 @@ function colourGroups(css, names) {
     const token = /^\s*(--[\w-]+)\s*:/.exec(line);
     if (token && heading) headings.set(token[1], heading);
   }
+  return headings;
+}
+
+function tokenGroups(headings, names) {
   const groups = new Map();
   for (const name of names) {
     const title = headings.get(name) ?? name.slice(2).split('-')[0];
@@ -59,6 +71,15 @@ function resolvedValue(name, values, seen = new Set()) {
 
 function caption(name, light, dark) {
   return `<code>${escape(name)}</code><small>Light: ${escape(light)}</small>${light !== dark ? `<small>Dark: ${escape(dark)}</small>` : ''}`;
+}
+
+function sizeLength(value) {
+  const match = /^(-?(?:\d+\.?\d*|\.\d+))(px|rem|em|vh|vw|%)?$/.exec(value);
+  if (!match || (!match[2] && Number(match[1]) !== 0)) return null;
+  const number = Math.max(0, Number(match[1]));
+  if (match[2] === '%') return `${number / 100 * sizeTrackWidth}px`;
+  if (match[2] === 'em') return `${number * 16}px`;
+  return `${number}${match[2] ?? 'px'}`;
 }
 
 function tokenCategory(name, value, colours) {
@@ -102,49 +123,65 @@ export function tokenBoard(source, css, { projectName = 'Design library' } = {})
   }
   const light = name => resolvedValue(name, tokens.light);
   const dark = name => resolvedValue(name, darkValues);
+  const headings = tokenHeadings(css);
+  const groups = (names, render) => `<div data-adg-token-groups>${[...tokenGroups(headings, names)].map(([title, group]) =>
+    `<div data-adg-token-group><h3>${escape(title)}</h3>${render(group)}</div>`).join('')}</div>`;
   const article = (name, content, attrs = '') => `<article data-adg-token data-specimen="${escape(`${source}#${name}`)}"${attrs}>${content}</article>`;
   const label = name => caption(name, tokens.light.get(name), tokens.dark.get(name) ?? tokens.light.get(name));
   const section = (title, content) => sectionMarkup({ title, source, content }).replace(
     `data-adg-section="${escape(source)}"`, `data-adg-section="${escape(`${source}#${title.toLowerCase()}`)}"`); 
   const sections = [];
   if (categories.has('colour')) {
-    const groups = colourGroups(css, categories.get('colour'));
-    const content = [...groups].map(([title, names]) => `<div data-adg-token-group><h3>${escape(title)}</h3><div data-adg-token-grid>${names.map(name => article(name,
-      `<div data-adg-token-swatch><span style="background:${escape(light(name))}"></span><span style="background:${escape(dark(name))}"></span></div>${label(name)}`)).join('')}</div></div>`).join('');
-    sections.push(section('Colour', `<div data-adg-token-groups>${content}</div>`));
+    sections.push(section('Colour', groups(categories.get('colour'), names => `<div data-adg-token-grid>${names.map(name => article(name,
+      `<div data-adg-token-swatch><span style="background:${escape(light(name))}"></span><span style="background:${escape(dark(name))}"></span></div>${label(name)}`)).join('')}</div>`)));
   }
   if (categories.has('type') || categories.has('family') || categories.has('type-extra')) {
-    const sizes = (categories.get('type') ?? []).map(name => {
+    const sizeRow = name => {
       const role = name.replace(/^--(?:font-size|text)-/, '');
       const line = [`--line-${role}`, `--line-height-${role}`, `--font-line-${role}`].find(key => tokens.light.has(key));
       const weight = [`--weight-${role}`, `--font-weight-${role}`].find(key => tokens.light.has(key));
       const style = `font-size:var(${name});line-height:${line ? `var(${line})` : '1.4'};font-weight:${weight ? `var(${weight})` : '400'}`;
       const metrics = [name, line, weight].filter(Boolean).map(key => key === name ? escape(tokens.light.get(key)) : `<span data-specimen="${escape(`${source}#${key}`)}">${escape(tokens.light.get(key))}</span>`).join(' / ');
       return article(name, `<code>${escape(name)}</code><span style="${escape(style)}">The quick brown fox</span><small>${metrics}</small>`, ' data-adg-type-row');
-    }).join('');
-    const families = (categories.get('family') ?? []).map(name => article(name,
-      `<div data-adg-family-sample style="font-family:var(${escape(name)})">Aa Bb 0123</div>${label(name)}`, ' data-adg-family')).join('');
+    };
     const paired = new Set((categories.get('type') ?? []).flatMap(name => {
       const role = name.replace(/^--(?:font-size|text)-/, '');
       return [`--line-${role}`, `--line-height-${role}`, `--font-line-${role}`, `--weight-${role}`, `--font-weight-${role}`];
     }));
-    const extras = (categories.get('type-extra') ?? []).filter(name => !paired.has(name)).map(name => article(name, label(name))).join('');
-    sections.push(section('Type', `<div data-adg-token-groups>${sizes ? `<div data-adg-type-scale>${sizes}</div>` : ''}${families ? `<div data-adg-token-group><h3>Families</h3><div data-adg-family-grid>${families}</div></div>` : ''}${extras ? `<div data-adg-type-extras>${extras}</div>` : ''}</div>`));
+    const extras = (categories.get('type-extra') ?? []).filter(name => !paired.has(name));
+    const names = [...tokens.light.keys()].filter(name => ['type', 'family'].includes(tokenCategory(name, tokens.light.get(name), colours)) || extras.includes(name));
+    sections.push(section('Type', groups(names, group => {
+      const sizes = group.filter(name => categories.get('type')?.includes(name)).map(sizeRow).join('');
+      const families = group.filter(name => categories.get('family')?.includes(name)).map(name => article(name,
+        `<div data-adg-family-sample style="font-family:var(${escape(name)})">Aa Bb 0123</div>${label(name)}`, ' data-adg-family')).join('');
+      const remaining = group.filter(name => extras.includes(name)).map(name => article(name, label(name))).join('');
+      return `${sizes ? `<div data-adg-type-scale>${sizes}</div>` : ''}${families ? `<div data-adg-family-grid>${families}</div>` : ''}${remaining ? `<div data-adg-type-extras>${remaining}</div>` : ''}`;
+    })));
   }
-  if (categories.has('radius')) sections.push(section('Shape', `<div data-adg-shape-grid>${categories.get('radius').map(name => article(name, `<div data-adg-radius style="border-radius:var(${escape(name)})"></div>${label(name)}`)).join('')}</div>`));
-  if (categories.has('shadow')) sections.push(section('Elevation', `<div data-adg-shadow-grid>${categories.get('shadow').map(name => article(name, `<div data-adg-shadow style="--hub-color:var(--accent,var(--text,#333));box-shadow:var(${escape(name)})"></div>${label(name)}`)).join('')}</div>`));
-  if (categories.has('size')) sections.push(section('Sizing', `<div data-adg-size-list>${categories.get('size').map(name => {
-    const value = light(name);
-    const preview = /^[-.\d]+(?:px|rem|em|vh|vw|%)$/.test(value) ? `<div data-adg-size style="height:var(${escape(name)})"></div>` : '';
-    return article(name, preview + label(name));
-  }).join('')}</div>`));
+  if (categories.has('radius')) sections.push(section('Shape', groups(categories.get('radius'), names => `<div data-adg-shape-grid>${names.map(name => article(name, `<div data-adg-radius style="border-radius:var(${escape(name)})"></div>${label(name)}`)).join('')}</div>`)));
+  if (categories.has('shadow')) sections.push(section('Elevation', groups(categories.get('shadow'), names => `<div data-adg-shadow-grid>${names.map(name => article(name, `<div data-adg-shadow style="--hub-color:var(--accent,var(--text,#333));box-shadow:var(${escape(name)})"></div>${label(name)}`)).join('')}</div>`)));
+  if (categories.has('size')) {
+    const sizeGroups = [...tokenGroups(headings, categories.get('size'))].map(([title, names]) => {
+      const lengths = names.map(name => ({ name, light: sizeLength(light(name)), dark: sizeLength(dark(name)) }));
+      const maximum = (theme) => `max(${sizeTrackWidth}px,${lengths.map(length => length[theme]).filter(Boolean).join(',') || '0px'})`;
+      const scale = `--adg-size-maximum-light:${maximum('light')};--adg-size-maximum-dark:${maximum('dark')}`;
+      const bars = lengths.map(length => {
+        const preview = length.light === null ? '' : `<div data-adg-size-track><div data-adg-size style="--adg-size-length-light:${length.light};--adg-size-length-dark:${length.dark ?? length.light}"></div></div>`;
+        return article(length.name, preview + label(length.name));
+      }).join('');
+      return `<div data-adg-token-group data-adg-size-group style="${escape(scale)}"><h3>${escape(title)}<span data-adg-size-scale></span></h3><div data-adg-size-list>${bars}</div></div>`;
+    }).join('');
+    sections.push(section('Sizing', `<div data-adg-token-groups>${sizeGroups}</div>`));
+  }
   if (categories.has('easing') || categories.has('duration')) {
-    const durations = categories.get('duration') ?? [];
     const milliseconds = name => parseFloat(light(name)) * (light(name).endsWith('ms') ? 1 : 1000);
-    const maximum = Math.max(1, ...durations.map(milliseconds));
-    const curves = (categories.get('easing') ?? []).map(name => article(name, easingCurve(light(name)) + label(name))).join('');
-    const bars = durations.map(name => article(name, `<div data-adg-duration-track><div data-adg-duration style="width:${milliseconds(name) / maximum * 100}%"></div></div>${label(name)}`)).join('');
-    sections.push(section('Motion', `<div data-adg-motion-grid>${curves}${bars}</div>`));
+    const names = [...tokens.light.keys()].filter(name => categories.get('easing')?.includes(name) || categories.get('duration')?.includes(name));
+    sections.push(section('Motion', groups(names, group => {
+      const maximum = Math.max(1, ...group.filter(name => categories.get('duration')?.includes(name)).map(milliseconds));
+      return `<div data-adg-motion-grid>${group.map(name => article(name, categories.get('easing')?.includes(name)
+        ? easingCurve(light(name)) + label(name)
+        : `<div data-adg-duration-track><div data-adg-duration style="width:${milliseconds(name) / maximum * 100}%"></div></div>${label(name)}`)).join('')}</div>`;
+    })));
   }
   const body = `<main data-adg-board>${boardHeader({ title: 'Tokens', projectName, layer: 'Tokens', number: 1, sourceCount: 1, frameCount: tokens.light.size, countLabel: 'tokens' })}${sections.join('')}</main>`;
   // Scope project tokens to the board so a DOM overlay never changes viewer chrome.

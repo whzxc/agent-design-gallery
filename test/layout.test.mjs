@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { layoutWorld, blockForAsset, rows, bounds, fitArea, fitView, componentWrapWidth } from '../public/layout.js';
+import { layoutWorld, blockForAsset, specimenPaintCrop, rows, bounds, fitArea, fitView, componentWrapWidth } from '../public/layout.js';
 import { arrange, arrangementInput, groupAssets, resolveScope } from '../public/assets.js';
 import { createArranger } from '../public/arrangement.js';
 
@@ -52,7 +52,7 @@ test('each declared component frame becomes an independently selectable item sha
   const data = manifest([asset]);
   const section = blockForAsset(asset);
   assert.equal(section.kind, 'flow');
-  assert.deepEqual(section.previewCrop, { id: 'overview', name: 'All forms', x: 16, y: 26, width: 258, height: 94 });
+  assert.deepEqual(section.previewCrop, { id: 'overview', name: 'All forms', x: 16, y: 30, width: 258, height: 98 });
   const { groups, items } = arrange(data);
   assert.deepEqual(items.map(a => [a.id, a.component, a.kind]), [
     ['components/button.tsx#0', false, 'flow'], ['components/button.tsx#1', false, 'flow'],
@@ -66,6 +66,8 @@ test('each declared component frame becomes an independently selectable item sha
     assert.deepEqual([item.shown[0].x, item.shown[0].y, item.width, item.height], [part.x, part.y, part.width, part.height]);
     near(item.x, groups[0].x + groups[0].blocks[0].x + frame.x);
     near(item.y, groups[0].y + groups[0].blocks[0].y + frame.y);
+    assert.deepEqual(item.well, { x: groups[0].x + groups[0].blocks[0].x + frame.well.x,
+      y: groups[0].y + groups[0].blocks[0].y + frame.well.y, width: frame.well.w, height: frame.well.h });
   }
 });
 
@@ -83,10 +85,34 @@ test('source sections retain names, modification time, frame notes, proposal mar
   assert.equal(frame.proposal, 'account');
   assert.equal(frame.caption.h, 36);
   assert.equal(item.previewCrop.id, '0');
-  assert.deepEqual(item.previewCrop, item.shown[0]);
+  assert.deepEqual(item.previewCrop, { ...item.shown[0], x: -4, y: -2, width: 348, height: 264 });
+  assert.deepEqual(item.paintCrop, item.previewCrop);
   assert.deepEqual([item.shown[0].x, item.shown[0].y, item.width, item.height], [20, 30, 300, 200]);
   const full = arrange(manifest([source('surfaces/legacy.svg', [], { full: { x: -4, y: 8, width: 510, height: 230 } })]));
   assert.deepEqual(full.items.map(a => [a.id, a.shown[0].x, a.shown[0].y, a.width, a.height]), [['surfaces/legacy.svg#full', -4, 8, 510, 230]]);
+});
+
+test('paint crops bound legacy neighbour bodies on both axes and retain TSX bleed padding', () => {
+  const parts = [
+    { id: '0', x: 0, y: 0, width: 100, height: 50 },
+    { id: '1', x: 108, y: 0, width: 100, height: 50 },
+    { id: '2', x: 0, y: 58, width: 100, height: 50 },
+    { id: '3', x: 108, y: 58, width: 100, height: 50 },
+  ];
+  const asset = source('components/legacy.svg', [], { component: true, parts });
+  assert.deepEqual(parts.map(part => specimenPaintCrop(asset, part)), [
+    { ...parts[0], x: -24, y: -32, width: 128, height: 86 },
+    { ...parts[1], x: 104, y: -32, width: 128, height: 86 },
+    { ...parts[2], x: -24, y: 54, width: 128, height: 86 },
+    { ...parts[3], x: 104, y: 54, width: 128, height: 86 },
+  ]);
+  const tsx = { ...asset, format: 'tsx' };
+  for (const part of parts) assert.deepEqual(specimenPaintCrop(tsx, part), {
+    ...part, x: part.x - 24, y: part.y - 32, width: part.width + 48, height: part.height + 64,
+  });
+  for (const surface of [{ ...asset, layer: 'Surfaces' }, { ...asset, path: 'surfaces/legacy.svg' }]) {
+    for (const part of parts) assert.deepEqual(specimenPaintCrop(surface, part), part);
+  }
 });
 
 test('board sections expose local wells, centered native-size frames and declaration-order spans', () => {
@@ -304,7 +330,8 @@ test('fit and prepared component wrap helpers retain their existing geometry', (
   assert.equal(componentWrapWidth([{width: 100000, height: 100000}]), 6400);
   const forms = Array.from({length: 87}, () => ({width: 600, height: 200}));
   const width = componentWrapWidth(forms);
+  assert.equal(width, Math.ceil(Math.sqrt(87 * 648 * 264 * 1.6)));
   assert.ok(width > 1600 && width <= 6400);
-  assert.ok(bounds(rows(forms.map(p => ({w: p.width, h: p.height})), width, 32, 48)).h <
-    bounds(rows(forms.map(p => ({w: p.width, h: p.height})), 1600, 32, 48)).h);
+  assert.ok(bounds(rows(forms.map(p => ({w: p.width, h: p.height})), width, 48, 64)).h <
+    bounds(rows(forms.map(p => ({w: p.width, h: p.height})), 1600, 48, 64)).h);
 });

@@ -1,8 +1,8 @@
 import { dataFetch } from './auth.js';
 import { collectViewerElements } from './frame-identity.js';
-import { blockForAsset, componentWrapWidth, layoutWorld } from "./layout.js";
+import { blockForAsset, componentWrapWidth, layoutWorld, specimenPaintCrop } from "./layout.js";
 // Measure declared SVG content in an isolated, script-disabled document.
-export const metadataContext = () => `adaptive-wrap-v1|${navigator.userAgent}|${devicePixelRatio}`;
+export const metadataContext = () => `specimen-bleed-v2|${navigator.userAgent}|${devicePixelRatio}`;
 export function measuredMetadata(asset) {
   const {format,full,component,parts,background,imports,frameRanges}=asset;
   return {format,full,component,parts,background,imports,frameRanges};
@@ -287,7 +287,10 @@ export function arrange(data, { placed, previousGroups } = {}) {
         const crop = { ...frame.crop, width: frame.w, height: frame.h, id: frame.id, name: frame.name };
         items.push({ ...asset, name: section.title, component: false, id: `${asset.path}#${frame.id}`, kind: 'flow', group,
           x: board.x + section.x + frame.x, y: board.y + section.y + frame.y,
-          width: frame.w, height: frame.h, shown: [crop], previewCrop: section.previewCrop ?? crop,
+          width: frame.w, height: frame.h, shown: [crop],
+          well: {x:board.x+section.x+frame.well.x,y:board.y+section.y+frame.well.y,width:frame.well.w,height:frame.well.h},
+          paintCrop: specimenPaintCrop(asset, crop),
+          previewCrop: section.previewCrop ?? specimenPaintCrop(asset, crop),
         });
       }
     }
@@ -346,9 +349,9 @@ async function prepareSource(asset, built, theme, signal) {
     const wrapWidth = built.component ? componentWrapWidth(parts) : Infinity;
     let x=0,y=0,rowHeight=0;
     for (const part of parts) {
-      if (x && x+part.width>wrapWidth) { x=0;y+=rowHeight+48;rowHeight=0; }
+      if (x && x+part.width>wrapWidth) { x=0;y+=rowHeight+64;rowHeight=0; }
       Object.assign(part,{x,y});
-      x+=part.width+32;rowHeight=Math.max(rowHeight,part.height);
+      x+=part.width+48;rowHeight=Math.max(rowHeight,part.height);
     }
     const width=Math.max(1,...parts.map(p=>p.x+p.width)),height=Math.max(1,...parts.map(p=>p.y+p.height));
     const xml = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
@@ -356,7 +359,7 @@ async function prepareSource(asset, built, theme, signal) {
     let offset=header.length;
     const frameRanges=[];
     const markup=parts.map(p=>{
-      const value=`<g ${built.component ? 'data-component="source" data-form="'+xml(p.name)+'"' : 'data-part="frame-'+xml(p.name)+'"'}><foreignObject overflow="visible" x="${p.x}" y="${p.y}" width="${p.width}" height="${p.height}">${p.markup}</foreignObject></g>`;
+      const value=`<g ${built.component ? 'data-component="source" data-form="'+xml(p.name)+'"' : 'data-part="frame-'+xml(p.name)+'"'}><foreignObject overflow="hidden" x="${p.x-24}" y="${p.y-32}" width="${p.width+48}" height="${p.height+64}"><div xmlns="http://www.w3.org/1999/xhtml" style="padding:32px 24px;box-sizing:border-box;width:${p.width+48}px;height:${p.height+64}px">${p.markup}</div></foreignObject></g>`;
       frameRanges.push([offset,offset+value.length]);offset+=value.length;
       return value;
     });

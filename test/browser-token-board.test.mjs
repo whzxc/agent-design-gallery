@@ -14,6 +14,8 @@ const tokens = `:root {
   --text: #123456;
   --radius-card: 12px;
   --control-height: 2400px;
+  --text-sample: 14px;
+  --line-sample: 2400px;
 }
 :root[data-theme="dark"] {
   --canvas: #112233;
@@ -21,7 +23,7 @@ const tokens = `:root {
   --text: #ddeeff;
 }`;
 
-async function viewer(t, { assets = true } = {}) {
+async function viewer(t, { assets = true, styles = tokens } = {}) {
   const directory = await mkdtemp(path.join(tmpdir(), 'adg-token-browser-'));
   let server, browser;
   t.after(async () => {
@@ -35,7 +37,7 @@ async function viewer(t, { assets = true } = {}) {
       }
     }
   });
-  await writeFile(path.join(directory, 'tokens.css'), tokens);
+  await writeFile(path.join(directory, 'tokens.css'), styles);
   if (assets) {
     await mkdir(path.join(directory, 'components'));
     await writeFile(path.join(directory, 'components/button.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="48"><rect width="120" height="48" fill="#123456"/></svg>');
@@ -67,6 +69,51 @@ async function toggleList(page) {
   await page.getByRole('button', { name: 'More', exact: true }).click();
 }
 
+test('Tokens viewer renders proportional horizontal bars and theme-specific group scale headings', { timeout: 30000 }, async t => {
+  const styles = tokens.replace('--control-height: 2400px;', `
+  /* Layout */
+  --layout-wide: 1152px;
+  --layout-half: 576px;
+  --layout-quarter: 288px;
+  /* Spacing */
+  --space-wide: 32px;
+  --space-half: 16px;`).replace('--canvas: #112233;', `--canvas: #112233;
+  --layout-wide: 288px;
+  --layout-half: 144px;
+  --layout-quarter: 72px;
+  --space-wide: 1152px;
+  --space-half: 576px;`);
+  const { page, server } = await viewer(t, { assets: false, styles });
+  await page.goto(server.url + '?scope=tokens');
+  await settled(page, 'tokens');
+  const measurements = () => page.locator('[data-adg-size-group]').evaluateAll(groups => groups.map(group => ({
+    title: group.querySelector('h3').firstChild.textContent,
+    headingWidth: group.querySelector('[data-adg-size-scale]').offsetWidth,
+    headingCounter: getComputedStyle(group.querySelector('[data-adg-size-scale]')).counterReset,
+    bars: [...group.querySelectorAll('[data-adg-size]')].map(bar => ({
+      width: parseFloat(getComputedStyle(bar).width),
+      height: parseFloat(getComputedStyle(bar).height),
+      track: parseFloat(getComputedStyle(bar.parentElement).width),
+    })),
+  })));
+  const [layout, spacing] = await measurements();
+  assert.equal(layout.title, 'Layout');
+  assert.deepEqual(layout.bars, [576, 288, 144].map(width => ({ width, height: 16, track: 576 })));
+  assert.ok(layout.headingWidth > 0);
+  assert.equal(layout.headingCounter, 'adg-size-scale 50');
+  assert.equal(spacing.title, 'Spacing');
+  assert.deepEqual(spacing.bars.map(bar => bar.width), [32, 16]);
+  assert.equal(spacing.headingWidth, 0);
+  await toggleTheme(page, 'dark');
+  await settled(page, 'tokens');
+  const [darkLayout, darkSpacing] = await measurements();
+  assert.deepEqual(darkLayout.bars.map(bar => bar.width), [288, 144, 72]);
+  assert.equal(darkLayout.headingWidth, 0);
+  assert.deepEqual(darkSpacing.bars, [576, 288].map(width => ({ width, height: 16, track: 576 })));
+  assert.ok(darkSpacing.headingWidth > 0);
+  assert.equal(darkSpacing.headingCounter, 'adg-size-scale 50');
+});
+
 test('Tokens board measures unscaled DOM height and preserves camera and list choice on save and theme change', { timeout: 30000 }, async t => {
   const { page, directory, server } = await viewer(t);
   const previewRequests = [];
@@ -86,7 +133,7 @@ test('Tokens board measures unscaled DOM height and preserves camera and list ch
   const rect = await board.boundingBox();
   assert.ok(Math.abs(rect.height / camera.scale - height) < 1, 'board height stays in world pixels at every zoom');
   const revision = await page.evaluate(() => window.__adg.revision);
-  await writeFile(path.join(directory, 'tokens.css'), tokens.replace('2400px', '2600px'));
+  await writeFile(path.join(directory, 'tokens.css'), tokens.replace('--line-sample: 2400px', '--line-sample: 2600px'));
   await page.waitForFunction(revision => window.__adg.ready && window.__adg.revision > revision, revision);
   assert.deepEqual(await page.evaluate(() => window.__adg.view), camera, 'saving tokens preserves camera');
   assert.ok(await board.evaluate(node => node.offsetHeight) > height);
@@ -100,7 +147,7 @@ test('Tokens board measures unscaled DOM height and preserves camera and list ch
   await settled(page, 'tokens');
   assert.equal(await page.locator('#token-catalog').isVisible(), true, 'theme change preserves list view');
   const listRevision = await page.evaluate(() => window.__adg.revision);
-  await writeFile(path.join(directory, 'tokens.css'), tokens.replace('2400px', '2800px'));
+  await writeFile(path.join(directory, 'tokens.css'), tokens.replace('--line-sample: 2400px', '--line-sample: 2800px'));
   await page.waitForFunction(revision => window.__adg.ready && window.__adg.revision > revision, listRevision);
   assert.equal(await page.locator('#token-catalog').isVisible(), true, 'saving tokens preserves list view');
 });
@@ -118,7 +165,7 @@ test('All mode stacks specimens below measured Tokens board and keeps camera on 
   await settled(page, 'all');
   const camera = await page.evaluate(() => window.__adg.view);
   const revision = await page.evaluate(() => window.__adg.revision);
-  await writeFile(path.join(directory, 'tokens.css'), tokens.replace('2400px', '2700px'));
+  await writeFile(path.join(directory, 'tokens.css'), tokens.replace('--line-sample: 2400px', '--line-sample: 2700px'));
   await page.waitForFunction(revision => window.__adg.ready && window.__adg.revision > revision, revision);
   await settled(page, 'all');
   assert.equal(await page.locator('.chapter-board').evaluate(node => parseFloat(node.style.top)), await board.evaluate(node => node.offsetHeight) + 480);

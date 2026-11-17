@@ -83,8 +83,9 @@ test('colour groups preserve first appearance and declaration order with prefix 
   --focus: #00aaff;
   --text-body: 14px;`);
   const board = tokenBoard(source, styles);
-  assert.deepEqual([...board.body.matchAll(/<h3>(.*?)<\/h3>/g)].map(match => match[1]),
-    ['brand', 'Surfaces', 'Text and actions', 'Focus &amp; selection', 'Families']);
+  const colourSection = board.body.split('data-adg-section="design/tokens.css#colour"')[1].split('</section>')[0];
+  assert.deepEqual([...colourSection.matchAll(/<h3>(.*?)<\/h3>/g)].map(match => match[1]),
+    ['brand', 'Surfaces', 'Text and actions', 'Focus &amp; selection']);
   const groups = [...board.body.matchAll(/<h3>(.*?)<\/h3><div data-adg-token-grid>(.*?)<\/div><\/div>/g)];
   const names = group => [...group.matchAll(/<code>(.*?)<\/code>/g)].map(match => match[1]);
   assert.deepEqual(names(groups[0][2]), ['--brand-primary', '--brand-secondary']);
@@ -92,8 +93,159 @@ test('colour groups preserve first appearance and declaration order with prefix 
   assert.deepEqual(names(groups[2][2]), ['--text', '--accent']);
 });
 
+test('every token section groups by root headings, with prefix fallbacks and repeated headings merged', () => {
+  const styles = `:root {
+  --font-ui: sans-serif;
+  --font-mono: monospace;
+  --canvas: #fff;
+  --text: #111;
+  --radius-plain: 0px;
+  --shadow-plain: none;
+  --gap-plain: 8px;
+  --ease-plain: linear;
+  --motion-plain: 100ms;
+  /* Compact & calm */
+  --accent-compact: #123;
+  --text-compact: 12px;
+  --line-compact: 16px;
+  --weight-compact: 400;
+  --font-compact: sans-serif;
+  --tracking-compact: 0px;
+  --radius-compact: 4px;
+  --shadow-compact: 0 1px 2px #0002;
+  --gap-compact: 16px;
+  --motion-compact: 120ms;
+  --ease-compact: ease;
+  /* Spacious */
+  --accent-spacious: #456;
+  --text-spacious: 20px;
+  --font-spacious: serif;
+  --tracking-spacious: 1px;
+  --radius-spacious: 12px;
+  --shadow-spacious: 0 2px 8px #0002;
+  --gap-spacious: 32px;
+  --ease-spacious: ease-out;
+  --motion-spacious: 240ms;
+  /* Compact & calm */
+  --gap-compact-end: 24px;
+}
+:root[data-theme="dark"] {
+  /* Dark-only heading */
+  --canvas: #111;
+}`;
+  const board = tokenBoard(source, styles);
+  const headings = {
+    colour: ['canvas', 'text', 'Compact &amp; calm', 'Spacious'],
+    type: ['font', 'Compact &amp; calm', 'Spacious'],
+    shape: ['radius', 'Compact &amp; calm', 'Spacious'],
+    elevation: ['shadow', 'Compact &amp; calm', 'Spacious'],
+    sizing: ['gap', 'Compact &amp; calm', 'Spacious'],
+    motion: ['ease', 'motion', 'Compact &amp; calm', 'Spacious'],
+  };
+  for (const [section, expected] of Object.entries(headings)) {
+    const content = board.body.split(`data-adg-section="${source}#${section}"`)[1].split('</section>')[0];
+    assert.deepEqual([...content.matchAll(/<h3>([^<]*)/g)].map(match => match[1]), expected, section);
+  }
+  assert.doesNotMatch(board.body, /Dark-only heading/);
+  assert.equal([...board.body.matchAll(/<article[^>]*data-specimen=/g)].length, 28);
+  assert.match(board.body, /font-size:var\(--text-compact\);line-height:var\(--line-compact\);font-weight:var\(--weight-compact\)/);
+  const sizing = board.body.split(`data-adg-section="${source}#sizing"`)[1].split('</section>')[0];
+  const compact = sizing.split('<h3>Compact &amp; calm')[1].split('<h3>Spacious')[0];
+  assert.deepEqual([...compact.matchAll(/<code>(.*?)<\/code>/g)].map(match => match[1]), ['--gap-compact', '--gap-compact-end']);
+});
+
+test('size bars share a group scale, resolve aliases and update the scale and heading with the theme', async t => {
+  const styles = css.replace('--control-height: 32px;', `
+  /* Spacing */
+  --space-zero: 0;
+  --space-small: 16px;
+  --space-rem: 2rem;
+  --space-em: 2em;
+  --space-percent: 50%;
+  --space-alias: var(--space-small);
+  --space-auto: auto;
+  /* Layout */
+  --layout-wide: 1152px;
+  --layout-half: 576px;
+  /* Theme growth */
+  --grow-wide: 288px;
+  --grow-half: 144px;
+  /* Track boundary */
+  --boundary-wide: 576px;
+  --boundary-half: 288px;
+  /* Viewport */
+  --viewport-wide: 100vw;
+  --viewport-half: 50vw;
+  --viewport-height: 100vh;`).replace('--canvas: #141414;', `--canvas: #141414;
+  --space-small: 8px;
+  --layout-wide: 288px;
+  --layout-half: 144px;
+  --grow-wide: 1152px;
+  --grow-half: 576px;`);
+  const board = tokenBoard(source, styles);
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.setContent(`<html data-theme="light"><head><style>html{font-size:20px}${board.css}</style></head><body>${board.body}</body></html>`);
+  const measurements = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('[data-adg-size-group]')].map(group => {
+    const heading = group.querySelector('h3');
+    const scale = heading.querySelector('[data-adg-size-scale]');
+    const bars = [...group.querySelectorAll('[data-adg-token]')].map(token => {
+      const bar = token.querySelector('[data-adg-size]');
+      return [token.querySelector('code').textContent, bar ? {
+        width: parseFloat(getComputedStyle(bar).width),
+        height: parseFloat(getComputedStyle(bar).height),
+        track: bar.parentElement.getBoundingClientRect().width,
+      } : null];
+    });
+    return [heading.firstChild.textContent, {
+      headingWidth: scale.getBoundingClientRect().width,
+      headingCounter: getComputedStyle(scale).counterReset,
+      bars: Object.fromEntries(bars),
+    }];
+  })));
+  const light = await measurements();
+  const assertBar = (group, name, width) => {
+    const bar = group.bars[name];
+    assert.ok(Math.abs(bar.width - width) < .1, `${name}: ${bar.width} instead of ${width}`);
+    assert.equal(bar.height, 16);
+    assert.equal(bar.track, 576);
+    assert.ok(bar.width <= bar.track);
+  };
+  for (const [name, width] of Object.entries({ '--space-zero': 0, '--space-small': 16, '--space-rem': 40, '--space-em': 32, '--space-percent': 288, '--space-alias': 16 })) {
+    assertBar(light.Spacing, name, width);
+  }
+  assert.equal(light.Spacing.bars['--space-auto'], null);
+  assert.equal(light.Spacing.headingWidth, 0);
+  assert.equal(light['Theme growth'].headingWidth, 0);
+  assert.equal(light['Track boundary'].headingWidth, 0);
+  assertBar(light['Track boundary'], '--boundary-wide', 576);
+  assertBar(light['Track boundary'], '--boundary-half', 288);
+  assertBar(light.Layout, '--layout-wide', 576);
+  assertBar(light.Layout, '--layout-half', 288);
+  assert.ok(light.Layout.headingWidth > 0);
+  assert.equal(light.Layout.headingCounter, 'adg-size-scale 50');
+  assertBar(light.Viewport, '--viewport-wide', 576);
+  assertBar(light.Viewport, '--viewport-half', 288);
+  assertBar(light.Viewport, '--viewport-height', 360);
+  assert.equal(light.Viewport.headingCounter, 'adg-size-scale 40');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  const dark = await measurements();
+  assertBar(dark.Spacing, '--space-small', 8);
+  assertBar(dark.Spacing, '--space-alias', 8);
+  assertBar(dark.Layout, '--layout-wide', 288);
+  assertBar(dark.Layout, '--layout-half', 144);
+  assert.equal(dark.Layout.headingWidth, 0);
+  assertBar(dark['Theme growth'], '--grow-wide', 576);
+  assertBar(dark['Theme growth'], '--grow-half', 288);
+  assert.ok(dark['Theme growth'].headingWidth > 0);
+  assert.equal(dark['Theme growth'].headingCounter, 'adg-size-scale 50');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  assert.deepEqual(await measurements(), light, 'switching back restores widths and scale headings');
+});
+
 test('one long token board measures in the DOM and scopes theme variables to itself', async t => {
-  const board = tokenBoard(source, css.replace('--control-height: 32px;', '--control-height: 5100px;'));
+  const board = tokenBoard(source, css.replace('--line-body: 20px;', '--line-body: 5100px;'));
   assert.equal(board.height, null);
   assert.equal(board.sourceCount, 1);
   assert.equal(board.frameCount, 15);

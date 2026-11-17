@@ -375,7 +375,10 @@ function layout(data, preserve = false, options = {}) {
   if (data.scope === 'all' && data.tokenBoard && tokenHeight) {
     const offset = tokenHeight + 480;
     for (const group of groups) group.y += offset;
-    for (const asset of assets) asset.y += offset;
+    for (const asset of assets) {
+      asset.y += offset;
+      if (asset.well) asset.well.y += offset;
+    }
     world.height += offset;
     world.width = Math.max(world.width, 1680);
   }
@@ -747,8 +750,8 @@ const annotationUI = createAnnotations({
 function updateOutlines() {
   annotationUI.render();
   const hover=hoveredElement,origin=hover?.part?frameBox(hover.asset,hover.part):null;
-  const hoverBox=hover?.element?{...hover.element,x:origin.x+hover.element.x,y:origin.y+hover.element.y}:null;
-  for (const [id,box] of [['selection-outline',selectedBox()],['hover-outline',hoverBox]]) {
+  const hoverBox=hover?.element?{...hover.element,x:origin.x+hover.element.x,y:origin.y+hover.element.y}:origin;
+  for (const [id,box] of [['selection-outline',selectedBox() ?? (selected ? currentItem() : null)],['hover-outline',hoverBox]]) {
     const el=$('#'+id);el.hidden=!box || moving;
     if (box) Object.assign(el.style,{left:`${view.x+box.x*view.scale}px`,top:`${view.y+box.y*view.scale}px`,width:`${box.width*view.scale}px`,height:`${box.height*view.scale}px`});
   }
@@ -928,9 +931,7 @@ function thumbnail(e, upgrade = false) {
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.ceil(e.part.width * limit));
   c.height = Math.max(1, Math.ceil(e.part.height * limit));
-  const preview = c.getContext('2d', { alpha: false });
-  preview.fillStyle = e.asset.background || palette.canvas;
-  preview.fillRect(0, 0, c.width, c.height);
+  const preview = c.getContext('2d');
   preview.drawImage(e.image, 0, 0, c.width, c.height);
   e.bitmap = c;
   e.bitmapScale = limit;
@@ -1008,13 +1009,11 @@ function draw() {
       if (!visible(a, drawingMargin)) continue;
 
       const parts = placements(a).map(pos => ({ ...pos, image: ensureImage(a, a.previewCrop ?? pos.part) }));
-      const raster = moving || view.scale < .8;
-      ctx.beginPath(); ctx.roundRect(a.x, a.y, a.width, a.height, Math.min(6 / view.scale, a.width / 2, a.height / 2));
-      // Cached previews already contain the asset background; avoid painting it twice.
-      if (!raster || parts.some(pos => pos.image.state !== 'ready')) {
-        ctx.fillStyle = a.background || palette.canvas; ctx.fill();
-      }
-      ctx.save(); ctx.clip();
+      ctx.save();
+      const well = a.well ?? a;
+      ctx.beginPath();
+      ctx.roundRect(well.x, well.y, well.width, well.height, parseFloat(boardPalette['radius-card']) || 12);
+      ctx.clip();
       const inViewport = visible(a);
       for (const pos of parts) {
         if (inViewport) count++;
@@ -1022,18 +1021,19 @@ function draw() {
         if (e.state !== 'ready') continue;
         if (inViewport) ready++;
         const source = moving ? thumbnail(e) : view.scale < .8 ? thumbnail(e, true) : e.image;
-        const crop = a.previewCrop;
-        if (crop) {
-          const sx = source.width / crop.width, sy = source.height / crop.height;
-          ctx.drawImage(source, (pos.part.x-crop.x)*sx, (pos.part.y-crop.y)*sy, pos.part.width*sx, pos.part.height*sy,
-            pos.x, pos.y, pos.part.width, pos.part.height);
-        } else ctx.drawImage(source, pos.x, pos.y, pos.part.width, pos.part.height);
+        const crop = a.previewCrop ?? pos.part;
+        const paint = a.paintCrop ?? pos.part;
+        const sx = source.width / crop.width, sy = source.height / crop.height;
+        ctx.drawImage(source, (paint.x-crop.x)*sx, (paint.y-crop.y)*sy, paint.width*sx, paint.height*sy,
+          pos.x+paint.x-pos.part.x, pos.y+paint.y-pos.part.y, paint.width, paint.height);
         if (inViewport) globalThis.__adgTiming?.paint('first-content', {source:a.path,crop:pos.part.id});
       }
       ctx.restore();
-      const chosen = selected === a.path && selectedForm === null;
-      ctx.strokeStyle = chosen ? palette.accent : palette.border;
-      ctx.lineWidth = (chosen ? 2 : 1) / view.scale; ctx.stroke();
+      if (a.layer?.toLowerCase() === 'surfaces' || a.path.startsWith('surfaces/')) {
+        ctx.strokeStyle = boardPalette.border || palette.border;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(a.x, a.y, a.width, a.height);
+      }
     }
     ctx.restore();
     drawingReady = ready; drawingCount = count;
