@@ -2,7 +2,7 @@
 
 - Keep a standalone ephemeral viewer (`adg open`) and a resident multi-project hub (`adg serve`) behind one global `adg` CLI. The ephemeral viewer never depends on the hub. Projects own their TSX design sources, tokens, artwork, optional `gallery.json`, optional `adg.config.mjs`, `.js` or `.ts`, and Git history; they do not depend on the package.
 - Preserve the ARC MIT attribution. Do not depend on ARC runtime code or a personal checkout at runtime.
-- Report design asset changes with one reachable `?base=<rev>` review URL (`adg link <viewer-url> --base=<rev>`) and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted`, and the affected Doop page link from `adg publish`, without per-frame images. Follow the [review handoff workflow](docs/design-toolkit.md#review-handoff).
+- Report design asset changes with one reachable `?base=<rev>` review URL (`adg link <viewer-url> --base=<rev>`) and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted`, without per-frame images. Follow the [review handoff workflow](docs/design-toolkit.md#review-handoff).
 - Design assets follow [the asset rules](docs/asset-rules.md), which take precedence over conflicting local guidance.
   Use [the design toolkit](docs/design-toolkit.md) for source format and [ADG design](docs/design.md) for current ownership,
   mappings and approval routing. Each task is one end-to-end Codex round: implement, self-check, commit and push, then show the user the running
@@ -10,7 +10,7 @@
   directly and the design sources are synced after the user accepts the result. Only a new visual direction is drawn
   in the design sources first. The push gate is `npm test` plus the tests of affected fixtures. Do not dispatch ARC
   Agents or answer their permission requests. Built-in Codex subagents are allowed.
-- The canvas viewer is frozen: fix defects and add no canvas features. Doop is the browsing and comment canvas; [Doop publishing](docs/publishing.md) owns the contract.
+- The viewer presents the design library as [boards](docs/boards.md), which own the board contract. Comments are ADG annotations.
 - Keep camera input independent of page component rendering.
 - `tooling/compare.mjs` is a reporting tool, not a gate. Run it when a change claims to be a pure refactor or targets performance. Retain raw output locally under `output/`; do not publish copied acceptance assets in the npm package.
 - Publish `@whzxc/agent-design-gallery` to the public npm registry only when the user asks. Include only the CLI, server, browser files, toolkit runtime and types, README, and license in the package.

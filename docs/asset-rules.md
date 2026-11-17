@@ -116,9 +116,9 @@ or rendering effects. It does not justify a second frame for another language.
 - Add a surface frame only when the full-page or full-region layout changes, such as a platform layout, a minimum viewport or a banner that changes page geometry. Use full window or region dimensions. Local control states belong to their component or module.
 - A surface preserves the intended production structure, content, order, states and layout. Use the consumer's implementation mapping and the library's visuals; reconcile detailed differences through the consumer's visual acceptance process.
 - Flex, grid, gaps, padding and placement are surface layout glue. Controls and other visuals come from components or modules; fixture data stays separate.
-- Declare frames in reading order: the default state first, then variants, states and edge cases. Declaration order is presentation order in the viewer and on [published sheets](publishing.md).
+- Declare frames in reading order: the default state first, then variants, states and edge cases. Declaration order is presentation order on the viewer's [boards](boards.md).
 - A part that sizes itself against its host (the viewport or a layer slot), such as a panel or dialog, declares a frame width at which it reaches its desktop size. Presentation never infers a host.
-- In components and modules, a narrow-viewport form is its own frame driven by props, such as a viewport width. A viewport media query alone does not produce a frame form; published sheets present components and modules at the desktop viewport.
+- In components and modules, a narrow-viewport form is its own frame driven by props, such as a viewport width. A viewport media query alone does not produce a frame form; boards present each frame at one viewport.
 
 Frames show what the implementation renders. Explanatory diagrams, annotated specimens,
 hand-placed illustrations and flow pictures are not production frames. Put mechanism

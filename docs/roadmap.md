@@ -76,21 +76,19 @@ checks those rules so retirement and layering no longer depend on cleanup rounds
 - Reverse ownership: `adg owner --part=<source>#<Export>` (or `--part=<source>` for whole-source bindings) returns the implementation bindings of a design part, so
   implementers find the counterpart to reuse.
 
-## 6. Doop canvas (in progress: chapter boards)
+## 6. Board view (in progress)
 
-Doop replaces ADG's canvas for browsing and discussing designs. ADG keeps sources, checks and the agent commands. The
-[Doop publishing](publishing.md) contract owns the details. This replaces the in-canvas annotation plan: comments,
-element anchors and the comment inbox come from Doop.
+The viewer presents the design library as chapter boards. The [board view](boards.md) contract owns the details.
+Doop was trialled as an external browsing and comment canvas and dropped: the board presentation came from ADG's own
+generator, ADG annotations already cover comments, and publishing added a service, a sync step and per-frame iframes
+that loaded slowly.
 
-- Freeze the canvas viewer: fixes only. Decide its removal after the ARC pilot. The `?base=<rev>` review page stays.
-- `adg publish`: layer pages, generated sheets, surface frames, presentation viewport, specimen identity, provenance,
-  anchor carry-over, unchanged-document skipping and branch drafts.
-- Runtime: omit `undefined`, `null` and `false` style values instead of serializing them.
-- The superseded `tooling/boards/` prototype is removed. Its viewport and anchor findings are covered by publishing tests.
-- Chapter boards: the ARC pilot showed that one sheet per source, stacked in one column with minimal styling, loses
-  the board presentation. Boards become chapters from `gallery.json` groups with the trial board presentation, a
-  visual Tokens board and side-by-side placement.
-- Consumer pilot: ARC first, then the other consumers, in separate tasks.
+- Board view: chapters from `gallery.json` groups with the trial board presentation, a visual Tokens board and column
+  placement, replacing the skyline packing. ARC accepts it first.
+- Remove `adg publish`, its Doop client and its documentation. The `?base=<rev>` review page stays.
+- Runtime (done): omit `undefined`, `null` and `false` style values instead of serializing them.
+- Annotations, next round: element anchors and a comment interaction modelled on
+  [Doop](https://github.com/kgoedecke/doop)'s comments, after board view is accepted.
 
 Afterwards, expose the stable commands as an MCP server through ARC's MCP hub.
 
