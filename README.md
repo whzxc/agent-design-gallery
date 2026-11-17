@@ -1,6 +1,6 @@
 # Agent Design Gallery
 
-Build, check and publish a repository's TSX design library to Doop. The local canvas viewer remains available for existing workflows and Git review.
+Build, check and browse a repository's TSX design library as boards in a local viewer or resident multi-project hub. Review changes against Git and leave ADG annotations on frames.
 
 ```sh
 npm install -g @whzxc/agent-design-gallery
@@ -70,17 +70,17 @@ The bottom zoom bar holds Back, zoom out, the zoom menu, zoom in, Fit, and Minim
 
 Design sources are TSX files directly in `design/components/`, `design/modules/` and `design/surfaces/`. Default discovery also includes `design/studies/` once it contains a direct TSX study; explicit `sources` lists remain unchanged. Fixtures and artwork stay in their supporting directories. Import `Frame` and `Icon` from `adg`, export reusable component functions, and default-export a function returning the declared frames. JSX builds static HTML and inline SVG without React or browser scripts. Tailwind v4 utilities resolve through the project's `design/tokens.css`; light and dark are selected by the document's `data-theme`.
 
-Choose the **Tokens** tab to inspect the current project's `design/tokens.css`. Filter by category in Contents or search the table by name or value from the toolbar, compare light and dark declarations side by side, and click a token name to copy it. Colors show swatches, and pixel values for spacing, sizes, and radii show a visual sample. Share `?scope=tokens` to open the catalog directly.
+Choose the **Tokens** tab to inspect the current project's `design/tokens.css`. The Tokens board presents paired light/dark colour swatches, typography, shape, elevation, sizing and motion samples. Its list view retains category filtering, search and copy controls. Share `?scope=tokens` to open the board directly.
 
 Follow the [design asset rules](docs/asset-rules.md) for placement, ownership, states, frame names, fidelity, lifecycle and studies. The [adoption guide](docs/asset-rules.md#adopting-an-existing-project) covers inventory, a read-only audit with `file / problem / suggested fix` findings, check-decided governance steps, the implementation checks a consumer adds, and the mappings/governance each consumer keeps locally. `sources` orders production layers from lower to higher; `check` reports upward imports. Set `check: { importDirection: false }` to opt out of that lint while keeping frame checks.
 
-A component source is one set: frames run in source order with 32px gaps, wrap before 1600px, and have 48px between rows. Sets pad forms by 24px at the sides and bottom and 36px at the top. A surface source is one flow: each frame receives 16px padding and follows the flow layout. Frame notes appear in the inspector, outside the drawing. Full sheet has been removed; choose a declared form or frame.
+Each chapter is one board at any height, including in the Surfaces layer. Each source is a section with its declared frames in order, shown at their rendered sizes on captioned wells in a 12-column grid. Boards start at 1680px wide and grow for wider specimens. Headers, source labels, frame names, notes and proposal markers scale with the camera. See the [board contract](docs/boards.md) for dimensions and presentation.
 
 Legacy SVGs remain browsable with their existing geometric crops and relative embedded artwork. Files without declarations keep a whole-file preview. New toolkit commands accept TSX only; an SVG directly in `design/components/` or `design/surfaces/` must be converted. Imported SVG artwork belongs in `design/art/`; PNG, JPEG and WebP imports become data URLs. Add `?url` to an import under `design/art/` to embed any file as a data URL, including self-contained SVG previews.
 
-Sets and flows pack into sections, and sections into a stable world. Saving a source, imported component, artwork or tokens refreshes affected previews without moving the camera. Unchanged regions retain their positions; new or enlarged regions move below existing content. Use Arrange current group to compact after structural changes. Labels retain constant screen sizes and hide when they collide with chrome or other labels.
+Boards flow in chapter order into the shortest column, using the leftmost column on ties. Column count targets a 16:10 layer band, with 240px between columns and boards and 480px between layers. Saving a source refreshes its board and moves boards below it in the same column by its height change while keeping the camera. **Arrange current group** recomputes column assignment.
 
-Files group by directory unless `gallery.json` supplies project groups. The same groups define publishing chapters, with each title naming a board and each listed source becoming a section in order. Entries must identify configured source entries, including a module folder's `index.tsx`:
+Files group by directory unless `gallery.json` supplies chapters, with each title naming a board and each listed source becoming a section in order. Entries must identify configured source entries, including a module folder's `index.tsx`:
 
 ```json
 {
@@ -91,29 +91,9 @@ Files group by directory unless `gallery.json` supplies project groups. The same
 }
 ```
 
-Unlisted component and module sources publish in directory chapters. A mixed-layer group creates a chapter with the same title on each layer page. Surface sources keep separate frames, gathered into consecutive rows by their group. Projects own their TSX sources, artwork, tokens, configuration, and Git history. Theme, sidebar, inspector, and per-directory camera and selection preferences stay in `~/.agent-design-gallery/state.json`, defaulting to `~/.agent-design-gallery/state.json`. Refreshing or reopening a directory restores its zoom, position, selected component and form. Canvas asset headings show the source's last modification time in local time; hover for the complete timestamp. `--state-dir` isolates preferences.
+Unlisted sources form directory chapters. A mixed-layer group splits into a same-titled chapter in each layer view; keep project groups within one layer. A module folder shows its `index.tsx` under the feature directory name. Projects own their TSX sources, artwork, tokens, configuration and Git history. Preferences stay in `~/.agent-design-gallery/state.json`; `--state-dir` isolates them. Refreshing or reopening a directory restores its camera and selection. Source labels show modification times.
 
-## Publish to Doop
-
-```sh
-export DOOP_URL=https://doop.example
-export DOOP_AGENT_KEY=your-agent-key
-adg publish /path/to/project --json
-```
-
-One project becomes one canvas with Tokens, Components, Modules and Surfaces pages. Component and module chapters
-publish as boards side by side, with a chapter header, source sections and captioned specimens on wells. Chapters and Tokens continue on another board at a section boundary when they exceed the 4800px height budget;
-a single taller section stays intact. The Tokens board presents paired light/dark swatches, type, shape,
-elevation, sizing and motion samples. Surface frames retain their viewport. Every document has a light/dark switch,
-source identity and Git provenance.
-Re-publishing skips unchanged content, preserves matching comment anchors and reports orphans and removed comments.
-The first chapter-board publish replaces existing per-source sheet frames and reports the comments removed with them.
-Other branches publish only changed documents to a draft page. Target IDs and hashes stay in `~/.agent-design-gallery`,
-or the selected `--state-dir`; nothing is written to the project. See [publishing](docs/publishing.md).
-
-Change reports include the affected Doop page link alongside the existing `?base=<rev>` review link and
-`added`, `removed`, `changed` counts from `adg diff --base=<rev> --impacted`. The canvas viewer is frozen; Doop owns
-new browsing and comment workflows.
+Change reports carry one reachable `?base=<rev>` review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted`. Comments use ADG annotations.
 
 ## Design toolkit
 

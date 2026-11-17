@@ -1,7 +1,6 @@
 import { parseTokens, themeCss } from '../toolkit/tokens.mjs';
 import { escape } from '../toolkit/html.mjs';
-import { boardDocument, boardHeader, sectionMarkup, boardHeightBudget } from './board.mjs';
-import { readyResources } from '../toolkit/browser.mjs';
+import { boardCss, boardHeader, sectionMarkup, boardWidth } from './board.mjs';
 
 const tokenStyles = `
 [data-adg-token-groups]{display:flex;flex-direction:column;gap:40px}
@@ -90,7 +89,7 @@ function easingCurve(value) {
   return `<svg data-adg-easing viewBox="0 0 128 128" role="img" aria-label="${escape(value)}"><path d="M16 16 V112 H112" fill="none" stroke="currentColor" opacity=".18"/><path d="${curve}" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>`;
 }
 
-export function tokenBoard(source, css, revision, { projectName = 'Design library' } = {}) {
+export function tokenBoard(source, css, { projectName = 'Design library' } = {}) {
   const tokens = parseTokens(css);
   const darkValues = new Map([...tokens.light, ...tokens.dark]);
   const themes = themeCss(tokens);
@@ -148,43 +147,13 @@ export function tokenBoard(source, css, revision, { projectName = 'Design librar
     sections.push(section('Motion', `<div data-adg-motion-grid>${curves}${bars}</div>`));
   }
   const body = `<main data-adg-board>${boardHeader({ title: 'Tokens', projectName, layer: 'Tokens', number: 1, sourceCount: 1, frameCount: tokens.light.size, countLabel: 'tokens' })}${sections.join('')}</main>`;
-  return { key: source, source, name: 'Tokens', layer: 'Tokens', kind: 'board', width: 1680, html: boardDocument(source, body, `${css}\n${tokenStyles}`, revision),
-    _tokenBoard: { sections, css: `${css}\n${tokenStyles}`, revision, projectName } }; 
-}
-
-
-export async function paginateTokenBoard(doc, page, { heightBudget = boardHeightBudget } = {}) {
-  const { _tokenBoard: metadata, ...document } = doc;
-  await page.setContent(doc.html);
-  await page.evaluate(readyResources);
-  const heights = await page.locator('[data-adg-section]').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height));
-  const overhead = await page.locator('[data-adg-board]').evaluate(node => {
-    const style = getComputedStyle(node);
-    return parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) + node.querySelector('[data-adg-header]').getBoundingClientRect().height;
-  });
-  const buckets = [];
-  let sections = [], height = overhead;
-  for (const [index, section] of metadata.sections.entries()) {
-    if (sections.length && height + heights[index] > heightBudget) {
-      buckets.push(sections);
-      sections = [];
-      height = overhead;
-    }
-    sections.push(section);
-    height += heights[index];
-  }
-  if (sections.length) buckets.push(sections);
-  const documents = [];
-  for (const [index, content] of buckets.entries()) {
-    const part = index + 1;
-    const name = part === 1 ? 'Tokens' : `Tokens · ${part}`;
-    const frameCount = content.reduce((count, section) => count + [...section.matchAll(/data-specimen=/g)].length, 0);
-    const header = boardHeader({ title: name, projectName: metadata.projectName, layer: 'Tokens', number: 1, sourceCount: 1, frameCount, countLabel: 'tokens' });
-    const html = boardDocument(doc.source, `<main data-adg-board>${header}${content.join('')}</main>`, metadata.css, metadata.revision);
-    await page.setContent(html);
-    await page.evaluate(readyResources);
-    const measuredHeight = Math.ceil(await page.locator('[data-adg-board]').evaluate(node => node.getBoundingClientRect().height));
-    documents.push({ ...document, key: part === 1 ? doc.key : `${doc.key}:${part}`, chapter: 'tokens', part, name, sourceCount: 1, frameCount, height: measuredHeight, html });
-  }
-  return documents;
+  // Scope project tokens to the board so a DOM overlay never changes viewer chrome.
+  const declarations = values => [...values].map(([name, value]) => `${name}:${value};`).join('\n');
+  const scopedTokens = `[data-adg-board]{${declarations(tokens.light)}}
+:where([data-theme="dark"]) [data-adg-board], [data-adg-board][data-theme="dark"]{${declarations(tokens.dark)}}`;
+  return {
+    key: source, source, name: 'Tokens', layer: 'Tokens', kind: 'board',
+    width: boardWidth, height: null, sourceCount: 1, frameCount: tokens.light.size,
+    body, css: `${scopedTokens}\n${boardCss}\n${tokenStyles}`,
+  };
 }

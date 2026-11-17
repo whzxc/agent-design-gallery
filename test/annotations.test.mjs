@@ -286,9 +286,9 @@ test('browser check 1 & 2: right-click Annotate here anchors deepest element and
     const el = part.elements.find(e => e.id === labelId);
     const item = window.__adg.items.find(i => i.id === 'surfaces/workspace.tsx#0');
     const v = window.__adg.view;
-    // Flow item has 16px frame crop offset (crop.x = -16, crop.y = -16 => frameBox = item.x + 16).
-    const fx = item.x + 16 + el.x + el.width * 0.5;
-    const fy = item.y + 16 + el.y + el.height * 0.5;
+    // Board items begin at the specimen's rendered frame origin.
+    const fx = item.x + el.x + el.width * 0.5;
+    const fy = item.y + el.y + el.height * 0.5;
     return { x: v.x + fx * v.scale, y: v.y + fy * v.scale, el };
   }, expectedLabelId);
 
@@ -318,8 +318,8 @@ test('browser check 1 & 2: right-click Annotate here anchors deepest element and
     const item = window.__adg.items.find(i => i.id === 'surfaces/workspace.tsx#0');
     const v = window.__adg.view;
     return {
-      dx: ( parseFloat(pt.style.left) - (v.x + (item.x + 16) * v.scale) ) / v.scale,
-      dy: ( parseFloat(pt.style.top) - (v.y + (item.y + 16) * v.scale) ) / v.scale,
+      dx: ( parseFloat(pt.style.left) - (v.x + item.x * v.scale) ) / v.scale,
+      dy: ( parseFloat(pt.style.top) - (v.y + item.y * v.scale) ) / v.scale,
     };
   });
   const beforeMove = await readPointOffset();
@@ -350,7 +350,7 @@ test('browser check 1 & 2: right-click Annotate here anchors deepest element and
     const item = window.__adg.items.find(i => i.id === 'surfaces/workspace.tsx#0');
     if (!pt || !item || !window.__adg?.ready) return false;
     const v = window.__adg.view;
-    const dx = (parseFloat(pt.style.left) - (v.x + (item.x + 16) * v.scale)) / v.scale;
+    const dx = (parseFloat(pt.style.left) - (v.x + item.x * v.scale)) / v.scale;
     return Math.abs(dx - (prev.dx + 160)) < 2;
   }, beforeMove);
   const afterElementMove = await readPointOffset();
@@ -411,7 +411,7 @@ test('browser check 4, 5, 6 & 7: live CLI updates within 5s, card & menu lifecyc
   const clickTarget = await page.evaluate(() => {
     const item = window.__adg.items.find(i => i.id === 'surfaces/workspace.tsx#0');
     const v = window.__adg.view;
-    return { x: v.x + (item.x + 16 + 70) * v.scale, y: v.y + (item.y + 16 + 52) * v.scale };
+    return { x: v.x + (item.x + 70) * v.scale, y: v.y + (item.y + 52) * v.scale };
   });
   await page.mouse.click(clickTarget.x, clickTarget.y);
   await page.waitForFunction(() => window.__adg.selection.element?.export === 'ActionButton');
@@ -556,7 +556,7 @@ test('browser check 4, 5, 6 & 7: live CLI updates within 5s, card & menu lifecyc
   const elScreen = await page.evaluate(() => {
     const item = window.__adg.items.find(i => i.id === 'surfaces/workspace.tsx#0');
     const v = window.__adg.view;
-    return { x: v.x + (item.x + 16 + 70) * v.scale, y: v.y + (item.y + 16 + 52) * v.scale };
+    return { x: v.x + (item.x + 70) * v.scale, y: v.y + (item.y + 52) * v.scale };
   });
   await page.mouse.click(elScreen.x, elScreen.y, { button: 'right' });
   await page.locator('#context-menu:popover-open').waitFor();

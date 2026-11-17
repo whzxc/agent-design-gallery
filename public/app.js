@@ -2,7 +2,7 @@ import { createAnnotations, createContextMenu, formatElementReference, READABLE_
 import { initSwitcher, updateSwitcherLabels } from './switcher.js';
 import { dataFetch, keyURL, isUnauthorized } from './auth.js';
 import { Labels } from "./labels.js";
-import { fitArea, fitView, packingSnapshot, restorePacking } from "./layout.js";
+import { fitArea, fitView } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
 import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext, measuredMetadata, previewAddress, compactPreparedSource, scopeKind, scopeTarget } from "./assets.js";
@@ -11,6 +11,7 @@ import { hitSelection, frameBox, exportFrames } from './selection.js';
 import { groupTokens, renderTokenTable } from './token-catalog.js';
 import { renderReview } from './review.js';
 import { readViewRoute, viewURL } from './view-route.js';
+import { createBoardLayer } from './boards.js';
 import { createArranger } from './arrangement.js';
 const arranger = createArranger();
 window.addEventListener('pagehide',()=>arranger.close());
@@ -21,11 +22,18 @@ const viewport = $(".gallery-viewport"),
   ctx = canvas.getContext("2d"),
   background = $("#canvas-background"),
   backgroundContext = background.getContext("2d", { alpha: false });
+const boardLayer = createBoardLayer(viewport, (path, title) => {
+  const asset = assets.find(a => a.path === path);
+  if (asset) selectSource(asset);
+  navigator.clipboard.writeText(title).catch(failure => error(`Cannot copy name: ${failure.message}`));
+});
 let manifest,
   catalog = null,
   tokenManifest = null,
   reviewManifest = null,
   tokenCategory = null,
+  tokenList = false,
+  tokenHeight = 0,
   pendingNavigation = null,
   groups = [],
   assets = [],
@@ -180,6 +188,7 @@ function changeScope(next, entry = null, record = true) {
   const nextFrame = entry?.onlyFrame ?? null;
   if (next === scopeRequest && nextFrame === onlyFrame) return;
   if ((initializedScope || tokenManifest || reviewManifest) && !catalog) {
+    if (next === 'tokens' && manifest && !tokenManifest && !reviewManifest) manifest.view = { ...view };
     if (record && !tokenManifest && !reviewManifest && next !== 'tokens' && next !== 'review') remember();
     void persistPreferences();
   }
@@ -203,8 +212,10 @@ function toggleSidebar(value = !sidebar) {
 function updateChrome() {
   updateSwitcherLabels();
   const opened = !!(reviewManifest ?? tokenManifest ?? catalog ?? manifest)?.directory;
-  const showTokens = !!tokenManifest;
+  const showTokens = !!tokenManifest && tokenList;
   const showReview = !!reviewManifest;
+  $('#token-list-toggle').hidden = !tokenManifest;
+  $('#token-list-toggle').textContent = tokenList ? 'Board view' : 'List view';
   const canInspect = opened && !showTokens && !showReview && !!selected;
   $('.gallery').classList.toggle('tokens-mode', showTokens || showReview);
   $('#token-catalog').hidden = !showTokens;
@@ -356,78 +367,35 @@ document.addEventListener('visibilitychange', () => {if (document.hidden) void p
 const layoutData = data => onlyFrame ? { ...data, assets: data.assets.map(asset => ({ ...asset, component: false, parts: asset.parts.filter(part => part.name === onlyFrame) })) } : data;
 function layout(data, preserve = false, options = {}) {
   const endArrangement = globalThis.__adgTiming?.span('arrangement', undefined, {sources:data.assets.length,provisional:!!options.provisional});
-  const previous = assets,
-    previousGroups = groups,
-    result = arrange(layoutData(data),options);
+  const previousGroups = groups,
+    result = arrange(layoutData(data),{...options, previousGroups: preserve ? previousGroups : undefined});
   groups = result.groups;
   assets = result.items;
   world = result.world;
-  if (preserve) {
-    const previousById = new Map(previous.map(item => [item.id, item]));
-    const currentIds = new Set(assets.map(item => item.id));
-    const previousByTitle = new Map();
-    for (const group of previousGroups) if (!previousByTitle.has(group.title)) previousByTitle.set(group.title, group);
-    for (const group of groups) {
-      const old = previousByTitle.get(group.title);
-      if (old) {
-        group.x = old.x;
-        group.y = old.y;
-      }
-    }
-    const occupied = previous.filter((p) => currentIds.has(p.id));
-    const shape = (a) =>
-      JSON.stringify(a.shown.map(p => [p.width, p.height]));
-    for (const a of assets) {
-      const old = previousById.get(a.id);
-      if (old) {
-        a.x = old.x;
-        a.y = old.y;
-      }
-      if (
-        old &&
-        (shape(old) === shape(a) ||
-          (a.width <= old.width && a.height <= old.height))
-      ) {
-        a.width = old.width;
-        a.height = old.height;
-        continue;
-      }
-      const group = groups[a.group];
-      a.x = old?.x ?? group.x + 64;
-      a.y =
-        Math.max(
-          group.y + 104,
-          ...occupied
-            .filter((p) => previousGroups[p.group]?.title === group.title)
-            .map((p) => p.y + p.height),
-        ) + 112;
-      let collision;
-      while (
-        (collision = occupied.find(
-          (p) =>
-            p.id !== a.id &&
-            a.x < p.x + p.width + 20 &&
-            a.x + a.width + 20 > p.x &&
-            a.y < p.y + p.height + 20 &&
-            a.y + a.height + 20 > p.y,
-        ))
-      )
-        a.y = collision.y + collision.height + 112;
-      const index = occupied.findIndex((p) => p.id === a.id);
-      if (index >= 0) occupied[index] = a;
-      else occupied.push(a);
-    }
-    for (const g of groups) {
-      const list = assets.filter((a) => groups[a.group] === g);
-      g.width = Math.max(g.width, ...list.map((a) => a.x + a.width - g.x + 64));
-      g.height = Math.max(
-        g.height,
-        ...list.map((a) => a.y + a.height - g.y + 64),
-      );
-    }
-    world.width = Math.max(1, ...groups.map((g) => g.x + g.width));
-    world.height = Math.max(1, ...groups.map((g) => g.y + g.height));
+  if (data.scope === 'all' && data.tokenBoard && tokenHeight) {
+    const offset = tokenHeight + 480;
+    for (const group of groups) group.y += offset;
+    for (const asset of assets) asset.y += offset;
+    world.height += offset;
+    world.width = Math.max(world.width, 1680);
   }
+  boardLayer.update(groups, assets, data);
+  boardLayer.tokens(data.scope === 'all' ? data.tokenBoard : null, h => {
+    if (Math.abs(tokenHeight-h)>1) {
+      const firstMeasurement = !tokenHeight;
+      const previousSelection = firstMeasurement ? selectedBox() : null;
+      tokenHeight=h;
+      layout(data, preserve, options);
+      const nextSelection = previousSelection ? selectedBox() : null;
+      if (nextSelection) {
+        commit({ ...view,
+          x: view.x - (nextSelection.x - previousSelection.x) * view.scale,
+          y: view.y - (nextSelection.y - previousSelection.y) * view.scale,
+        });
+      } else if (firstMeasurement && !preserve && !data.view) frame(world);
+      requestDraw();
+    }
+  });
   renderNav();
   $("#asset-access").replaceChildren(
     ...assets.map((a) => {
@@ -437,7 +405,7 @@ function layout(data, preserve = false, options = {}) {
       return b;
     }),
   );
-  $("#empty").hidden = !!assets.length || !data.directory;
+  $("#empty").hidden = !!assets.length || !!data.tokenBoard || !data.directory;
   if (!assets.length) $("#empty").textContent = scopedUI(data) ? 'No assets in this scope.' : 'No SVG files in this directory.';
   endArrangement?.({items:assets.length});
   if (assets.length) globalThis.__adgTiming?.mark('first-layout');
@@ -704,7 +672,7 @@ function visibleFrames() {
   const list = [];
   for (const a of displayed) {
     if (!visible(a, 320)) continue;
-    const parts = a.component ? a.parts : a.parts.filter(p => p.id === a.shown[0]?.id);
+    const parts = a.parts.filter(p => p.id === a.shown[0]?.id);
     for (const part of parts) {
       const worldBox = frameBox(a, part);
       const box = {
@@ -723,7 +691,7 @@ function locateNoteOnCanvas(row, moveCamera = false) {
   const run = () => {
     const sourceAsset = manifest?.assets.find(a => a.path === row.source);
     const part = sourceAsset?.parts.find(p => p.name === row.frame);
-    const item = assets.find(a => a.path === row.source && (a.component || !part || a.shown[0]?.id === part.id));
+    const item = assets.find(a => a.path === row.source && (!part || a.shown[0]?.id === part.id));
     if (!item || !part) return false;
     const el = row.element ? (part.elements ?? []).find(e => e.id === row.element.id) : null;
     inspection = null;
@@ -993,10 +961,19 @@ function draw() {
   const endDrawing = globalThis.__adgTiming?.span('drawing');
   raf = 0;
   drawBackground();
-  if (tokenManifest || reviewManifest) {
+  if ((tokenManifest && tokenList) || reviewManifest) {
     window.__adg.ready = true;
     window.__adg.revision = (reviewManifest ?? tokenManifest)?.revision;
     if (fixtureState) document.documentElement.dataset.fixtureReady = fixtureState.name;
+    endDrawing?.(); return;
+  }
+  if (tokenManifest) {
+    boardLayer.camera(view, false);
+    const percentage = `${Math.round(view.scale * 100)}%`;
+    zoomValue.textContent = percentage; zoomOutput.value = percentage;
+    window.__adg.ready = tokenHeight > 0;
+    window.__adg.revision = tokenManifest.revision;
+    if (fixtureState && window.__adg.ready) document.documentElement.dataset.fixtureReady=fixtureState.name;
     endDrawing?.(); return;
   }
   if (!labelObstacles) readChromeBounds();
@@ -1017,15 +994,20 @@ function draw() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width + drawingMargin * 2, height + drawingMargin * 2);
     ctx.save(); ctx.translate(view.x + drawingMargin, view.y + drawingMargin); ctx.scale(view.scale, view.scale);
-    if (!inspection && scopeKind(manifest?.scope)!=='asset') for (const g of groups) {
+    const boardPalette = boardLayer.palette();
+    if (!inspection) for (const g of groups) {
       if (!visible(g, drawingMargin)) continue;
-      rounded(g.x, g.y, g.width, g.height, 16 / view.scale, palette['surface-section']);
-      ctx.strokeStyle = palette.border; ctx.lineWidth = 1 / view.scale; ctx.stroke();
+      rounded(g.x, g.y, g.width, g.height, 0, boardPalette.surface || palette.surface);
+      for (const section of g.blocks) for (const specimen of section.frames) {
+        const well = specimen.well;
+        rounded(g.x+section.x+well.x, g.y+section.y+well.y, well.w, well.h, parseFloat(boardPalette["radius-card"]) || 12, boardPalette.canvas || palette.canvas);
+      }
     }
     let ready = 0, count = 0;
     for (const a of displayed) {
       if (!visible(a, drawingMargin)) continue;
-      const parts = placements(a).map(pos => ({ ...pos, image: ensureImage(a, pos.part) }));
+
+      const parts = placements(a).map(pos => ({ ...pos, image: ensureImage(a, a.previewCrop ?? pos.part) }));
       const raster = moving || view.scale < .8;
       ctx.beginPath(); ctx.roundRect(a.x, a.y, a.width, a.height, Math.min(6 / view.scale, a.width / 2, a.height / 2));
       // Cached previews already contain the asset background; avoid painting it twice.
@@ -1040,13 +1022,11 @@ function draw() {
         if (e.state !== 'ready') continue;
         if (inViewport) ready++;
         const source = moving ? thumbnail(e) : view.scale < .8 ? thumbnail(e, true) : e.image;
-        if (moving) {
-          const left = Math.max(pos.x, (-view.x - drawingMargin) / view.scale);
-          const top = Math.max(pos.y, (-view.y - drawingMargin) / view.scale);
-          const right = Math.min(pos.x + pos.part.width, (width + drawingMargin - view.x) / view.scale);
-          const bottom = Math.min(pos.y + pos.part.height, (height + drawingMargin - view.y) / view.scale);
-          const sx = source.width / pos.part.width, sy = source.height / pos.part.height;
-          ctx.drawImage(source, (left-pos.x)*sx, (top-pos.y)*sy, (right-left)*sx, (bottom-top)*sy, left, top, right-left, bottom-top);
+        const crop = a.previewCrop;
+        if (crop) {
+          const sx = source.width / crop.width, sy = source.height / crop.height;
+          ctx.drawImage(source, (pos.part.x-crop.x)*sx, (pos.part.y-crop.y)*sy, pos.part.width*sx, pos.part.height*sy,
+            pos.x, pos.y, pos.part.width, pos.part.height);
         } else ctx.drawImage(source, pos.x, pos.y, pos.part.width, pos.part.height);
         if (inViewport) globalThis.__adgTiming?.paint('first-content', {source:a.path,crop:pos.part.id});
       }
@@ -1061,7 +1041,8 @@ function draw() {
   }
   canvas.style.transform = `translate(${view.x - drawingView.x - drawingMargin}px,${view.y - drawingView.y - drawingMargin}px)`;
   updateOutlines();
-  drawLabels(displayed);
+  boardLayer.camera(view, !!inspection || !!tokenManifest || !!reviewManifest);
+  if (inspection) drawLabels(displayed); else labelLayer.clear();
   const percentage = `${Math.round(view.scale * 100)}%`;
   if (zoomValue.textContent !== percentage) zoomValue.textContent = percentage;
   if (zoomOutput.value !== percentage) zoomOutput.value = percentage;
@@ -1074,7 +1055,7 @@ function draw() {
   if(!moving&&queued.length)pump();
   if (cache.size > 100) {
     const activeKeys = new Set(displayed.filter(a => visible(a, drawingMargin))
-      .flatMap(a => placements(a).map(({part}) => assetURL(a, part))));
+      .flatMap(a => placements(a).map(({part}) => assetURL(a, a.previewCrop ?? part))));
     evictPreviews(cache, activeKeys);
   }
   endDrawing?.();
@@ -1435,10 +1416,13 @@ document.addEventListener("keydown", (e) => {
   else return;
   e.preventDefault();
 });
-viewport.addEventListener("dblclick", () => {
-  const a = currentItem();
-  const p=a?.parts.find(p=>p.id===selectedForm);
-  if (p) inspectForm(a,p); else if(a) focusAsset(a);
+viewport.addEventListener("dblclick", event => {
+  const rect = viewport.getBoundingClientRect();
+  const x = (event.clientX - rect.left - view.x) / view.scale;
+  const y = (event.clientY - rect.top - view.y) / view.scale;
+  const hit = hitSelection(inspection ? [inspection] : assets, x, y);
+  if (hit?.part) inspectForm(hit.asset, hit.part);
+  else if (hit) focusAsset(hit.asset);
 });
 for (const [id, action] of Object.entries({
   "zoom-fit-all": fit,
@@ -1493,35 +1477,7 @@ $("#arrange").onclick = async () => {
   try {if(!data.loading)placed=await arranger.arrange(layoutData(data));}
   catch(failure){if(failure.name!=='AbortError')error(failure.message);requestDraw();return;}
   if(manifest!==data || catalog!==previousCatalog || tokenManifest || reviewManifest){requestDraw();return;}
-  const old = assets,
-    oldGroups = groups;
   layout(manifest,false,{placed,provisional:!!data.loading});
-  if (active !== null) {
-    const g = groups[active],
-      prev = oldGroups[active],
-      dx = prev.x - g.x,
-      dy = prev.y - g.y;
-    for (const a of assets) {
-      if (a.group === active) {
-        a.x += dx;
-        a.y += dy;
-      } else {
-        const before = old.find((b) => b.id === a.id);
-        if (before)
-          Object.assign(a, {
-            x: before.x,
-            y: before.y,
-            width: before.width,
-            height: before.height,
-          });
-      }
-    }
-    groups = groups.map((g, i) =>
-      i === active ? { ...g, x: prev.x, y: prev.y } : oldGroups[i],
-    );
-  }
-  world.width = Math.max(1, ...groups.map((g) => g.x + g.width));
-  world.height = Math.max(1, ...groups.map((g) => g.y + g.height));
   $("#more-menu").hidePopover();
   selection();
 };
@@ -1572,6 +1528,20 @@ function applyTokenManifest(data) {
   const previous = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
   const entering = !tokenManifest || tokenManifest.directory !== data.directory;
   tokenManifest = { ...data, tokenGroups: groupTokens(data.tokens ?? []) };
+  if (entering) tokenList = false;
+  if (!data.tokenBoard) {
+    tokenList = true;
+    tokenHeight = 0;
+  }
+  canvas.width = canvas.width;
+  boardLayer.update([], [], data);
+  boardLayer.camera(view, false);
+  boardLayer.tokens(data.tokenBoard, height => {
+    tokenHeight=height;
+    world={x:0,y:0,width:data.tokenBoard.width,height};
+    if (entering) frame(world);
+    requestDraw();
+  });
   reviewManifest = null;
   scopeRequest = data.scope;
   catalog = null;
@@ -1596,6 +1566,7 @@ function applyTokenManifest(data) {
   updateChrome();
   annotationUI.render();
   renderNav();
+  requestDraw();
 }
 function applyReviewManifest(data) {
   const previous = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
@@ -1671,7 +1642,7 @@ async function applyManifest(data, force = false) {
   const link = initializedDirectory === undefined && !fixtureState ? initialLink : null;
   const entry = !changedRoot && scopeRequest===data.scope ? scopeEntry : null;
   const groupTitle = groups[active]?.title;
-  restorePacking(data.packing);
+
   const previous=manifest, results=new Array(data.assets.length), signal=refreshController?.signal;
   let next=0,publishFrame=0,streamView=null,streamMoved=false,publishedCount=0,nextPublish=1;
   const streaming=first && !leavingOverlayView;
@@ -1747,7 +1718,7 @@ async function applyManifest(data, force = false) {
   for(const element of document.querySelectorAll('.directory-name')) element.textContent=data.label;
   $("#app-directory").title=data.directory||'';
   document.title = `${data.label} — Agent Design Gallery`;
-  if (first) {
+  if (first || leavingOverlayView) {
     const target = entry ? entry.target : link ?? data.selection;
     if (!fixtureState) restoreSelection(target);
     const saved = data.selection;
@@ -1759,7 +1730,8 @@ async function applyManifest(data, force = false) {
     else if (entry?.target || (link && (onlyFrame || !(reload && sameSelection && data.view)))) {
       const target = selectedBox() || currentItem() || groups[active] || world;
       frame(target, selected ? 24 : 0);
-    } else if (data.view) view = data.view;
+    } else if (leavingOverlayView && previous?.directory === data.directory && previous.scope === data.scope && previous.view) view = previous.view;
+    else if (data.view) view = data.view;
     else if (!streamMoved) frame(world);
   } else if (groupTitle) {
     const index = groups.findIndex(group=>group.title===groupTitle);
@@ -1789,7 +1761,6 @@ async function applyManifest(data, force = false) {
   initializedFrame=onlyFrame;
   initialLink=null;
   scopeEntry=null;
-  if(data.features?.persistedMetadata && !onlyFrame)cacheWrite(`catalog?context=${encodeURIComponent(metadataContext())}`,{packing:packingSnapshot()});
   selection();
   if (pendingNavigation) {
     const action = pendingNavigation;
@@ -1957,3 +1928,5 @@ document.addEventListener("keydown", (e) => {
 });
 
 initSwitcher();
+
+$('#token-list-toggle').onclick = () => {tokenList=!tokenList;updateChrome();requestDraw();};

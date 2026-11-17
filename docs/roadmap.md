@@ -85,7 +85,7 @@ that loaded slowly.
 
 - Board view: chapters from `gallery.json` groups with the trial board presentation, a visual Tokens board and column
   placement, replacing the skyline packing. ARC accepts it first.
-- Remove `adg publish`, its Doop client and its documentation. The `?base=<rev>` review page stays.
+- Publishing retirement: the CLI, configuration, JSON diagnostics, documentation and obsolete publishing tests are removed. The `?base=<rev>` review page stays.
 - Runtime (done): omit `undefined`, `null` and `false` style values instead of serializing them.
 - Annotations, next round: element anchors and a comment interaction modelled on
   [Doop](https://github.com/kgoedecke/doop)'s comments, after board view is accepted.

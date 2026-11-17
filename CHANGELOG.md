@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Retire `adg publish`, its command help, JSON diagnostics and `publish` configuration. Remove the obsolete publishing tests and documentation.
+- Present design sources as chapter boards with a visual Tokens board, responsive specimen spans and deterministic layer columns. Preserve source/frame selection, annotations and Git-based review handoff.
+
 ## 0.14.1
 
 - Fix `impact` and `--impacted` worker builds on module feature folders so feature-internal files do not record unread `tokens.css` dependency hashes.

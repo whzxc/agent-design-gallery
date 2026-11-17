@@ -4,9 +4,13 @@
 
 The viewer fills the window with Canvas 2D and positions floating navigation, menus, dialogs, and inspection controls above it. Camera input and drawing are coalesced into animation frames, independently of navigation rendering. Only artboards intersecting the viewport and its retained drawing margin are rasterized. After 150 ms without camera input, a settled drawing includes a quarter of the shorter viewport dimension on each side; pans translate that canvas until they reach its edge, then refresh it. Zoom changes redraw at the new scale without that margin, preserving constant-width borders. A separate canvas retains the static dot background, rebuilt only when its colors, size or pixel ratio change. During gestures the canvas uses cached preview rasters at the actual display scale; when settled it upgrades previews or draws the original SVG for detail. This avoids rebuilding a component tree or mounting inline SVG trees on every input event.
 
-`public/assets.js` measures explicit outermost form/frame declarations on a geometry-cache miss in temporary, script-disabled sandbox documents. Measured frame lists, bounds, ownership geometry and background values persist by source output hash, theme and browser user-agent/pixel-ratio context, prefixed with the `adaptive-wrap-v1` geometry version. Viewer measurement/layout code changes invalidate that context. Warm loads arrange from this metadata before source preparation; cold loads publish measured sources as they finish and perform the same final complete arrangement regardless of completion order. Bounds are geometric, without shadow expansion. TSX component forms pack in source order with 32px gaps and 48px row gaps, wrapping at `ceil(sqrt(sum((width + 32) × (height + 48)) × 1.6))`, clamped to 1600–6400px; an oversized individual form remains intact. Legacy SVG sets preserve their source arrangement. Sets have 24px side/bottom and 36px top padding; surface frames receive 16px padding. `public/layout.js` packs sets and flows together with a height-descending skyline (width descending, then source order for ties); world sections use the same skyline. Section gaps are 64px horizontally and 112px vertically, world gaps are 240px, and section padding remains 64px at the sides/bottom and 104px at the top. Width searches minimize bounding-box area with a soft logarithmic aspect penalty of 0.6, targeting 1.6 for sections and 1.5 for the world. Width steps remain 50/100; safe-grid threshold skipping and the bounded winning-width cache avoid redundant packing. Cache keys include the algorithm version, scoring parameters, gaps and ordered geometry. Canvas order can change, while returned group/block arrays preserve source identities and order for navigation and incremental placement. Surface frame rows and the usable fit area remain independent of this packing. The reference-size unit test reproduces `fixtures/arc-sample.layout.json`. Layout is independent of camera and floating panels.
+`public/assets.js` measures explicit outermost form/frame declarations on a geometry-cache miss in temporary, script-disabled sandbox documents. Measured frame lists, bounds, ownership geometry and background values persist by source output hash, theme and browser context. Viewer measurement/layout code changes invalidate that context. Bounds are geometric, without shadow expansion.
 
-Previews are SVG images with cropped viewBoxes, preserving document-local styles, identifiers, filters, and aspect ratios. Top-level legacy annotations are omitted from crops. The inspector shows declared frames and their notes; there is no Full sheet action. `public/labels.js` retains positioned DOM text above the drawing canvas. A pan translates one retained label layer for up to 32px before refreshing visible labels without reading chrome geometry. Scale changes recompute positions and collisions on the next animation frame; gesture completion, settling, viewport changes and chrome changes also rebuild the visible set. Chrome bounds and text metrics are cached, with font readiness clearing text metrics. Captions are tested independently. Asset headings follow the visible canvas edge when their original anchor leaves the viewport, prioritize the selected asset and progressively omit optional timestamps and counts when space is limited. Labels remain accessible to DOM-based comparison. Artboards use their asset's canvas color, a 1px border, and a 2px selection ring.
+The [board contract](boards.md) defines layout. Each chapter is one board at any height, with one section per source and declared frames as specimens in order. `gallery.json` groups name and order chapters; ungrouped sources form directory chapters, and mixed-layer groups split by layer. Surfaces use the same board model. Boards start at 1680px wide, widening for oversized specimens. Source labels and a 12-column specimen grid share each section. Board chrome, notes and captions scale with the camera.
+
+Board placement puts chapters into layer columns, choosing the shortest column with leftmost tie-breaking. Column count targets a 16:10 layer band. Columns and boards are 240px apart; layer bands are 480px apart. Saving a source reflows its board and shifts boards below it in that column. Arrange recomputes column assignment. Layout stays independent of camera input and floating panels. The Tokens board leads scopes containing Tokens; the searchable token table remains available as a list view.
+
+Previews are SVG images with cropped viewBoxes, preserving document-local styles, identifiers, filters, and aspect ratios. Top-level legacy annotations are omitted from crops. The inspector shows declared frames and their notes; there is no Full sheet action. Board text remains crisp at every zoom level and accessible to selection and inspection. Specimens retain their preview pixels and rendered sizes. Selection, element picking, Uses and Used by, annotations, Back, Fit, the minimap, search, keyboard shortcuts and fixture states remain attached to their source/frame identities. Architecture diagrams retain their own scope, and the Git review page retains its frame comparison layout.
 
 The server uses `src/toolkit/build-store.mjs` for TSX builds. Each source has a content hash over its rendered frames, CSS, imports and source identity; its input hash covers the actual bytes read from the source and dependency closure. Package/toolkit versions, discovery configuration and the code-file inventory identify the persistent build namespace. Dependency hashes are validated on restart. A helper addition or removal invalidates resolution-sensitive builds; ordinary edits use reverse dependency edges. Superseded work is cancelled, including first builds whose dependency closure is not known yet. The next scoped manifest rehashes invalidated, previously built sources in that scope. Unchanged output hashes reuse the existing geometry and previews. Filesystem modification times still update in navigation and labels.
 
@@ -14,13 +18,13 @@ The server uses `src/toolkit/build-store.mjs` for TSX builds. Each source has a 
 
 `src/viewer-cache.mjs` stores measured metadata and ready-cropped SVGs under the server's state directory, separate from design sources. Its metadata LRU is 32 MiB; its disk LRU is 256 MiB with at most 2,048 records. Manifest references refresh LRU recency so unchanged current sources stay cached while old revisions are evicted. The initial manifest supplies measured metadata for the requested theme; subsequent manifests carry source hashes, metadata references and cached preview IDs. The compact source response carries frame HTML and one shared stylesheet, with no second copy of every full frame document. Relationships use the cached source graph. Cache writes persist geometry and generated cropped previews once; the browser does not upload a second full-source SVG.
 
-The browser prioritizes preview work by viewport proximity and defers new preparation/decode work during camera gestures. It first uses ready-cropped persistent SVGs; a missing or evicted crop lazily rebuilds only its owning source. Its prepared-source LRU is 64 MiB and shares identical stylesheet text while restoring the exact stylesheet for individual crops. The existing offscreen preview LRU evicts obsolete output hashes and themes while retaining current visible previews. Packing retains only bounded winning widths and repacks fresh metadata; those scalar choices are persisted for warm restart. No alternative far-zoom representation is used.
+The browser prioritizes preview work by viewport proximity and defers new preparation/decode work during camera gestures. It first uses ready-cropped persistent SVGs; a missing or evicted crop lazily rebuilds only its owning source. Its prepared-source LRU is 64 MiB and shares identical stylesheet text while restoring the exact stylesheet for individual crops. The existing offscreen preview LRU evicts obsolete output hashes and themes while retaining current visible previews. No alternative far-zoom representation is used.
 
-Local legacy SVG references are embedded recursively and retain their dependency invalidation behavior. An update sends an SSE revision after invalidation, before any scoped rebuild. The camera belongs to the directory and scope and survives refresh; unchanged regions retain positions while enlarged or new regions move below existing content until Arrange current group is invoked. Initial cold streaming always uses fresh arrangement, so source completion order does not change the final layout.
+Local legacy SVG references are embedded recursively and retain their dependency invalidation behavior. An update sends an SSE revision after invalidation, before any scoped rebuild. The camera belongs to the directory and scope and survives refresh. Source completion order does not change the final chapter order or column assignment.
 
 The directory tree renders from the manifest before asset preparation. Group expansion and filename search are available immediately; a navigation choice made during preparation runs after layout. On a measurement miss, forms from one TSX source share a single sandbox document and its compiled stylesheet. Each form replaces the specimen and restores its declared viewport before fonts, images and bounds are measured, avoiding a document navigation for every form.
 
-Preferences store the camera and selected source, named form and group per directory and render scope. The viewer saves selection changes as well as camera input, and flushes pending state with a keepalive request on page hide or backgrounding. The Contents and Inspector overlays start closed on each page entry. Toggling them leaves the camera unchanged. Restoring a scope resolves saved names against its current assets. The manifest also exposes each source's filesystem `modifiedAt` in milliseconds; canvas headings render that value in the browser's local time zone.
+Preferences store the camera and selected source, named form and group per directory and render scope. The viewer saves selection changes as well as camera input, and flushes pending state with a keepalive request on page hide or backgrounding. The Contents and Inspector overlays start closed on each page entry. Toggling them leaves the camera unchanged. Restoring a scope resolves saved names against its current assets. The manifest also exposes each source's filesystem `modifiedAt` in milliseconds; board source labels render that value in the browser's local time zone.
 
 The ephemeral server writes viewer preferences, refreshes ignored editor declarations and binds to `127.0.0.1`. The CLI selects its directory once. Browser mutations are limited to preferences and derived cache data; directory opening and reveal APIs are removed. Asset paths come from discovered source entries; symlinks are not scanned.
 
@@ -33,7 +37,6 @@ The viewer shell sets the base URL to the direct viewer, project, or live instan
 | `GET metadata/<hash>?theme=...&context=...` | One cached geometry record and available crop IDs. |
 | `POST metadata/<hash>?theme=...&context=...` | Persist browser-measured geometry. |
 | `GET/POST preview/<hash>?theme=...&context=...&crop=...` | Load or persist an exact ready-cropped SVG. |
-| `POST catalog?context=...` | Persist the bounded scalar packing cache. |
 | `GET relationships` | Full source graph; builds uncached sources when explicitly requested. The viewer uses the import data already available from its manifests and asset requests. |
 | `GET events` | Revision/error SSE stream. |
 
@@ -389,38 +392,3 @@ metadata, build payloads and catalog caches are not overwritten. A source delete
 since base has no artboard; CLI rendering reports selected deletions in its base JSON
 envelope. Unsupported kinds or type changes retain the current drawing and report the
 comparison limit in the Inspector note. There is no viewer chrome addition.
-
-## Doop publishing
-
-`src/publish/index.mjs` owns `adg publish`: Git branch selection, external state, Doop page/frame reconciliation,
-content skipping, deletion reports and draft retirement. State is keyed by canonical project path and Doop origin
-under the selected ADG state directory. Each mutation persists its returned IDs for later in-place updates.
-The CLI uses the shared schema-version-1 envelope and publish-specific recovery diagnostics.
-
-`documents.mjs` builds production entries through `buildSource(..., {write:false})` and derives chapter boards from
-`gallery.json` groups. A mixed-layer group splits into a same-titled chapter on each layer page. Ungrouped component
-and module sources form chapters by directory path. Each source becomes a section; a module folder's `index.tsx`
-uses its feature directory as the section title. Local Chromium measures specimens for the 12-column grid and
-splits chapters at section boundaries beyond the 4800px height budget. A single taller section stays intact.
-Surface frames keep their declared viewports and form source rows gathered by gallery groups.
-
-`board.mjs` supplies shared document chrome, using project tokens with neutral fallbacks for chapter headers,
-source labels, specimen wells and captions. Boards sit side by side in chapter order. `token-board.mjs` renders
-paired light/dark colour swatches grouped by CSS comment headings or token-name prefix, type samples, shape,
-elevation, sizing and motion. It applies the same height budget and section-boundary continuation to Tokens.
-
-Generated documents carry section and specimen identity, provenance and one theme-switch script. The source
-selection includes production entries and excludes feature helpers, studies and architecture. Local Chromium closes
-before upload. `media.mjs` uses the existing css-tree parser to partially evaluate board viewport conditions against
-the presentation viewport; preference queries remain live, and surface styles retain their original viewport rules.
-
-`anchors.mjs` parses old/new HTML with parse5, matches section or specimen identity plus relative nth-of-type paths,
-and inserts existing Doop IDs. Unmatched anchors and deleted-frame comments are returned for review. The first
-chapter-board publish removes legacy per-source sheet frames from the existing canvas and includes their comments
-in the removal results. `doop.mjs` reads only DOOP_URL/DOOP_AGENT_KEY and implements JSON/SSE MCP calls with bounded timeouts;
-network, authentication and remote tool failures have separate codes. Fake MCP tests exercise the same client.
-
-Drafts derive both current and merge-base documents using the existing disposable revision-tree mechanism, compare
-content hashes and publish only changed current documents. Revision metadata is excluded from skip hashes. Default
-publishes retire drafts whose recorded commits are ancestors of the default branch. The frozen viewer and its
-`?base=<rev>` review implementation are unchanged.

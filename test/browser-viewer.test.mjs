@@ -23,7 +23,7 @@ async function temporary(t) {
   return directory;
 }
 
-test('token scope reads both themes, updates on save, and preserves the design camera', { timeout: 30000 }, async t => {
+test('token board opens by default and its list reads both themes, updates on save and preserves the design camera', { timeout: 30000 }, async t => {
   const folder = await temporary(t), directory = path.join(folder, 'design');
   await mkdir(directory);
   await writeFile(path.join(directory, 'button.svg'), await readFile(path.join(root, 'fixtures/legacy-svg/components/button.svg')));
@@ -58,6 +58,11 @@ test('token scope reads both themes, updates on save, and preserves the design c
     await page.waitForFunction(() => window.__adg?.ready);
     await events;
     assert.deepEqual(designRequests, [], 'opening tokens must not request artboards');
+    assert.equal(await page.locator('.token-board-drawing').isVisible(), true);
+    assert.equal(await page.locator('#token-catalog').isVisible(), false);
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+    await page.locator('#token-list-toggle').click();
+    assert.equal(await page.locator('#token-catalog').isVisible(), true);
     const accent = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'Copy --accent', exact: true }) });
     assert.deepEqual(await accent.locator('.token-swatch').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).backgroundColor)),
       ['rgb(51, 51, 51)', 'rgb(238, 238, 238)']);
@@ -116,7 +121,7 @@ test('server serves the packaged token source and ignores fixture queries in nor
   t.after(()=>server.close());
   const tokens=await fetch(new URL('/tokens.css',server.url));
   assert.equal(tokens.status,200);assert.equal(await tokens.text(),await readFile(path.join(root,'design/tokens.css'),'utf8'));
-  for(const file of ['app.js','assets.js','icons.js','layout.js','labels.js']) assert.equal((await fetch(new URL('/'+file,server.url))).status,200);
+  for(const file of ['app.js','assets.js','icons.js','layout.js','labels.js','boards.js']) assert.equal((await fetch(new URL('/'+file,server.url))).status,200);
   const manifest=await (await fetch(new URL('/manifest?fixture=open-empty',server.url))).json();
   assert.ok(manifest.directory);assert.equal(manifest.fixture,undefined);
   const empty=path.join(temporaryRoot,'empty');await mkdir(empty);
@@ -194,8 +199,8 @@ test('camera and selected form survive immediate reload and a server restart', {
     const data=await(await fetch(new URL('/manifest?scope=layer:components',server.url))).json();
     assert.deepEqual(data.selection,{path:'components/button.tsx',form:'secondary',group:'Essentials',element:null});
     assert.equal(data.assets.find(a=>a.path==='components/button.tsx').modifiedAt,(await stat(path.join(directory,'components/button.tsx'))).mtimeMs);
-    const time=page.locator('.canvas-label:not([hidden]) time').first();
-    await time.waitFor({timeout:3000});assert.ok(await time.getAttribute('datetime'));assert.ok(await time.getAttribute('title'));
+    const modified=page.locator('.board-source').filter({has:page.locator('[data-source="components/button.tsx"]')}).locator('.board-modified');
+    await modified.waitFor({timeout:3000});assert.ok((await modified.textContent()).trim());
     await page.close();await server.close();
     server=await startServer({directory,stateDirectory});
     const restored=await browser.newPage({viewport:{width:1440,height:900}});
@@ -203,16 +208,16 @@ test('camera and selected form survive immediate reload and a server restart', {
     assert.deepEqual(await restored.evaluate(()=>window.__adg.view),camera);
     assert.equal(await restored.locator('#source-name').textContent(),'button');
     assert.match(await restored.locator('#forms [aria-current=true]').textContent(),/^secondary/);
-    const heading = restored.locator('.canvas-label:not([hidden])').filter({hasText:/^button/});
+    const heading = restored.locator('.board-source [data-source="components/button.tsx"]');
     const before = await heading.boundingBox();
     await restored.locator('.gallery-viewport').evaluate(async el => {
       el.dispatchEvent(new WheelEvent('wheel',{deltaX:8,deltaY:0,bubbles:true,cancelable:true}));
       await new Promise(requestAnimationFrame);
     });
-    assert.equal((await heading.boundingBox()).x,before.x,'clipped headings remain pinned during small pans');
+    assert.ok(Math.abs((await heading.boundingBox()).x-before.x+8)<.1,'board source titles pan with their specimens');
   } finally {await browser.close();await server.close()}
 });
-test('all fixture states reach drawn readiness without screenshots or persisted preferences', {timeout:90000}, async t => {
+test('all board fixture states reach drawn readiness without persisted preferences', {timeout:90000}, async t => {
   const temporaryRoot=await temporary(t);
   const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot,fixtures:{states,recent}});
   const browser=await launch();
@@ -244,25 +249,35 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
             const {prepare,arrange}=await import('/assets.js');
             const manifest=await(await fetch('/manifest')).json();
             const assets=await Promise.all(manifest.assets.map(a=>prepare(a,'light')));
-            return {paths:manifest.assets.map(a=>a.path),sections:arrange({...manifest,assets}).groups.map(({title,x,y,w,h,blocks})=>({title,x,y,w,h,blocks}))};
+            return {paths:manifest.assets.map(a=>a.path),sections:arrange({...manifest,assets}).groups.map(({title,layer,x,y,w,h,blocks})=>({title,layer,x,y,w,h,blocks}))};
           });
           const reference=JSON.parse(await readFile(path.join(root,'fixtures/arc-sample.layout.json'),'utf8'));
           assert.equal(actual.paths.length,51);assert.ok(actual.paths.every(p=>p.endsWith('.tsx')));
-          // Live sizes depend on system fonts. The layout unit test checks exact coordinates from fixed sizes.
-          const structure=sections=>sections.map(({title,blocks})=>[title,blocks.map(({asset,kind,frames})=>[asset,kind,frames?.map(f=>f.name)])]);
+          const structure=sections=>sections.map(({title,layer,blocks})=>[title,layer,blocks.map(({asset,frames})=>[asset,frames.map(frame=>frame.name)])]);
           assert.deepEqual(structure(actual.sections),structure(reference.sections));
+          const sectionSources=actual.sections.flatMap(section=>section.blocks.map(block=>block.asset));
+          assert.deepEqual([...sectionSources].sort(),[...actual.paths].sort());
           for(const section of actual.sections) {
+            assert.ok(section.w>=1680 && section.h>0);
             const placed=[];
-            for(const {asset,x,y,w,h} of section.blocks) {
-              assert.ok(w>0&&h>0&&x>=section.x&&y>=section.y&&x+w<=section.x+section.w&&y+h<=section.y+section.h,asset);
+            for(const {asset,x,y,w,h,frames} of section.blocks) {
+              assert.ok(w>0 && h>0 && x>=0 && y>=0 && x+w<=section.w && y+h<=section.h,asset);
               const box={x,y,width:w,height:h};
-              assert.ok(!placed.some(other=>overlaps(other,box)),`${asset} overlaps another block`);
+              assert.ok(!placed.some(other=>overlaps(other,box)),`${asset} overlaps another source section`);
               placed.push(box);
+              for(const frame of frames) {
+                assert.ok(frame.w>0 && frame.h>0);
+                assert.ok(frame.well.w>=frame.w && frame.well.h>=frame.h,`${asset} specimen fits its well`);
+              }
             }
           }
+          assert.equal(await page.locator('.chapter-board').count(),actual.sections.length);
+          assert.equal(await page.locator('.board-source').count(),actual.paths.length);
         }
         if(name==='sample-zoomed') {
-          for(const caption of ['default','error']) assert.equal(await page.locator('#labels .canvas-label:not([hidden])').filter({hasText:new RegExp(`^${caption}$`)}).count(),1);
+          const captions=await page.locator('.board-caption > span').allTextContents();
+          for(const caption of ['default','error']) assert.ok(captions.includes(caption),caption);
+          assert.equal(await page.locator('#labels .canvas-label:not([hidden])').count(),0);
         }
         if(name==='sample-inspect-frame') {
           assert.equal(await page.locator('#frame-name').textContent(),'failed');
@@ -285,7 +300,9 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
         }
         if(name==='sample-components') {
           assert.equal(await page.locator('#search').getAttribute('placeholder'),'Find assets…');
-          assert.ok(await page.locator('#labels .canvas-label:not([hidden])').count()>0);
+          assert.ok(await page.locator('.chapter-board header h1').count()>0);
+          assert.ok(await page.locator('.board-source').count()>0);
+          assert.equal(await page.locator('#labels .canvas-label:not([hidden])').count(),0);
           const view=await page.evaluate(()=>window.__adg.view);
           await page.getByRole('button',{name:'Contents',exact:true}).click();
           assert.deepEqual(await page.evaluate(()=>window.__adg.view),view);
@@ -293,7 +310,7 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
           await page.keyboard.press('1');
           assert.equal(await page.evaluate(()=>window.__adg.view.scale),1);
           await page.keyboard.press('0');
-          assert.ok(await page.evaluate(()=>window.__adg.view.scale)<.2);
+          assert.ok(await page.evaluate(()=>window.__adg.view.scale)<1);
         }
       } finally { await page.close(); }
       }
@@ -302,72 +319,54 @@ test('all fixture states reach drawn readiness without screenshots or persisted 
   } finally { await browser.close();await server.close(); }
 });
 
-test('camera pans retain labels, while scale, settle and viewport changes refresh them', {timeout:30000}, async t => {
+test('board titles and captions scale and pan with the camera without rebuilding source content', {timeout:30000}, async t => {
   const temporaryRoot=await temporary(t);
   const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory:temporaryRoot,fixtures:{states,recent}});
   const browser=await launch();
   try {
     const page=await browser.newPage({viewport:{width:1440,height:900}});
-    // Overview headings are unpinned; the detail fixture deliberately clips
-    // neighboring sets and must rebuild their pinned headings on every pan.
-    await page.goto(new URL('/?fixture=sample-overview',server.url).href);
-    await config.compare.ready(page,'sample-overview');
+    await page.goto(new URL('/?fixture=sample-components',server.url).href);
+    await config.compare.ready(page,'sample-components');
     const pan=await page.evaluate(async()=>{
-      const {Labels}=await import('/labels.js'), update=Labels.prototype.update;
-      const rect=Element.prototype.getBoundingClientRect;
-      window.labelWork={updates:0,chromeReads:0,childWrites:0};
-      Labels.prototype.update=function(...args){window.labelWork.updates++;return update.apply(this,args)};
-      Element.prototype.getBoundingClientRect=function(){
-        if(this.matches('.floating, [popover], dialog, #tooltip'))window.labelWork.chromeReads++;
-        return rect.call(this);
-      };
-      const layer=document.querySelector('.label-layer'), viewport=document.querySelector('.gallery-viewport');
-      const observer=new MutationObserver(records=>{window.labelWork.childWrites+=records.filter(r=>r.target!==layer).length});
-      observer.observe(layer,{subtree:true,attributes:true,childList:true,characterData:true});
-      const snapshot=()=>[...layer.children].filter(el=>!el.hidden).map(el=>[el.textContent,el.style.transform]);
-      const before=snapshot(), camera=window.__adg.view;
-      // Keep each event inside the idle interval; one animation frame per move.
+      const root=document.querySelector('#board-chrome');
+      const title=root.querySelector('.board-source button'),caption=root.querySelector('.board-caption');
+      const box=node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height}};
+      const before={title:box(title),caption:box(caption),view:window.__adg.view};
+      let childWrites=0;
+      const observer=new MutationObserver(records=>{childWrites+=records.filter(record=>record.target!==root).length});
+      observer.observe(root,{subtree:true,attributes:true,childList:true,characterData:true});
+      const viewport=document.querySelector('.gallery-viewport');
       for(let i=0;i<12;i++) {
         viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:2,deltaY:1,bubbles:true,cancelable:true}));
         await new Promise(requestAnimationFrame);
       }
       await Promise.resolve();observer.disconnect();
-      return {before,after:snapshot(),camera,view:window.__adg.view,work:{...window.labelWork},transform:layer.style.transform};
+      return {before,after:{title:box(title),caption:box(caption),view:window.__adg.view},childWrites};
     });
-    assert.ok(pan.before.length>0);
-    assert.deepEqual(pan.after,pan.before);
-    assert.deepEqual(pan.work,{updates:0,chromeReads:0,childWrites:0});
-    assert.equal(pan.view.x,pan.camera.x-24);assert.equal(pan.view.y,pan.camera.y-12);
-    assert.equal(pan.transform,'translate(-24px, -12px)');
+    assert.equal(pan.childWrites,0,'panning transforms the board layer without rebuilding its children');
+    assert.equal(pan.after.view.x,pan.before.view.x-24);
+    assert.equal(pan.after.view.y,pan.before.view.y-12);
+    for(const name of ['title','caption']) {
+      assert.ok(Math.abs(pan.after[name].x-pan.before[name].x+24)<.1,name);
+      assert.ok(Math.abs(pan.after[name].y-pan.before[name].y+12)<.1,name);
+      assert.equal(pan.after[name].width,pan.before[name].width);
+    }
     await page.waitForFunction(()=>window.__adg.ready);
-    assert.equal(await page.evaluate(()=>window.labelWork.updates),1);
-    assert.equal(await page.locator('.label-layer').evaluate(el=>el.style.transform),'translate(0px, 0px)');
-    const zoom=await page.evaluate(async()=>{
-      window.labelWork={updates:0,chromeReads:0,childWrites:0};
-      const viewport=document.querySelector('.gallery-viewport');
-      for(let i=0;i<3;i++) {
-        viewport.dispatchEvent(new WheelEvent('wheel',{deltaY:-5,ctrlKey:true,clientX:800,clientY:400,bubbles:true,cancelable:true}));
-        await new Promise(requestAnimationFrame);
-      }
-      return {...window.labelWork};
-    });
-    assert.equal(zoom.updates,3);assert.equal(zoom.chromeReads,0);
-    await page.waitForFunction(()=>window.__adg.ready);
-    const immediate=await page.evaluate(async()=>{
-      const viewport=document.querySelector('.gallery-viewport'),before=window.labelWork.updates;
-      viewport.dispatchEvent(new WheelEvent('wheel',{deltaX:40,deltaY:0,bubbles:true,cancelable:true}));
-      await new Promise(requestAnimationFrame);
-      return window.labelWork.updates-before;
-    });
-    assert.equal(immediate,1,'large pans refresh visible labels without waiting for the idle timer');
-    const updates=await page.evaluate(()=>window.labelWork.updates);
-    await page.setViewportSize({width:1200,height:800});
-    await page.waitForFunction(previous=>window.labelWork.updates>previous&&window.__adg.ready,updates);
-    assert.ok(await page.evaluate(()=>window.labelWork.chromeReads)>0);
+    const before=await page.locator('.board-source button').first().boundingBox();
+    const scale=await page.evaluate(()=>window.__adg.view.scale);
+    await page.locator('#plus').click();await page.waitForFunction(()=>window.__adg.ready);
+    const after=await page.locator('.board-source button').first().boundingBox();
+    const ratio=await page.evaluate(previous=>window.__adg.view.scale/previous,scale);
+    assert.ok(ratio>1);
+    assert.ok(Math.abs(after.width/before.width-ratio)<.001,'source title scales in board pixels');
+    assert.ok(Math.abs(after.height/before.height-ratio)<.001);
+    await page.setViewportSize({width:1200,height:800});await page.waitForFunction(()=>window.__adg.ready);
+    assert.equal(await page.locator('#board-chrome').isVisible(),true);
+    assert.equal(await page.locator('#labels .canvas-label:not([hidden])').count(),0);
   } finally {await browser.close();await server.close()}
 });
 
-test('canvas names retain copy behavior and select their source or frame without moving the camera', {timeout:30000}, async t => {
+test('board source titles select and copy through pointer and keyboard without moving the camera', {timeout:30000}, async t => {
   const stateDirectory=await temporary(t);
   const server=await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory,fixtures:{states,recent}});
   const browser=await launch();
@@ -381,53 +380,63 @@ test('canvas names retain copy behavior and select their source or frame without
         window.copiedNames.push(text);
       }});
     });
-    await page.goto(new URL('/?fixture=sample-inspect-component',server.url).href);
-    await config.compare.ready(page,'sample-inspect-component');
+    await page.goto(new URL('/?fixture=sample-components',server.url).href);
+    await config.compare.ready(page,'sample-components');
     const view=await page.evaluate(()=>window.__adg.view);
-    const name=page.getByRole('button',{name:'Copy button name',exact:true});
-    const glyph=name.locator('.label-copy-icon');
-    const bounds=await name.boundingBox();
-    assert.equal(await glyph.evaluate(el=>getComputedStyle(el).opacity),'0');
-    await name.hover();
-    assert.equal(await glyph.evaluate(el=>getComputedStyle(el).opacity),'1');
-    await page.mouse.move(0,0);
-    assert.equal(await glyph.evaluate(el=>getComputedStyle(el).opacity),'0');
-    assert.deepEqual(await name.boundingBox(),bounds);
-    await name.locator('.label-copy-icon').click();
-    await page.getByRole('button',{name:'Copied button',exact:true}).waitFor();
-    await page.mouse.move(0,0);
-    assert.equal(await page.getByRole('button',{name:'Copied button',exact:true}).locator('.label-copy-icon').evaluate(el=>getComputedStyle(el).opacity),'1');
+    const name=page.locator('.board-source [data-source="components/button.tsx"]');
+    await name.click();
+    await page.waitForFunction(()=>window.copiedNames.length===1);
     assert.deepEqual(await page.evaluate(()=>window.copiedNames),['button']);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.selection),{path:'components/button.tsx',frame:null,element:null});
     assert.deepEqual(await page.evaluate(()=>window.__adg.view),view);
-    assert.equal(await page.locator('#source-name').textContent(),'button');
-    await name.waitFor({timeout:2500});
-    assert.equal(await glyph.evaluate(el=>getComputedStyle(el).opacity),'0');
-    await name.focus();await page.keyboard.press('Tab');await page.keyboard.press('Shift+Tab');
-    assert.equal(await glyph.evaluate(el=>getComputedStyle(el).opacity),'1');
-    await page.keyboard.press('Enter');
+    await name.focus();await page.keyboard.press('Enter');
     await page.waitForFunction(()=>window.copiedNames.length===2);
+    await name.focus();await page.keyboard.press('Space');
+    await page.waitForFunction(()=>window.copiedNames.length===3);
     assert.deepEqual(await page.evaluate(()=>window.__adg.view),view);
     await page.evaluate(()=>{window.copyFailure=true});
-    await page.getByRole('button',{name:'Copy primary name',exact:true}).click();
-    await page.locator('#error').waitFor();
+    await name.click();await page.locator('#error').waitFor();
     assert.match(await page.locator('#error').textContent(),/Clipboard access denied/);
-    assert.deepEqual(await page.evaluate(()=>window.copiedNames),['button','button']);
+    assert.equal(await page.evaluate(()=>window.copiedNames.length),3);
     await page.evaluate(()=>{window.copyFailure=false});
-    await page.getByRole('button',{name:'Copy primary name',exact:true}).focus();
-    await page.keyboard.press('Space');
-    await page.waitForFunction(()=>window.copiedNames.length===3);
+    await page.locator('#inspect').click();
+    await page.locator('#forms [data-frame="primary"]').click();
+    await page.waitForFunction(()=>window.__adg.ready);
+    await page.locator('#copy-frame').click();
     assert.equal((await page.evaluate(()=>window.copiedNames)).at(-1),'primary');
-    assert.equal(await page.locator('#error').isVisible(),false);
-    assert.deepEqual(await page.evaluate(()=>window.__adg.view),view);
     await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:new URL(server.url).origin});
     await page.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{value:window.nativeClipboardWrite}));
-    await name.waitFor();await name.click();
-    await page.getByRole('button',{name:'Copied button',exact:true}).waitFor();
-    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'button');
+    await page.locator('#copy-path').click();
+    assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),'components/button.tsx');
   } finally {await browser.close();await server.close()}
 });
 
-test('TSX sets and flows use built frame sizes, inline previews, notes and import-dependent refresh', {timeout:30000}, async t=>{
+test('feature-folder board titles copy the displayed name instead of index', async t => {
+  const directory=await temporary(t);
+  await mkdir(path.join(directory,'design/modules/account'),{recursive:true});
+  await writeFile(path.join(directory,'adg.config.mjs'),"export default {sources:['components','modules','surfaces']};");
+  await writeFile(path.join(directory,'design/tokens.css'),(await import('../src/toolkit/project.mjs')).starterTokens);
+  await writeFile(path.join(directory,'design/modules/account/index.tsx'),`import {Frame} from 'adg';export default()=> <Frame name="ready" width={200} height={100}><div>Account</div></Frame>;`);
+  const server=await startServer({directory:path.join(directory,'design'),stateDirectory:path.join(directory,'state')});
+  const browser=await launch();
+  try {
+    const page=await browser.newPage();
+    await page.addInitScript(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:async value=>{window.copiedTitle=value}}}));
+    await page.goto(server.url+'?scope=layer:modules');
+    await page.waitForFunction(()=>window.__adg?.ready || document.querySelector('#error')?.textContent);
+    const response=await fetch(new URL('/asset/modules%2Faccount%2Findex.tsx?theme=light',server.url));
+    assert.equal(response.status,200,await response.text());
+    assert.equal(await page.locator('#error').textContent(),'');
+    const title=page.locator('.board-source [data-source="modules/account/index.tsx"]');
+    assert.equal(await title.count(),1,JSON.stringify(await page.evaluate(()=>({error:document.querySelector('#error').textContent,items:window.__adg.items,titles:[...document.querySelectorAll('.board-source button')].map(node=>[node.dataset.source,node.textContent])}))));
+    assert.equal(await title.textContent(),'account');
+    await title.click();
+    assert.equal(await page.evaluate(()=>window.copiedTitle),'account');
+    assert.equal((await page.evaluate(()=>window.__adg.selection)).path,'modules/account/index.tsx');
+  } finally {await browser.close();await server.close()}
+});
+
+test('TSX board specimens retain frame sizes, exact previews, notes, caches and import-dependent refresh', {timeout:30000}, async t=>{
   const {writeFile}=await import('node:fs/promises');
   const {init}=await import('../src/toolkit/project.mjs');
   const temporaryRoot=await temporary(t);init({root:temporaryRoot},()=>{});
@@ -475,7 +484,10 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
     });
     assert.deepEqual(result.paths,['components/forms.tsx','surfaces/flow.tsx']);
     assert.deepEqual(result.parts.map(p=>[p.x,p.y]),[[0,0],[0,68],[732,68]]);assert.equal(result.note,'Note 0');
-    assert.deepEqual(result.blocks.map(b=>[b.kind,b.w,b.h]),[['set',1280,168],['flow',328,82]]);
+    assert.equal(result.blocks.length,2);
+    assert.deepEqual(result.blocks.map(b=>b.frames.map(f=>[f.w,f.h])),[[[900,20],[700,30],[500,40]],[[100,50],[100,50]]]);
+    assert.equal(result.items.length,5);
+    assert.ok(result.blocks.every(block=>block.kind==='flow' && block.w>=1520 && block.h>0));
     assert.equal(result.crops.length,4);
     for(const crop of result.crops) {
       assert.equal(crop.identical,true,`${crop.theme} frame ${crop.id} XML must remain exact`);
@@ -489,7 +501,7 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
         const {prepare,imageURL,compactPreparedSource}=await import('/assets.js');const {blockForAsset}=await import('/layout.js');
         const data=await(await fetch('/manifest')).json();
         const asset=await prepare(data.assets.find(a=>a.path==='components/forms.tsx'),theme),block=blockForAsset(asset);
-        const crop={...block.crop,width:block.crop.w,height:block.crop.h,id:'overview'};
+        const crop=block.previewCrop;
         const urls=[imageURL({...asset,format:undefined},crop),imageURL(asset,crop),imageURL(compactPreparedSource(asset),crop)];
         const documents=await Promise.all(urls.map(async url=>new DOMParser().parseFromString(await(await fetch(url)).text(),'image/svg+xml')));
         const styles=documents.map(document=>[...document.querySelectorAll('style')].map(style=>style.textContent));
@@ -520,14 +532,17 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
       assert.deepEqual(await page.locator('#dedup-preview').screenshot(),original,`${theme} shared stylesheet preview pixels must remain exact`);
       await page.evaluate(()=>window.cleanupDedupPreview());
     }
-    assert.deepEqual(await page.evaluate(()=>window.__adg.items),result.items,'streamed completion must preserve the full-source layout');
+    const streamedItems=await page.evaluate(()=>window.__adg.items);
+    const bandOffset=streamedItems[0].y-result.items[0].y;
+    const expectedItems=result.items.map(item=>({...item,y:item.y+bandOffset}));
+    assert.deepEqual(streamedItems,expectedItems,'streamed completion retains specimen geometry below the Tokens board');
     await page.evaluate(()=>window.__adg.cacheFlush);
     assert.equal(await page.evaluate(()=>window.__adg.cacheFailures),0);
     const warmRequests=[];const warmRequest=request=>{if(new URL(request.url()).pathname.startsWith('/asset/'))warmRequests.push(request.url())};
     page.on('request',warmRequest);await page.reload();await page.waitForFunction(()=>window.__adg?.ready);
     page.off('request',warmRequest);
     assert.deepEqual(warmRequests,[],'warm metadata and cropped previews must bypass source preparation');
-    assert.deepEqual(await page.evaluate(()=>window.__adg.items),result.items);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.items),expectedItems);
     let lostPreview;
     await page.route('**/preview/**',async route=>{
       const address=route.request().url();
@@ -540,7 +555,7 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
     await page.evaluate(()=>window.__adg.cacheFlush);page.off('request',recoverRequest);await page.unroute('**/preview/**');
     assert.equal(recoveredSources.length,1,'an evicted preview must regenerate only its source');
     assert.equal(await page.locator('#error').textContent(),'');
-    assert.deepEqual(await page.evaluate(()=>window.__adg.items),result.items);
+    assert.deepEqual(await page.evaluate(()=>window.__adg.items),expectedItems);
     await writeFile(path.join(directory,'scenes/sizes.tsx'),'export const widths=[901,700,500];');
     await page.evaluate(async version=>{
       for(let i=0;i<100;i++) {
@@ -557,20 +572,22 @@ test('TSX sets and flows use built frame sizes, inline previews, notes and impor
     await page.waitForFunction(revision=>window.__adg.ready && window.__adg.metadataComplete && window.__adg.revision>revision,beforeGrowth.revision);
     const grown=await page.evaluate(()=>({items:window.__adg.items,view:window.__adg.view}));
     assert.deepEqual(grown.view,beforeGrowth.view,'geometry refresh must retain the camera');
-    assert.deepEqual(grown.items.filter(a=>a.path==='surfaces/flow.tsx'),beforeGrowth.items.filter(a=>a.path==='surfaces/flow.tsx'),
-      'unchanged regions keep their positions even when section height ordering changes');
-    const grownSet=grown.items.find(a=>a.path==='components/forms.tsx');
-    assert.ok(grownSet.width>1600,'many measured forms must use an adaptive wrap width');
-    assert.ok(grownSet.y>beforeGrowth.items.find(a=>a.path===grownSet.path).y,'enlarged set moves below occupied content');
+    const grownForms=grown.items.filter(a=>a.path==='components/forms.tsx');
+    assert.equal(grownForms.length,87);
+    assert.ok(grownForms.every(item=>item.width===600),'declared specimen widths stay unchanged as a chapter grows');
+    assert.equal(grownForms[0].y,beforeGrowth.items.find(a=>a.path==='components/forms.tsx').y,'the first specimen retains the board origin');
+    assert.ok(grownForms.at(-1).y>grownForms[0].y,'additional specimens extend the board vertically');
+    const oldSurfaces=beforeGrowth.items.filter(a=>a.path==='surfaces/flow.tsx');
+    const newSurfaces=grown.items.filter(a=>a.path==='surfaces/flow.tsx');
+    assert.equal(newSurfaces.length,oldSurfaces.length);
+    assert.ok(newSurfaces[0].y>oldSurfaces[0].y,'later layer bands follow the taller Components band');
+    assert.equal(newSurfaces[1].y-newSurfaces[0].y,oldSurfaces[1].y-oldSurfaces[0].y);
+    assert.deepEqual(newSurfaces.map(({width,height})=>({width,height})),oldSurfaces.map(({width,height})=>({width,height})));
     await page.getByRole('button', { name: 'Contents', exact: true }).click();
     await page.locator('.group-name').filter({hasText:/^components/}).click();
     await page.locator('#more').click();await page.locator('#arrange').click();
     await page.waitForFunction(()=>window.__adg.ready);
-    const arranged=await page.evaluate(()=>window.__adg.items);
-    assert.deepEqual(arranged.filter(a=>a.path==='surfaces/flow.tsx'),grown.items.filter(a=>a.path==='surfaces/flow.tsx'),
-      'Arrange current group leaves other groups in place');
-    assert.equal(arranged.find(a=>a.path===grownSet.path).y,beforeGrowth.items.find(a=>a.path===grownSet.path).y,
-      'Arrange returns the enlarged set to its section content origin');
+    assert.deepEqual(await page.evaluate(()=>window.__adg.items),grown.items,'Arrange keeps deterministic one-board-per-layer placement');
     assert.equal(await page.locator('#full-sheet').count(),0);
   }finally{await browser.close();await server.close();}
   await writeFile(path.join(directory,'gallery.json'),JSON.stringify({groups:[{title:'Helpers',assets:['scenes/sizes.tsx']}]}));
@@ -599,8 +616,9 @@ test('dedicated legacy SVG sheets retain measurement, form crops and renderable 
       [['primary',40,62,100,34],['secondary',180,62,70,34]],
       [['ready',20,30,100,60],['empty',20,130,200,80]],
     ]);
-    assert.deepEqual(result.blocks,[['set',258,94],['flow',428,112]]);
-    assert.deepEqual(result.previews,[{notes:0,frames:0},{notes:0,frames:1},{notes:0,frames:1}]);
+    assert.equal(result.blocks.length,2);
+    assert.ok(result.blocks.every(([kind,width,height])=>kind==='flow' && width>=1520 && height>0));
+    assert.deepEqual(result.previews,[{notes:0,frames:0},{notes:0,frames:0},{notes:0,frames:1},{notes:0,frames:1}]);
   } finally {await browser.close();await server.close();}
 });
 
@@ -647,7 +665,7 @@ test('frame and element selection expose transitive relationships, matching expo
     await page.locator('#inspect').click();
     const point=await page.evaluate(()=>{
       const a=window.__adg.items.find(a=>a.id==='surfaces/home.tsx#1'),v=window.__adg.view;
-      return {x:v.x+(a.x+16+100)*v.scale,y:v.y+(a.y+16+40)*v.scale};
+      return {x:v.x+(a.x+100)*v.scale,y:v.y+(a.y+40)*v.scale};
     });
     await page.mouse.move(point.x,point.y);assert.equal(await page.locator('#hover-outline').isVisible(),true);
     await page.mouse.click(point.x,point.y);await page.waitForFunction(()=>window.__adg.ready);
@@ -679,7 +697,7 @@ test('frame and element selection expose transitive relationships, matching expo
     await page.locator('[data-navkey="file:surfaces/home.tsx"]').click();
     assert.equal(await page.locator('#source').isVisible(),false,'navigation retains the collapsed inspector');
     await page.locator('#inspect').click();await page.locator('#forms [data-frame="one"]').click();await page.waitForFunction(()=>window.__adg.ready);
-    const blank=await page.evaluate(()=>{const a=window.__adg.items.find(a=>a.id==='surfaces/home.tsx#0'),v=window.__adg.view;return{x:v.x+(a.x+16+300)*v.scale,y:v.y+(a.y+16+100)*v.scale}});
+    const blank=await page.evaluate(()=>{const a=window.__adg.items.find(a=>a.id==='surfaces/home.tsx#0'),v=window.__adg.view;return{x:v.x+(a.x+300)*v.scale,y:v.y+(a.y+100)*v.scale}});
     await page.mouse.click(blank.x,blank.y);assert.equal((await page.evaluate(()=>window.__adg.selection)).frame,'one');
     assert.equal((await page.evaluate(()=>window.__adg.selection)).element,null);
     await page.keyboard.press('Escape');assert.deepEqual(await page.evaluate(()=>window.__adg.selection),{path:null,frame:null,element:null});
@@ -693,7 +711,7 @@ test('frame and element selection expose transitive relationships, matching expo
       path:'surfaces/home.tsx',frame:'two',element:{source:'modules/composer.tsx',export:'Composer'},
     });
     const bounds=await shared.locator('#selection-outline').boundingBox();
-    assert.ok(bounds && bounds.x>=0 && bounds.y>=0 && bounds.x+bounds.width<=1440 && bounds.y+bounds.height<=900);
+    assert.ok(bounds && bounds.x>=0 && bounds.y>=0 && bounds.x+bounds.width<=1440 && bounds.y+bounds.height<=900, JSON.stringify({bounds,view:await shared.evaluate(()=>window.__adg.view)}));
     const stale=new URL(elementLink);stale.searchParams.set('frame','removed');
     await shared.goto(stale.href);await shared.waitForFunction(()=>window.__adg?.ready);
     assert.deepEqual(await shared.evaluate(()=>window.__adg.selection),{path:'surfaces/home.tsx',frame:null,element:null});

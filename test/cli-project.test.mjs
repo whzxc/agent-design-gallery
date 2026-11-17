@@ -172,6 +172,18 @@ test('inaccessible child directories produce warnings without changing existing 
   await assert.rejects(listRoots(path.join(base, 'bad-state')), typed('STATE_INVALID', /Cannot read registry/));
 });
 
+test('config omits retired publish options and keeps compare viewport validation', async t => {
+  const root = await temporary(t);
+  for (const publish of [{ viewport: '1440x900' }, { viewport: 'invalid' }, false]) {
+    await put(root, 'adg.config.mjs', `export default ${JSON.stringify({ publish })};`);
+    const config = await loadConfig(root, { fresh: true });
+    assert.ok(!Object.hasOwn(config, 'publish'));
+    assert.equal(config.compare.viewport, '1280x800');
+  }
+  await put(root, 'adg.config.mjs', "export default { compare: { viewport: 'invalid' } };");
+  await assert.rejects(loadConfig(root, { fresh: true }), typed('CONFIG_INVALID', /Invalid viewport/));
+});
+
 test('config, version, migration, tokens and source discovery classify at their owning boundaries', async t => {
   const root = await temporary(t);
   await put(root, 'adg.config.mjs', "export default {requires: '>=99.0.0'};");

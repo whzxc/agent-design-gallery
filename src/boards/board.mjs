@@ -1,12 +1,9 @@
 import { escape } from '../toolkit/html.mjs';
 
 export const boardWidth = 1680;
-export const boardHeightBudget = 4800;
 export const specimenWidth = 1184;
-const themeSwitch = `<button data-adg-theme-switch type="button" aria-label="Switch light/dark theme">Light / Dark</button><script>document.querySelector('[data-adg-theme-switch]').addEventListener('click',()=>{const r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'});</script>`;
-const chrome = `
-html,body{margin:0}
-[data-adg-board]{--adg-surface:var(--surface,#fff);--adg-canvas:var(--canvas,#f2f2f0);--adg-text:var(--text,#202020);--adg-muted:var(--text-tertiary,var(--text-secondary,#737373));--adg-border:var(--border,#dededb);box-sizing:border-box;width:1680px;padding:64px 80px 80px;background:var(--adg-surface);color:var(--adg-text);font-family:var(--font-ui,system-ui,sans-serif)}
+export const boardCss = `
+[data-adg-board]{--adg-surface:var(--surface,#fff);--adg-canvas:var(--canvas,#f2f2f0);--adg-text:var(--text,#202020);--adg-muted:var(--text-tertiary,var(--text-secondary,#737373));--adg-border:var(--border,#dededb);box-sizing:border-box;width:1680px;padding:64px 80px 80px;background:var(--adg-surface);color:var(--adg-text);font:16px/normal var(--font-ui,system-ui,sans-serif)}
 [data-adg-board] *,[data-adg-board] *::before,[data-adg-board] *::after{box-sizing:border-box}
 [data-adg-header]{display:grid;grid-template-columns:1fr 440px;align-items:end;gap:64px;padding-bottom:56px}
 [data-adg-header] h1{margin:16px 0 0;font-size:48px;line-height:56px;font-weight:600;letter-spacing:-.02em}
@@ -24,11 +21,7 @@ html,body{margin:0}
 [data-adg-well]>[data-adg-frame]{flex-shrink:0}
 [data-adg-specimens] figcaption{display:flex;flex-direction:column;gap:2px;font:var(--text-meta,12px)/17px var(--font-mono,monospace);overflow-wrap:anywhere}
 [data-adg-specimens] figcaption small{font:var(--text-meta,12px)/17px var(--font-ui,system-ui,sans-serif);color:var(--adg-muted)}
-[data-adg-theme-switch]{position:fixed;z-index:2147483647;right:12px;top:12px;padding:8px 12px;border:1px solid var(--border,#ddd);border-radius:6px;background:var(--surface,#fff);color:var(--text,#222);font:12px var(--font-ui,system-ui,sans-serif);cursor:pointer}
 `;
-export function boardDocument(source, body, css, revision) {
-  return `<!doctype html><html data-theme="light"><head><meta charset="utf-8"><meta name="generator" content="ADG"><meta name="adg-provenance" content="${escape(JSON.stringify({generator:'ADG',source,revision}))}"><title>${escape(Array.isArray(source) ? source.join(', ') : source)}</title><style>${css.replace(/<\/style/gi, '<\\/style')}\n${chrome}</style></head><body>${body}${themeSwitch}</body></html>`;
-}
 export function boardHeader({title, projectName, layer, number=1, sourceCount, frameCount, countLabel='frames'}) {
   return `<header data-adg-header><div><p data-adg-eyebrow><span data-adg-number>${String(number).padStart(2,'0')}</span>${escape(projectName)} · ${escape(layer)}</p><h1>${escape(title)}</h1></div><p data-adg-counts>${sourceCount} ${sourceCount === 1 ? 'source' : 'sources'} · ${frameCount} ${countLabel}</p></header>`;
 }

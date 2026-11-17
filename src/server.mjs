@@ -24,6 +24,7 @@ import { createViewerCache } from './viewer-cache.mjs';
 import { refreshTypes, archFiles, isSourcePath, readGroups, sourceDirectories, isFeatureInternal } from './toolkit/project.mjs';
 import { loadConfig } from './toolkit/config.mjs';
 import { parseTokens } from './toolkit/tokens.mjs';
+import { tokenBoard } from './boards/token-board.mjs';
 import { sourceRelationships } from '../public/relationships.js';
 import { resolveScope } from '../public/assets.js';
 import { diff } from './toolkit/diff.mjs';
@@ -369,17 +370,26 @@ export async function startServer({
     const data=baseManifest(),context=await contextFor(url), requested=url.searchParams.get('scope');
     const fixtureScope=fixtures?.states[url.searchParams.get('fixture')]?.scope;
     const desired = fixtureScope ?? requested ?? 'all';
+    if (data.tokenSource) {
+      try {
+        const css = await readFile(path.join(data.directory, tokenFile), 'utf8');
+        const { light, dark } = parseTokens(css);
+        const declarations = values => [...values].map(([name, value]) => `${name}:${value};`).join('\n');
+        data.boardCss = `#board-chrome{${declarations(light)}}
+:where([data-theme="dark"]) #board-chrome, #board-chrome[data-theme="dark"]{${declarations(dark)}}`;
+        if (desired === 'tokens' || desired === 'all') {
+          data.tokens = [...light].map(([name, value]) => [name, value, dark.get(name) ?? null]);
+          data.tokenBoard = tokenBoard(data.tokenSource, css, { projectName: data.label });
+        }
+      } catch (error) {
+        data.tokenError = error.code ? `Cannot read ${data.tokenSource}.` : error.message;
+        diagnostic(new CliError('TOKENS_INVALID', error.message, { cause: error }));
+      }
+    }
     if (desired === 'tokens' && data.tokenSource) {
       // Keep the layer choices available without measuring or building any artboards.
       const { layers } = resolveScope(data, sources, 'all');
       const result = { ...data, scope: 'tokens', layers, assets: [] };
-      try {
-        const { light, dark } = parseTokens(await readFile(path.join(data.directory, tokenFile), 'utf8'));
-        result.tokens = [...light].map(([name, value]) => [name, value, dark.get(name) ?? null]);
-      } catch (error) {
-        result.tokenError = error.code ? `Cannot read ${data.tokenSource}.` : error.message;
-      diagnostic(new CliError('TOKENS_INVALID',error.message,{cause:error}));
-      }
       return applyFixtureManifest(result, url.searchParams.get('fixture'));
     }
     const scoped=resolveScope(data,sources,desired === 'tokens' ? 'default' : desired);
@@ -424,7 +434,6 @@ export async function startServer({
         }
         return {...asset,metadata,metadataRefs,previewIds};
       }));
-      data.packing=(await viewerCache.get(digest('catalog'),'light',context))?.metadata.packing??[];
     }
     data.features={compactSources:1,persistedMetadata:1,incrementalHashes:1};
     return applyFixtureManifest(data,url.searchParams.get('fixture'));
@@ -601,12 +610,6 @@ export async function startServer({
             if(!/^\s*<svg\b/.test(source))throw Error('Expected an SVG preview.');
             await viewerCache.savePreview(hash,theme,context,crop,source);
           }
-          return json(response,200,{ok:true});
-        }
-        if(url.pathname==='/catalog') {
-          const data=await body(request,1024*1024),context=await contextFor(url);
-          if(!Array.isArray(data.packing)||data.packing.length>32)throw Error('Invalid packing cache.');
-          await viewerCache.save(digest('catalog'),'light',context,{packing:data.packing});
           return json(response,200,{ok:true});
         }
         const data = await body(request);

@@ -1,11 +1,11 @@
-import { layoutWorld, packingSnapshot, restorePacking } from './layout.js';
+import { layoutWorld } from './layout.js';
 
-self.onmessage = ({data:{id,input,packing}}) => {
+self.onmessage = ({ data: { id, input, previousGroups } }) => {
   try {
-    restorePacking(packing);
-    const start=performance.now(),placed=layoutWorld(input);
-    self.postMessage({id,placed,packing:packingSnapshot(),durationMs:performance.now()-start});
-  } catch(error) {
-    self.postMessage({id,error:error.message});
+    const start = performance.now();
+    const placed = layoutWorld(input, { previousGroups });
+    self.postMessage({ id, placed, durationMs: performance.now() - start });
+  } catch (error) {
+    self.postMessage({ id, error: error.message });
   }
 };

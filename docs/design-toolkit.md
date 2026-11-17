@@ -2,7 +2,7 @@
 
 [Asset rules and adoption](asset-rules.md) · [Agent CLI interface](agent-interface.md) · [ADG design](design.md) · [Architecture](architecture.md) · [Performance](performance.md)
 
-A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `adg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, publishes them to Doop (`adg publish`), and retains the frozen viewer (`adg <directory>`) and Git review page.
+A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `adg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, and presents the library as boards in the viewer (`adg <directory>`), with ADG annotations and a Git review page.
 
 This document is the source format and authoring command contract. The [agent CLI interface](agent-interface.md) defines `--json` output, command data schemas, exit codes and recovery actions. The [design asset rules](asset-rules.md) define layers, ownership, states, frame naming, fidelity and lifecycle, with an adoption guide for existing projects. A project's own mapping and governance documents keep its direction, declared forms, implementation locations, approval process and concrete gaps.
 
@@ -47,7 +47,7 @@ and service migration details.
 - `design/art/` holds SVG illustrations and brand artwork that sources import.
 - `design/fixtures/` holds representative content and state data. `design/studies/` holds temporary direction explorations only while they are active.
 - `design/implementation.json` optionally maps implementation files/symbols to design parts and frames; see [implementation mappings](#implementation-mappings).
-- `design/gallery.json` optionally arranges sources into viewer groups and publishing chapters. Group titles name the boards, and listed sources become sections in order. A mixed-layer group creates a same-titled chapter on each layer page. Ungrouped component and module sources form directory chapters. Surface groups gather their separate frames into consecutive source rows.
+- `design/gallery.json` optionally arranges sources into viewer chapters. Group titles name the boards, and listed sources become sections in order. A mixed-layer group creates a same-titled chapter on each layer page. Ungrouped component and module sources form directory chapters. Surface groups gather their separate frames into consecutive source rows.
 - `design/tsconfig.json` lets editors resolve the toolkit's types. `adg init` writes it; authoring commands refresh the ignored `design/.adg/` declarations it points to.
 - `output/design/` receives builds, renders and compare reports. Keep it and `design/.adg/` out of Git.
 
@@ -560,38 +560,12 @@ the other theme. Exit 0 means `identical`/`structural`, exit 1 is completed `cha
 (`DIFF_FAILED`), and exit 2 is incomplete execution. Review visual differences through
 the consumer's normal approval process.
 
-## Publish to Doop
-
-```sh
-adg publish [project] --json
-adg publish [project] --state-dir=/path/to/scratch-state --json
-```
-
-Set `DOOP_URL` and `DOOP_AGENT_KEY` in the environment. Publishing derives a visual Tokens board, component and module
-chapter boards, and separate surface frames on the project's four layer pages. A `gallery.json` group defines a chapter
-with its sources as sections, in listed order. A mixed-layer group creates a same-titled chapter on each layer page.
-Ungrouped component and module sources form directory chapters. A module folder's `index.tsx` uses its feature
-directory as the section title. Chapters and Tokens continue at a section boundary when they exceed the 4800px
-height budget; a single taller section stays intact.
-Boards sit side by side and present a large header with counts, a label column for each source and a 12-column grid
-of captioned specimens on wells. Surface groups gather source rows while preserving each frame's own viewport.
-Documents start in light mode and include a light/dark switch. `publish: { viewport: '1440x900' }` configures presentation
-media queries for boards. Publishing writes external ADG state and Doop.
-
-Run `check`, review the source changes, then publish. Re-publishing skips unchanged documents and replaces changed
-HTML in place, preserving matching specimen and section comment anchors. The first chapter-board publish replaces
-existing per-source sheet frames and reports their removed comments. Inspect `data.orphaned` and `data.removed[].comments` before
-replying to feedback. On a non-default branch only changed documents publish to `Draft: <branch>`; merged draft
-pages retire on the next default-branch publish. See [publishing](publishing.md) for layout, state and merge rules,
-and the [agent interface](agent-interface.md#publish) for results and recovery.
-
 ## Review handoff
 
-Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report carries one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted` (`data.review`), with the affected Doop page link from `adg publish` next to the `?base=<rev>` link, and no per-frame images.
+Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report carries one reachable review URL from `adg link <viewer-url> --base=<rev>` and the `added`, `removed` and `changed` counts from `adg diff --base=<rev> --impacted` (`data.review`), with no per-frame images.
 
 | Need | Command |
 | --- | --- |
-| Publish the library or branch draft and obtain Doop page links | `adg publish --json` |
 | Compute counts and write the local self-contained `index.html` review | `adg diff --base=<rev> --impacted --json` |
 | Print the reachable hub review URL for a change report | `adg link https://gallery.example/p/project/ --base=<rev>` |
 | Open a local loopback review server | `adg open ./design --base=<rev> --no-open` |
@@ -863,9 +837,9 @@ export default {
 
 ## Viewer conventions
 
-The canvas viewer is frozen for feature development. Doop owns browsing and comments; the Git `?base=<rev>` review page remains available.
+The viewer presents the design library as [boards](boards.md) and uses ADG annotations for comments. The Git `?base=<rev>` review page shows frame changes.
 
-The viewer reads the same sources and rebuilds a source, and the sources that import it, when it is saved. A component source is one set of its forms; a surface source is one flow of its frames. Frame notes appear in the inspector. `gallery.json` lists groups of source paths for both viewer grouping and publishing chapters; unlisted sources stay in directory groups. See the [README](../README.md) for viewer controls.
+The viewer reads the same sources and rebuilds a source, and the sources that import it, when it is saved. Each `gallery.json` group defines a chapter board, and each listed source becomes a section in file order. Unlisted sources form directory chapters. Mixed-layer groups split by layer; keep each project group within one layer. Surfaces use the same board presentation as other layers, with specimens at their rendered sizes. Headers, source labels and specimen captions scale with the camera. Source saves reflow the affected board and boards below it in the same column while preserving the camera. Arrange recomputes the column assignment. See the [README](../README.md) for viewer controls.
 
 Since 0.4.5, clicking a frame selects that variant. Clicking a source title selects its source; title clicks also retain copy-name behavior, while the copy icon alone leaves the selection unchanged. Escape clears the selection. Back restores the preceding selection and camera. Drag, pan, zoom, double-click and Enter focus remain available.
 

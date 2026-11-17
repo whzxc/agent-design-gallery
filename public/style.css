@@ -298,3 +298,16 @@ body:has(#source:not([hidden])) #annotations-panel { right:min(324px, calc(100vw
 @media (prefers-reduced-motion: reduce) {
   .annotation-layer, .annotation-point, .annotation-card, .annotation-row { transition:none !important; animation:none !important; }
 }
+#board-chrome {position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:none;will-change:transform;color:var(--text);font-family:var(--font-ui,system-ui,sans-serif)}
+.chapter-board {position:absolute;padding:64px 80px 80px}
+.chapter-board header {display:grid;grid-template-columns:1fr 440px;gap:64px;align-items:end;padding-bottom:56px}
+.chapter-board header h1 {margin:16px 0 0;font:600 48px/56px var(--font-ui,system-ui);letter-spacing:-.02em}
+.chapter-board header>p {font-size:13px;color:var(--text-secondary);line-height:1.6}
+.board-eyebrow {display:flex;align-items:center;gap:12px;text-transform:uppercase;letter-spacing:.16em;font-size:11px;font-weight:600;color:var(--text-tertiary)}
+.board-eyebrow b {display:grid;place-items:center;min-width:28px;height:28px;border-radius:999px;background:var(--action,var(--text));color:var(--on-action,var(--surface));letter-spacing:0;font-family:var(--font-mono,monospace)}
+.board-source {position:absolute;border-top:1px solid var(--border);padding-top:48px}
+.board-source button {display:block;pointer-events:auto;white-space:normal;text-align:left;width:280px;font:600 22px/28px var(--font-ui,system-ui);overflow-wrap:anywhere}
+.board-path {width:280px;margin-top:20px;font:11px/1.6 var(--font-mono,monospace);color:var(--text-tertiary);overflow-wrap:anywhere}
+.board-modified {margin-top:8px;font-size:11px;color:var(--text-tertiary)}
+.board-caption {position:absolute;font:12px/17px var(--font-mono,monospace);overflow-wrap:anywhere}
+.board-caption small {display:block;font:12px/17px var(--font-ui,system-ui);color:var(--text-tertiary)}

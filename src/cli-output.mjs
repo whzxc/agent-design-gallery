@@ -12,11 +12,6 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 // Recovery kinds keep the catalog declarative; actions are constructed from known operands.
 /** @satisfies {Record<string, [number, string, string]>} */
 export const errorCatalog = {
-  PUBLISH_CREDENTIALS_MISSING: [2, 'publish', 'Set DOOP_URL and DOOP_AGENT_KEY, then retry publishing.'],
-  PUBLISH_AUTH_FAILED: [2, 'publish', 'Replace the rejected DOOP_AGENT_KEY, then retry publishing.'],
-  PUBLISH_UNREACHABLE: [2, 'publish', 'Restore access to DOOP_URL, then retry publishing.'],
-  PUBLISH_DOOP_FAILED: [2, 'publish', 'Inspect the Doop canvas and publishing state, then retry publishing.'],
-  PUBLISH_ORPHANED_ANCHORS: [2, 'publish', 'Review the reported orphaned anchors and their source changes before republishing.'],
   USAGE_INVALID: [2, 'help', 'Read command arguments.'],
   CONFIG_INVALID: [2, 'check', 'Recheck after fixing configuration.'],
   TOKENS_INVALID: [2, 'check', 'Recheck after repairing tokens.css.'],
@@ -88,7 +83,7 @@ export class CliError extends Error {
 }
 
 const canonicalCommands = new Set([
-  'publish', 'annotations', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect',
+  'annotations', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect',
   'root add', 'root remove', 'root list', 'root scan',
   'service install', 'service uninstall', 'service status', 'service logs', 'service migrate',
   'help', 'version', 'adg',
@@ -120,7 +115,6 @@ export function nextActions(code, context = {}) {
   const state = context.stateDirectory ? ['--state-dir', context.stateDirectory] : [];
   let argv;
   switch (recovery) {
-    case 'publish': argv = context.project ? ['adg', 'publish', context.project, ...state, '--json'] : helpArgv('publish'); break;
     case 'check': argv = ['adg', 'check', '--read-only', '--json', ...(context.positionals?.length && context.command === 'check' ? ['--', ...context.positionals] : [])]; break;
     case 'install': argv = ['npm', 'install', '-g', '@whzxc/agent-design-gallery']; break;
     case 'migrate': argv = context.project ? ['adg', 'migrate', context.project, '--json'] : helpArgv('migrate'); break;

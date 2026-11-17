@@ -187,27 +187,44 @@ export function evictPreviews(cache, activeKeys) {
 }
 
 export function groupAssets(data) {
+  const layerOf = asset => asset.layer ?? (asset.path.includes('/') ? asset.path.split('/')[0] : 'Design');
   const byPath = new Map(data.assets.map(asset => [asset.path, asset]));
-  const used = new Set(),
-    grouped = [];
-  for (const g of data.groups) {
-    const list = g.assets.flatMap((p) => {
-      const a = byPath.get(p);
-      if (!a || used.has(p)) return [];
-      used.add(p);
-      return [a];
+  const used = new Set(), grouped = [];
+  const add = (group, assets, key) => {
+    const layers = new Map();
+    for (const asset of assets) {
+      const layer = layerOf(asset);
+      if (!layers.has(layer)) layers.set(layer, []);
+      layers.get(layer).push(asset);
+    }
+    for (const [layer, members] of layers) grouped.push({ ...group, key: `${key}:${layer}`, layer, assets: members });
+  };
+  for (const [index, group] of (data.groups ?? []).entries()) {
+    const assets = group.assets.flatMap(path => {
+      const asset = byPath.get(path);
+      if (!asset || used.has(path)) return [];
+      used.add(path);
+      return [asset];
     });
-    if (list.length) grouped.push({ ...g, assets: list });
+    add(group, assets, `group:${index}:${group.title}`);
   }
   const rest = new Map();
-  for (const a of data.assets) {
-    if (used.has(a.path)) continue;
-    const parent = a.path.split("/").slice(0, -1).join("/") || "Design";
+  for (const asset of data.assets) {
+    if (used.has(asset.path)) continue;
+    const parent = asset.path.split('/').slice(0, -1).join('/') || 'Design';
     if (!rest.has(parent)) rest.set(parent, []);
-    rest.get(parent).push(a);
+    rest.get(parent).push(asset);
   }
-  for (const [title, assets] of rest) grouped.push({ title, assets });
-  return grouped;
+  for (const [title, assets] of rest) add({ title }, assets, `directory:${title}`);
+  const canonical = ['tokens', 'components', 'modules', 'surfaces', 'studies'];
+  const layers = [...new Set([...canonical, ...(data.layers ?? []).map(layer => layer.toLowerCase()), ...grouped.map(group => group.layer.toLowerCase())])];
+  grouped.sort((a, b) => layers.indexOf(a.layer.toLowerCase()) - layers.indexOf(b.layer.toLowerCase()));
+  const chapters = new Map();
+  return grouped.map(group => {
+    const chapter = (chapters.get(group.layer) ?? 0) + 1;
+    chapters.set(group.layer, chapter);
+    return { ...group, chapter };
+  });
 }
 
 export function scopeKind(scope) {
@@ -236,8 +253,8 @@ export function resolveScope(data, layers, requested) {
       if (layerAssets.has(key)) return result(requested, layerAssets.get(key));
       break;
     case 'group': {
-      const group = groupAssets(data).find(item => item.title === key);
-      if (group) return result(requested, group.assets);
+      const groups = groupAssets(data).filter(item => item.title === key);
+      if (groups.length) return result(requested, groups.flatMap(group => group.assets));
       break;
     }
     case 'asset': {
@@ -252,28 +269,30 @@ export function resolveScope(data, layers, requested) {
 
 
 export function arrangementInput(data) {
-  return groupAssets(data).map(group => ({blocks:group.assets.map(blockForAsset)}));
+  return groupAssets(data).map(({ assets, ...group }) => ({ ...group, blocks: assets.map(blockForAsset) }));
 }
 
-export function arrange(data, { provisional = false, placed } = {}) {
+export function arrange(data, { placed, previousGroups } = {}) {
   const grouped = groupAssets(data);
-  const sections = placed
-    ? placed.map((section,index) => ({...grouped[index],...section}))
-    : layoutWorld(grouped.map(g => ({ ...g, blocks: g.assets.map(blockForAsset) })), {provisional});
-  const groups = sections.map(s => ({ ...s, width: s.w, height: s.h }));
+  const boards = previousGroups ? layoutWorld(arrangementInput(data), { previousGroups })
+    : placed ?? layoutWorld(arrangementInput(data));
+  const byKey = new Map(grouped.map(group => [group.key, group]));
+  const groups = boards.map(board => ({ ...byKey.get(board.key), ...board, width: board.w, height: board.h }));
   const items = [];
-  for (const [group, section] of groups.entries()) {
-    for (const block of section.blocks) {
-      const asset = section.assets.find(a => a.path === block.asset);
-      const frames = block.kind === 'set' ? [{ id: 'overview', name: 'All forms', x: block.x, y: block.y, crop: block.crop }] : block.frames;
-      for (const frame of frames) {
-        const crop = { ...frame.crop, width: frame.crop.w, height: frame.crop.h, id: frame.id, name: frame.name };
-        items.push({ ...asset, id: block.kind === 'set' ? asset.path : `${asset.path}#${frame.id}`, kind: block.kind,
-          group, x: frame.x, y: frame.y, width: crop.width, height: crop.height, shown: [crop] });
+  for (const [group, board] of groups.entries()) {
+    const byPath = new Map(board.assets.map(asset => [asset.path, asset]));
+    for (const section of board.blocks) {
+      const asset = byPath.get(section.asset);
+      for (const frame of section.frames) {
+        const crop = { ...frame.crop, width: frame.w, height: frame.h, id: frame.id, name: frame.name };
+        items.push({ ...asset, name: section.title, component: false, id: `${asset.path}#${frame.id}`, kind: 'flow', group,
+          x: board.x + section.x + frame.x, y: board.y + section.y + frame.y,
+          width: frame.w, height: frame.h, shown: [crop], previewCrop: section.previewCrop ?? crop,
+        });
       }
     }
   }
-  return { groups, items, world: { x: 0, y: 0, width: Math.max(1, ...groups.map(g => g.x + g.width)), height: Math.max(1, ...groups.map(g => g.y + g.height)) } };
+  return { groups, items, world: { x: 0, y: 0, width: Math.max(1, ...groups.map(g => g.x + g.w)), height: Math.max(1, ...groups.map(g => g.y + g.h)) } };
 }
 
 function formDocument(form,css,theme) {
@@ -321,7 +340,7 @@ async function prepareSource(asset, built, theme, signal) {
       content.setAttribute('xmlns','http://www.w3.org/1999/xhtml');
       content.setAttribute('style','font:16px/1.5 var(--font-ui);color:var(--text);');
       content.append(frame.contentDocument.querySelector('style').cloneNode(true),shell.cloneNode(true));
-      parts.push({id:String(index),name:form.name,note:form.note,width:box.width,height:box.height,elements,markup:new XMLSerializer().serializeToString(content)});
+      parts.push({id:String(index),name:form.name,note:form.note,proposed:form.proposed,width:box.width,height:box.height,elements,markup:new XMLSerializer().serializeToString(content)});
       endFrame?.();
     }
     const wrapWidth = built.component ? componentWrapWidth(parts) : Infinity;

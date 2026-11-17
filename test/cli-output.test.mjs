@@ -62,6 +62,21 @@ test('global JSON parsing and canonical identities cover every command/action wi
   assert.throws(() => parseCli(['--json', 'render', '--scale', '--json']), /argument/);
 });
 
+test('retired publish is absent from command help and diagnostic codes', async () => {
+  assert.ok(!commands.includes('publish'));
+  assert.doesNotMatch(help(), /adg publish/);
+  assert.ok(Object.keys(errorCatalog).every(code => !code.startsWith('PUBLISH_')));
+  const parsed = parseCli(['publish', '--help', '--json']);
+  assert.equal(parsed.command, 'open');
+  assert.equal(parsed.explicit, false);
+  const result = capture();
+  await main(['publish', '--help', '--json'], '/missing/project', result.io);
+  const value = envelope(result, 'help', true, 0);
+  assert.equal(value.data.subject, null);
+  assert.doesNotMatch(value.data.text, /adg publish/);
+  assert.throws(() => parseCli(['publish', '/some/project', '--json']), { code: 'USAGE_INVALID' });
+});
+
 test('help/version use the injected entry and bypass project configuration', async () => {
   for (const args of [[], ...commands.map(command => [command]), ...invocations.filter(args => ['root', 'service'].includes(args[0])).map(args => args.slice(0, 2))]) {
     const result = capture();
@@ -148,7 +163,7 @@ function parseAction(action) {
 }
 
 test('all catalog codes have stable exits, exact recovery argv and parser-valid ADG actions', () => {
-  assert.equal(Object.keys(errorCatalog).length, 60);
+  assert.equal(Object.keys(errorCatalog).length, 55);
   for (const removed of ['CONFIG_LOAD_FAILED', 'GIT_REPOSITORY_REQUIRED', 'GIT_BASE_NOT_FOUND', 'GIT_READ_FAILED']) assert.equal(Object.hasOwn(errorCatalog, removed), false);
   for (const code of Object.keys(errorCatalog)) {
     assert.match(code, /^[A-Z][A-Z_]+$/);
