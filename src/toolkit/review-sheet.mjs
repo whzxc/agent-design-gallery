@@ -1,3 +1,4 @@
+import { renderReviewFailures } from '../../public/review.js';
 import { browserTask, readyResources } from './browser.mjs';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => (
@@ -40,6 +41,8 @@ export function reviewSheetHtml(review, theme, frameOrder = []) {
 * { box-sizing:border-box; }
 body { margin:0; padding:24px; width:1600px; max-width:100%; background:var(--canvas); color:var(--text); font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
 header { margin-bottom:24px; }
+.review-failures { padding:16px; border:1px solid var(--border); border-radius:8px; margin-top:16px; overflow-wrap:anywhere; }
+.review-failures h2 { font-size:18px; }
 h1 { margin:0 0 8px; font-size:24px; }
 p { margin:8px 0; }
 code { font-family:ui-monospace,Menlo,Consolas,monospace; overflow-wrap:anywhere; }
@@ -54,7 +57,7 @@ img { display:block; max-width:100%; height:auto; }
 </style></head><body data-theme="${escapeHtml(theme)}">
 <header><h1>${escapeHtml(review.label)}</h1>
 <p class="revisions"><code>${escapeHtml(review.base.rev)} (${escapeHtml(review.base.sha)}) → working tree (${escapeHtml(review.current.head)})</code></p>
-<p>${review.counts.added} added · ${review.counts.removed} removed · ${review.counts.changed} changed · ${escapeHtml(theme)}</p></header>
+<p>${review.counts.added} added · ${review.counts.removed} removed · ${review.counts.changed} changed · ${escapeHtml(theme)}</p>${renderReviewFailures(review.failures)}</header>
 ${cards || '<p>No added, removed, or changed frames.</p>'}
 ${more ? `<p>${more} more frames in the review URL.</p>` : ''}
 </body></html>`;

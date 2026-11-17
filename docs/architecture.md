@@ -406,3 +406,9 @@ The viewer requests its current theme and retains the preceding review while a
 live refresh or theme switch runs. Progress and chrome remain visible. Diff output
 also includes a single-theme, DPR-2 review sheet alongside the self-contained HTML
 review; its source-ordered selection stops at 24 frames and reports overflow.
+
+Source build failures are isolated during review, including failures at the base
+revision. The viewer, HTML review and sheet header list each failed source, side
+and error while showing the remaining sources. JSON includes
+`failures: [{ source, side, code, message }]`; partial review artifacts and cache
+entries remain available with `complete: false`. An incomplete diff exits 2.

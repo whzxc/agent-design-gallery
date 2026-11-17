@@ -463,7 +463,7 @@ export async function startServer({
             'state-dir': reviewStateDirectory, json: true,
           }, { log: () => {}, onReview: value => { review = value; } });
         } catch (error) {
-          if (error.code !== 'DIFF_FAILED') throw error;
+          if (error.code !== 'DIFF_FAILED' && !(error.reviewCacheable === true && review)) throw error;
         }
         if (!review) throw new CliError('INTERNAL_ERROR', 'Review output was not produced.');
         return review;

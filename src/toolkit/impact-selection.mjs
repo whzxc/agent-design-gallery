@@ -28,9 +28,11 @@ export async function withImpacted(config, args, options, command, work) {
     const plan = await impact(config, { base: options.base, json: true, 'state-dir': options['state-dir'], 'out-dir': options['out-dir'], explain: options.explain }, {
       consume: async session => {
         const { rows, views, assessments, inputs, data } = session;
-        const sources = await selectedSources(views[1].config, views[0].config, views[1].config.root, new Set(rows.map(row => row.source)), args);
+        const sources = await selectedSources(views[1].config, views[0].config, views[1].config.root,
+          new Set([...rows.map(row => row.source), ...data.failures.map(failure => failure.source)]), args);
+        const failures = data.failures.filter(failure => sources.includes(failure.source));
         const chosen = rows.filter(row => sources.includes(row.source) && (options.frame === undefined || row.frame === options.frame));
-        if (options.frame !== undefined && !chosen.length) {
+        if (options.frame !== undefined && !chosen.length && !failures.length) {
           throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${options.frame}; choose a frame present on either side.`);
         }
         const exclusions = { source_filter: 0, frame_filter: 0, theme_filter: 0, hypothetical_input: 0, not_checked: 0 };
@@ -63,7 +65,7 @@ export async function withImpacted(config, args, options, command, work) {
           coverage.renderedRows = command === 'diff' ? data.summary.comparisons + data.summary.supportComparisons : command === 'check' ? data.summary.evaluations : data.captures.length;
           const deleted = command === 'render' ? coverage.deletedRows : 0;
           coverage.uncoveredRows = Math.max(0, coverage.expectedRows - coverage.renderedRows - coverage.provenRows - deleted);
-          coverage.scope = !coverage.expectedRows ? 'empty' : coverage.uncoveredRows || args.length || options.frame !== undefined || themes.length !== 2 ? 'partial' : 'full';
+          coverage.scope = failures.length ? 'partial' : !coverage.expectedRows ? 'empty' : coverage.uncoveredRows || args.length || options.frame !== undefined || themes.length !== 2 ? 'partial' : 'full';
           coverage.basis = command === 'check' ? 'selected' : coverage.renderedRows ? coverage.provenRows ? 'rendered_and_proven' : 'rendered' : coverage.provenRows ? 'proven' : 'selected';
           data.impact = selection;
         };
@@ -71,7 +73,7 @@ export async function withImpacted(config, args, options, command, work) {
           ...(options.scale !== undefined && command !== 'check' ? [`--scale=${options.scale}`] : []), '--json'], reason: 'Evaluate the full project without impact filtering.' }];
         session.selection = selection; session.sources = sources; session.chosen = chosen; session.themes = themes; session.scheduled = scheduled;
         session.diffInputs = { ...inputs.session, sources, close: async () => {},
-          buildFrames: async ({ browser }) => inputs.session.buildFrames({ browser, materialized: views.map(view => view.built),
+          buildFrames: async ({ browser }) => inputs.session.buildFrames({ browser, materialized: views.map(view => view.built), failures,
             frame: options.frame, sources: [...new Set(chosen.filter(row => themes.some(theme => scheduled(row, theme))).map(row => row.source))] }) };
         const workStarted = performance.now();
         try { outcome = await work(session); } catch (cause) { failure = cause; outcome = { data: cause.data, warnings: cause.warnings ?? [] }; }
@@ -81,21 +83,23 @@ export async function withImpacted(config, args, options, command, work) {
           if (selection.coverage.scope === 'partial') warnings.push({ code: 'IMPACT_COVERAGE_PARTIAL', message: 'Impact selection has partial frame/theme coverage.', next });
           if (!failure && !chosen.some(row => (command === 'diff' || row.after) && themes.some(theme => scheduled(row, theme)))) warnings.push({ code: 'IMPACT_NO_CHANGES', message: 'No capture or browser-evaluation jobs were scheduled.', next });
         }
-        if (failure && !['CHECK_FAILED', 'DIFF_FAILED'].includes(failure.code)) throw failure;
+        if (failure && !['CHECK_FAILED', 'DIFF_FAILED'].includes(failure.code) && !(command === 'diff' && failure.reviewCacheable === true)) throw failure;
       },
+      tolerateSourceFailures: command === 'diff',
     });
     warnings.push(...plan.warnings.filter(w => !['IMPACT_NO_CHANGES', 'IMPACT_NO_MATCH'].includes(w.code)));
-    if (selection) selection.coverage.proofComplete = true;
+    if (selection) selection.coverage.proofComplete = !plan.data.failures.length;
     if (outcome?.data) outcome.data.timings = { ...outcome.data.timings, impactMs: plan.data.timings.totalMs - workMs, workMs, materializeMs: plan.data.timings.materializeMs, proofMs: plan.data.timings.proofMs, totalMs: plan.data.timings.totalMs };
   } catch (cause) {
     discardProofs();
+    if (failure) delete failure.reviewCacheable;
     if (!outcome?.data) cause.data = null;
     failure = outcome?.data ? commandFailure(cause, outcome.data, warnings) : cause;
   }
   if (outcome) outcome.warnings = [...new Set([...outcome.warnings, ...warnings])];
   if (outcome?.data?.reportPath) {
     try { await mkdir(path.dirname(outcome.data.reportPath), { recursive: true }); await writeFile(outcome.data.reportPath, JSON.stringify(outcome.data, null, 2) + '\n'); }
-    catch (cause) { discardProofs(); outcome.data.reportPath = null; if ('indexPath' in outcome.data) outcome.data.indexPath = null; failure = commandFailure(cause, outcome.data, outcome.warnings); }
+    catch (cause) { discardProofs(); outcome.data.reportPath = null; if ('indexPath' in outcome.data) outcome.data.indexPath = null; failure = commandFailure(cause, outcome.data, outcome.warnings); delete failure.reviewCacheable; }
   }
   if (failure) { if (outcome?.data) failure = commandFailure(failure, outcome.data, outcome.warnings); throw failure; }
   return outcome;

@@ -1520,3 +1520,9 @@ are cached under the state directory by project, resolved base, HEAD, working-tr
 content fingerprint and theme. Impacted CLI diffs populate the same entries.
 Switching themes computes the missing theme, and source changes invalidate the
 cache through the existing live refresh.
+
+Source build failures are isolated during review, including failures at the base
+revision. The viewer, HTML review and sheet header list each failed source, side
+and error while showing the remaining sources. JSON includes
+`failures: [{ source, side, code, message }]`; partial review artifacts and cache
+entries remain available with `complete: false`. An incomplete diff exits 2.

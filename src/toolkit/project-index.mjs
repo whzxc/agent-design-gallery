@@ -184,8 +184,8 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
       try { text = await readFile(path.join(config.root, side), 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
       return cached('architecture', { source, text }, () => ({ source, sidecar: side, ...sidecar(text) }));
     },
-    async relationships({ facts: supplied, projectPaths = false } = {}) {
-      const assets = await Promise.all(inventory.tsx.map(async source => {
+    async relationships({ facts: supplied, projectPaths = false, sources = inventory.tsx } = {}) {
+      const assets = await Promise.all(sources.map(async source => {
         const facts = supplied?.get(source) ?? await this.source(source);
         if (projectPaths) return { path: source, imports: facts.imports };
         const designRelative = file => path.relative(config.design, path.join(config.root, file)).split(path.sep).join('/');

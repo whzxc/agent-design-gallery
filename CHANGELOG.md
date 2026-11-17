@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep review frames available when a source fails at either revision. List source errors in the viewer, HTML and sheet, cache partial results, and retain incomplete diff status.
+
 - Cache review handoffs by project, Git revisions, working-tree content and theme. Show immediate progress, preserve results during live refresh and compute additional themes on demand.
 - Support `--theme=system` for render and diff and generate a single-theme inline review sheet with revisions, counts and up to 24 labelled frames. Impacted diffs warm the hub cache.
 

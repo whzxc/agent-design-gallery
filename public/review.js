@@ -74,6 +74,7 @@ export function buildReview(data, imagesById = new Map(), { label } = {}) {
     base: data.base ?? { rev: 'HEAD', sha: '' },
     current: data.current ?? { kind: 'working_tree', head: null },
     complete: !!data.complete,
+    failures: data.failures ?? [],
     verdict: data.verdict ?? null,
     counts: {
       added: sections.added.length,
@@ -118,6 +119,13 @@ function renderFrameCard(item) {
   </article>`;
 }
 
+export function renderReviewFailures(failures = []) {
+  if (!failures.length) return '';
+  return `<section class="review-failures" role="alert"><h2>Some sources could not be built</h2><ul>${failures.map(failure =>
+    `<li><code>${escapeHtml(failure.source)}</code> (${escapeHtml(failure.side)}) — ${escapeHtml(failure.message)}</li>`
+  ).join('')}</ul></section>`;
+}
+
 export function renderReviewBody(review) {
   const counts = review.counts ?? { added: 0, removed: 0, changed: 0 };
   const baseLabel = review.base?.sha
@@ -151,7 +159,7 @@ export function renderReviewBody(review) {
       <span class="review-count" data-kind="changed"><strong>${counts.changed}</strong> changed</span>
     </div>
   </header>
-  <div class="review-scroll">${renderedSections}${empty}</div>`;
+  <div class="review-scroll">${renderReviewFailures(review.failures)}${renderedSections}${empty}</div>`;
 }
 
 export function renderReview(container, review) {
@@ -159,6 +167,11 @@ export function renderReview(container, review) {
 }
 
 export const REVIEW_STYLES = `
+.review-failures { padding:16px; border:1px solid var(--border); border-radius:8px; background:var(--surface-sunken); overflow-wrap:anywhere; }
+.review-failures h2 { margin:0 0 8px; font-size:14px; }
+.review-failures ul { margin:0; padding-left:20px; }
+.review-failures li + li { margin-top:8px; }
+
 .review-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 20px; padding:16px 20px; border-bottom:1px solid var(--border); flex:none; }
 .review-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 12px; min-width:0; }
 .review-heading h1 { font-size:var(--text-title); font-weight:650; line-height:20px; margin:0; }

@@ -171,3 +171,24 @@ test('restricted scope and scale skip publishing while configured policy publish
   assert.equal(result.code, 'DIFF_FAILED');
   assert.deepEqual((await readReviewCache(customKey)).counts, { added: 0, removed: 0, changed: 1 });
 });
+
+test('failed sources appear escaped above built frames in HTML and the sheet header', async () => {
+  const { buildReview, renderReviewBody } = await import('../public/review.js');
+  const failures = [
+    { source: 'design/broken.tsx', side: 'before', code: 'SOURCE_BUILD_FAILED', message: 'Unexpected <token>' },
+    { source: 'design/other.tsx', side: 'after', code: 'SOURCE_BUILD_FAILED', message: 'Missing default export' },
+  ];
+  const review = { ...reviewFixture(), complete: false, failures };
+  for (const entry of Object.values(review.sections).flat()) for (const row of entry.themes) row.differentPixels = 1;
+  const body = renderReviewBody(review);
+  const sheet = reviewSheetHtml(review, 'dark');
+  assert.ok(body.indexOf('review-failures') < body.indexOf('review-section-list'));
+  assert.ok(sheet.indexOf('Some sources could not be built') < sheet.indexOf('</header>'));
+  for (const html of [body, sheet]) {
+    assert.match(html, /design\/broken.tsx/);
+    assert.match(html, /Unexpected &lt;token&gt;/);
+    assert.match(html, /\(before\)/);
+    assert.match(html, /\(after\)/);
+  }
+  assert.deepEqual(buildReview({ complete: false, failures, comparisons: [] }).failures, failures);
+});

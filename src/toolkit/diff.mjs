@@ -158,7 +158,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     } catch (error) { failure = error; }
     // withImpacted has now verified the generation and closed the real input trees.
     const data = outcome?.data ?? failure?.data;
-    if (data?.complete && (!failure || failure.code === 'DIFF_FAILED')) {
+    if (reviewModel && (data?.complete && (!failure || failure.code === 'DIFF_FAILED') || failure?.reviewCacheable === true)) {
       try { await Promise.all(keys.map(key => writeReviewCache(key, reviewForTheme(reviewModel, key.theme)))); }
       catch (error) { throw commandFailure(error, data, outcome?.warnings ?? failure.warnings); }
     }
@@ -188,7 +188,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
         existingCoverage: !inputs.sources.length ? 'empty' : args.length || options.frame !== undefined || themes.length !== 2 ? 'partial' : 'full' },
       environment: { adg: metadata.version, node: process.version, platform: process.platform, arch: process.arch, chromium: null,
         ...metadata.dependencies, locale: 'en-US', timezone: 'UTC', ...inputs.environment, baseThresholds: inputs.before.config.diff.thresholds },
-      impact: session?.selection ?? null, classifierVersion: 1, thresholds, comparisons: [], support: [], verdict: null, reasons: [],
+      impact: session?.selection ?? null, classifierVersion: 1, thresholds, comparisons: [], support: [], failures: [], verdict: null, reasons: [],
       summary: { sources: inputs.sources.length, frames: 0, comparisons: 0, supportComparisons: 0, isolationCaptures: 0,
         added: 0, removed: 0, matched: 0, identical: 0, structural: 0, changed: 0,
         classPixels: Object.fromEntries(classNames.map(name => [name, 0])) },
@@ -199,12 +199,13 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
       rm(path.join(output, entry), { recursive: true, force: true }))));
     if (session ? session.chosen.some(row => row.source.endsWith('.mmd') && session.themes.some(theme => session.scheduled(row, theme))) : inputs.sources.length) browser = await launchBrowser();
     const built = await timed('buildMs', () => inputs.buildFrames({ browser }));
+    data.failures = built.failures ?? [];
     if (session) built.frames = built.frames.filter(row => themes.some(theme => session.scheduled(row, theme)));
     context = partContext(built, inputs, scale, themes, clock);
     for (const warning of inputs.warnings) if (!warnings.includes(warning)) warnings.push(warning);
     data.summary.frames = built.frames.length;
     for (const row of built.frames) data.summary[row.status]++;
-    if (!built.frames.length && (!session || !session.selection.coverage.expectedRows)) emptySelection(warnings);
+    if (!built.frames.length && !data.failures.length && (!session || !session.selection.coverage.expectedRows)) emptySelection(warnings);
     else if (built.frames.length) browser ??= await launchBrowser();
     if (browser) data.environment.chromium = browser.version();
     const selectedOrder = new Map(built.frames.flatMap(row => themes.map(theme => comparisonIdentity(row, theme))).map((key, index) => [key, index]));
@@ -256,7 +257,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     if (options.impacted) await timed('writeMs', async () => {
       await mkdir(output, { recursive: true });
       browser ??= await launchBrowser();
-      const model = buildReview({ ...data, complete: true }, reviewImages, { label: config.name ?? path.basename(config.root) });
+      const model = buildReview({ ...data, complete: !data.failures.length }, reviewImages, { label: config.name ?? path.basename(config.root) });
       data.review.sheet = await renderSheet(browser, model, sheetTheme, path.join(output, 'review-sheet.png'), completed);
     });
   } catch (error) {
@@ -273,6 +274,9 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     }
   }
   if (!data) throw primary;
+  let sourceFailureOnly = !primary && data.failures.length > 0;
+  if (sourceFailureOnly) primary = commandFailure(new CliError('SOURCE_BUILD_FAILED',
+    `${new Set(data.failures.map(failure => failure.source)).size} source(s) could not be compared; review the source failures.`, { data }), data, warnings);
   data.complete = !primary;
   if (!primary) {
     data.verdict = data.summary.changed || data.support.some(row => row.verdict === 'changed') ? 'changed' : data.summary.structural ? 'structural' : 'identical';
@@ -296,11 +300,15 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     await writeFile(data.indexPath, reviewDocumentHtml(reviewModel));
     if (!session) await writeFile(data.reportPath, JSON.stringify(data, null, 2) + '\n');
   } catch (error) {
+    sourceFailureOnly = false;
     data.reportPath = null; data.indexPath = null; data.complete = false; data.verdict = null;
     if (primary) primary.warnings.push(classifyError(error).error);
     else primary = commandFailure(error, data, warnings);
   }
-  if (primary) throw primary;
+  if (primary) {
+    if (sourceFailureOnly) primary.reviewCacheable = true;
+    throw primary;
+  }
   if (!options.json) log(`${data.verdict}: ${data.review.added} added, ${data.review.removed} removed, ${data.review.changed} changed (${data.summary.frames} frames). ${data.indexPath}`);
   if (data.verdict === 'changed') throw new CliError('DIFF_FAILED', 'Design differences require review.', { data, warnings });
   return { data, warnings };

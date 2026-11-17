@@ -271,3 +271,9 @@ Review links show progress immediately and retain visible results during refresh
 The current theme loads first; another theme is computed on switch. The state
 directory caches results by project, base, HEAD, working-tree fingerprint and theme.
 An impacted CLI diff warms the same cache used by the hub.
+
+Source build failures are isolated during review, including failures at the base
+revision. The viewer, HTML review and sheet header list each failed source, side
+and error while showing the remaining sources. JSON includes
+`failures: [{ source, side, code, message }]`; partial review artifacts and cache
+entries remain available with `complete: false`. An incomplete diff exits 2.

@@ -3,7 +3,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { CliError, nextActions } from '../cli-output.mjs';
 import { openProjectIndex } from './project-index.mjs';
 import { prepareImpactInputs, configInputFiles } from './impact-inputs.mjs';
-import { matchDiffFrames } from './diff-inputs.mjs';
+import { matchDiffFrames, sourceFailure } from './diff-inputs.mjs';
 import { selectSources, relative } from './project.mjs';
 import { loadImplementationMap, implementationFiles } from './implementation-map.mjs';
 import { normalizeFileQuery, implementationScope } from './implementation-query.mjs';
@@ -42,7 +42,7 @@ function mappingBuild(facts) {
 }
 
 /** Candidate queries and operation-local fresh-input proofs for exact Git endpoints. */
-export async function impact(config, values, { log = console.log, openIndex = openProjectIndex, prepareInputs = prepareImpactInputs, consume } = {}) {
+export async function impact(config, values, { log = console.log, openIndex = openProjectIndex, prepareInputs = prepareImpactInputs, consume, tolerateSourceFailures = false } = {}) {
   const started = performance.now(), themes = themesFor(values);
   const timings = { prepareMs: 0, indexMs: 0, materializeMs: 0, proofMs: 0, queryMs: 0, totalMs: 0 };
   const timed = async (name, work) => { const start = performance.now(); try { return await work(); } finally { timings[name] += performance.now() - start; } };
@@ -67,7 +67,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
     data = { project: config.root, complete: false, query,
       before: inputs ? { kind: 'revision', sha: query.base.sha } : null,
       after: { kind: inputs?.after.revision ? 'revision' : 'working_tree', sha: inputs?.head ?? null },
-      selection: { themes, explain: !!values.explain }, changes: [], facts: [], frames: [], mappingFindings: [], unresolvedInputs: [],
+      selection: { themes, explain: !!values.explain }, changes: [], facts: [], frames: [], failures: [], mappingFindings: [], unresolvedInputs: [],
       coverage: { inventory: 'incomplete', mapping: 'not_requested', expectedRows: 0, candidateRows: 0, directRows: 0, transitiveRows: 0,
         renderRows: 0, provenRows: 0, unassessedRows: 0, proofComplete: false,
         tokenScan: { reachableRows: 0, fullSheetRows: 0, fallbackReasons: [] } }, timings };
@@ -91,12 +91,22 @@ export async function impact(config, values, { log = console.log, openIndex = op
         return view;
       });
       const { index, config: current } = view;
+      const failed = new Set();
       if (inputs) await timed('materializeMs', async () => {
         const settled = await Promise.allSettled(index.inventory.tsx.map(async source => [source, await index.materialize(source)]));
-        for (const result of settled) { if (result.status === 'rejected') throw result.reason; view.built.set(...result.value); }
+        for (const [position, result] of settled.entries()) {
+          if (result.status === 'fulfilled') view.built.set(...result.value);
+          else {
+            if (!tolerateSourceFailures) throw result.reason;
+            const source = index.inventory.tsx[position];
+            failed.add(source);
+            data.failures.push(sourceFailure(result.reason, source, side === 'before' ? 'base' : 'current', inputs.translate));
+          }
+        }
       });
       await timed('indexMs', async () => {
         for (const source of index.inventory.tsx) {
+          if (failed.has(source)) continue;
           const facts = await index.source(source, { tokens: query.kind === 'token' || query.kind === 'git', fresh: !!inputs });
           view.facts.set(source, facts);
           for (const frame of facts.tokenDependencies ?? []) for (const row of frame.themes) if (themes.includes(row.theme)) {
@@ -107,15 +117,25 @@ export async function impact(config, values, { log = console.log, openIndex = op
           }
         }
         for (const source of index.inventory.architecture) {
-          const metadata = await index.architecture(source), file = path.join(current.root, source), sidecar = path.join(current.root, metadata.sidecar);
-          await track(file); await track(sidecar);
-          view.architecture.set(source, { source: await bytes(file), sidecar: await bytes(sidecar), tokens: view.tokenBytes, config: current });
-          view.facts.set(source, { source, parts: [], imports: [], dependencies: [source, metadata.sidecar, relative(current, view.tokenFile)], frames: [{ name: 'default', parts: [] }] });
+          try {
+            const metadata = await index.architecture(source), file = path.join(current.root, source), sidecar = path.join(current.root, metadata.sidecar);
+            await track(file); await track(sidecar);
+            view.architecture.set(source, { source: await bytes(file), sidecar: await bytes(sidecar), tokens: view.tokenBytes, config: current });
+            view.facts.set(source, { source, parts: [], imports: [], dependencies: [source, metadata.sidecar, relative(current, view.tokenFile)], frames: [{ name: 'default', parts: [] }] });
+          } catch (error) {
+            if (!tolerateSourceFailures) throw error;
+            data.failures.push(sourceFailure(error, source, side === 'before' ? 'base' : 'current', inputs.translate));
+          }
         }
-        view.graph = await index.relationships({ facts: view.facts, projectPaths: true });
+        view.graph = await index.relationships({ facts: view.facts, projectPaths: true, sources: index.inventory.tsx.filter(source => !failed.has(source)) });
         view.tokens = view.facts.size || query.kind === 'token' ? index.tokens() : [];
         if (query.kind === 'file' || query.kind === 'git') { view.map = await loadImplementationMap(current); await track(view.map.file); }
       });
+    }
+    const failedSources = new Set(data.failures.map(failure => failure.source));
+    for (const view of views) for (const source of failedSources) {
+      view.facts.delete(source);
+      view.built.delete(source);
     }
     const scan = data.coverage.tokenScan;
     scan.fallbackReasons.sort(compare);
@@ -154,7 +174,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
     async function mappings(view, indices, pathIndexes = []) {
       if (!view.map.present) { data.coverage.mapping = data.coverage.mapping === 'stale' ? 'stale' : 'absent'; unresolved(view.map.source, 'mapping_absent'); return; }
       if (data.coverage.mapping === 'not_requested') data.coverage.mapping = 'valid';
-      const validated = await view.index.mappings({ map: view.map, mappingIndices: indices,
+      const validated = await view.index.mappings({ map: view.map, mappingIndices: indices, selected: failedSources.size ? [...view.facts.keys()] : undefined,
         getBuild: source => {
           const facts = view.facts.get(source);
           // Mapping validators expect design-relative marker provenance.
@@ -333,7 +353,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
       }
     });
     timings.queryMs = Math.max(0, timings.queryMs - (timings.proofMs - proofBeforeQuery));
-    data.coverage.inventory = 'complete';
+    data.coverage.inventory = data.failures.length ? 'incomplete' : 'complete';
     if (data.unresolvedInputs.length || data.mappingFindings.length) warn('IMPACT_MAPPING_INCOMPLETE', 'Some implementation mappings are absent, unmatched or stale; inspect the resolvable targets and findings.', checkNext('Repair implementation.json and its reported locators before repeating the query.'));
     if (!data.frames.length) {
       const observed = query.kind === 'token' ? { token: query.tokens[0], theme: values.theme } : query.kind === 'file' ? { file: query.input, theme: values.theme } : null;
@@ -352,7 +372,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
       try { await cleanup(() => view.index.close(), primary); } catch (cause) { primary = data ? commandFailure(cause, data, warnings) : cause; }
     }
     if (!primary) {
-      try { await verifyGeneration(); data.coverage.proofComplete = !!inputs; }
+      try { await verifyGeneration(); data.coverage.proofComplete = !!inputs && !data.failures.length; }
       catch (cause) {
         if (cause.code === 'OWNER_INDEX_CHANGED') cause = new CliError('IMPACT_INPUT_CHANGED', cause.message, { cause });
         if (inputs) cause.message = inputs.translate(cause.message);

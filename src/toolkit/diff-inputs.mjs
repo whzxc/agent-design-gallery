@@ -6,7 +6,7 @@ import { loadConfig, legacyConfigFile } from './config.mjs';
 import { selectSources, relative } from './project.mjs';
 import { buildSource } from './build.mjs';
 import { cleanup } from './results.mjs';
-import { CliError, withHumanOutputMapping } from '../cli-output.mjs';
+import { CliError, asCliError, withHumanOutputMapping } from '../cli-output.mjs';
 
 const environmentFiles = ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb'];
 const slash = value => value.split(path.sep).join('/');
@@ -52,6 +52,12 @@ function importFailure(error) {
 function historicalFailure(error) {
   if (!importFailure(error)) return error;
   return new CliError('DIFF_BASE_DEPENDENCIES_UNAVAILABLE', `Historical import failed: ${error.message}`, { cause: error });
+}
+
+export function sourceFailure(error, source, side, translate = value => value) {
+  if (['OWNER_INDEX_CHANGED', 'IMPACT_INPUT_CHANGED'].includes(error.code)) throw error;
+  const failure = asCliError(side === 'base' ? historicalFailure(error) : error, 'SOURCE_BUILD_FAILED');
+  return { source, side, code: failure.code, message: translate(failure.message) };
 }
 
 function inventory(config, repository) {
@@ -183,32 +189,45 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
     let closed = false;
     return {
       base, before, after, sources, warnings, translateDiagnostic: translate, environment: { configDependencies, baseMigration },
-      async buildFrames({ browser, materialized, sources: requestedSources = sources, frame: requestedFrame = options.frame } = {}) {
+      async buildFrames({ browser, materialized, failures: previousFailures = [], sources: requestedSources = sources, frame: requestedFrame = options.frame } = {}) {
         if (closed) throw new CliError('SOURCE_BUILD_FAILED', 'Diff inputs are closed; prepare a new comparison.');
         const built = materialized ? materialized.map(values => new Map(values)) : [new Map(), new Map()], snapshots = [new Map(), new Map()];
+        const failures = [...previousFailures];
+        const failed = new Set(failures.map(failure => failure.source));
+        const attempts = [new Set(), new Set()];
         const build = async (side, index, source) => {
-          if (built[index].has(source) || !side.sources.has(source)) return;
+          if (attempts[index].has(source) || previousFailures.some(failure => failure.source === source) || built[index].has(source) || !side.sources.has(source)) return;
+          attempts[index].add(source);
           try {
             const work = () => buildSource(side.config, side.sources.get(source), { write: false, allowLegacy: false, snapshot: snapshots[index], browser });
             built[index].set(source, await (side === before ? withHumanOutputMapping(work, translate) : work()));
           } catch (error) {
-            const failure = side === before ? revisionError(historicalFailure(error), tree.directory, base) : error;
-            if (failure instanceof CliError) failure.warnings.push(...warnings);
-            throw failure;
+            failures.push(sourceFailure(error, source, index === 0 ? 'base' : 'current', translate));
+            failed.add(source);
           }
         };
         for (const source of requestedSources) {
           await build(before, 0, source);
           await build(after, 1, source);
         }
-        const frames = matchDiffFrames(requestedSources, built[0], built[1], renames, requestedFrame);
+        const frames = matchDiffFrames(requestedSources.filter(source => !failed.has(source)), built[0], built[1], renames)
+          .filter(row => requestedFrame === undefined || row.frame === requestedFrame);
+        if (requestedFrame !== undefined && !frames.some(row => row.frame === requestedFrame) && !failures.length) {
+          throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${requestedFrame}; choose a frame present on either side.`);
+        }
         const support = [], parents = new Map();
         const selected = new Map(frames.map(row => [frameKey(row), row]));
         for (const row of frames.filter(row => row.status === 'added' && row.after.parent)) {
+          if (failed.has(row.source)) continue;
           const ref = row.after.parent, key = frameKey({ source: ref.source, frame: ref.frame });
           if (!parents.has(key)) {
             await build(before, 0, ref.source);
             await build(after, 1, ref.source);
+            if (failed.has(ref.source)) {
+              failures.push({ source: row.source, side: 'current', code: 'DIFF_REFERENCE_INVALID', message: `${row.source}: ${row.frame}: parent source ${ref.source} failed to build.` });
+              failed.add(row.source);
+              continue;
+            }
             const old = built[0].get(ref.source)?.frames.find(frame => frame.name === ref.frame);
             const current = built[1].get(ref.source)?.frames.find(frame => frame.name === ref.frame);
             if (!old || !current) throw new CliError('DIFF_REFERENCE_INVALID', `${row.source}: ${row.frame}: parent ${ref.source}: ${ref.frame} must exist at both revisions.`);
@@ -223,7 +242,9 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
           code: 'DIFF_RENAMED_OR_UNKNOWN',
           message: `Unmatched frames have rename candidates: ${candidates.map(row => frameKey(row)).join(', ')}.`, next: [],
         });
-        return { frames, before: built[0], after: built[1], support };
+        for (const source of failed) for (const values of built) values.delete(source);
+        return { frames: frames.filter(row => !failed.has(row.source) && (requestedFrame === undefined || row.frame === requestedFrame)),
+          before: built[0], after: built[1], support: support.filter(row => !failed.has(row.source)), failures };
       },
       async close() { closed = true; await tree.close(); },
     };
