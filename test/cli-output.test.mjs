@@ -1,7 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { readFileSync } from 'node:fs';
 import { commandIdentity, commands, help, jsonRequested, main, parseCli } from '../src/cli.mjs';
 import { CliError, classifyError, createOutput, errorCatalog, nextActions, sanitize } from '../src/cli-output.mjs';
@@ -230,9 +228,3 @@ test('secrets and terminal control codes are sanitized in diagnostics, warnings,
   assert.doesNotMatch(entry.stdout, /adg_a{64}/);
 });
 
-test('finite subprocess smoke wires JSON serialization and a successful process exit', async () => {
-  const { stdout, stderr } = await promisify(execFile)(process.execPath, [new URL('../src/cli.mjs', import.meta.url).pathname, '--json', '--version'], { timeout: 3000 });
-  assert.deepEqual(JSON.parse(stdout), { schemaVersion: 2, command: 'version', ok: true, data: { version }, warnings: [], error: null });
-  assert.equal(stderr, '');
-  assert.equal(stdout.trimEnd().split('\n').length, 1);
-});

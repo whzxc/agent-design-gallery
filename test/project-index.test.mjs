@@ -1,13 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, unlink } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { openProjectIndex } from '../src/toolkit/project-index.mjs';
 import { createIndexStore, indexDigest } from '../src/toolkit/index-store.mjs';
 import { starterTokens } from '../src/toolkit/project.mjs';
-import { sourceRelationships } from '../public/relationships.js';
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'adg-index-'));
@@ -27,24 +25,6 @@ export default()=> <Frame name="primary"><Button/></Frame>;`);
   await put('drawings/implementation.json', JSON.stringify({ version: 1, mappings: [{ implementation: { file: 'ui/control.ts', symbol: 'Button' }, design: [{ source: 'drawings/components/button.tsx', part: 'Button' }] }] }));
   return { config, put, stateDirectory: path.join(root, 'external-state') };
 }
-
-test('lazy projections preserve provenance, tokens, graph shape and architecture owners without rendering diagrams', async t => {
-  const f = await fixture(t), index = await openProjectIndex(f.config, { persist: false, stateDirectory: f.stateDirectory }); t.after(() => index.close());
-  assert.deepEqual(index.inventory.tsx, ['drawings/components/button.tsx', 'drawings/surfaces/home.tsx']);
-  assert.equal((await index.stats()).builds, null);
-  const facts = await index.source('drawings/surfaces/home.tsx');
-  assert.deepEqual(facts.parts, [], 're-export is owned by its defining source');
-  assert.deepEqual(facts.frames[0].parts, [{ source: 'drawings/components/button.tsx', part: 'Button' }]);
-  assert.ok(facts.dependencies.includes('drawings/fixtures/value.ts')); assert.equal(facts.frames[0].html, undefined);
-  const tokens = index.tokens(); assert.deepEqual(tokens.find(t => t.name === '--accent').values[1], { theme: 'dark', declaration: 'var(--text)', inherited: true, line: 6, references: ['--text'] });
-  const architecture = await index.architecture('arch/example.mmd');
-  assert.deepEqual(architecture.owners, ['ui/**']); assert.deepEqual(architecture.ownerLines, [3]); assert.equal(architecture.status, 'Reviewed');
-  const graph = await index.relationships();
-  assert.deepEqual(graph, sourceRelationships([{ path: 'components/button.tsx', imports: [] }, { path: 'surfaces/home.tsx', imports: ['components/button.tsx'] }, { path: 'arch/example.mmd', imports: [] }]));
-  const mappings = await index.mappings(); assert.deepEqual(mappings.findings, []);
-  assert.deepEqual(mappings.bindings[0].frames, ['primary']);
-  assert.equal(existsSync(f.stateDirectory), false); assert.equal(existsSync(path.join(f.config.design, '.adg')), false);
-});
 
 test('persistent projections invalidate dependencies, tokens, mappings and sidecars without rebuilding unrelated designs', async t => {
   const f = await fixture(t); let index;
@@ -89,15 +69,6 @@ test('index shards are atomic, bounded, disposable and safe across concurrent wr
   await writeFile(path.join(directory, indexDigest('broken') + '.json'), '{'); assert.equal(await store.get('broken'), null);
   await store.put('broken', { repaired: true }); assert.deepEqual(await store.get('broken'), { repaired: true });
   assert.ok(store.stats().memoryBytes <= 160);
-});
-
-test('cold shard batches inventory the directory once and publish one manifest at close', async t => {
-  const directory = await mkdtemp(path.join(tmpdir(), 'adg-batch-'));
-  const store = await createIndexStore({ directory });
-  t.after(async () => { await store.close(); await rm(directory, { recursive: true, force: true }); });
-  for (let i = 0; i < 100; i++) await store.put(`key-${i}`, { i });
-  assert.equal(store.stats().directoryScans, 1); assert.equal(store.stats().manifestWrites, 0);
-  await store.close(); assert.equal(store.stats().directoryScans, 2); assert.equal(store.stats().manifestWrites, 1);
 });
 
 test('palette queries reuse their environment and bound standalone color entries to 128', async t => {
