@@ -49,22 +49,30 @@ theme, with neutral fallbacks for any token a project does not define.
 - **Specimen**: the frame at its rendered size, centred on a well (canvas colour, card radius, 24px horizontal and
   32px vertical padding, 96px minimum height), with a caption below it: the frame name in the monospace meta style,
   then the note and proposal marker in the tertiary meta style.
+- **One backdrop**: the well is a specimen's only backdrop. It uses the canvas colour that frame documents already
+  paint, and the frame is drawn without its own fill, border or corner radius, so the frame's empty area merges into
+  the well. Paint that overflows the frame, such as a dialog's shadow or a focus ring, continues into the well padding
+  instead of ending at the frame bounds; a specimen never shows part of a neighbouring frame. Hover and selection
+  outlines still mark the frame bounds. A surface frame is a screen, so a 1px line in the project border colour marks
+  its edge.
 
 Board chrome and text belong to the drawing. They scale with the camera like the specimens, at the sizes above in
 board pixels; they are not constant-screen-size labels. Board text stays crisp at every zoom level.
 
 ## Tokens board
 
-The Tokens board leads the Tokens scope and the bands of scopes that include it. Sections:
+The Tokens board leads the Tokens scope and the bands of scopes that include it. Within every section, tokens group by
+the comment headings inside the `:root` block of `tokens.css` (a `/* Heading */` line before a run of tokens). Without
+headings, groups follow the first segment of the token name. Sections:
 
-- **Colour**: one group per comment heading inside the `:root` block of `tokens.css` (a `/* Heading */` line before a
-  run of tokens). Without headings, groups follow the first segment of the token name. Each swatch is a 72px tile
+- **Colour**: one group per heading. Each swatch is a 72px tile
   split into the light value on the left and the dark value on the right, with the token name and both values below,
   seven per row.
 - **Type**: one row per text size token with a sample line set in that size and its paired line height and weight
   when names match, then family cards with a sample in each family.
-- **Shape, elevation, sizing and motion**: radius squares, shadow cards on the canvas colour, size bars at their
-  height, easing curves and duration bars.
+- **Shape, elevation, sizing and motion**: radius squares, shadow cards on the canvas colour, size bars, easing
+  curves and duration bars. A size bar is a horizontal bar whose length is the token value. When a group's largest
+  value exceeds the bar track, the whole group scales to fit and its heading shows the scale.
 
 Samples use neutral English text. Project artwork such as brand marks belongs to components, not to this board. The
 existing token table stays available in the Tokens scope as a list view with its search, category filter and copy
