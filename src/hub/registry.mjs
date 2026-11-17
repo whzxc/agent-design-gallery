@@ -179,3 +179,8 @@ export async function listProjects(stateDirectory = defaultStateDirectory) {
   const unique = [...new Map(records.map(project => [project.path, project])).values()].sort((a, b) => a.path.localeCompare(b.path));
   return Promise.all(unique.map(projectMetadata));
 }
+
+export async function registeredProject(directory, stateDirectory = defaultStateDirectory) {
+  const root = await realpath(directory);
+  return (await registry(stateDirectory)).roots.flatMap(entry => entry.projects).find(project => project.path === root);
+}

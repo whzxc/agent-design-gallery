@@ -14,13 +14,14 @@ import { attachComment, commentLabel, placeComment } from '../public/comment-anc
 test('placement records target and frame offsets, and attachment clamps and falls back', () => {
   const source = { x: 5, y: 8, width: 260, height: 140 };
   const frame = { x: 20, y: 30, width: 210, height: 100 };
-  const element = { id: 'e1_abc', tag: 'button', text: 'Open', x: 40, y: 10, width: 80, height: 40 };
+  const element = { id: 'e1_abc', tag: 'button', commentName: 'button', text: 'Open', x: 40, y: 10, width: 80, height: 40 };
   const thread = placeComment({ source: 'design/modules/files.tsx', frame: 'source-local', layer: 'modules', chapter: 'Files',
     box: { ...element, x: 60, y: 40 }, frameBox: frame, element, owner: 'design/components/button.tsx#Button',
     label: commentLabel('modules/files.tsx', 'source-local') }, { x: 122, y: 76 });
   assert.deepEqual(thread.anchor, { kind: 'element', source: 'design/modules/files.tsx', frame: 'source-local', layer: 'modules',
     chapter: 'Files', element: { id: 'e1_abc' }, x: 62, y: 36, frameX: 102, frameY: 46 });
-  assert.deepEqual(thread.target, { label: 'modules/files#source-local', tag: 'button', text: 'Open', owner: 'design/components/button.tsx#Button' });
+  assert.deepEqual(thread.target, { label: 'modules/files#source-local', tag: 'button', text: 'Open',
+    owner: 'design/components/button.tsx#Button', displayName: 'Button “Open”' });
   assert.equal(thread.hint, 'Button “Open”');
   const moved = attachComment(thread, { frame: { ...frame, x: 50, y: 55 }, source, elements: [{ ...element, width: 20, height: 12 }] });
   assert.deepEqual([moved.x, moved.y, moved.changed], [110, 77, false]);
@@ -50,7 +51,7 @@ export function ActionButton({ label = 'Save changes' }: { label?: string }) {
   return (
     <button class="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-field)] bg-[var(--accent)] text-[var(--on-accent)]">
       <Icon name="check" size={14} />
-      <span data-adg-id="action-label">{label}</span>
+      <span {...(label === 'Publish draft' ? {'data-adg-id': 'action-label'} : {})}>{label}</span>
     </button>
   );
 }
@@ -157,9 +158,18 @@ test('the bottom Comment tool places touch pins and keeps them attached through 
   });
   await page.keyboard.press('c');
   await page.mouse.move(point.x, point.y);
-  await page.locator('.adg-comment-highlight-label').filter({ hasText: 'Save changes' }).waitFor();
+  const highlight = page.locator('.adg-comment-highlight-label');
+  await highlight.filter({ hasText: 'Button “Save changes”' }).waitFor();
+  const outline = page.locator('.adg-comment-outline');
+  const buttonBox = await outline.boundingBox();
+  await page.keyboard.down('Alt');
+  await highlight.filter({ hasText: 'ActionButton “Save changes”' }).waitFor();
+  assert.ok((await outline.boundingBox()).width < buttonBox.width);
+  await page.keyboard.up('Alt');
+  await highlight.filter({ hasText: 'Button “Save changes”' }).waitFor();
   await page.touchscreen.tap(point.x, point.y);
   const composer = page.locator('.adg-comment-composer');
+  assert.equal(await composer.locator('textarea').getAttribute('placeholder'), 'Comment on Button “Save changes”…');
   await composer.locator('textarea').fill('Check the save label.');
   await composer.getByRole('button', { name: 'Post', exact: true }).click();
   await page.getByText('Check the save label.', { exact: true }).waitFor();
@@ -171,6 +181,13 @@ test('the bottom Comment tool places touch pins and keeps them attached through 
   assert.equal(thread.anchor.kind, 'element');
   assert.match(thread.anchor.element.id, /^e1_/);
   assert.equal(thread.target.text, 'Save changes');
+  assert.equal(thread.target.tag, 'button');
+  assert.equal(thread.target.displayName, 'Button “Save changes”');
+  const pinStyle = () => pin.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { fill: style.backgroundColor, clip: style.backgroundClip, edge: style.borderTopStyle };
+  });
+  const openStyle = await pinStyle();
   assert.equal((await runCli(['comments', 'reply', '#1', '--author=codex', '--message=Checked.', '--state-dir=' + state], root)).code, 0);
   await page.getByText('Checked.', { exact: true }).waitFor({ timeout: 2000 });
   await page.keyboard.press('Escape');
@@ -186,7 +203,23 @@ test('the bottom Comment tool places touch pins and keeps them attached through 
   const file = path.join(design, 'components/action.tsx');
   await writeFile(file, (await readFile(file, 'utf8')).replace('Save changes', 'Save draft'));
   await page.locator('.adg-comment-pin[data-changed]').waitFor({ timeout: 15_000 });
+  assert.match(openStyle.fill, /^rgb\(/);
+  assert.deepEqual(await pinStyle(), { ...openStyle, edge: 'dashed' });
   await page.goto(server.url + '?comment=1');
   await page.getByText('Checked.', { exact: true }).waitFor();
   assert.ok(await page.locator('.adg-comment-pin[data-changed]').isVisible());
+
+  await page.goto(server.url + '?asset=components/action.tsx');
+  await page.waitForFunction(() => window.__adg?.ready);
+  await page.keyboard.press('c');
+  await page.keyboard.down('Alt');
+  await page.mouse.click(point.x, point.y);
+  await page.keyboard.up('Alt');
+  assert.equal(await composer.locator('textarea').getAttribute('placeholder'), 'Comment on ActionButton “Save draft”…');
+  await composer.locator('textarea').fill('Anchor the text itself.');
+  await composer.getByRole('button', { name: 'Post', exact: true }).click();
+  await page.getByText('Anchor the text itself.', { exact: true }).waitFor();
+  const second = (await runCli(['comments', 'list', '--state-dir=' + state], root)).envelope.data.threads[1];
+  assert.equal(second.target.tag, 'span');
+  assert.notEqual(second.anchor.element.id, thread.anchor.element.id);
 });

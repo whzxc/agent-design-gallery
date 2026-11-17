@@ -1,6 +1,6 @@
 import { createContextMenu } from './context-menu.js';
 import { createComments } from './comments.js';
-import { attachComment, commentLabel, placeComment } from './comment-anchors.js';
+import { attachComment, commentElement, commentLabel, placeComment } from './comment-anchors.js';
 import { initSwitcher, updateSwitcherLabels } from './switcher.js';
 import { dataFetch, keyURL, isUnauthorized } from './auth.js';
 import { Labels } from "./labels.js";
@@ -716,10 +716,10 @@ const commentOwner = (element, fallback) => {
   const owner = elementOwner(element, fallback);
   return owner.export ? projectSource(owner.source) + '#' + owner.export : null;
 };
-function targetOnBoard(x, y, point = boardPoint(x, y)) {
+function targetOnBoard(x, y, deepest, point = boardPoint(x, y)) {
   if (tokenManifest || !manifest || manifest.renderTheme !== effectiveTheme) return null;
   const { x: wx, y: wy } = point;
-  const hit = hitSelection(inspection ? [inspection] : assets, wx, wy);
+  const hit = hitSelection(inspection ? [inspection] : assets, wx, wy, false);
   const group = hit ? groups[hit.asset.group] : groups.find(board => contains(board, wx, wy));
   if (!group || group.layer?.toLowerCase() === 'arch') return null;
   const block = group.blocks?.find(block => contains(sectionBox(group, block), wx, wy));
@@ -727,7 +727,8 @@ function targetOnBoard(x, y, point = boardPoint(x, y)) {
   if (!commentable(path) || (!path && group.assets?.every(asset => !commentable(asset.path)))) return null;
   const part = hit?.part;
   const frameBounds = part ? frameBox(hit.asset, part) : null;
-  const element = hit?.element ?? null;
+  const elementHit = part?.elements?.findLast(element => contains(element, wx - frameBounds.x, wy - frameBounds.y));
+  const element = commentElement(part?.elements, elementHit, deepest);
   const box = element ? { ...element, x: frameBounds.x + element.x, y: frameBounds.y + element.y }
     : frameBounds ?? (block ? sectionBox(group, block) : group);
   return { ...placeComment({ source: path ? projectSource(path) : null, frame: part?.name, layer: group.layer,
@@ -786,14 +787,15 @@ function currentReviewImage(x, y) {
   const image = document.elementsFromPoint(x, y).find(item => item.matches('#review-page [data-side="after"] img'));
   return image && commentable(image.closest('.review-frame')?.dataset.source) ? image : null;
 }
-function targetOnReview(x, y) {
+function targetOnReview(x, y, deepest) {
   const image = currentReviewImage(x, y);
   if (!image) return null;
   const card = image.closest('.review-frame'), source = card.dataset.source, frameName = card.dataset.frame;
   const { part, bounds, rect, sx, sy, toScreen } = reviewCanvas(image);
   if (!sx || !sy) return null;
   const point = { x: (x - rect.left) / sx, y: (y - rect.top) / sy };
-  const element = part?.elements?.findLast(element => contains(element, point.x, point.y)) ?? null;
+  const hit = part?.elements?.findLast(element => contains(element, point.x, point.y));
+  const element = commentElement(part?.elements, hit, deepest);
   const box = element ?? bounds, path = designSource(source);
   const group = commentBoards.find(board => board.assets.some(asset => asset.path === path));
   return { ...placeComment({ source, frame: frameName, layer: group?.layer ?? path.split('/')[0],
@@ -864,7 +866,7 @@ function commentBoardPlace(thread) {
 }
 const commentUI = createComments({
   toolButton: $('#comment-tool'), panelButton: $('#comments-toggle'), panel: $('#comments-panel'), layer: $('#comment-layer'),
-  hitTest: (x, y) => reviewManifest ? targetOnReview(x, y) : targetOnBoard(x, y),
+  hitTest: (x, y, deepest) => reviewManifest ? targetOnReview(x, y, deepest) : targetOnBoard(x, y, deepest),
   preparePoint: (x, y) => {
     const image = reviewManifest && currentReviewImage(x, y);
     return image ? Promise.all([primeReviewFrame(image).promise, commentCatalogLoaded ? undefined : refreshCommentCatalog()]) : undefined;
@@ -1339,7 +1341,7 @@ viewport.addEventListener("pointermove", (e) => {
   if (!old) {
     if (commentUI.active()) {
       hoveredElement = null;
-      commentUI.hover(e.clientX, e.clientY);
+      commentUI.hover(e.clientX, e.clientY, e.altKey);
       updateOutlines();
       return;
     }
@@ -1384,7 +1386,7 @@ function up(e) {
       x = (e.clientX - rect.left - view.x) / view.scale,
       y = (e.clientY - rect.top - view.y) / view.scale;
     const hit=hitSelection(inspection?[inspection]:assets,x,y);
-    if (commentUI.active()) commentUI.click(e.clientX, e.clientY);
+    if (commentUI.active()) commentUI.click(e.clientX, e.clientY, e.altKey);
     else if(hit?.part) selectFrame(hit.asset,hit.part,hit.element);
     else if(hit) selectSource(hit.asset);
     else clearSelection();
@@ -1395,9 +1397,9 @@ function up(e) {
 }
 for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
   viewport.addEventListener(event, up);
-function openSelectionContextMenu({ worldPoint = null, screenX, screenY, returnFocus = viewport }) {
+function openSelectionContextMenu({ worldPoint = null, screenX, screenY, deepest, returnFocus = viewport }) {
   const a = currentItem(), p = a?.parts.find(part => part.id === selectedForm), el = selectedElement;
-  const placement = targetOnBoard(screenX, screenY, worldPoint ?? undefined);
+  const placement = targetOnBoard(screenX, screenY, deepest, worldPoint ?? undefined);
   const comment = placement && placement.anchor.kind !== 'chapter' ? [{ label: 'Comment', action: () => commentUI.place(placement) }] : [];
   if (a && p && el) {
     const owner = elementOwner(el, a.path);
@@ -1477,7 +1479,7 @@ viewport.addEventListener('contextmenu', e => {
   if (hit?.part) selectFrame(hit.asset, hit.part, hit.element);
   else if (hit) selectSource(hit.asset);
   else clearSelection();
-  openSelectionContextMenu({ worldPoint: { x: wx, y: wy }, screenX: e.clientX, screenY: e.clientY, returnFocus: viewport });
+  openSelectionContextMenu({ worldPoint: { x: wx, y: wy }, screenX: e.clientX, screenY: e.clientY, deepest: e.altKey, returnFocus: viewport });
 });
 document.addEventListener('keydown', e => {
   if (!(e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) return;
@@ -2029,7 +2031,7 @@ if (scopeRequest === 'review') {
 const reviewPage = $('#review-page');
 let reviewPress;
 reviewPage.addEventListener('pointermove', event => {
-  if (commentUI.active() && !reviewPress) commentUI.hover(event.clientX, event.clientY);
+  if (commentUI.active() && !reviewPress) commentUI.hover(event.clientX, event.clientY, event.altKey);
 });
 reviewPage.addEventListener('pointerleave', () => { reviewPress = null; commentUI.hover(); });
 reviewPage.addEventListener('pointerdown', event => {
@@ -2043,14 +2045,14 @@ reviewPage.addEventListener('pointerup', async event => {
   const image = currentReviewImage(event.clientX, event.clientY);
   if (!image) return;
   await Promise.all([primeReviewFrame(image).promise, commentCatalogLoaded ? undefined : refreshCommentCatalog()]);
-  if (commentUI.active() && image.isConnected) commentUI.click(event.clientX, event.clientY);
+  if (commentUI.active() && image.isConnected) commentUI.click(event.clientX, event.clientY, event.altKey);
 });
 reviewPage.addEventListener('contextmenu', async event => {
   const image = currentReviewImage(event.clientX, event.clientY);
   if (!image) return;
   event.preventDefault();
   await Promise.all([primeReviewFrame(image).promise, commentCatalogLoaded ? undefined : refreshCommentCatalog()]);
-  const placement = targetOnReview(event.clientX, event.clientY);
+  const placement = targetOnReview(event.clientX, event.clientY, event.altKey);
   if (placement) contextMenu.open([{ label: 'Comment', action: () => commentUI.place(placement) }], { x: event.clientX, y: event.clientY, returnFocus: reviewPage });
 });
 reviewPage.addEventListener('scroll', () => { commentUI.hover(); commentUI.reposition(); }, { capture: true, passive: true });

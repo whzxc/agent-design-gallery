@@ -53,6 +53,11 @@ const digest = value => sha256Hex(value).slice(0, 24);
 const normalize = value => value.normalize('NFC').replace(/\p{White_Space}+/gu, ' ').trim();
 const namingAttributes = new Set(['id', 'data-part', 'role', 'aria-label', 'aria-labelledby', 'aria-describedby']);
 const containerRoots = new Set(['div', 'main', 'section', 'article', 'aside', 'header', 'footer', 'nav', 'form']);
+const additionalCommentRoles = new Map(Object.entries({
+  article: 'article', aside: 'complementary', dialog: 'dialog', fieldset: 'group', hr: 'separator',
+  li: 'listitem', main: 'main', meter: 'meter', nav: 'navigation', ol: 'list', option: 'option', output: 'status',
+  progress: 'progressbar', summary: 'button', table: 'table', td: 'cell', th: 'columnheader', tr: 'row', ul: 'list',
+}));
 
 export function identityNode(node, path, parentPath, owners, styleFor) {
   const attributes = {};
@@ -77,7 +82,7 @@ export function identityNode(node, path, parentPath, owners, styleFor) {
   const name = normalize(labelled || node.getAttribute('aria-label') || node.getAttribute('alt') || (role === 'textbox' || role === 'combobox' ? Array.from(node.labels ?? []).map(l => l.textContent).join(' ') : role ? node.textContent : '') || '');
   const resource = node.localName === 'svg' && (node.hasAttribute('data-adg-icon') || node.getAttribute('aria-hidden') === 'true' || !node.querySelector('text,foreignObject') && !node.hasAttribute('role'));
   return {
-    path, parentPath, tag: node.localName, namespace: node.namespaceURI, attributes, owners, neutral, resource,
+    path, parentPath, tag: node.localName, namespace: node.namespaceURI, attributes, owners, neutral, resource, role, name,
     ...(role && name ? { semantic: { role, name } } : {}),
     keys: JSON.parse(node.getAttribute('data-adg-keys') ?? '[]'),
     password,
@@ -191,10 +196,20 @@ export function collectViewerElements(shell, { projectSource, assetPath, frame, 
   }
   const clean = n => n === 0 ? 0 : n;
   const elements = [];
+  const boundaries = new Map();
   for (let i = 0; i < domNodes.length; i++) {
     const node = domNodes[i], input = inputs[i], idRow = assigned[i];
+    const parentBoundary = boundaries.get(input.parentPath) ?? null;
+    boundaries.set(input.path, parentBoundary);
     if (input.neutral) continue;
-    if (node === root && !input.owners.length && !node.hasAttribute('data-adg-id') && !node.hasAttribute('role') && containerRoots.has(node.localName)) continue;
+    const semanticRole = input.role ?? additionalCommentRoles.get(input.tag);
+    const role = /^(none|presentation)$/.test(semanticRole) ? null : semanticRole?.trim().split(/\s+/, 1)[0];
+    const boundary = Boolean(input.owners.length || input.keys.length || role ||
+      Object.keys(input.attributes).some(name => name === 'data-adg-id' || name !== 'role' && namingAttributes.has(name)) ||
+      node.hasAttribute('alt') || node.hasAttribute('title'));
+    const commentOnly = node === root && !input.owners.length && !node.hasAttribute('data-adg-id') &&
+      !node.hasAttribute('role') && containerRoots.has(node.localName);
+    if (commentOnly && !boundary) continue;
     const rect = rectFor(node);
     let left = Math.max(rect.left, origin.left), right = Math.min(rect.right, origin.right);
     let top = Math.max(rect.top, origin.top), bottom = Math.min(rect.bottom, origin.bottom);
@@ -209,12 +224,19 @@ export function collectViewerElements(shell, { projectSource, assetPath, frame, 
     }
     if (right <= left || bottom <= top) continue;
     const owner = idRow.defining.at(-1) ?? { source: assetPath, export: null };
+    if (boundary) boundaries.set(input.path, idRow.id);
+    const text = (input.semantic?.name || normalize(input.directText)).slice(0, 120) || null;
     elements.push({
       id: idRow.id,
       owners: input.owners,
       owner,
       tag: input.tag,
-      text: (input.semantic?.name || normalize(input.directText)).slice(0, 120) || null,
+      text,
+      ...(commentOnly ? { commentOnly } : {}),
+      commentBoundary: boundaries.get(input.path),
+      commentName: role || owner.export || null,
+      commentText: (input.name || text || (boundary && !input.password ? normalize(node.textContent) : '') ||
+        normalize(node.getAttribute('title') ?? '')).slice(0, 120) || null,
       x: clean(left - origin.left),
       y: clean(top - origin.top),
       width: Math.max(0, right - left),

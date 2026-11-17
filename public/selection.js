@@ -10,7 +10,7 @@ export function hitSelection(assets, x, y, elements = true) {
     const part = asset.parts.find(p => (asset.component || p.id === crop.id) && contains(frameBox(asset,p), x,y));
     if (!part) return {asset, part:asset.component ? null : asset.parts.find(p=>p.id===crop.id)};
     const box = frameBox(asset,part);
-    const element = elements ? [...(part.elements ?? [])].reverse().find(e => contains(e,x-box.x,y-box.y)) : null;
+    const element = elements ? part.elements?.findLast(e => !e.commentOnly && contains(e,x-box.x,y-box.y)) : null;
     return {asset, part, element};
   }
   return null;

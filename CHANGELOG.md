@@ -4,6 +4,7 @@
 
 - **Breaking:** Remove `adg annotations`, its API and viewer. Old annotation data is retired. The JSON command envelope is now schema version 2.
 - Add pinned Comments on boards and review images, live threads and a CLI for agents to read, reply and resolve.
+- Target the closest meaningful element when placing comments, keep changed pins opaque, and return stable hub links in comment results.
 
 - Simplify review sheets to the project title and tinted Added, Changed and Removed sections. Show changed pairs with an arrow and inherited representatives with a `+N` label.
 

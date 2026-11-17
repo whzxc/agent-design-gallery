@@ -1,6 +1,5 @@
 // Adapted from ARC's MIT-licensed tooling/design-server.mjs.
 import { changeComment, commentFile, commentRevision, listComments, readComment } from './comments.mjs';
-import { previewTarget, previewURL } from './link.mjs';
 import { randomUUID, createHash } from 'node:crypto';
 import { directLocal, viewerFile, shell, json } from './http.mjs';
 import { createServer } from "node:http";
@@ -579,20 +578,17 @@ export async function startServer({
         if (request.method === 'POST' && request.headers.origin && ![`http://${host}`,`https://${host}`].includes(request.headers.origin)) return json(response,403,{error:'Cross-origin request refused.'});
         if (!activeProject) return json(response, 404, { error: 'No project is open.' });
         const { root: projectRoot } = activeProject;
-        const base = request.headers['x-adg-viewer-base'] ?? '/';
-        const origin = request.headers['x-adg-viewer-origin'] ?? `http://${host}`;
-        const viewerURL = previewURL(new URL(base, origin).href, previewTarget({})).href;
         if (request.method === 'GET') {
           if (url.searchParams.has('id'))
-            return json(response, 200, await readComment(projectRoot, commentStateDirectory, url.searchParams.get('id'), viewerURL));
+            return json(response, 200, await readComment(projectRoot, commentStateDirectory, url.searchParams.get('id')));
           const [result, revision] = await Promise.all([
-            listComments(projectRoot, commentStateDirectory, { viewerURL, status: url.searchParams.get('status') ?? 'all' }),
+            listComments(projectRoot, commentStateDirectory, { status: url.searchParams.get('status') ?? 'all' }),
             commentRevision(projectRoot),
           ]);
           return json(response, 200, { ...result, revision });
         }
         const input = await body(request, 256 * 1024);
-        return json(response, 200, await changeComment(projectRoot, commentStateDirectory, input, { viewerURL }));
+        return json(response, 200, await changeComment(projectRoot, commentStateDirectory, input, { viewer: true }));
       }
       if(url.pathname==='/api/cache-stats'&&request.method==='GET')return json(response,200,{process:process.memoryUsage(),builds:buildStore?.stats(),viewer:viewerCache?.stats()});
       if (url.pathname === '/api/health' && request.method === 'GET') return json(response, 200, { id: instanceId, capabilities: { keyAuth: 1 } });

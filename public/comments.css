@@ -32,7 +32,7 @@
   padding: 3px 7px;
   overflow: hidden;
   border-radius: 5px;
-  background: var(--accent);
+  background: var(--accent) border-box;
   color: var(--on-accent);
   font-size: var(--text-meta);
   text-overflow: ellipsis;
@@ -67,7 +67,8 @@
 }
 
 .adg-comments-layer .adg-comment-pin[data-changed] {
-  border: 2px dashed var(--on-accent);
+  border-style: dashed;
+  border-color: var(--on-accent);
 }
 
 .adg-comments-layer .adg-comment-pin[data-changed][data-resolved] { border-color: var(--text-tertiary); }

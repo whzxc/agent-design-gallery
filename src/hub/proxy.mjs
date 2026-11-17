@@ -6,14 +6,10 @@ export function proxy(request, response, port, pathname, viewerBase, onDiagnosti
   return new Promise(resolve => {
     const headers = { ...request.headers, host: `127.0.0.1:${port}` };
     for (const name of Object.keys(headers)) {
-      if (['authorization', 'x-adg-key', 'x-adg-viewer-base', 'x-adg-viewer-origin', 'cookie', 'forwarded', 'origin', 'connection'].includes(name) || name.startsWith('x-forwarded-')) delete headers[name];
+      if (['authorization', 'x-adg-key', 'x-adg-viewer-base', 'cookie', 'forwarded', 'origin', 'connection'].includes(name) || name.startsWith('x-forwarded-')) delete headers[name];
     }
     if (viewerBase) headers['x-adg-viewer-base'] = viewerBase;
     const target = new URL(pathname, 'http://localhost');
-    if (target.pathname === '/api/comments') {
-      const scheme = request.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-      headers['x-adg-viewer-origin'] = `${scheme}://${request.headers.host}`;
-    }
     target.searchParams.delete('key');
     const upstream = httpRequest({ hostname: '127.0.0.1', port, method: request.method, path: target.pathname + target.search, headers }, incoming => {
       const outgoing = { ...incoming.headers };

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +21,7 @@ const source = 'design/components/control.tsx';
 const chapter = 'Controls';
 const position = {
   anchor: { kind: 'frame', source, frame: 'Ready', layer: 'components', chapter, element: null, x: 5, y: 7, frameX: 5, frameY: 7 },
-  target: { label: 'components/control#Ready', tag: null, text: null, owner: null },
+  target: { label: 'components/control#Ready', tag: null, text: null, owner: null, displayName: 'components/control#Ready' },
 };
 
 function design(label, frame = 'Ready') {
@@ -59,10 +59,10 @@ async function fixture(t, { git = false } = {}) {
   };
   const cli = async (...args) => JSON.parse((await exec(process.execPath, [cliFile, ...args], { cwd: project })).stdout);
   const comments = (...args) => cli('comments', ...args, '--state-dir', stateDirectory, '--json');
-  const hub = async () => {
+  const hub = async publicOrigin => {
     const { data } = await addRoot(project, 0, stateDirectory);
     assert.ok(data);
-    const server = await startHub({ port: 0, stateDirectory });
+    const server = await startHub({ port: 0, stateDirectory, publicOrigin });
     servers.push(server);
     const [item] = await (await fetch(new URL('/api/projects', server.url))).json();
     return { server, base: new URL(item.url, server.url) };
@@ -92,7 +92,7 @@ test('Comments HTTP and CLI share thread lifecycle, authors, filters, revision a
   assert.equal(first.revision, f.revision);
   assert.deepEqual(first.anchor, position.anchor);
   assert.deepEqual(first.target, position.target);
-  assert.equal(first.link, viewer.url + '?comment=1');
+  assert.equal(first.link, null);
   const original = first.messages[0];
   assert.deepEqual(original.author, { kind: 'user' });
   assert.equal(original.text, long);
@@ -188,10 +188,10 @@ async function liveStream(t, base, headers) {
   return event;
 }
 
-test('authenticated hub project and instance links are canonical and cross-process writes notify both viewers', { timeout: 15_000 }, async t => {
+test('authenticated hub links use the configured public origin and cross-process writes notify both viewers', { timeout: 15_000 }, async t => {
   const f = await fixture(t);
   const viewer = await f.serve();
-  const { server, base } = await f.hub();
+  const { server, base } = await f.hub('https://design.example.invalid');
   const registered = await registerInstance({ directory: f.designDirectory, port: viewer.port, id: viewer.id, stateDirectory: f.stateDirectory });
   t.after(() => registered.remove());
   const instanceBase = new URL('/i/' + viewer.id + '/', server.url);
@@ -202,17 +202,14 @@ test('authenticated hub project and instance links are canonical and cross-proce
   assert.equal((await post(base, { action: 'create', ...position, message: 'no' }, { ...headers, Origin: 'https://evil.invalid' })).status, 403);
   assert.equal((await fetch(endpoint(instanceBase), { headers: forwarded })).status, 401);
   const created = (await ok(await post(base, { action: 'create', ...position, message: 'Hub comment' }, headers))).thread;
-  const expected = new URL('?comment=1', base);
-  expected.protocol = 'https:';
+  const expected = new URL(base.pathname + '?comment=1', 'https://design.example.invalid');
   assert.equal(created.link, expected.href);
   assert.equal(created.revision, null);
   assert.equal((await f.comments()).data.threads[0].link, expected.href);
   const direct = await ok(await fetch(endpoint(viewer.url)));
-  assert.equal(direct.threads[0].link, viewer.url + '?comment=1');
+  assert.equal(direct.threads[0].link, expected.href);
   const instance = await ok(await fetch(endpoint(instanceBase), { headers }));
-  const expectedInstance = new URL('?comment=1', instanceBase);
-  expectedInstance.protocol = 'https:';
-  assert.equal(instance.threads[0].link, expectedInstance.href);
+  assert.equal(instance.threads[0].link, expected.href);
   for (const route of ['comments.js', 'comments.css', 'comment-anchors.js', 'context-menu.js']) {
     for (const origin of [viewer.url, base, instanceBase]) {
       const response = await fetch(new URL(route, origin));
@@ -230,6 +227,7 @@ test('authenticated hub project and instance links are canonical and cross-proce
   ]);
   assert.ok(performance.now() < deadline, 'Both viewers should receive the CLI change within 2 seconds.');
   assert.equal(reply.data.thread.messages.length, 2);
+  assert.equal(reply.data.thread.link, expected.href);
   assert.deepEqual(hubChange, { event: 'comments', data: { comments: true } });
   assert.deepEqual(directChange, { event: 'comments', data: { comments: true } });
 
@@ -245,6 +243,27 @@ test('authenticated hub project and instance links are canonical and cross-proce
   const { threads } = await ok(await fetch(endpoint(base), { headers }));
   assert.deepEqual(threads.map(thread => thread.number), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   assert.deepEqual(new Set(threads[0].messages.slice(2).map(message => message.text)), new Set(['CLI 0', 'CLI 1', 'CLI 2', 'CLI 3', 'CLI 4']));
+});
+
+test('CLI links follow live registration and replace a stored transient link', async t => {
+  const f = await fixture(t);
+  const viewer = await f.serve();
+  const { thread } = await ok(await post(viewer.url, { action: 'create', ...position, message: 'Open this later' }));
+  const file = await commentFile(f.project, f.stateDirectory);
+  const store = JSON.parse(await readFile(file, 'utf8'));
+  assert.equal(Object.hasOwn(store.threads[0], 'link'), false);
+  store.threads[0].link = viewer.url + '?comment=1';
+  delete store.threads[0].target.displayName;
+  await writeFile(file, JSON.stringify(store));
+  await viewer.close();
+  assert.equal((await f.comments('read', thread.id)).data.thread.link, null);
+
+  const { server, base } = await f.hub();
+  const listed = (await f.comments('list')).data.threads[0];
+  assert.equal(listed.target.displayName, null);
+  assert.equal(listed.link, new URL('?comment=1', base).href);
+  await server.close();
+  assert.equal((await f.comments('list')).data.threads[0].link, null);
 });
 
 test('CLI read reports observed element geometry, stable-ID text changes and missing targets', { timeout: 45_000 }, async t => {

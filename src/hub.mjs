@@ -10,8 +10,10 @@ import { json, shell, viewerFile } from './http.mjs';
 import { CliError, asCliError } from './cli-output.mjs';
 import { loadConfig } from './toolkit/config.mjs';
 import { cleanup } from './toolkit/results.mjs';
+import { hubPublicOrigin, publishHubAddress } from './hub/project-link.mjs';
 
-export async function startHub({ port = 4310, stateDirectory = defaultStateDirectory, idleTimeout = 300_000, onDiagnostic, onFatal, startViewer = startServer } = {}) {
+export async function startHub({ port = 4310, stateDirectory = defaultStateDirectory, publicOrigin = process.env.ADG_PUBLIC_ORIGIN, idleTimeout = 300_000, onDiagnostic, onFatal, startViewer = startServer } = {}) {
+  publicOrigin = hubPublicOrigin(publicOrigin);
   await hubKey(stateDirectory);
   let closing = false;
   const id = randomUUID(), viewers = new Map(), streams = new Set();
@@ -116,12 +118,14 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
     for (const step of steps) try { await cleanup(step,primary); } catch (error) { primary=error; }
     if (primary) throw primary;
   })();
-  try { await new Promise((resolve,reject) => {
-    const startupError=error=>{server.off('listening',listening);reject(error);};
-    const listening=()=>{server.off('error',startupError);server.on('error',error=>{if(!closing)onFatal?.(asCliError(error));});resolve();};
-    server.once('error',startupError);server.listen(port,'127.0.0.1',listening);
-  }); }
-  catch (cause) { const primary=asCliError(cause);await cleanup(close,primary);throw primary; }
+  try {
+    await new Promise((resolve,reject) => {
+      const startupError=error=>{server.off('listening',listening);reject(error);};
+      const listening=()=>{server.off('error',startupError);server.on('error',error=>{if(!closing)onFatal?.(asCliError(error));});resolve();};
+      server.once('error',startupError);server.listen(port,'127.0.0.1',listening);
+    });
+    await publishHubAddress(stateDirectory, { id, port: server.address().port, publicOrigin });
+  } catch (cause) { const primary=asCliError(cause);await cleanup(close,primary);throw primary; }
   return {
     id, url: `http://127.0.0.1:${server.address().port}/`,port:server.address().port,stateDirectory:path.resolve(stateDirectory),close,
   };

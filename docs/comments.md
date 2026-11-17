@@ -10,12 +10,12 @@ read nor migrated.
 
 ## Anchors
 
-A thread is pinned to the deepest target under the point where it was placed:
+A thread is pinned to the nearest meaningful target under the point where it was placed:
 
 | Target | Identity | Where it appears |
 | --- | --- | --- |
-| Element | source, frame and element ID | inside a frame on a board, and on that frame's after image on the review page |
-| Frame | source and frame | the frame's background |
+| Element | source, frame and element ID | inside a frame on a board or on a review after image, at the closest element or ancestor with an owned part, an authored `data-adg-id` or instance key, a semantic role or a naming attribute |
+| Frame | source and frame | the frame's background or a point inside the frame without a meaningful element target |
 | Source | source | the source's section on its board, outside its frames |
 | Chapter | layer and chapter | the chapter board, outside its sections |
 
@@ -24,8 +24,8 @@ project's sources. The pin keeps the placed point relative to its target's top-l
 the board re-lays out, and it is clamped into the target when the target shrinks.
 
 Each thread records, at placement, the frame-relative point, the Git revision (null outside Git) and a snapshot of the
-target: its label as in `modules/files#source-local`, plus the element's tag, a text excerpt and its owning part
-(`<source>#<Export>`) for an element target. When the target can no longer be found, the pin falls back one level,
+target. It includes its label as in `modules/files#source-local` and the displayed name shown during placement. For an
+element it also includes its raw tag, a text excerpt and its owning part (`<source>#<Export>`). When the target can no longer be found, the pin falls back one level,
 from element to frame at the recorded point, then from frame to its source, and is marked **changed**. A thread whose
 source is gone appears only in the panel. The snapshot still tells what it pointed at.
 
@@ -35,6 +35,8 @@ The Tokens board and architecture diagrams take no comments.
 
 - The **Comment** tool is a toggle in the bottom toolbar, also switched by `C`. While it is on, the cursor shows a
   comment cursor, and hovering outlines the target a click would pin to and names it in a small tag.
+- Inside a frame, the tag names an element by role or part and its text, such as `Button “Open”`. Clicking the label
+  of a button targets the button. Hold `⌥` / `Alt` during hover or placement to target the deepest element.
 - A click places a pin and opens an inline composer beside it, focused, with a placeholder naming the target, as in
   "Comment on Button “Open”…". There is no modal dialog. `⌘↩` or `Ctrl+↩` posts and `Esc` discards the draft.
 - The tool stays on after a post, so a review pass can place several comments. `Esc` with no composer open, or `C`,
@@ -93,8 +95,9 @@ Before images and removed frames take no comments.
 
 ## Links and live updates
 
-Every thread has a link: the viewer URL with `?comment=<n>`. Opening it selects the right scope, moves the camera to
-the pin and opens the thread. `adg link <viewer-url> --comment=<n>` prints it, and **Copy link** copies it.
+Opening a viewer URL with `?comment=<n>` selects the right scope, moves the camera to the pin and opens the thread.
+CLI results include the registered project link when a hub is running. For a standalone viewer,
+`adg link <viewer-url> --comment=<n>` prints a link, and **Copy link** copies the link for the current viewer.
 
 A change made anywhere, in another viewer or through the command line, reaches every open viewer of the project within
 two seconds without a reload. It does not disturb an open composer or reply draft.

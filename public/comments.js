@@ -327,7 +327,7 @@ export function createComments({
 
   function renderHighlight() {
     const point = drag?.moved && !drag.cancelled ? drag : active() ? highlightPoint : null;
-    const target = point ? hitTest(point.x, point.y) : null;
+    const target = point ? hitTest(point.x, point.y, point.deepest) : null;
     const box = target?.box;
     outline.hidden = !box;
     highlightLabel.hidden = !box;
@@ -342,8 +342,8 @@ export function createComments({
       clamp(y >= 28 ? y - 26 : y + box.height + 4, gutter, window.innerHeight - 28));
   }
 
-  function hover(x, y) {
-    highlightPoint = active() && Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  function hover(x, y, deepest) {
+    highlightPoint = active() && Number.isFinite(x) && Number.isFinite(y) ? { x, y, deepest } : null;
     renderHighlight();
   }
 
@@ -369,14 +369,14 @@ export function createComments({
     return true;
   }
 
-  async function dropPin(id, x, y) {
+  async function dropPin(id, x, y, deepest) {
     const move = { point: { x, y } };
     pendingMoves.set(id, move);
     render();
     try {
       if (preparePoint) await preparePoint(x, y);
       if (pendingMoves.get(id) !== move || !threads.has(id)) return;
-      const target = hitTest(x, y);
+      const target = hitTest(x, y, deepest);
       if (!target) return;
       move.placement = { id, ...placement(target) };
       await mutate('move', move.placement);
@@ -409,6 +409,7 @@ export function createComments({
       if (drag?.pointerId !== event.pointerId || drag.cancelled) return;
       drag.x = event.clientX;
       drag.y = event.clientY;
+      drag.deepest = event.altKey;
       if (!drag.moved) drag.moved = Math.hypot(drag.x - drag.startX, drag.y - drag.startY) >= dragThreshold;
       if (!drag.moved) return;
       suppressClick = true;
@@ -419,7 +420,7 @@ export function createComments({
       if (drag?.pointerId !== event.pointerId) return;
       const previous = drag;
       drag = null;
-      if (previous.moved && !previous.cancelled) void dropPin(id, event.clientX, event.clientY);
+      if (previous.moved && !previous.cancelled) void dropPin(id, event.clientX, event.clientY, event.altKey);
       else render();
     });
     function stopPointer(event) {
@@ -575,9 +576,9 @@ export function createComments({
     return true;
   }
 
-  function click(x, y) {
+  function click(x, y, deepest) {
     if (active()) {
-      const target = hitTest(x, y);
+      const target = hitTest(x, y, deepest);
       if (target) place({ ...target, x, y });
       return true;
     }
@@ -900,6 +901,12 @@ export function createComments({
 
   document.addEventListener('pointerdown', event => {
     if (menu && !menu.wrapper.contains(event.target) && !menu.list.contains(event.target)) closeMenu();
+  });
+  for (const type of ['keydown', 'keyup']) document.addEventListener(type, event => {
+    if (event.key !== 'Alt' || (!highlightPoint && !drag?.moved)) return;
+    if (highlightPoint) highlightPoint.deepest = event.altKey;
+    if (drag) drag.deepest = event.altKey;
+    renderHighlight();
   });
   toolButton.addEventListener('click', () => toggle());
   panelButton.addEventListener('click', () => setPanel(panel.hidden, panel.hidden));

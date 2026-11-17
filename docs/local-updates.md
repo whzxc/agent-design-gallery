@@ -61,6 +61,9 @@ adg service status
 
 If the recorded Node or CLI path changed, reinstall the service with its existing port and state directory. Preserve the registry, access key, preferences and caches. Restarting the hub briefly disconnects its viewer streams; a changed cache context makes the first visit rebuild measured geometry and previews. Independent `adg open` processes remain running; reopen those sessions separately when they need the updated runtime.
 
+Set `ADG_PUBLIC_ORIGIN` in the hub process environment when it should use a public HTTP(S) origin for comment
+links. A launch agent can set it in `EnvironmentVariables`. Use the origin alone, without a project path.
+
 ## Verify delivery
 
 1. Confirm the installed runtime files match the milestone package. If the hub restarted, verify a new health ID at its direct-local `/api/health` endpoint and a running service state.

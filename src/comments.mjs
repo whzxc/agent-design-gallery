@@ -7,6 +7,7 @@ import { CliError } from './cli-output.mjs';
 import { isFeatureInternal, listSources, readGroups } from './toolkit/project.mjs';
 import { currentHead } from './toolkit/arch-git.mjs';
 import { groupAssets } from '../public/assets.js';
+import { hubProjectURL } from './hub/project-link.mjs';
 
 const defaultStateDirectory = path.join(os.homedir(), '.agent-design-gallery');
 const statuses = ['open', 'resolved', 'all'];
@@ -122,7 +123,8 @@ function placement(input, revision) {
     throw invalid('Provide a valid target identity and point for the comment anchor.');
   if (revision !== null && (!string(revision) || revision.length > 128 || /[\r\n]/.test(revision)))
     throw invalid('Provide a Git revision or null.');
-  const snapshot = { label: target.label, tag: null, text: null, owner: null };
+  if (target.displayName != null && !string(target.displayName)) throw invalid('Provide a valid target display name.');
+  const snapshot = { label: target.label, tag: null, text: null, owner: null, displayName: target.displayName ?? null };
   if (element) {
     if (!string(target.tag) || target.text != null && typeof target.text !== 'string' ||
       target.owner != null && !string(target.owner)) throw invalid('Provide a valid element snapshot.');
@@ -144,49 +146,52 @@ function reopen(thread) {
   Object.assign(thread, { status: 'open', resolvedAt: null, resolvedBy: null });
 }
 
-function linked(thread, viewerURL) {
-  if (!viewerURL) return thread;
-  return { ...thread, link: new URL(`?comment=${thread.number}`, viewerURL).href };
+function linked(thread, projectURL) {
+  return { ...thread, target: { displayName: null, ...thread.target },
+    link: projectURL ? new URL(`?comment=${thread.number}`, projectURL).href : null };
 }
 
-export async function listComments(root, stateDirectory, { status = 'all', source, frame, viewerURL } = {}) {
+export async function listComments(root, stateDirectory, { status = 'all', source, frame } = {}) {
   if (!statuses.includes(status)) throw invalid('Choose --status=open, --status=resolved or --status=all.');
   const { threads } = await readStore(await commentFile(root, stateDirectory));
-  return { threads: threads.filter(thread => (status === 'all' || thread.status === status) &&
-    (source === undefined || thread.anchor.source === source) && (frame === undefined || thread.anchor.frame === frame))
-    .map(thread => linked(thread, viewerURL)) };
+  const matches = threads.filter(thread => (status === 'all' || thread.status === status) &&
+    (source === undefined || thread.anchor.source === source) && (frame === undefined || thread.anchor.frame === frame));
+  const projectURL = matches.length ? await hubProjectURL(root, stateDirectory) : null;
+  return { threads: matches.map(thread => linked(thread, projectURL)) };
 }
 
-export async function readComment(root, stateDirectory, id, viewerURL) {
+export async function readComment(root, stateDirectory, id) {
   const { threads } = await readStore(await commentFile(root, stateDirectory));
-  return { thread: linked(threads[findThread(threads, id)], viewerURL) };
+  const thread = threads[findThread(threads, id)];
+  return { thread: linked(thread, await hubProjectURL(root, stateDirectory)) };
 }
 
-export async function changeComment(root, stateDirectory, input, { viewerURL, author } = {}) {
-  if (!object(input) || !viewerActions.includes(input.action) || !viewerURL && !['reply', 'resolve'].includes(input.action))
+export async function changeComment(root, stateDirectory, input, { viewer = false, author } = {}) {
+  if (!object(input) || !viewerActions.includes(input.action) || !viewer && !['reply', 'resolve'].includes(input.action))
     throw invalid('Choose a supported comment action.');
   const { action, id, message, messageId } = input;
-  const actor = viewerURL ? user : { kind: 'agent', name: author?.trim() };
-  if (!viewerURL && !string(actor.name)) throw invalid('Set --author to the agent name.');
+  const actor = viewer ? user : { kind: 'agent', name: author?.trim() };
+  if (!viewer && !string(actor.name)) throw invalid('Set --author to the agent name.');
   const file = await commentFile(root, stateDirectory);
   const placed = ['create', 'move'].includes(action)
     ? placement(input, input.revision === undefined ? await commentRevision(root) : input.revision)
     : null;
-  return withProjectLock(file, async () => {
+  const projectURL = await hubProjectURL(root, stateDirectory);
+  const thread = await withProjectLock(file, async () => {
     const store = await readStore(file), { threads } = store, now = new Date().toISOString();
     if (action === 'create') {
-      const thread = linked({ id: randomUUID(), number: store.nextNumber++, status: 'open', ...placed, messages: [],
-        createdAt: now, updatedAt: now, resolvedAt: null, resolvedBy: null }, viewerURL);
+      const thread = { id: randomUUID(), number: store.nextNumber++, status: 'open', ...placed, messages: [],
+        createdAt: now, updatedAt: now, resolvedAt: null, resolvedBy: null };
       addMessage(thread, message, actor, now);
       threads.push(thread);
       await writeStore(file, store);
-      return { thread };
+      return thread;
     }
     const index = findThread(threads, id), thread = threads[index];
     switch (action) {
       case 'reply':
         addMessage(thread, message, actor, now);
-        if (viewerURL && thread.status === 'resolved') reopen(thread);
+        if (viewer && thread.status === 'resolved') reopen(thread);
         break;
       case 'resolve':
         if (message !== undefined) addMessage(thread, message, actor, now);
@@ -213,13 +218,28 @@ export async function changeComment(root, stateDirectory, input, { viewerURL, au
     if (removed) threads.splice(index, 1);
     else thread.updatedAt = now;
     await writeStore(file, store);
-    return { thread: removed ? null : linked(thread, viewerURL) };
+    return removed ? null : thread;
   });
+  return { thread: thread ? linked(thread, projectURL) : null };
 }
 
 const quote = value => /^[\w/.#=-]+$/.test(value) ? value : "'" + value.replaceAll("'", "'\\''") + "'";
 const inspectArgv = ({ source, frame }, element) => ['adg', 'inspect',
   ...(frame ? [`--frame=${frame}`] : []), ...(element ? [`--element=${element}`] : []), '--json', '--', source];
+
+function observedText(scene, element, displayName) {
+  const domRuns = scene.runs.filter(run => run.kind === 'dom');
+  const direct = domRuns.filter(run => run.element === element.id).map(run => run.raw).join('');
+  const name = element.role && element.name;
+  if (!displayName) return normalizeText(name || direct);
+  const named = normalizeText(element.attributes?.['aria-label'] || element.attributes?.alt || name || direct);
+  if (named) return named;
+  const children = new Map(scene.elements.map(entry => [entry.id, entry.children]));
+  const descendants = new Set(element.children);
+  for (const child of descendants) for (const id of children.get(child) ?? []) descendants.add(id);
+  const descendantText = domRuns.filter(run => descendants.has(run.element)).map(run => run.raw).join('');
+  return normalizeText(descendantText || element.attributes?.title || '');
+}
 
 export async function readCommentContext(config, stateDirectory, id) {
   const { thread } = await readComment(config.root, stateDirectory, id);
@@ -258,8 +278,7 @@ export async function readCommentContext(config, stateDirectory, id) {
             const { scene, element } = match;
             elementId = element.id;
             result.elementBox = element.geometry?.box ?? null;
-            const direct = scene.runs.filter(run => run.element === element.id && run.kind === 'dom').map(run => run.raw).join('');
-            if (element.tag !== target.tag || normalizeText((element.role && element.name) || direct) !== target.text) result.state = 'changed';
+            if (element.tag !== target.tag || observedText(scene, element, target.displayName) !== target.text) result.state = 'changed';
           } else result.state = 'changed';
         }
       } catch (error) {

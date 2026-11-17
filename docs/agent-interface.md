@@ -1507,10 +1507,17 @@ A thread record contains `id`, `number`, `status` (`open` or `resolved`), `ancho
 `messages`, `createdAt`, `updatedAt`, `resolvedAt`, `resolvedBy` and `link`. `anchor` holds `kind` (`element`,
 `frame`, `source` or `chapter`), `source`, `frame`, `layer`, `chapter`, `element` (`{ id }` or null), the point
 `x`/`y` relative to the target and the frame-relative point `frameX`/`frameY`, each null where it does not apply.
-`target` is the placement snapshot: `label`, and for elements `tag`, `text` and `owner` (`<source>#<Export>`).
+`target` is the placement snapshot. It includes `label`, `displayName` as shown in the hover tag and composer,
+and, for elements, the raw `tag`, `text` and `owner` (`<source>#<Export>`). Older snapshots may have a null
+`displayName`. Placement normally selects the nearest element or ancestor with an owned part, an authored
+`data-adg-id` or instance key, a semantic role or a naming attribute. Holding `⌥` / `Alt` selects the deepest element.
 A message contains `id`, `author` (`{ kind: 'user' }` or `{ kind: 'agent', name }`), `text`, `at` and
 `editedAt`. `read` adds `state` (`attached`, `changed` or `gone`), `elementBox` and `commands.inspect`.
 Lists return `data: { threads }`. Reading or modifying one thread returns `data: { thread }`.
+
+`link` is the running hub's registered project URL, `/p/<slug>/?comment=<n>`. It uses the hub's configured
+`ADG_PUBLIC_ORIGIN` when set and its local address otherwise. If no running hub serves the project, `link`
+is null. Use `adg link <viewer-url> --comment=<n>` with a viewer URL you can reach.
 
 The viewer server provides `GET api/comments`, `GET api/comments?id=<id>` and `POST api/comments` with an
 `action`: `create`, `reply`, `edit`, `delete`, `delete-thread`, `move`, `resolve` or `reopen`. Every change emits
