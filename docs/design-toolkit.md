@@ -581,7 +581,15 @@ The review sheet and the review page show these entries in order:
 
 The page expands a group to every member.
 
-The review sheet is one PNG that `adg diff --base=<rev> --impacted` writes next to its `index.html` and reports as `data.review.sheet` (absolute path and resolved theme). It uses the system theme, or the theme `--theme` names when it names exactly one. A header names the project, the base and current revisions and the counts. Added frames show their new render; changed frames show before and after side by side; removed frames are listed by name. Each frame is labelled `<source>#<frame>`. The sheet is at most 1600 CSS pixels wide at device scale 2. The sheet holds at most 24 images in the order above, where a group's representative and outliers count but its other members do not. It states how many more the review URL holds.
+The review sheet is one PNG that `adg diff --base=<rev> --impacted` writes next to its `index.html` and reports as `data.review.sheet` (absolute path and resolved theme). It uses the system theme, or the theme `--theme` names when it names exactly one. The sheet is a compact contact sheet that reads at a glance inline in a chat; the review page holds the rest.
+
+- **Header**: the project, the base and current revisions and the counts.
+- **Cells**: entries flow in the order above through two columns, 1600 CSS pixels wide in total at device scale 2. Each image fills one cell labelled `<source>#<frame>`: an added frame shows its new render, and a changed frame shows before and after side by side within the cell. A frame scales down to fit its cell, at most 480 CSS pixels tall, and never scales up. Removed frames are listed by name.
+- **Budget**: at most 12 images, where a before-and-after pair is one image. Each inherited group's representative is reserved a place first, in group order. Added frames, direct changes and outliers fill the remaining places in the order above. Other group members take no place.
+- **Group text**: a group names its cause, its frame count and at most eight other members, and counts the rest.
+- **Height**: at most 4000 CSS pixels. Entries that do not fit are not drawn.
+
+A closing line states how many more frames the review URL holds.
 
 | Need | Command |
 | --- | --- |
