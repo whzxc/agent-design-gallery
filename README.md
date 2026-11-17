@@ -264,8 +264,8 @@ Run `adg diff --base=<rev> --impacted --theme=system --json` and embed
 from `adg link <viewer-url> --base=<rev>`.
 The sheet follows macOS appearance, or light on other platforms; `render` also
 accepts `--theme=system`. Explicit light/dark overrides the sheet theme. Default
-diff comparison coverage remains both themes. The sheet groups frames into tinted Added,
-Changed and Removed sections with before → after pairs and almost no text.
+diff comparison coverage remains both themes. The sheet groups frames into Added,
+Changed and Removed sections with colored edges, before → after pairs and almost no text.
 
 Review links show progress immediately and retain visible results during refresh.
 The current theme loads first; another theme is computed on switch. The state

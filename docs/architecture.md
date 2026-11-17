@@ -405,7 +405,7 @@ publish those models after producing their artifacts.
 The viewer requests its current theme and retains the preceding review while a
 live refresh or theme switch runs. Progress and chrome remain visible. Diff output
 also includes a single-theme, DPR-2 review sheet alongside the self-contained HTML
-review. The sheet separates Added, Changed and Removed with tinted sections,
+review. The sheet separates Added, Changed and Removed by colored section names and cell edges,
 uses up to 12 image cells and reports overflow in a closing line.
 
 Source build failures are isolated during review, including failures at the base
