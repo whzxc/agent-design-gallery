@@ -5,7 +5,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 /** @typedef {{argv: string[], reason: string}} NextAction */
 /** @typedef {{code: string, message: string, next: NextAction[]}} Diagnostic */
 /** @typedef {keyof typeof errorCatalog} ErrorCode */
-/** @typedef {{schemaVersion: 1, command: string, ok: boolean, data: unknown, warnings: Diagnostic[], error: Diagnostic | null}} Envelope */
+/** @typedef {{schemaVersion: 2, command: string, ok: boolean, data: unknown, warnings: Diagnostic[], error: Diagnostic | null}} Envelope */
 /** @typedef {{command?: string, project?: string, stateDirectory?: string, gitCause?: 'repository' | 'revision' | 'read', inspectCatalog?: boolean, inspectSources?: string[], positionals?: string[], values?: Record<string, string | string[] | boolean>, failureCode?: ErrorCode}} ErrorContext */
 /** @typedef {{json: boolean, command: string, revealKey?: boolean, stdout?: (text: string) => void, stderr?: (text: string) => void}} OutputOptions */
 
@@ -56,6 +56,8 @@ export const errorCatalog = {
   COMPARE_ADAPTER_FAILED: [2, 'compare', 'Retry after repairing the adapter callback.'],
   COMPARE_UNSETTLED: [2, 'compare', 'Retry after stabilizing fixture readiness.'],
   STATE_INVALID: [2, 'help', 'Inspect the reported state file before retrying.'],
+  COMMENT_NOT_FOUND: [2, 'comments', 'List open threads to choose an existing comment.'],
+  COMMENT_FORBIDDEN: [2, 'comments', 'Read the comment thread to check who authored the message.'],
   HUB_KEY_INVALID: [2, 'rotate', 'Replace the invalid key; existing access will expire.'],
   SERVICE_UNSUPPORTED: [2, 'serve-help', 'Use a foreground hub on this platform.'],
   SERVICE_ALREADY_INSTALLED: [2, 'status', 'Inspect the existing installation.'],
@@ -83,7 +85,8 @@ export class CliError extends Error {
 }
 
 const canonicalCommands = new Set([
-  'annotations', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect',
+  'comments', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect',
+  'comments list', 'comments read', 'comments reply', 'comments resolve',
   'root add', 'root remove', 'root list', 'root scan',
   'service install', 'service uninstall', 'service status', 'service logs', 'service migrate',
   'help', 'version', 'adg',
@@ -167,6 +170,7 @@ export function nextActions(code, context = {}) {
     }
     case 'serve-help': argv = helpArgv('serve'); break;
     case 'roots': argv = ['adg', 'root', 'list', ...state, '--json']; break;
+    case 'comments': argv = ['adg', 'comments', ...state, '--json']; break;
     case 'rotate': argv = ['adg', 'serve', '--rotate-key', ...state, '--json']; break;
     case 'status': argv = ['adg', 'service', 'status', ...state, '--json']; break;
     case 'logs': argv = ['adg', 'service', 'logs', ...state, '--json']; break;
@@ -308,11 +312,11 @@ export function createOutput({ json, command, revealKey = false, stdout = text =
     /** @param {string} text */
     progress: text => stderr(`${sanitize(text)}\n`),
     /** @param {unknown} data @param {Diagnostic[]} [warnings] */
-    success(data, warnings = []) { emit({ schemaVersion: 1, command, ok: true, data: data ?? null, warnings, error: null }); },
+    success(data, warnings = []) { emit({ schemaVersion: 2, command, ok: true, data: data ?? null, warnings, error: null }); },
     /** @param {unknown} cause @param {ErrorContext} [context] */
     failure(cause, context = {}) {
       const failure = classifyError(cause, { ...context, command });
-      if (json) emit({ schemaVersion: 1, command, ok: false, data: failure.data, warnings: failure.warnings, error: failure.error });
+      if (json) emit({ schemaVersion: 2, command, ok: false, data: failure.data, warnings: failure.warnings, error: failure.error });
       else if (!(cause instanceof CliError && cause.humanReported)) stderr(`adg: ${failure.error.message}\n`);
       return failure.exitCode;
     },

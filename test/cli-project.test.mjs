@@ -32,7 +32,7 @@ async function invoke(args, cwd) {
   });
   assert.equal(result.stdout.trimEnd().split('\n').length, 1);
   result.envelope = JSON.parse(result.stdout);
-  assert.equal(result.envelope.schemaVersion, 1);
+  assert.equal(result.envelope.schemaVersion, 2);
   assert.equal(result.envelope.ok, result.exits[0] === 0);
   return result;
 }

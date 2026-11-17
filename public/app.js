@@ -1,4 +1,6 @@
-import { createAnnotations, createContextMenu, formatElementReference, READABLE_ANNOTATION_SCALE } from './annotations.js';
+import { createContextMenu } from './context-menu.js';
+import { createComments } from './comments.js';
+import { attachComment, commentLabel, placeComment } from './comment-anchors.js';
 import { initSwitcher, updateSwitcherLabels } from './switcher.js';
 import { dataFetch, keyURL, isUnauthorized } from './auth.js';
 import { Labels } from "./labels.js";
@@ -7,7 +9,7 @@ import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
 import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext, measuredMetadata, previewAddress, compactPreparedSource, scopeKind, scopeTarget } from "./assets.js";
 import { sourceRelationships, relatedSources } from './relationships.js';
-import { hitSelection, frameBox, exportFrames } from './selection.js';
+import { contains, hitSelection, frameBox, exportFrames } from './selection.js';
 import { groupTokens, renderTokenTable } from './token-catalog.js';
 import { renderReview } from './review.js';
 import { readViewRoute, viewURL } from './view-route.js';
@@ -226,12 +228,16 @@ function updateChrome() {
   $('#sidebar-toggle').hidden = showReview;
   $('.search-divider').hidden = showReview;
   $('.search-field').hidden = showReview;
-  $('#annotate').hidden = showReview;
+  const canComment = opened && !tokenManifest && scopeRequest !== 'layer:arch';
+  $('#comment-tool').hidden = !canComment;
+  $('#comment-tool').disabled = !canComment;
   $('#inspect').hidden = showReview;
   $('#app-bar').hidden = !opened;
   if (fixtureState) $('#app-directory .switcher-chevron').hidden = false;
   $('#tools').hidden = !opened;
-  $('.zoom').hidden = !opened || showTokens || showReview;
+  $('.zoom').hidden = !opened || showTokens;
+  $('.zoom').classList.toggle('comments-only', showReview);
+  $('.zoom').setAttribute('aria-label', showReview ? 'Review tools' : 'Canvas tools');
   $('#source').hidden = !canInspect || !inspector;
   $('#inspect').disabled = !canInspect;
   $('#inspect').setAttribute('aria-expanded', String(canInspect && inspector));
@@ -671,85 +677,204 @@ function selectedBox() {
 function copyToClipboard(text) {
   navigator.clipboard.writeText(text).catch(e => error(e.message));
 }
-function visibleFrames() {
-  const displayed = manifest?.renderTheme === effectiveTheme ? (inspection ? [inspection] : assets) : [];
-  const list = [];
-  for (const a of displayed) {
-    if (!visible(a, 320)) continue;
-    const parts = a.parts.filter(p => p.id === a.shown[0]?.id);
-    for (const part of parts) {
-      const worldBox = frameBox(a, part);
-      const box = {
-        x: view.x + worldBox.x * view.scale,
-        y: view.y + worldBox.y * view.scale,
-        width: worldBox.width * view.scale,
-        height: worldBox.height * view.scale,
-      };
-      if (box.x + box.width + 280 < 0 || box.x > width + 40 || box.y + box.height + 40 < 0 || box.y > height + 40) continue;
-      list.push({ asset: a, part, source: a.path, frame: part.name, world: worldBox, box });
-    }
-  }
-  return list;
-}
-function locateNoteOnCanvas(row, moveCamera = false) {
-  const run = () => {
-    const sourceAsset = manifest?.assets.find(a => a.path === row.source);
-    const part = sourceAsset?.parts.find(p => p.name === row.frame);
-    const item = assets.find(a => a.path === row.source && (!part || a.shown[0]?.id === part.id));
-    if (!item || !part) return false;
-    const el = row.element ? (part.elements ?? []).find(e => e.id === row.element.id) : null;
-    inspection = null;
-    selectFrame(item, part, el);
-    if (moveCamera) {
-      frame(frameBox(item, part), 48);
-      if (view.scale < READABLE_ANNOTATION_SCALE) zoom(READABLE_ANNOTATION_SCALE);
-    }
-    return true;
-  };
-  if (!run() && moveCamera && initializedScope !== 'all') {
-    changeScope('all');
-    pendingNavigation = () => { run(); annotationUI.render(); };
-  }
-}
 const contextMenu = createContextMenu($('#context-menu'), {
   viewport,
   onOverlayChange: () => { hideTooltip(); requestDraw(true, false); },
 });
-const annotationUI = createAnnotations({
-  viewport,
-  panel: $('#annotations-panel'),
-  toggleButton: $('#annotate'),
-  contextMenu,
-  getState: () => {
-    const a = currentItem(), p = a?.parts.find(part => part.id === selectedForm);
-    return {
-      opened: Boolean(manifest?.directory) && !tokenManifest && !reviewManifest,
-      projectRoot: manifest?.projectRoot ?? manifest?.directory ?? null,
-      sourcePrefix: manifest?.sourcePrefix ?? '',
-      revision: manifest?.revision ?? 0,
-      scope: initializedScope ?? manifest?.scope ?? 'all',
-      loading: Boolean(manifest?.loading),
-      view,
-      moving,
-      manifestAssets: manifest?.assets ?? [],
-      selectedFrame: a && p ? { asset: a, part: p, source: a.path, frame: p.name } : null,
-      visibleFrames: visibleFrames(),
-    };
+const boardPoint = (x, y) => {
+  const rect = viewport.getBoundingClientRect();
+  return { x: (x - rect.left - view.x) / view.scale, y: (y - rect.top - view.y) / view.scale };
+};
+function asScreen(box) {
+  const rect = viewport.getBoundingClientRect();
+  return { x: rect.left + view.x + box.x * view.scale, y: rect.top + view.y + box.y * view.scale,
+    width: box.width * view.scale, height: box.height * view.scale };
+}
+const sourcePrefix = () => (reviewManifest ?? manifest)?.sourcePrefix ?? '';
+const projectSource = source => {
+  const prefix = sourcePrefix();
+  return !prefix || source.startsWith(prefix + '/') ? source : prefix + '/' + source;
+};
+const designSource = source => sourcePrefix() && source.startsWith(sourcePrefix() + '/') ? source.slice(sourcePrefix().length + 1) : source;
+const commentable = source => !source?.endsWith('.mmd');
+const sectionBox = (board, block) => ({ x: board.x + block.x, y: board.y + block.y, width: block.w, height: block.h });
+const boardGroup = (thread, board) => board.layer === thread.anchor.layer && board.title === thread.anchor.chapter;
+let commentBoards = [];
+let commentCatalogRun, commentCatalogLoaded;
+function refreshCommentCatalog() {
+  if (commentCatalogRun) return commentCatalogRun;
+  const catalog = !reviewManifest && manifest?.scope === 'all' ? Promise.resolve(manifest) : api('manifest');
+  commentCatalogRun = catalog.then(data => {
+    commentBoards = groupAssets(data);
+    commentCatalogLoaded = true;
+    commentUI.render();
+  }).catch(() => {}).finally(() => { commentCatalogRun = null; });
+  return commentCatalogRun;
+}
+const commentOwner = (element, fallback) => {
+  if (!element) return null;
+  const owner = elementOwner(element, fallback);
+  return owner.export ? projectSource(owner.source) + '#' + owner.export : null;
+};
+function targetOnBoard(x, y, point = boardPoint(x, y)) {
+  if (tokenManifest || !manifest || manifest.renderTheme !== effectiveTheme) return null;
+  const { x: wx, y: wy } = point;
+  const hit = hitSelection(inspection ? [inspection] : assets, wx, wy);
+  const group = hit ? groups[hit.asset.group] : groups.find(board => contains(board, wx, wy));
+  if (!group || group.layer?.toLowerCase() === 'arch') return null;
+  const block = group.blocks?.find(block => contains(sectionBox(group, block), wx, wy));
+  const path = hit?.asset.path ?? block?.asset;
+  if (!commentable(path) || (!path && group.assets?.every(asset => !commentable(asset.path)))) return null;
+  const part = hit?.part;
+  const frameBounds = part ? frameBox(hit.asset, part) : null;
+  const element = hit?.element ?? null;
+  const box = element ? { ...element, x: frameBounds.x + element.x, y: frameBounds.y + element.y }
+    : frameBounds ?? (block ? sectionBox(group, block) : group);
+  return { ...placeComment({ source: path ? projectSource(path) : null, frame: part?.name, layer: group.layer,
+    chapter: group.title, box, frameBox: frameBounds, element, owner: commentOwner(element, path),
+    label: path ? commentLabel(path, part?.name) : `${group.layer} / ${group.title}` }, point),
+    x, y, box: asScreen(box) };
+}
+function boardAttachment(thread) {
+  const { source, frame: frameName } = thread.anchor;
+  const path = source && designSource(source);
+  const board = groups.find(group => path ? group.blocks?.some(block => block.asset === path) : boardGroup(thread, group));
+  if (!board) return null;
+  const block = board.blocks?.find(block => block.asset === path);
+  const item = (inspection ? [inspection] : assets).find(asset => asset.path === path && asset.shown[0]?.name === frameName);
+  const part = item?.parts.find(part => part.name === frameName);
+  const attached = attachComment(thread, { chapter: board, source: block && sectionBox(board, block),
+    frame: part && frameBox(item, part), elements: part?.elements });
+  return attached && { ...attached, chapter: board.title, layer: board.layer };
+}
+
+let reviewFrames = new Map();
+const reviewGeometry = new WeakMap();
+const frameKey = (source, frame) => JSON.stringify([source, frame]);
+function indexReviewFrames() {
+  reviewFrames = new Map();
+  for (const image of $('#review-page').querySelectorAll('[data-side="after"] img')) {
+    const card = image.closest('.review-frame');
+    if (card && commentable(card.dataset.source)) reviewFrames.set(frameKey(card.dataset.source, card.dataset.frame), image);
+  }
+}
+function primeReviewFrame(image) {
+  let record = reviewGeometry.get(image);
+  if (!record) {
+    const card = image.closest('.review-frame');
+    const path = designSource(card.dataset.source);
+    record = { part: null };
+    reviewGeometry.set(image, record);
+    record.promise = prepare({ path, onlyFrame: card.dataset.frame, version: reviewManifest?.revision ?? '' }, effectiveTheme)
+      .then(result => { record.part = result.parts[0]; })
+      .catch(() => {})
+      .finally(() => { if (image.isConnected) commentUI.render(); });
+  }
+  return record;
+}
+function reviewCanvas(image) {
+  const rect = image.getBoundingClientRect();
+  const part = primeReviewFrame(image).part;
+  const width = part?.width || image.naturalWidth / 2 || rect.width;
+  const height = part?.height || image.naturalHeight / 2 || rect.height;
+  const bounds = { x: 0, y: 0, width, height };
+  const sx = rect.width / width, sy = rect.height / height;
+  return { part, bounds, sx, sy, rect,
+    toScreen: box => ({ x: rect.left + box.x * sx, y: rect.top + box.y * sy, width: box.width * sx, height: box.height * sy }) };
+}
+function currentReviewImage(x, y) {
+  const image = document.elementsFromPoint(x, y).find(item => item.matches('#review-page [data-side="after"] img'));
+  return image && commentable(image.closest('.review-frame')?.dataset.source) ? image : null;
+}
+function targetOnReview(x, y) {
+  const image = currentReviewImage(x, y);
+  if (!image) return null;
+  const card = image.closest('.review-frame'), source = card.dataset.source, frameName = card.dataset.frame;
+  const { part, bounds, rect, sx, sy, toScreen } = reviewCanvas(image);
+  if (!sx || !sy) return null;
+  const point = { x: (x - rect.left) / sx, y: (y - rect.top) / sy };
+  const element = part?.elements?.findLast(element => contains(element, point.x, point.y)) ?? null;
+  const box = element ?? bounds, path = designSource(source);
+  const group = commentBoards.find(board => board.assets.some(asset => asset.path === path));
+  return { ...placeComment({ source, frame: frameName, layer: group?.layer ?? path.split('/')[0],
+    chapter: group?.title, box, frameBox: bounds, element, owner: commentOwner(element, path),
+    label: commentLabel(path, frameName) }, point), revision: reviewManifest.review.current.head, x, y, box: toScreen(box) };
+}
+function locateComment(thread) {
+  if (reviewManifest) {
+    const image = reviewFrames.get(frameKey(thread.anchor.source, thread.anchor.frame));
+    if (!image || !image.getClientRects().length || !image.complete) return null;
+    const { part, bounds, sx, sy, rect } = reviewCanvas(image);
+    const scroll = $('#review-page .review-scroll').getBoundingClientRect();
+    const point = attachComment(thread, { frame: bounds, elements: part?.elements });
+    if (!point || !sx || !sy) return null;
+    const x = rect.left + sx * point.x, y = rect.top + sy * point.y;
+    if (!contains({ x: scroll.left, y: scroll.top, width: scroll.width, height: scroll.height }, x, y)) return null;
+    return { ...point, x, y };
+  }
+  if (tokenManifest) return null;
+  const point = boardAttachment(thread);
+  return point && { ...point, ...asScreen({ x: point.x, y: point.y, width: 0, height: 0 }) };
+}
+function focusBoardComment(thread) {
+  const point = boardAttachment(thread);
+  if (!point) return false;
+  const target = point.box;
+  if (!contains(target, point.x, point.y)) return false;
+  if (thread.anchor.kind === 'element' && !point.changed) {
+    const scale = view.scale;
+    commit({ scale, x: cameraArea().x + cameraArea().width / 2 - point.x * scale, y: cameraArea().y + cameraArea().height / 2 - point.y * scale });
+  } else frame(target, 48);
+  return true;
+}
+let commentNavigation;
+async function navigateComment(thread) {
+  if (reviewManifest) {
+    const image = reviewFrames.get(frameKey(thread.anchor.source, thread.anchor.frame));
+    if (image) {
+      const details = image.closest('details');
+      if (details) details.open = true;
+      image.loading = 'eager';
+      image.scrollIntoView({ block: 'center' });
+      await Promise.all([image.decode().catch(() => {}), primeReviewFrame(image).promise]);
+      return true;
+    }
+  } else if (!tokenManifest && focusBoardComment(thread)) return true;
+  const { layer } = commentBoardPlace(thread);
+  const next = layer ? `layer:${layer}` : 'all';
+  if (scopeRequest === next && !manifest?.loading) return false;
+  if (scopeRequest !== next) changeScope(next);
+  commentNavigation?.resolve(false);
+  return new Promise(resolve => { commentNavigation = { thread, scope: next, resolve }; });
+}
+function commentBoardOrder(thread) {
+  const { source, frame: frameName } = thread.anchor;
+  const path = source && designSource(source);
+  const boards = commentBoards.length ? commentBoards : groups;
+  const board = boards.findIndex(group => path ? group.assets?.some(asset => asset.path === path) : boardGroup(thread, group));
+  if (board < 0) return Number.MAX_SAFE_INTEGER;
+  const block = boards[board].assets?.findIndex(asset => asset.path === path) ?? -1;
+  const frameIndex = manifest?.assets.find(asset => asset.path === path)?.parts?.findIndex(part => part.name === frameName) ?? -1;
+  return board * 1_000_000 + (block + 1) * 1_000 + frameIndex + 1;
+}
+function commentBoardPlace(thread) {
+  const path = thread.anchor.source && designSource(thread.anchor.source);
+  const board = commentBoards.find(group => path ? group.assets.some(asset => asset.path === path) : boardGroup(thread, group));
+  return board ? { layer: board.layer, chapter: board.title } : { changed: commentBoards.length > 0 };
+}
+const commentUI = createComments({
+  toolButton: $('#comment-tool'), panelButton: $('#comments-toggle'), panel: $('#comments-panel'), layer: $('#comment-layer'),
+  hitTest: (x, y) => reviewManifest ? targetOnReview(x, y) : targetOnBoard(x, y),
+  preparePoint: (x, y) => {
+    const image = reviewManifest && currentReviewImage(x, y);
+    return image ? Promise.all([primeReviewFrame(image).promise, commentCatalogLoaded ? undefined : refreshCommentCatalog()]) : undefined;
   },
-  hitFrameAt: (worldX, worldY) => {
-    const hit = hitSelection(inspection ? [inspection] : assets, worldX, worldY);
-    if (!hit?.part) return null;
-    return { ...hit, frameBox: frameBox(hit.asset, hit.part) };
-  },
-  navigateToNote: row => locateNoteOnCanvas(row, true),
-  selectNoteTarget: row => locateNoteOnCanvas(row, false),
-  inspectFrame: (a, p, minScale) => inspectForm(a, p, minScale),
-  onChromeChange: () => { updateChrome(); requestDraw(true, false); },
-  copyText: copyToClipboard,
-  fail: e => error(e.message ?? String(e)),
+  locate: locateComment, navigate: navigateComment, boardOrder: commentBoardOrder, boardPlace: commentBoardPlace, request: api,
 });
+document.addEventListener('keydown', event => commentUI.key(event));
+$('#comments-toggle').addEventListener('click', () => { if (!commentCatalogLoaded) void refreshCommentCatalog(); });
 function updateOutlines() {
-  annotationUI.render();
+  commentUI.reposition();
   const hover=hoveredElement,origin=hover?.part?frameBox(hover.asset,hover.part):null;
   const hoverBox=hover?.element?{...hover.element,x:origin.x+hover.element.x,y:origin.y+hover.element.y}:origin;
   for (const [id,box] of [['selection-outline',selectedBox() ?? (selected ? currentItem() : null)],['hover-outline',hoverBox]]) {
@@ -1201,23 +1326,28 @@ viewport.addEventListener(
 );
 viewport.addEventListener("pointerdown", (e) => {
   if (e.button !== 0 && e.button !== 1) return;
-  if(e.target.closest('.annotation-layer'))return;
   e.preventDefault();
   viewport.focus({ preventScroll: true });
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 1)
-    gesture = { x: e.clientX, y: e.clientY, moved: false };
+    gesture = { x: e.clientX, y: e.clientY, button: e.button, moved: false };
   else gesture.moved = true;
   viewport.setPointerCapture(e.pointerId);
 });
 viewport.addEventListener("pointermove", (e) => {
   const old = pointers.get(e.pointerId);
   if (!old) {
+    if (commentUI.active()) {
+      hoveredElement = null;
+      commentUI.hover(e.clientX, e.clientY);
+      updateOutlines();
+      return;
+    }
     const rect=viewport.getBoundingClientRect();
     hoveredElement=hitSelection(inspection?[inspection]:assets,(e.clientX-rect.left-view.x)/view.scale,(e.clientY-rect.top-view.y)/view.scale);
     updateOutlines();return;
   }
-  hoveredElement=null;updateOutlines();
+  hoveredElement=null;commentUI.hover();updateOutlines();
   const before = [...pointers.values()];
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) > 4)
@@ -1246,16 +1376,16 @@ viewport.addEventListener("pointermove", (e) => {
     });
   }
 });
-viewport.addEventListener('pointerleave',()=>{hoveredElement=null;updateOutlines()});
+viewport.addEventListener('pointerleave',()=>{hoveredElement=null;commentUI.hover();updateOutlines()});
 function up(e) {
   if (!pointers.delete(e.pointerId)) return;
-  if (e.type === "pointerup" && !gesture.moved) {
+  if (e.type === "pointerup" && !gesture.moved && gesture.button === 0) {
     const rect = viewport.getBoundingClientRect(),
       x = (e.clientX - rect.left - view.x) / view.scale,
       y = (e.clientY - rect.top - view.y) / view.scale;
     const hit=hitSelection(inspection?[inspection]:assets,x,y);
-    if(annotationUI.active()) { annotationUI.click(x,y); return; }
-    if(hit?.part) selectFrame(hit.asset,hit.part,hit.element);
+    if (commentUI.active()) commentUI.click(e.clientX, e.clientY);
+    else if(hit?.part) selectFrame(hit.asset,hit.part,hit.element);
     else if(hit) selectSource(hit.asset);
     else clearSelection();
   }
@@ -1267,34 +1397,15 @@ for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
   viewport.addEventListener(event, up);
 function openSelectionContextMenu({ worldPoint = null, screenX, screenY, returnFocus = viewport }) {
   const a = currentItem(), p = a?.parts.find(part => part.id === selectedForm), el = selectedElement;
+  const placement = targetOnBoard(screenX, screenY, worldPoint ?? undefined);
+  const comment = placement && placement.anchor.kind !== 'chapter' ? [{ label: 'Comment', action: () => commentUI.place(placement) }] : [];
   if (a && p && el) {
-    const fb = frameBox(a, p);
     const owner = elementOwner(el, a.path);
-    const fx = worldPoint ? Math.max(0, Math.min(1, (worldPoint.x - fb.x) / fb.width)) : (p.width > 0 ? Math.max(0, Math.min(1, (el.x + el.width / 2) / p.width)) : 0.5);
-    const fy = worldPoint ? Math.max(0, Math.min(1, (worldPoint.y - fb.y) / fb.height)) : (p.height > 0 ? Math.max(0, Math.min(1, (el.y + el.height / 2) / p.height)) : 0.5);
-    const ex = worldPoint && el.width > 0 ? Math.max(0, Math.min(1, (worldPoint.x - (fb.x + el.x)) / el.width)) : 0.5;
-    const ey = worldPoint && el.height > 0 ? Math.max(0, Math.min(1, (worldPoint.y - (fb.y + el.y)) / el.height)) : 0.5;
     contextMenu.open([
-      {
-        label: 'Annotate here',
-        action: () => annotationUI.annotateAt({
-          source: a.path,
-          frame: p.name,
-          fx,
-          fy,
-          element: { id: el.id, owner, x: ex, y: ey },
-          returnFocus,
-        }),
-      },
+      ...comment,
       {
         label: 'Copy element reference',
-        action: () => copyToClipboard(formatElementReference({
-          sourcePrefix: manifest?.sourcePrefix ?? '',
-          source: a.path,
-          owner,
-          frame: p.name,
-          elementId: el.id,
-        })),
+        action: () => copyToClipboard(`source=${projectSource(a.path)} export=${owner?.export ? (owner.source === a.path ? owner.export : `${projectSource(owner.source)}#${owner.export}`) : 'none'} frame=${JSON.stringify(p.name)} element=${el.id}`),
       },
       {
         label: 'Show in Inspector',
@@ -1333,14 +1444,8 @@ function openSelectionContextMenu({ worldPoint = null, screenX, screenY, returnF
     return;
   }
   if (a && p) {
-    const fb = frameBox(a, p);
-    const fx = worldPoint ? Math.max(0, Math.min(1, (worldPoint.x - fb.x) / fb.width)) : 0.5;
-    const fy = worldPoint ? Math.max(0, Math.min(1, (worldPoint.y - fb.y) / fb.height)) : 0.5;
     contextMenu.open([
-      {
-        label: 'Annotate frame',
-        action: () => annotationUI.annotateAt({ source: a.path, frame: p.name, fx, fy, element: null, returnFocus }),
-      },
+      ...comment,
       { label: 'Copy frame name', action: () => copyToClipboard(p.name) },
       { label: 'Copy source path', action: () => copyToClipboard(a.path) },
       {
@@ -1352,22 +1457,17 @@ function openSelectionContextMenu({ worldPoint = null, screenX, screenY, returnF
         },
       },
       { label: 'Fit frame', action: () => frame(frameBox(a, p), 24) },
-      {
-        label: 'Copy open annotations as agent prompt',
-        disabled: annotationUI.countOpenForFrame(a.path, p.name) === 0,
-        action: () => annotationUI.copyOpenForFrame(a.path, p.name),
-      },
     ], { x: screenX, y: screenY, returnFocus });
     return;
   }
   contextMenu.open([
+    ...comment,
     { label: 'Fit all', action: () => fit() },
     { label: 'Arrange current group', action: () => $('#arrange').click() },
   ], { x: screenX, y: screenY, returnFocus });
 }
 viewport.addEventListener('contextmenu', e => {
   if (reviewManifest || tokenManifest || !manifest?.directory) return;
-  if (e.target.closest('.annotation-point, .annotation-card')) return;
   e.preventDefault();
   viewport.focus({ preventScroll: true });
   const rect = viewport.getBoundingClientRect();
@@ -1384,15 +1484,6 @@ document.addEventListener('keydown', e => {
   if (reviewManifest || tokenManifest || !manifest?.directory || document.querySelector('dialog[open]')) return;
   e.preventDefault();
   const activeEl = document.activeElement;
-  const noteEl = activeEl?.closest?.('[data-annotation-id]');
-  if (noteEl) {
-    const row = annotationUI.getRow(noteEl.dataset.annotationId);
-    if (row) {
-      const r = noteEl.getBoundingClientRect();
-      annotationUI.openNoteMenu(row, { x: r.left + r.width / 2, y: r.top + r.height / 2, returnFocus: activeEl });
-      return;
-    }
-  }
   const box = selectedBox();
   const vr = viewport.getBoundingClientRect();
   const sx = box ? vr.left + view.x + (box.x + box.width / 2) * view.scale : vr.left + width / 2;
@@ -1421,6 +1512,7 @@ document.addEventListener("keydown", (e) => {
   e.preventDefault();
 });
 viewport.addEventListener("dblclick", event => {
+  if (commentUI.active()) return;
   const rect = viewport.getBoundingClientRect();
   const x = (event.clientX - rect.left - view.x) / view.scale;
   const y = (event.clientY - rect.top - view.y) / view.scale;
@@ -1568,7 +1660,7 @@ function applyTokenManifest(data) {
     if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
   }
   updateChrome();
-  annotationUI.render();
+  commentUI.render();
   renderNav();
   requestDraw();
 }
@@ -1589,10 +1681,11 @@ function applyReviewManifest(data) {
   if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
   const scrollTop = $('#review-page .review-scroll')?.scrollTop ?? 0;
   renderReview($('#review-page'), data.review);
+  indexReviewFrames();
   $('#review-page .review-scroll').scrollTop = scrollTop;
   if (!performance.getEntriesByName('adg-review-content', 'mark').length) performance.mark('adg-review-content');
   updateChrome();
-  annotationUI.render();
+  commentUI.render();
   renderNav();
   requestDraw();
 }
@@ -1803,6 +1896,14 @@ async function applyManifest(data, force = false) {
     pendingNavigation = null;
     action();
   }
+  if (commentNavigation && (data.scope === commentNavigation.scope || !data.loading)) {
+    const found = focusBoardComment(commentNavigation.thread);
+    if (found || !data.loading) {
+      commentNavigation.resolve(found);
+      commentNavigation = null;
+    }
+  }
+  commentUI.render();
   requestDraw();
 }
 function updateChoices() {
@@ -1925,16 +2026,51 @@ if (scopeRequest === 'review') {
   applyTheme();
   initSwitcher();
 }
+const reviewPage = $('#review-page');
+let reviewPress;
+reviewPage.addEventListener('pointermove', event => {
+  if (commentUI.active() && !reviewPress) commentUI.hover(event.clientX, event.clientY);
+});
+reviewPage.addEventListener('pointerleave', () => { reviewPress = null; commentUI.hover(); });
+reviewPage.addEventListener('pointerdown', event => {
+  if (event.button === 0 && commentUI.active()) reviewPress = { x: event.clientX, y: event.clientY, id: event.pointerId };
+});
+reviewPage.addEventListener('pointercancel', () => { reviewPress = null; });
+reviewPage.addEventListener('pointerup', async event => {
+  const press = reviewPress;
+  reviewPress = null;
+  if (!press || press.id !== event.pointerId || Math.hypot(event.clientX - press.x, event.clientY - press.y) > 4) return;
+  const image = currentReviewImage(event.clientX, event.clientY);
+  if (!image) return;
+  await Promise.all([primeReviewFrame(image).promise, commentCatalogLoaded ? undefined : refreshCommentCatalog()]);
+  if (commentUI.active() && image.isConnected) commentUI.click(event.clientX, event.clientY);
+});
+reviewPage.addEventListener('contextmenu', async event => {
+  const image = currentReviewImage(event.clientX, event.clientY);
+  if (!image) return;
+  event.preventDefault();
+  await Promise.all([primeReviewFrame(image).promise, commentCatalogLoaded ? undefined : refreshCommentCatalog()]);
+  const placement = targetOnReview(event.clientX, event.clientY);
+  if (placement) contextMenu.open([{ label: 'Comment', action: () => commentUI.place(placement) }], { x: event.clientX, y: event.clientY, returnFocus: reviewPage });
+});
+reviewPage.addEventListener('scroll', () => { commentUI.hover(); commentUI.reposition(); }, { capture: true, passive: true });
+reviewPage.addEventListener('load', () => commentUI.render(), true);
+reviewPage.addEventListener('toggle', () => commentUI.render(), true);
 await refresh();
 if(fixtureState) { try { await applyFixture(); } catch(e) { error(e.message); } }
 if ((reviewManifest || tokenManifest || manifest) && !isUnauthorized()) {
   const events = new EventSource(keyURL('events'));
+  const refreshComments = () => commentUI.refresh().catch(err => error(err.message));
+  events.addEventListener('comments', refreshComments);
+  events.addEventListener('open', refreshComments);
   window.addEventListener('adg-unauthorized', () => events.close(), { once: true });
   events.onmessage = (e) => {
     const data = JSON.parse(e.data);
     if (data.error) error(data.error);
-    else if (data.annotations) annotationUI.refresh().catch(err => error(err.message));
-    else void refresh();
+    else {
+      void refresh();
+      if (data.changed && commentCatalogLoaded) void refreshCommentCatalog();
+    }
   };
   events.onerror = async () => {
     try {
@@ -1943,6 +2079,13 @@ if ((reviewManifest || tokenManifest || manifest) && !isUnauthorized()) {
       error('Local server disconnected. Reconnecting…');
     } catch (e) { error(e.message); }
   };
+  void refreshComments().then(async () => {
+    const number = new URL(location.href).searchParams.get('comment');
+    if (number) {
+      await refreshCommentCatalog();
+      void commentUI.openLink(number);
+    }
+  });
 }
 
 document.addEventListener("keydown", (e) => {
@@ -1954,7 +2097,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
   if (document.querySelector(":popover-open")) return;
-  if (annotationUI.cancelMove()) return;
+  if (e.defaultPrevented) return;
   if (reviewManifest) return;
   if (tokenManifest) {
     if ($('#search').value) $('#search-clear').click();

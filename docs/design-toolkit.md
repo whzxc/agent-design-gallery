@@ -802,7 +802,7 @@ rendered. With an architecture base, `render --json` uses the same envelope and 
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "command": "render",
   "ok": true,
   "data": {

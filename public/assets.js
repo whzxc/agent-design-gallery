@@ -2,7 +2,7 @@ import { dataFetch } from './auth.js';
 import { collectViewerElements } from './frame-identity.js';
 import { blockForAsset, componentWrapWidth, layoutWorld, specimenPaintCrop } from "./layout.js";
 // Measure declared SVG content in an isolated, script-disabled document.
-export const metadataContext = () => `specimen-bleed-v2|${navigator.userAgent}|${devicePixelRatio}`;
+export const metadataContext = () => `specimen-bleed-v2-comments|${navigator.userAgent}|${devicePixelRatio}`;
 export function measuredMetadata(asset) {
   const {format,full,component,parts,background,imports,frameRanges}=asset;
   return {format,full,component,parts,background,imports,frameRanges};

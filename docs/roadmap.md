@@ -91,9 +91,8 @@ that loaded slowly.
   following the Mac's appearance, changes grouped by cause, moved and renamed frames recognized, and one compact
   inline review sheet per change. The
   [review handoff](design-toolkit.md#review-handoff) contract owns the details.
-- Comments, next round: threads pinned to elements, frames, sources and chapters, a comment tool, one panel and an
-  agent command line, modelled on [Doop](https://github.com/kgoedecke/doop)'s comments and replacing the unusable
-  annotations. The [comments](comments.md) contract owns the details.
+- Comments: threads pinned to elements, frames, sources and chapters, a comment tool, one panel and an
+  agent command line. The [comments](comments.md) contract owns the details.
 
 Afterwards, expose the stable commands as an MCP server through ARC's MCP hub.
 

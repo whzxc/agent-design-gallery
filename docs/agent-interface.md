@@ -1,6 +1,6 @@
 # Agent CLI interface
 
-This reference describes schema version 1 of the `adg --json` interface. See the
+This reference describes schema version 2 of the `adg --json` interface. See the
 [design toolkit](design-toolkit.md) for command arguments, source authoring and compare
 adapters.
 
@@ -18,7 +18,7 @@ are not machine interfaces.
 
 | Invocation | Stdout framing |
 | --- | --- |
-| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, `owner`, `impact`, `inspect`, every `root` and `service` action | One envelope, then exit |
+| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, `owner`, `impact`, `inspect`, every `comments`, `root` and `service` action | One envelope, then exit |
 | `serve --print-key`, `serve --rotate-key` | One envelope, then exit |
 | `--help`, `--version`, including command-specific forms | One envelope, then exit |
 | Foreground `open`, ordinary `serve` | NDJSON: one envelope per line until termination |
@@ -35,7 +35,7 @@ All six fields are present on every envelope:
 type NextAction = { argv: string[]; reason: string };
 type Diagnostic = { code: string; message: string; next: NextAction[] };
 type Envelope<T> = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   command: string;
   ok: boolean;
   data: T | null;
@@ -50,7 +50,7 @@ result or `null` when no result has been assembled. A failure need not undo comp
 file changes. Consumers must examine `ok` and process termination, even when data exists.
 
 Canonical command identities are `open`, `link`, `serve`, `init`, `migrate`, `check`,
-`render`, `compare`, `diff`, `owner`, `impact`, `inspect`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
+`render`, `compare`, `diff`, `owner`, `impact`, `inspect`, `comments list`, `comments read`, `comments reply`, `comments resolve`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
 `service uninstall`, `service status`, `service logs` and `service migrate`. Help and
 version use `help` and `version`. Parse failures use the recognized command/action when
 available, or the group identity `root`/`service` or global identity `adg`. An implicit
@@ -605,7 +605,7 @@ operands and invalid combinations return `USAGE_INVALID`.
 | --- | --- |
 | File | Exact file, directory or quoted POSIX glob, resolved from the discovered project root. In-project absolute paths are accepted; escaping paths/symlinks are rejected. Directory/glob queries expand current regular files and can succeed empty. Exact missing inputs use `OWNER_INPUT_NOT_FOUND`. Only a single existing file accepts `--line=<positive 1-based integer>` and/or `--symbol=<exact label>`; a line beyond EOF is invalid. Bindings come from [implementation.json](design-toolkit.md#implementation-mappings). |
 | Part | `--part=<source>#<Export>` returns active implementation bindings for that defining part; `--part=<source>` returns whole-source bindings. Evidence includes each resolved implementation file, selector and symbol/anchor region. Stale bindings remain in `mappingFindings` and are excluded from owners. |
-| Text | Unicode NFC and Unicode whitespace collapse/trim, preserving case, punctuation, accents and script. Default is exact equality; `--contains` adds literal substring matches. Whitespace-only input is invalid. `--locale=<BCP 47 tag>` canonicalizes and filters exact Frame annotations, excluding unspecified locales; there is no language fallback or translation. |
+| Text | Unicode NFC and Unicode whitespace collapse/trim, preserving case, punctuation, accents and script. Default is exact equality; `--contains` adds literal substring matches. Whitespace-only input is invalid. `--locale=<BCP 47 tag>` canonicalizes and filters exact Frame locale tags, excluding unspecified locales; there is no language fallback or translation. |
 | Color | Absolute CSS colors supported by packaged Chromium, including hex, RGB/HSL, named and modern color functions. Normalize to unpremultiplied 8-bit sRGB RGBA, clamp and round channels, canonical lowercase `#rrggbbaa`; alpha zero also zeros RGB. No compositing or tolerance. CSS-wide/system colors, `currentColor`, `var()` and context-dependent relative colors are `OWNER_COLOR_INVALID`; use `--token` for custom properties. |
 | Token | Exact case-sensitive custom-property name such as `--accent`. Invalid syntax is `USAGE_INVALID`; an undeclared valid name succeeds empty without building or launching a browser. Resolve declarations and aliases separately in light and merged light+dark maps, including noncolor tokens. |
 
@@ -1391,7 +1391,7 @@ replaced with safe help.
 
 ## Stability
 
-Schema version 1 freezes envelope fields/types/nullability, canonical command identities,
+Schema version 2 freezes envelope fields/types/nullability, canonical command identities,
 finite versus NDJSON framing, `ok`/`complete` semantics, exit assignments, documented
 command data fields/types/units and existing diagnostic-code meanings. Nullable fields
 stay present; a flag does not change an array to an object. The readiness boundary and
@@ -1406,7 +1406,7 @@ Next actions remain structured argv arrays governed by the construction rules ab
 
 While ADG is 0.x, a breaking schema change increments both `schemaVersion` and the
 package minor version. Consumers must reject unsupported schema versions. Schema version
-and package version are separate: compatible package releases retain `schemaVersion:1`.
+and package version are separate: compatible package releases retain `schemaVersion:2`.
 
 ## Inspect (M4.5)
 
@@ -1510,11 +1510,15 @@ A thread record contains `id`, `number`, `status` (`open` or `resolved`), `ancho
 `target` is the placement snapshot: `label`, and for elements `tag`, `text` and `owner` (`<source>#<Export>`).
 A message contains `id`, `author` (`{ kind: 'user' }` or `{ kind: 'agent', name }`), `text`, `at` and
 `editedAt`. `read` adds `state` (`attached`, `changed` or `gone`), `elementBox` and `commands.inspect`.
+Lists return `data: { threads }`. Reading or modifying one thread returns `data: { thread }`.
 
 The viewer server provides `GET api/comments`, `GET api/comments?id=<id>` and `POST api/comments` with an
 `action`: `create`, `reply`, `edit`, `delete`, `delete-thread`, `move`, `resolve` or `reopen`. Every change emits
 a `comments` event on the viewer's existing event stream. The hub proxies these routes with its existing
-authentication.
+authentication. The list response is `{ threads, revision }`. Detail and write responses are `{ thread }`,
+with `thread: null` after removing a thread. `create` and `move` accept `anchor`, `target` and an optional
+`revision`. Writes identify an existing thread with `id`. `edit` and `delete` identify a user message with
+`messageId`, and `create`, `reply` and `edit` supply the new text as `message`.
 
 ### Review handoff cache and sheet
 

@@ -2,8 +2,14 @@ import { CliError } from './cli-output.mjs';
 import { readViewRoute, viewURL, viewerBase } from '../public/view-route.js';
 
 export function previewTarget(options) {
-  const { asset, frame, group, layer, tokens, base, mode = 'query' } = options;
+  const { asset, frame, group, layer, tokens, base, comment, mode = 'query' } = options;
   if (!['path', 'query'].includes(mode)) throw new CliError('USAGE_INVALID', 'Choose --mode=path or --mode=query.');
+  if (comment !== undefined) {
+    if (!/^#?[1-9]\d*$/.test(comment) || !Number.isSafeInteger(Number(comment.replace(/^#/, ''))) ||
+      [asset, frame, group, layer, tokens, base, options.mode].some(value => value !== undefined))
+      throw new CliError('USAGE_INVALID', 'Use --comment=<number> by itself.');
+    return { comment: comment.replace(/^#/, '') };
+  }
   const targets = [asset, group, layer, tokens].filter(value => value !== undefined && value !== false);
   if (targets.length > 1 || (frame !== undefined && !asset) || targets.some(value => value === '') || frame === '')
     throw new CliError('USAGE_INVALID', 'Choose one of --asset, --group, --layer, or --tokens. --frame needs --asset.');
@@ -24,6 +30,12 @@ export function previewURL(input, target) {
   const root = viewerBase(pathname);
   if (pathname !== root && !pathname.startsWith(`${root}view/`) && pathname !== `${root}index.html`)
     throw new CliError('USAGE_INVALID', 'Use a direct viewer, hub project, or live instance URL.');
+  if (target.comment) {
+    base.pathname = root;
+    base.search = base.hash = '';
+    base.searchParams.set('comment', target.comment);
+    return base;
+  }
   const previous = target.asset || target.group || target.layer || target.tokens ? null : readViewRoute(base);
   const [kind, ...name] = (previous?.scope ?? '').split(':');
   const key = name.join(':');

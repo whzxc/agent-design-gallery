@@ -1,5 +1,6 @@
 // Adapted from ARC's MIT-licensed tooling/design-server.mjs.
-import { annotations, annotationFile, readAnnotationContext } from './annotations.mjs';
+import { changeComment, commentFile, commentRevision, listComments, readComment } from './comments.mjs';
+import { previewTarget, previewURL } from './link.mjs';
 import { randomUUID, createHash } from 'node:crypto';
 import { directLocal, viewerFile, shell, json } from './http.mjs';
 import { createServer } from "node:http";
@@ -41,8 +42,8 @@ export async function startServer({
   directory,
   port = 0,
   stateDirectory = defaultState,
-  annotationStateDirectory = stateDirectory,
-  reviewStateDirectory = annotationStateDirectory,
+  commentStateDirectory = stateDirectory,
+  reviewStateDirectory = commentStateDirectory,
   fixtures = null,
   readOnly = false,
   instanceId = randomUUID(),
@@ -87,29 +88,33 @@ export async function startServer({
       });
     return writes;
   };
-  const emit = (data) => {
+  const emit = (data, event) => {
+    const type = event ? `event: ${event}\n` : '';
     for (const client of clients)
-      client.write(`data: ${JSON.stringify(data)}\n\n`);
+      client.write(`${type}data: ${JSON.stringify(data)}\n\n`);
   };
-  let annotationStamp = null;
-  async function readAnnotationStamp() {
-    if (!activeProject) return null;
+  let commentsFile, commentStamp, checkingComments = false;
+  async function readCommentStamp(file) {
     try {
-      const info = await stat(annotationFile(activeProject.root, annotationStateDirectory));
-      return `${info.mtimeMs}-${info.size}`;
+      const info = await stat(file, { bigint: true });
+      return `${info.ino}-${info.mtimeNs}-${info.ctimeNs}`;
     } catch (e) {
       return e.code === 'ENOENT' ? 'missing' : null;
     }
   }
-  const annotationTimer = setInterval(async () => {
-    if (closing || !clients.size || !activeProject) return;
-    const next = await readAnnotationStamp();
-    if (next && next !== annotationStamp) {
-      annotationStamp = next;
-      emit({ annotations: true });
-    }
-  }, 800);
-  annotationTimer.unref?.();
+  const commentTimer = setInterval(async () => {
+    if (closing || !clients.size || !commentsFile || checkingComments) return;
+    checkingComments = true;
+    const file = commentsFile;
+    try {
+      const next = await readCommentStamp(file);
+      if (file === commentsFile && next && next !== commentStamp) {
+        commentStamp = next;
+        emit({ comments: true }, 'comments');
+      }
+    } finally { checkingComments = false; }
+  }, 400);
+  commentTimer.unref?.();
   const diagnostic = (error, name = null, fallback = 'SOURCE_BUILD_FAILED') => {
     if (error.name === 'AbortError') return;
     const at = error.location ?? error.errors?.[0]?.location ?? error.cause?.errors?.[0]?.location;
@@ -254,7 +259,8 @@ export async function startServer({
     watcher = nextWatcher;
     activeProject=project;watchArch(project,next);
     root = next;
-    annotationStamp = await readAnnotationStamp();
+    commentsFile = await commentFile(project.root, commentStateDirectory);
+    commentStamp = await readCommentStamp(commentsFile);
     tokenSource = hasTokens ? tokenSourcePath(next, project) : null;
     codePaths=nextCode;
     sources = nextSources;
@@ -568,29 +574,25 @@ export async function startServer({
       const file = ['GET', 'HEAD'].includes(request.method) && viewerFile(url.pathname);
       if (file) return await shell(request, response, file, request.headers['x-adg-viewer-base']);
       if (!directLocal(request)) return json(response, 401, { error: 'Unauthorized' });
-      if (url.pathname === '/api/annotations') {
+      if (url.pathname === '/api/comments') {
         if (request.method !== 'GET' && request.method !== 'POST') return json(response,405,{error:'Use GET or POST.'});
         if (request.method === 'POST' && request.headers.origin && ![`http://${host}`,`https://${host}`].includes(request.headers.origin)) return json(response,403,{error:'Cross-origin request refused.'});
-        const config = await loadConfig(root);
+        if (!activeProject) return json(response, 404, { error: 'No project is open.' });
+        const { root: projectRoot } = activeProject;
+        const base = request.headers['x-adg-viewer-base'] ?? '/';
+        const origin = request.headers['x-adg-viewer-origin'] ?? `http://${host}`;
+        const viewerURL = previewURL(new URL(base, origin).href, previewTarget({})).href;
         if (request.method === 'GET') {
-          if (url.searchParams.has('id')) {
-            const id = url.searchParams.get('id');
-            const result = url.searchParams.get('context') === '1'
-              ? await readAnnotationContext(config, annotationStateDirectory, id)
-              : await annotations(config.root, annotationStateDirectory, 'read', { id });
-            return json(response, 200, result);
-          }
-          const status = url.searchParams.get('status') ?? 'all';
-          return json(response, 200, await annotations(config.root, annotationStateDirectory, 'list', { status }));
+          if (url.searchParams.has('id'))
+            return json(response, 200, await readComment(projectRoot, commentStateDirectory, url.searchParams.get('id'), viewerURL));
+          const [result, revision] = await Promise.all([
+            listComments(projectRoot, commentStateDirectory, { viewerURL, status: url.searchParams.get('status') ?? 'all' }),
+            commentRevision(projectRoot),
+          ]);
+          return json(response, 200, { ...result, revision });
         }
-        const input = await body(request);
-        const result = await annotations(config.root, annotationStateDirectory, input.action, {
-          ...input,
-          ...(input.action === 'reply' && !input.author ? { author: 'user' } : {}),
-        });
-        annotationStamp = await readAnnotationStamp();
-        emit({ annotations: true });
-        return json(response, 200, result);
+        const input = await body(request, 256 * 1024);
+        return json(response, 200, await changeComment(projectRoot, commentStateDirectory, input, { viewerURL }));
       }
       if(url.pathname==='/api/cache-stats'&&request.method==='GET')return json(response,200,{process:process.memoryUsage(),builds:buildStore?.stats(),viewer:viewerCache?.stats()});
       if (url.pathname === '/api/health' && request.method === 'GET') return json(response, 200, { id: instanceId, capabilities: { keyAuth: 1 } });
@@ -654,7 +656,6 @@ export async function startServer({
         return;
       }
       if (url.pathname === "/events") {
-        annotationStamp ??= await readAnnotationStamp();
         response.writeHead(200, {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-store",
@@ -717,15 +718,15 @@ export async function startServer({
       response.end(request.method === "HEAD" ? undefined : content);
     } catch (error) {
       if (response.destroyed) return;
-      response.writeHead(error.name==='AbortError'?409:400, { "Content-Type": "application/json" });
-      response.end(JSON.stringify({ error: error.message }));
+      const status = { COMMENT_NOT_FOUND: 404, COMMENT_FORBIDDEN: 403 }[error.code] ?? (error.name === 'AbortError' ? 409 : 400);
+      return json(response, status, { error: error.message });
     }
   });
   let closePromise;
   const close = () => closePromise ??= (async () => {
     closing = true;
     clearTimeout(refreshTimer);
-    clearInterval(annotationTimer);
+    clearInterval(commentTimer);
     let primary;
     for (const step of [
       async () => { watcher?.close(); },

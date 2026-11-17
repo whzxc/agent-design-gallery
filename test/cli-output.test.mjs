@@ -22,7 +22,7 @@ function envelope(result, command, ok, exitCode) {
   assert.equal(result.stdout.trimEnd().split('\n').length, 1);
   const value = JSON.parse(result.stdout);
   assert.deepEqual(Object.keys(value).sort(), ['command', 'data', 'error', 'ok', 'schemaVersion', 'warnings']);
-  assert.equal(value.schemaVersion, 1);
+  assert.equal(value.schemaVersion, 2);
   assert.equal(value.command, command);
   assert.equal(value.ok, ok);
   assert.ok(Array.isArray(value.warnings));
@@ -163,7 +163,7 @@ function parseAction(action) {
 }
 
 test('all catalog codes have stable exits, exact recovery argv and parser-valid ADG actions', () => {
-  assert.equal(Object.keys(errorCatalog).length, 55);
+  assert.equal(Object.keys(errorCatalog).length, 57);
   for (const removed of ['CONFIG_LOAD_FAILED', 'GIT_REPOSITORY_REQUIRED', 'GIT_BASE_NOT_FOUND', 'GIT_READ_FAILED']) assert.equal(Object.hasOwn(errorCatalog, removed), false);
   for (const code of Object.keys(errorCatalog)) {
     assert.match(code, /^[A-Z][A-Z_]+$/);
@@ -232,7 +232,7 @@ test('secrets and terminal control codes are sanitized in diagnostics, warnings,
 
 test('finite subprocess smoke wires JSON serialization and a successful process exit', async () => {
   const { stdout, stderr } = await promisify(execFile)(process.execPath, [new URL('../src/cli.mjs', import.meta.url).pathname, '--json', '--version'], { timeout: 3000 });
-  assert.deepEqual(JSON.parse(stdout), { schemaVersion: 1, command: 'version', ok: true, data: { version }, warnings: [], error: null });
+  assert.deepEqual(JSON.parse(stdout), { schemaVersion: 2, command: 'version', ok: true, data: { version }, warnings: [], error: null });
   assert.equal(stderr, '');
   assert.equal(stdout.trimEnd().split('\n').length, 1);
 });

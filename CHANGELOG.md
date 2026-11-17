@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.15.0
+
+- **Breaking:** Remove `adg annotations`, its API and viewer. Old annotation data is retired. The JSON command envelope is now schema version 2.
+- Add pinned Comments on boards and review images, live threads and a CLI for agents to read, reply and resolve.
 
 - Simplify review sheets to the project title and tinted Added, Changed and Removed sections. Show changed pairs with an arrow and inherited representatives with a `+N` label.
 
@@ -22,7 +25,7 @@
 - Group every Tokens section by source headings and draw proportionally scaled horizontal size bars.
 
 - Retire `adg publish`, its command help, JSON diagnostics and `publish` configuration. Remove the obsolete publishing tests and documentation.
-- Present design sources as chapter boards with a visual Tokens board, responsive specimen spans and deterministic layer columns. Preserve source/frame selection, annotations and Git-based review handoff.
+- Present design sources as chapter boards with a visual Tokens board, responsive specimen spans and deterministic layer columns. Preserve source/frame selection and Git-based review handoff.
 
 ## 0.14.1
 

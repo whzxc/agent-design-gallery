@@ -6,12 +6,12 @@ import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 import { CliError, createOutput, withHumanOutput } from './cli-output.mjs';
 
-export const commands = ['annotations', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect'];
+export const commands = ['comments', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect'];
 const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
 const usage = {
-  annotations: '[list [--status=open|addressed|resolved|all] | read <id> | reply <id> --message=<text> | address <id> --message=<text> | resolve <id> | reopen <id>] [--state-dir=<path>] [--json]',
+  comments: '[[list] [--status=open|resolved|all] [--source=<path>] [--frame=<name>] | read <n> | reply <n> --author=<name> --message=<text> | resolve <n> --author=<name> [--message=<text>]] [--state-dir=<path>] [--json]',
   open: `[directory] [--port=<n>] [--no-open] [--state-dir=<path>] ${targetOptions}`,
-  link: `<viewer-url> ${targetOptions}`,
+  link: `<viewer-url> [--comment=<n> | ${targetOptions}]`,
   serve: '[--port=4310] [--state-dir=<path>] [--print-key | --rotate-key]',
   service: 'install|uninstall|status|logs|migrate [--state-dir=<path>] [--port=4310]',
   root: 'add <dir> [--depth=2] | remove <dir> | list | scan [dir] [--state-dir=<path>]',
@@ -23,17 +23,17 @@ const usage = {
   impact: '(--source=<path>... [--part=<name>] | --token=<name>... | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --base=<rev> [--head=<rev>]) [--theme=both|light|dark] [--explain] [--state-dir=<path>] [--json]',
 };
 const details = {
-  annotations: 'List, read, reply to, address, resolve or reopen project annotations stored outside the repository. Run from the project directory.',
+  comments: 'List open project comment threads by default, or read, reply to or resolve a thread by number, #number or ID. Run from the project directory.',
   migrate: 'Rename a project configuration and runtime imports, update editor paths and ignore entries, remove old generated files and regenerate declarations. Refuses mixed config names; safe to run again.',
   serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes. --print-key prints the key and exits; --rotate-key rotates the running hub key and exits. Forwarded data requests require a header or query key; direct-local requests are exempt.',
   service: 'Manage the macOS resident hub LaunchAgent. install starts it with RunAtLoad and KeepAlive, recording absolute Node/CLI paths. --port applies only to install. status prints JSON; logs prints the last 200 lines per log. Uninstall retains state and logs. migrate moves old hub state and replaces its LaunchAgent, then lists other agents referencing the old state path. --state-dir selects the migration destination. Other platforms are unsupported.',
   root: 'Manage registered scan roots. add scans immediately. scan rescans registered roots only; depth is 0 through 3. Hidden directories, node_modules and Git worktrees are skipped.',
   open: 'Browse TSX, Mermaid architecture sources and legacy SVG designs on an independent random-port server.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
-  link: 'Print a clean ADG preview URL. --base=<rev> on a clean viewer URL opens the Git frame review page. Query mode isolates a target. Path mode locates it in the design hierarchy.',
+  link: 'Print a clean ADG preview URL. --comment=<n> opens a comment thread. --base=<rev> opens the Git frame review page. Query mode isolates a target. Path mode locates it in the design hierarchy.',
   check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files. --impacted --base=<rev> evaluates scheduled current rows; proven rows remain not_checked with partial coverage.', render: 'Render selected frames as PNG. Defaults to both themes at 2×. --theme=system resolves the current macOS appearance, otherwise light, and reports the resolved themes. --impacted --base=<rev> captures scheduled plain current frames and reports deletions, with operation-local proofs for skipped rows. Ordinary architecture --base produces proposal overlays; --impacted never does. --json prints completed captures and impact coverage, including zero-job runs.',
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
   diff: 'Compare the Git base and working-tree source/frame union. Existing frames require exact pixels and CSS/device size; added Frame parent declarations enable structural part evidence under diff.thresholds. Defaults to both themes at 2× and <configured output>/diff, overwriting previous diff artifacts and writing a self-contained index.html review page, before/after/difference PNGs and report.json. --impacted also writes review-sheet.png with Added, Changed and Removed sections and up to 12 image cells at 2×. The sheet uses the explicit single theme or system appearance. --theme=system resolves the current macOS appearance, otherwise light. --impacted captures only scheduled rows (both themes when either theme of a frame is impacted); unqualified both-theme runs count fresh proofs toward full coverage. Required parents/support always capture. A structural batch requires all existing frames in both themes; source/frame/theme restrictions report partial coverage. Exit 0 identical/structural, 1 changed, 2 incomplete.',
-  owner: 'Find owning design sources, parts, frames and tokens from an implementation path, rendered text, absolute CSS color or token name. Paths resolve from the project root; quote globs. --part reverses the lookup from a design source or source#Export to implementation bindings with resolved files and symbol regions. --line returns the containing export/anchor region, including unmapped exports; non-exported helpers belong to the preceding export. Text is NFC/whitespace normalized and exact unless --contains; --locale filters exact Frame locale annotations without translation. Colors use 8-bit sRGB RGBA equality. Owner evidence is scoped to the query: mappings for files, text runs for text, computed paint for colors and authored references for tokens. Text authoredIn lists literal-search copy candidates; escaped or concatenated strings may be missed. Color evidence may include compact same-element/property references. Defaults to both themes. Broad color/token JSON can be around 100 KB; read owners first and narrow with --theme. Empty, stale and ambiguous results exit 0; invalid/incomplete requests exit 2.',
+  owner: 'Find owning design sources, parts, frames and tokens from an implementation path, rendered text, absolute CSS color or token name. Paths resolve from the project root; quote globs. --part reverses the lookup from a design source or source#Export to implementation bindings with resolved files and symbol regions. --line returns the containing export/anchor region, including unmapped exports; non-exported helpers belong to the preceding export. Text is NFC/whitespace normalized and exact unless --contains; --locale filters exact Frame locale tags without translation. Colors use 8-bit sRGB RGBA equality. Owner evidence is scoped to the query: mappings for files, text runs for text, computed paint for colors and authored references for tokens. Text authoredIn lists literal-search copy candidates; escaped or concatenated strings may be missed. Color evidence may include compact same-element/property references. Defaults to both themes. Broad color/token JSON can be around 100 KB; read owners first and narrow with --theme. Empty, stale and ambiguous results exit 0; invalid/incomplete requests exit 2.',
   inspect: 'Read TSX frame structure, text, CSS-pixel boxes, computed styles and token-reference evidence. Without a unique frame, return a catalog. Default: both themes, all fields, full depth. Field groups: structure,layout,typography,color,text. Shared styles, semantic wrappers, repeated subtrees and a sparse dark delta keep the default compact. --expand reconstructs ordinary element records for both themes. No consumer application or viewer is started. Exit 0 completed observation, 2 invalid/incomplete.',
   impact: 'Query direct/transitive candidates from sources, named parts, tokens or implementation mappings, or compare exact Git endpoints. --base includes staged, unstaged and untracked working files; --head selects another exact commit. Hypothetical selectors cannot prove skips; token candidates assume unchanged Tailwind classification. Git mode freshly executes both endpoint source sets and compares eligible materialized inputs. Closure or occurrence absence never proves safety. Groups merge equal theme and same-source frame records; noncandidate proofs remain counts. --explain samples witnesses/digests without splitting groups. No browser launch. Render/check/diff --impacted compute their own operation-local proofs. Exit 0 completed, including empty/stale mappings; 2 invalid/incomplete.',
 };
@@ -53,7 +53,7 @@ export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' } };
   const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
-const strings = { annotations: ['status', 'message', 'state-dir'], open: ['port', 'state-dir', ...locators], link: locators, serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'part', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
+  const strings = { comments: ['status', 'source', 'frame', 'author', 'message', 'state-dir'], open: ['port', 'state-dir', ...locators], link: [...locators, 'comment'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'part', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
@@ -126,14 +126,17 @@ const strings = { annotations: ['status', 'message', 'state-dir'], open: ['port'
       const [action, directory, ...extra] = positionals;
       if (extra.length || !rootActions.includes(action) || (['add', 'remove'].includes(action) && !directory) || (action === 'list' && directory) || (values.depth !== undefined && action !== 'add')) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg root --help');
     }
-    if (command === 'annotations') {
+    if (command === 'comments') {
       const [action = 'list', id, ...extra] = positionals;
-      if (!['list', 'read', 'reply', 'address', 'resolve', 'reopen'].includes(action) || extra.length ||
-          (action === 'list' ? id !== undefined || values.message !== undefined : !id || values.status !== undefined) ||
-          (values.status !== undefined && !['open', 'addressed', 'resolved', 'all'].includes(values.status)) ||
-          (['reply', 'address'].includes(action) ? typeof values.message !== 'string' || !values.message.trim() : values.message !== undefined) ||
-          (values['state-dir'] !== undefined && !values['state-dir'].trim())) {
-        throw new CliError('USAGE_INVALID', 'Use annotations list, read <id>, reply <id> --message=<text>, address <id> --message=<text>, resolve <id> or reopen <id>; run adg annotations --help.');
+      const write = action === 'reply' || action === 'resolve';
+      const hasFilter = ['status', 'source', 'frame'].some(key => values[key] !== undefined);
+      if (!commentActions.includes(action) || extra.length ||
+          (action === 'list' ? id !== undefined : !id?.trim() || hasFilter) ||
+          (write ? values.author === undefined : values.author !== undefined || values.message !== undefined) ||
+          (action === 'reply' && values.message === undefined) ||
+          strings.comments.some(key => values[key] !== undefined && !values[key].trim()) ||
+          (values.status !== undefined && !['open', 'resolved', 'all'].includes(values.status))) {
+        throw new CliError('USAGE_INVALID', 'Choose a comment action and its options. Run adg comments --help.');
       }
     }
     if (command === 'serve' && positionals.length) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg serve --help');
@@ -145,10 +148,12 @@ const strings = { annotations: ['status', 'message', 'state-dir'], open: ['port'
 }
 const rootActions = ['add', 'remove', 'list', 'scan'];
 const serviceActions = ['install', 'uninstall', 'status', 'logs', 'migrate'];
+const commentActions = ['list', 'read', 'reply', 'resolve'];
 
-export function commandIdentity({ command, positionals = [] }) {
-  const actions = command === 'root' ? rootActions : command === 'service' ? serviceActions : [];
-  return actions.includes(positionals[0]) ? `${command} ${positionals[0]}` : command;
+export function commandIdentity({ command, positionals = [], values }) {
+  const actions = command === 'root' ? rootActions : command === 'service' ? serviceActions : command === 'comments' ? commentActions : [];
+  const action = positionals[0] ?? (command === 'comments' && !values?.help ? 'list' : undefined);
+  return actions.includes(action) ? `${command} ${action}` : command;
 }
 
 export function jsonRequested(args) {
@@ -195,13 +200,15 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
     return {data:values['print-key'] ? {action:'print-key',stateDirectory,key} : {action:'rotate-key',stateDirectory,rotated:true}};
   }
   const config = await loadConfig(cwd);
-  if (command === 'annotations') {
+  if (command === 'comments') {
     const [action = 'list', id] = positionals;
     const stateDir = values['state-dir'] ? path.resolve(cwd, values['state-dir']) : undefined;
-    const mod = await import('./annotations.mjs');
-    const data = action === 'read'
-      ? await mod.readAnnotationContext(config, stateDir, id)
-      : await mod.annotations(config.root, stateDir, action, { id, status: values.status ?? 'open', message: values.message, author: 'agent' });
+    const { changeComment, listComments, readCommentContext } = await import('./comments.mjs');
+    const data = action === 'list'
+      ? await listComments(config.root, stateDir, { status: values.status ?? 'open', source: values.source, frame: values.frame })
+      : action === 'read'
+        ? await readCommentContext(config, stateDir, id)
+        : await changeComment(config.root, stateDir, { action, id, message: values.message }, { author: values.author });
     if (!values.json) output.log(JSON.stringify(data, null, 2));
     return { data };
   }
