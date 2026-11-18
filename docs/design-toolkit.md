@@ -295,21 +295,19 @@ Consumers using the feature can set `requires: '>=0.9.0'` in their ADG config.
 
 ## Workflow
 
-1. Start from the user's request and the fixture data the frame will be compared against.
-2. Write or update the source, reusing components.
-3. Run `check` and fix every problem.
-4. Run `render` and review both theme renders against the layout review.
-5. Show the renders to the user and iterate until they approve them.
-6. Implement with the project's shared components and runtime tokens.
-7. Run `compare` for the frame's fixture and review the overlay. Fix structural differences and systematic offsets. Accept small isolated offsets when the implementation reads as well as the design.
+1. Implement everyday layout and behavior changes with shared components and runtime tokens, then sync the owning design source and its binding in the same task.
+2. Run `adg check --read-only --json` for the affected scope and resolve applicable findings.
+3. Generate the [standalone review](#review-handoff) against the task's starting commit after the changes are ready.
 
-A frame uses the language and text of its fixture, including dates under the fixture clock and time zone. A drafter may propose forms. Approving the renders approves those forms and starts their implementation. A frame stays proposed until it is implemented and bound. Delete a frame the implementation does not reach instead of recording it as drift. After the user accepts an implementation change, update the owning source in the same task.
+Use `adg compare` when requested, required by project acceptance, or needed to investigate a specific mismatch reproducible by a fixture. Read the text and position findings first. Inspect a relevant preview, screenshot or overlay when the user requests visual acceptance or an appearance question requires it. Capture the relevant frame and theme when an image is needed.
 
-A new project starts with a visual direction before any source: two or three specimen frames that differ in palette, density and chrome, one chosen by the user. Then tokens, then the component sources, then one pilot surface taken through implementation and `compare` before the remaining surfaces.
+A frame uses its fixture's language and text, including dates under the fixture clock and time zone. For a new visual direction or redesign, use the standalone review to get approval of proposed frames before implementation. Include the states and themes needed for that decision. Bind approved frames when they are implemented and retire proposals that close without implementation.
+
+A new project starts with two or three direction specimens that differ in palette, density and chrome. The user picks one before the tokens, components and pilot surface are developed.
 
 ## Layout review
 
-Review the composition of every frame before showing it. A frame that copies the current implementation also copies its layout problems.
+Apply these composition rules when authoring a frame or evaluating a layout decision.
 
 - Group by meaning. Items that serve one decision sit together, and the gap between groups is clearly larger than the gap inside a group.
 - End a decision with one action row. Attach scope and consequence text to the title or content it qualifies.
@@ -567,7 +565,7 @@ adg review --base=<rev> --json
 adg review --base=<rev> --theme=dark --out=output/design/review.html --viewer-url=https://gallery.example/p/project/
 ```
 
-Use the commit where the task started as `--base`. Share the HTML file at `data.path` in the change report. By default it is `<configured output>/review.html`, and the one included theme follows the macOS system preference or uses light on other platforms. A relative `--out` resolves from the project root. The report describes the working tree at generation time. Run the command again when inputs change.
+Use the commit where the task started as `--base`. Provide only the direct link to the generated HTML at `data.path` in the design handoff. By default the file is `<configured output>/review.html` and includes the macOS system theme or light on other platforms. A relative `--out` resolves from the project root. Regenerate the report when its design inputs change.
 
 The report opens directly in a browser and needs no running viewer. Its full-width cards are organized into Added, Direct changes, Inherited changes, Removed and Moved. Added frames display After. Changed frames display Before, After and Difference in aligned panes. Before and After show the compiled frames on a solid preview well. ADG's injected capture backdrop is transparent so authored surfaces and controls keep their own paint. Previews mount near the viewport, and collapsed group members mount after expansion. Click **Enlarge** or a preview to inspect the comparison or one pane, fit it or view it at 100%. Click an available source breadcrumb and frame title to open that frame in the viewer. The link comes from the registered hub or an explicit `--viewer-url`. Use the board for comments.
 

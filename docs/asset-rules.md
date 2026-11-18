@@ -168,7 +168,8 @@ stale imports as soon as they appear. Do not defer retirement to cleanup rounds.
 
 Starter examples demonstrate authoring: replace or remove them when introducing real assets.
 
-Tokens, components, modules and surfaces share the review rule: run `adg check`, render the changed frames in both themes and obtain reviewer approval. Later target changes land in the library first. The consumer's governance document defines who proposes, approves and implements each batch, how visual acceptance runs, and how status is recorded. Work on one surface or one cohesive library family at a time.
+Changes to tokens, components, modules and surfaces follow the [design workflow](design-toolkit.md#workflow).
+The consumer's governance document records owners and project-specific acceptance. Work on one surface or one cohesive library family at a time.
 
 ADG checks source structure, rendered frames, import direction and implementation bindings. Reviewers assess placement, frame admission, fidelity and image budgets, and delete assets without a binding.
 
@@ -332,11 +333,10 @@ directory. Each has one `default` frame. An optional same-basename `.md` records
 English review note, `owners` mapping to existing project files/globs and a status.
 Keep explanation in that note and preserve the diagram as the structural source.
 
-Use the toolkit's phase/mark vocabulary and project tokens; sources do not paint.
-Run `adg check` and review rendered PNGs in both themes when changing an architecture
-asset. Include the source and both theme renders in the review handoff. Changes to
-owning code paths should prompt review of the mapped diagrams; ADG checks that owners
-match files and leaves semantic freshness to reviewers.
+Use the toolkit's phase/mark vocabulary and project tokens. Architecture assets follow
+the [design workflow](design-toolkit.md#workflow) and its HTML handoff. Check mapped
+diagrams against changes to their owning code paths. ADG checks that owners match files
+and leaves semantic freshness to reviewers.
 
 Architecture is a separate `arch` gallery layer with no source imports. Internal
 layer conventions such as a consumer's L0 system map, L1 components and L2 mechanisms

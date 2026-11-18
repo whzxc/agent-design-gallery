@@ -2,13 +2,12 @@
 
 - Keep a standalone ephemeral viewer (`adg open`) and a resident multi-project hub (`adg serve`) behind one global `adg` CLI. The ephemeral viewer never depends on the hub. Projects own their TSX design sources, tokens, artwork, optional `gallery.json`, optional `adg.config.mjs`, `.js` or `.ts`, and Git history; they do not depend on the package.
 - Preserve the ARC MIT attribution. Do not depend on ARC runtime code or a personal checkout at runtime.
-- For design asset changes, generate a standalone HTML with `adg review --base=<start> --json` and link the reported file, as the [review handoff workflow](docs/design-toolkit.md#review-handoff) defines.
+- For design asset changes, deliver the standalone HTML link from the [review handoff workflow](docs/design-toolkit.md#review-handoff).
 - Design assets follow [the asset rules](docs/asset-rules.md), which take precedence over conflicting local guidance.
   Use [the design toolkit](docs/design-toolkit.md) for source format and [ADG design](docs/design.md) for current ownership,
-  mappings and approval routing. Each task is one end-to-end Codex round: implement, self-check, commit and push, then show the user the running
-  result. The user judges that result; a deviation becomes the next round. Layout and behavior changes are implemented
-  directly and the design sources are synced after the user accepts the result. Only a new visual direction is drawn
-  in the design sources first. The push gate is `npm test` plus the tests of affected fixtures. Do not dispatch ARC
+  mappings and approval routing. Complete each task in one end-to-end Codex round. Implement everyday layout and behavior changes first,
+  sync the design sources in the same task, self-check, commit and push. New directions and redesigns use the toolkit's proposal workflow.
+  The push gate is `npm test` plus the tests of affected fixtures. Do not dispatch ARC
   Agents or answer their permission requests. Built-in Codex subagents are allowed.
 - The viewer presents the design library as [boards](docs/boards.md), which own the board contract. [Comments](docs/comments.md) own comment threads.
 - Keep camera input independent of page component rendering.
