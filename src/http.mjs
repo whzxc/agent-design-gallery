@@ -13,7 +13,6 @@ export const viewerFiles = {
   '/arrangement.js': 'arrangement.js', '/arrangement-worker.js': 'arrangement-worker.js',
   '/relationships.js': 'relationships.js', '/selection.js': 'selection.js', '/style.css': 'style.css', '/tokens.css': 'tokens.css',
   '/token-catalog.js': 'token-catalog.js',
-  '/review.js': 'review.js', '/review-groups.js': 'review-groups.js',
   '/comments.js': 'comments.js', '/comments.css': 'comments.css', '/comment-anchors.js': 'comment-anchors.js', '/context-menu.js': 'context-menu.js',
   '/view-route.js': 'view-route.js',
 };

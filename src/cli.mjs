@@ -6,7 +6,7 @@ import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 import { CliError, createOutput, withHumanOutput } from './cli-output.mjs';
 
-export const commands = ['comments', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect'];
+export const commands = ['comments', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'review', 'owner', 'impact', 'inspect'];
 const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
 const usage = {
   comments: '[[list] [--status=open|resolved|all] [--source=<path>] [--frame=<name>] | read <n> | reply <n> --author=<name> --message=<text> | resolve <n> --author=<name> [--message=<text>]] [--state-dir=<path>] [--json]',
@@ -18,6 +18,7 @@ const usage = {
   migrate: '[project]', init: '', check: '[source...] [--read-only] [--impacted --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--state-dir=<path>] [--explain]]', render: '[source...] [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--base=<rev>] [--impacted [--state-dir=<path>] [--explain]]',
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
   diff: '[source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--impacted [--state-dir=<path>] [--explain]]',
+  review: '--base=<rev> [--theme=system|light|dark] [--out=<file.html>] [--viewer-url=<project-url>] [--exact] [--json]',
   owner: '(--file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --text=<text> [--contains] [--locale=<tag>] | --color=<css> | --token=<name> | --part=<source>[#<Export>]) [--theme=both|light|dark] [--state-dir=<path>] [--json]',
   inspect: '[source] [--frame=<name>] [--theme=both|light|dark] [--part=<source>#<Export> | --element=<id> | --text=<text> [--contains]] [--depth=<n|all>] [--fields=<groups>] [--wrappers=semantic|all] [--expand] [--state-dir=<path>] [--json]',
   impact: '(--source=<path>... [--part=<name>] | --token=<name>... | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --base=<rev> [--head=<rev>]) [--theme=both|light|dark] [--explain] [--state-dir=<path>] [--json]',
@@ -29,10 +30,11 @@ const details = {
   service: 'Manage the macOS resident hub LaunchAgent. install creates or updates it with RunAtLoad and KeepAlive, recording absolute Node/CLI paths. --port and --public-origin apply only to install. Set --public-origin to an HTTP(S) origin for public comment links. Reinstalling keeps the port, state directory and public origin unless specified. status prints JSON; logs prints the last 200 lines per log. Uninstall retains state and logs. migrate moves old hub state and replaces its LaunchAgent, then lists other agents referencing the old state path. --state-dir selects the migration destination. Other platforms are unsupported.',
   root: 'Manage registered scan roots. add scans immediately. scan rescans registered roots only; depth is 0 through 3. Hidden directories, node_modules and Git worktrees are skipped.',
   open: 'Browse TSX, Mermaid architecture sources and legacy SVG designs on an independent random-port server.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
-  link: 'Print a clean ADG preview URL. --comment=<n> opens a comment thread. --base=<rev> opens the Git frame review page. Query mode isolates a target. Path mode locates it in the design hierarchy.',
+  link: 'Print a clean ADG preview URL. --comment=<n> opens a comment thread. --base=<rev> enables Git overlays for architecture diagrams. Query mode isolates a target. Path mode locates it in the design hierarchy.',
   check: 'Check import direction and every selected frame in both themes. --read-only skips generated types and build files. --impacted --base=<rev> evaluates scheduled current rows; proven rows remain not_checked with partial coverage.', render: 'Render selected frames as PNG. Defaults to both themes at 2×. --theme=system resolves the current macOS appearance, otherwise light, and reports the resolved themes. --impacted --base=<rev> captures scheduled plain current frames and reports deletions, with operation-local proofs for skipped rows. Ordinary architecture --base produces proposal overlays; --impacted never does. --json prints completed captures and impact coverage, including zero-job runs.',
   compare: 'Compare fixture text positions. Flags override Frame fixture and capture. --all writes a summary for every fixture frame.',
   diff: 'Compare the Git base and working-tree source/frame union. Existing frames require exact pixels and CSS/device size; added Frame parent declarations enable structural part evidence under diff.thresholds. Defaults to both themes at 2× and <configured output>/diff, overwriting previous diff artifacts and writing a self-contained index.html review page, before/after/difference PNGs and report.json. --impacted also writes review-sheet.png with Added, Changed and Removed sections and up to 12 image cells at 2×. The sheet uses the explicit single theme or system appearance. --theme=system resolves the current macOS appearance, otherwise light. --impacted captures only scheduled rows (both themes when either theme of a frame is impacted); unqualified both-theme runs count fresh proofs toward full coverage. Required parents/support always capture. A structural batch requires all existing frames in both themes; source/frame/theme restrictions report partial coverage. Exit 0 identical/structural, 1 changed, 2 incomplete.',
+  review: 'Generate one self-contained HTML review of the Git base and working tree. Defaults to the system theme and <configured output>/review.html. Uses structural prefiltering with pixel comparison for the remaining frames. --exact uses pixel comparison for every frame scheduled by impact analysis. A registered hub supplies frame links, or set --viewer-url. Exit 0 when written, including changes, or 2 for incomplete generation.',
   owner: 'Find owning design sources, parts, frames and tokens from an implementation path, rendered text, absolute CSS color or token name. Paths resolve from the project root; quote globs. --part reverses the lookup from a design source or source#Export to implementation bindings with resolved files and symbol regions. --line returns the containing export/anchor region, including unmapped exports; non-exported helpers belong to the preceding export. Text is NFC/whitespace normalized and exact unless --contains; --locale filters exact Frame locale tags without translation. Colors use 8-bit sRGB RGBA equality. Owner evidence is scoped to the query: mappings for files, text runs for text, computed paint for colors and authored references for tokens. Text authoredIn lists literal-search copy candidates; escaped or concatenated strings may be missed. Color evidence may include compact same-element/property references. Defaults to both themes. Broad color/token JSON can be around 100 KB; read owners first and narrow with --theme. Empty, stale and ambiguous results exit 0; invalid/incomplete requests exit 2.',
   inspect: 'Read TSX frame structure, text, CSS-pixel boxes, computed styles and token-reference evidence. Without a unique frame, return a catalog. Default: both themes, all fields, full depth. Field groups: structure,layout,typography,color,text. Shared styles, semantic wrappers, repeated subtrees and a sparse dark delta keep the default compact. --expand reconstructs ordinary element records for both themes. No consumer application or viewer is started. Exit 0 completed observation, 2 invalid/incomplete.',
   impact: 'Query direct/transitive candidates from sources, named parts, tokens or implementation mappings, or compare exact Git endpoints. --base includes staged, unstaged and untracked working files; --head selects another exact commit. Hypothetical selectors cannot prove skips; token candidates assume unchanged Tailwind classification. Git mode freshly executes both endpoint source sets and compares eligible materialized inputs. Closure or occurrence absence never proves safety. Groups merge equal theme and same-source frame records; noncandidate proofs remain counts. --explain samples witnesses/digests without splitting groups. No browser launch. Render/check/diff --impacted compute their own operation-local proofs. Exit 0 completed, including empty/stale mappings; 2 invalid/incomplete.',
@@ -42,6 +44,7 @@ const helpExamples = {
   render: 'adg render --impacted --base=HEAD --json\nadg render arch/catalog.mmd --base=HEAD --json',
   check: 'adg check --impacted --base=HEAD --read-only --json\nadg check --read-only --json',
   diff: 'adg diff --base=HEAD --impacted --json',
+  review: 'adg review --base=HEAD --json',
 };
 export function help(command) {
   if (command) return `Usage: adg ${command} ${usage[command]}\n\n${details[command]}${helpExamples[command] ? `\n\nExamples:\n${helpExamples[command]}` : ''}\n\n-h, --help  Show help\nExit codes: 0 success, 1 check/compare/diff problems, 2 usage/configuration/environment error.`;
@@ -55,6 +58,10 @@ export function parseCli(args) {
   const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
   const strings = { comments: ['status', 'source', 'frame', 'author', 'message', 'state-dir'], open: ['port', 'state-dir', ...locators], link: [...locators, 'comment'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir', 'public-origin'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'part', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
+  if (command === 'review') {
+    for (const name of ['base', 'theme', 'out', 'viewer-url']) options[name] = { type: 'string' };
+    options.exact = { type: 'boolean' };
+  }
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
   if (command === 'open' || command === 'link') options.tokens = { type: 'boolean' };
@@ -74,6 +81,11 @@ export function parseCli(args) {
   const { values, positionals } = parsed;
   if (globalJson) values.json = true;
   if (!values.help && !values.version) {
+    if (command === 'review' && (positionals.length || !values.base?.trim() ||
+        (values.theme !== undefined && !['system', 'light', 'dark'].includes(values.theme)) ||
+        (values.out !== undefined && !/\.html$/i.test(values.out)) || values['viewer-url'] === '')) {
+      throw new CliError('USAGE_INVALID', 'Set --base=<rev>, choose one theme, and use an HTML path for --out; run adg review --help.');
+    }
     if (['render', 'check', 'diff'].includes(command)) {
       if (!values.impacted && (values.explain !== undefined || values['state-dir'] !== undefined)) throw new CliError('USAGE_INVALID', '--explain and --state-dir require --impacted --base=<rev>.');
       if (values.impacted && (typeof values.base !== 'string' || !values.base.trim())) throw new CliError('USAGE_INVALID', '--impacted requires --base=<rev>.');
@@ -218,6 +230,7 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
   if (command === 'init') return { data: (await import('./toolkit/project.mjs')).init(config, output.log) };
   if (command === 'compare') return (await import('./toolkit/compare.mjs')).compare(config, positionals, values, {log:output.log});
   if (command === 'diff') return (await import('./toolkit/diff.mjs')).diff(config, positionals, values, { log: output.log });
+  if (command === 'review') return (await import('./toolkit/review.mjs')).review(config, values, { log: output.log });
   const toolkit = await import('./toolkit/commands.mjs');
   return command === 'check' ? toolkit.check(config, positionals, values, output.log, output.progress) : toolkit.render(config, positionals, values, output.log);
 }

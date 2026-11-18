@@ -47,12 +47,10 @@ Path links locate a selection within its design hierarchy. Query links open an i
 ## Share a design update
 
 ```sh
-adg diff --base=<rev> --impacted --json
-adg link https://gallery.example/p/project/ --base=<rev>
-adg open ./design --base=<rev> --no-open
+adg review --base=<rev> --json
 ```
 
-Set `--base=<rev>` to the task's starting commit. Embed the single-theme review sheet and give one reachable URL from `adg link <viewer-url> --base=<rev>`. The hub and direct viewer serve the same review at `?base=<rev>`. Targeted `--asset`, `--frame`, `--group`, `--layer`, `--tokens` and `--mode=path` links remain available for interactive navigation. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
+Choose the task's starting commit and share the HTML at `data.path`. The file opens offline, renders the frames on demand, and supports enlargement and frame links to the project's ADG boards. The current system theme is the default. Use `--viewer-url` when the project is served by a different hub, or `--exact` to compare every frame scheduled by impact analysis. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
 
 Every command accepts `--json`: finite commands return one versioned envelope, while foreground `open`/`serve` stream NDJSON events. `render` PNGs are in `data.captures`, with CSS and PNG pixel dimensions. See the [agent CLI interface](docs/agent-interface.md) for schemas, exits and recovery actions.
 
@@ -93,7 +91,7 @@ Files group by directory unless `gallery.json` supplies chapters, with each titl
 
 Unlisted sources form directory chapters. A mixed-layer group splits into a same-titled chapter in each layer view; keep project groups within one layer. A module folder shows its `index.tsx` under the feature directory name. Projects own their TSX sources, artwork, tokens, configuration and Git history. Preferences stay in `~/.agent-design-gallery/state.json`; `--state-dir` isolates them. Refreshing or reopening a directory restores its camera and selection. Source labels show modification times.
 
-Change reports embed the single-theme `data.review.sheet.path` PNG inline, then carry one reachable `?base=<rev>` review URL from `adg link <viewer-url> --base=<rev>`. [Comments](docs/comments.md) are threads pinned to the library.
+[Comments](docs/comments.md) are threads pinned to the library. Open a frame from the standalone review to discuss it on the board.
 
 ## Design toolkit
 
@@ -259,41 +257,9 @@ The LaunchAgent `org.agent-design-gallery.hub` starts the resident hub at login 
 
 ### Review handoff
 
-Run `adg diff --base=<rev> --impacted --theme=system --json` and embed
-`data.review.sheet.path` inline as a Markdown image, followed by the review URL
-from `adg link <viewer-url> --base=<rev>`.
-The sheet follows macOS appearance, or light on other platforms; `render` also
-accepts `--theme=system`. Explicit light/dark overrides the sheet theme. Default
-diff comparison coverage remains both themes. The sheet groups frames into Added,
-Changed and Removed sections with colored edges, before → after pairs and almost no text.
+`adg review` compares the resolved Git base against the current working tree and writes one HTML file. Frames are grouped by direct and inherited change. Each inherited group starts with the median-area representative and its outliers, and expands to show every member. Before and After are rendered as native document content; the Difference pane shows the pixel diff. Click a preview to enlarge it or a frame title to open its source on a registered ADG board.
 
-Review links show progress immediately and retain visible results during refresh.
-The current theme loads first; another theme is computed on switch. The state
-directory caches results by project, base, HEAD, working-tree fingerprint and theme.
-An impacted CLI diff warms the same cache used by the hub.
-
-Source build failures are isolated during review, including failures at the base
-revision. The viewer, HTML review and sheet header list each failed source, side
-and error while showing the remaining sources. JSON includes
-`failures: [{ source, side, code, message }]`; partial review artifacts and cache
-entries remain available with `complete: false`. An incomplete diff exits 2.
-
-The review page and `data.review` retain counts and group changes by cause.
-Moved frames keep their identity when pixels and size match in both themes.
-After same-name pairing, identical renders can also pair frames whose names
-changed. A related source breaks a tie when it identifies a unique pair.
-The page summarizes source moves and shows the previous and current
-`<source>#<frame>` for renamed pairs.
-Direct changes edit the frame source or its module folder. Inherited groups share
-the same changed dependencies, show a median-area representative, and expand to
-every member. Members above twice the median changed-pixel area appear as outliers.
-The sheet reserves cells for the first addition, the first direct change and
-inherited representatives in that order, then fills the remaining budget with
-additions, direct changes and outliers. A before → after pair shares a cell.
-Labels use the design-relative path without its extension and `#frame`, with
-`+N` on inherited representatives. Captures only scale down, to at most 480 CSS
-pixels tall. The sheet stops at 4000 CSS pixels and adds a closing line only
-when entries are omitted.
+The default hybrid pass uses equal rendered structure to skip screenshots for supported frames, and runs the pixel comparison for the rest. Use `adg review --exact` when pixel-equivalent review coverage is required. `adg diff` exposes exact comparison artifacts and verdicts for automation.
 
 `adg check` emits non-failing chapter warnings for component/module sources outside
 `gallery.json` chapters (`CHAPTER_SOURCES_UNASSIGNED`) and chapters above 12 sources

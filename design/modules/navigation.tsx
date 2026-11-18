@@ -4,7 +4,7 @@ import { Panel } from '../components/panel';
 import { Tooltip } from '../components/tooltip';
 import { TreeRow } from '../components/tree-row';
 import navigationFixtures from '../fixtures/navigation.json';
-import { reviewScopeTabOptions, scopeTabOptions } from '../fixtures/render-scope';
+import { scopeTabOptions } from '../fixtures/render-scope';
 
 export function ScopeTabs({
   options,
@@ -93,11 +93,6 @@ export default () => [
   <Frame name="scope-tabs">
     <div class="inline-flex rounded-panel bg-surface p-[6px] shadow-float">
       <ScopeTabs options={scopeTabOptions} selected="Components" />
-    </div>
-  </Frame>,
-  <Frame name="scope-tabs-review">
-    <div class="inline-flex rounded-panel bg-surface p-[6px] shadow-float">
-      <ScopeTabs options={reviewScopeTabOptions} selected="Review" />
     </div>
   </Frame>,
   <Frame name="contents-layer">

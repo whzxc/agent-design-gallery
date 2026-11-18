@@ -313,39 +313,20 @@
       "design": [{ "source": "design/modules/tokens.tsx", "part": "TokenBoardPreview" }]
     },
     {
-      "implementation": { "file": "public/review.js", "symbol": "renderReviewBody" },
-      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewHeader" }]
-    },
-    {
-      "implementation": { "file": "public/review.js", "symbol": "renderReviewFailures" },
-      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewFailures" }]
-    },
-    {
-      "implementation": { "file": "public/review.js", "symbol": "renderFrameCard", "anchor": "function renderFrameCard(" },
-      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewFrameCard" }]
-    },
-    {
-      "implementation": { "file": "public/review.js", "symbol": "renderGroup", "anchor": "function renderGroup(" },
-      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewInheritedGroup" }]
-    },
-    {
-      "implementation": { "file": "public/review.js", "symbol": "renderReview" },
+      "implementation": { "file": "src/toolkit/review-document.mjs", "symbol": "reviewDocument" },
       "design": [
-        { "source": "design/modules/review.tsx", "part": "ReviewView" },
+        { "source": "design/modules/review.tsx", "part": "ReviewHeader" },
+        { "source": "design/modules/review.tsx", "part": "ReviewLayout" },
         { "source": "design/surfaces/review.tsx" }
       ]
     },
     {
-      "implementation": { "file": "public/style.css", "symbol": "review-page", "anchor": "#review-page { inset:" },
-      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewView" }]
+      "implementation": { "file": "src/toolkit/review-document.mjs", "symbol": "cardHtml", "anchor": "function cardHtml(" },
+      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewFrameCard" }]
     },
     {
-      "implementation": { "file": "public/index.html", "symbol": "review-page", "anchor": "id=\"review-page\"" },
-      "design": [{ "source": "design/surfaces/review.tsx" }]
-    },
-    {
-      "implementation": { "file": "public/app.js", "symbol": "applyReviewManifest", "anchor": "function applyReviewManifest(" },
-      "design": [{ "source": "design/surfaces/review.tsx" }]
+      "implementation": { "file": "src/toolkit/review-document.mjs", "symbol": "mountPreviews", "anchor": "function mountPreviews(" },
+      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewZoom" }]
     },
     {
       "implementation": { "file": "public/switcher.js", "symbol": "updateSwitcherLabels" },

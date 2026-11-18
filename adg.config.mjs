@@ -7,6 +7,7 @@ import { commentFile } from './src/comments.mjs';
 import { loadConfig } from './src/toolkit/config.mjs';
 import comments from './design/fixtures/comments.json' with { type: 'json' };
 import { hubFixtures, readyFixtureHub, startFixtureHub } from './fixtures/hub-compare.mjs';
+import { readyReviewFixture, reviewFixtureTexts, reviewFixtures, startReviewFixture } from './fixtures/review-compare.mjs';
 
 const clock = '2026-01-01T00:00:00Z';
 const fixtureStates = {
@@ -86,6 +87,10 @@ export default {
     async start({ port, root }) {
       const temporary = await mkdtemp(path.join(tmpdir(), 'adg-fixture-'));
       try {
+        if (reviewFixtures.has(selectedFixture)) {
+          const close = await startReviewFixture(port, temporary);
+          return async () => { try { await close(); } finally { await rm(temporary, { recursive: true, force: true }); } };
+        }
         if (Object.hasOwn(hubFixtures, selectedFixture)) {
           const hub = await startFixtureHub(port, temporary);
           return async () => { try { await hub.close(); } finally { await rm(temporary, { recursive: true, force: true }); } };
@@ -99,12 +104,17 @@ export default {
     },
     fixture(name) {
       selectedFixture = name;
+      if (reviewFixtures.has(name)) return { url: '/', theme: 'dark', locale: 'en-US', timezone: 'UTC', clock };
       if (Object.hasOwn(hubFixtures, name)) return { url: hubFixtures[name], theme: 'light', locale: 'en-US', timezone: 'UTC', clock };
       const state = fixtureStates[name];
       if (!state) throw new Error(`Unknown ADG fixture ${name}; choose ${Object.keys(fixtureStates).join(', ')}`);
       return { url: `/?fixture=${encodeURIComponent(name)}`, theme: state.theme, locale: 'en-US', timezone: 'UTC', clock };
     },
+    async texts(page) {
+      return reviewFixtures.has(selectedFixture) ? reviewFixtureTexts(page) : [];
+    },
     async ready(page, name) {
+      if (reviewFixtures.has(name)) return readyReviewFixture(page, name);
       if (Object.hasOwn(hubFixtures, name)) return readyFixtureHub(page, name);
       await page.waitForFunction(name => document.documentElement.dataset.fixtureError || document.documentElement.dataset.fixtureReady === name, name, { timeout: 15000 });
       const error = await page.evaluate(() => document.documentElement.dataset.fixtureError);

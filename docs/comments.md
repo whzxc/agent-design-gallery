@@ -14,7 +14,7 @@ A thread is pinned to the nearest meaningful target under the point where it was
 
 | Target | Identity | Where it appears |
 | --- | --- | --- |
-| Element | source, frame and element ID | inside a frame on a board or on a review after image, at the closest element or ancestor with an owned part, an authored `data-adg-id` or instance key, a semantic role or a naming attribute |
+| Element | source, frame and element ID | inside a frame on a board, at the closest element or ancestor with an owned part, an authored `data-adg-id` or instance key, a semantic role or a naming attribute |
 | Frame | source and frame | the frame's background or a point inside the frame without a meaningful element target |
 | Source | source | the source's section on its board, outside its frames |
 | Chapter | layer and chapter | the chapter board, outside its sections |
@@ -87,11 +87,9 @@ The **Comments** button in the top-right toolbar opens the panel and shows the n
 - Clicking a row switches scope when needed, moves the camera to the pin and opens the thread.
 - With no threads, the panel says how to start: press `C` and click a frame.
 
-## Review page
+## Standalone review
 
-On the `?base=<rev>` review page, the Comment tool and pins work on the after image of every added or changed frame,
-with the same anchors as the boards, so a thread placed there also appears on the board and the other way round.
-Before images and removed frames take no comments.
+Click a frame title in a generated review to open the board and comment there. Existing frame threads continue to use the same anchors.
 
 ## Links and live updates
 

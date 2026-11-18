@@ -1,22 +1,10 @@
-import { groupReview } from '../../public/review-groups.js';
-import { renderReviewFailures } from '../../public/review.js';
+import { groupReview } from './review-groups.mjs';
+import { renderReviewFailures } from './diff-document.mjs';
 import { browserTask, readyResources } from './browser.mjs';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
 ));
-
-/** Project the captures to one theme while keeping the classification of each move. */
-export function reviewForTheme(review, theme) {
-  const sections = Object.fromEntries(Object.entries(review.sections).map(([kind, entries]) => [kind,
-    entries.map(entry => ({ ...entry, themes: entry.themes.filter(row => row.theme === theme) }))
-      .filter(entry => entry.themes.length && (kind !== 'changed' || entry.previousSource || entry.themes.some(row => row.verdict === 'changed'))),
-  ]));
-  const themed = { ...review, sections, counts: {
-    ...review.counts, added: sections.added.length, removed: sections.removed.length, changed: sections.changed.length,
-  } };
-  return { ...themed, ...groupReview(themed) };
-}
 
 export function reviewSheetHtml(review, theme, frameOrder = [], designDirs = { before: 'design', after: 'design' }) {
   const order = new Map(frameOrder.map((row, index) => [JSON.stringify([row.source, row.frame]), index]));

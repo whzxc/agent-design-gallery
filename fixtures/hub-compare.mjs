@@ -16,7 +16,6 @@ export const hubFixtures = {
   'hub-home-phone': '/',
   'hub-switcher': '/p/atlas/',
   'hub-key-required': '/',
-  'hub-review-live': '/p/atlas/?base=HEAD~1',
 };
 
 async function git(directory, args, date) {
@@ -43,10 +42,8 @@ function startUnproxyableStub() {
   });
 }
 
-export async function startFixtureHub(port, stateDirectory) {
-  const tokensCss = await readFile(tokensFile, 'utf8');
-  const projects = path.join(stateDirectory, 'fixture-projects');
-
+export async function prepareAtlas(projects, tokensCss) {
+  tokensCss ??= await readFile(tokensFile, 'utf8');
   const atlas = path.join(projects, 'atlas');
   await mkdir(path.join(atlas, 'design/components'), { recursive: true });
   await writeFile(path.join(atlas, 'adg.config.mjs'), "export default { name: 'Atlas' };\n");
@@ -66,11 +63,20 @@ export async function startFixtureHub(port, stateDirectory) {
     "import { Frame } from 'adg';\nexport default () => <Frame name=\"primary\"><button class=\"rounded-field bg-accent px-3 py-2 text-on-accent\">Save changes</button></Frame>;\n",
   );
   await writeFile(
-    path.join(atlas, 'design/components/review-header.tsx'),
-    "import { Frame } from 'adg';\nexport default () => <Frame name=\"review-header\"><div class=\"rounded-panel border border-border bg-surface px-4 py-3 text-text\">Exit review</div></Frame>;\n",
+    path.join(atlas, 'design/components/status.tsx'),
+    "import { Frame } from 'adg';\nexport default () => <Frame name=\"ready\"><div class=\"rounded-panel border border-border bg-surface px-4 py-3 text-text\">Ready</div></Frame>;\n",
   );
-  await commit(atlas, 'feat(design): add review header and accent primary button', '2025-12-31T23:48:00Z');
+  await commit(atlas, 'feat(design): add status and accent primary button', '2025-12-31T23:48:00Z');
   await writeFile(path.join(atlas, 'design/tokens.css'), tokensCss.replace('--surface-sunken: #f1f1ee;', '--surface-sunken: #e9e9e4;'));
+
+  return atlas;
+}
+
+export async function startFixtureHub(port, stateDirectory) {
+  const tokensCss = await readFile(tokensFile, 'utf8');
+  const projects = path.join(stateDirectory, 'fixture-projects');
+
+  const atlas = await prepareAtlas(projects, tokensCss);
 
   const folio = path.join(projects, 'folio');
   await mkdir(path.join(folio, 'design/components'), { recursive: true });
@@ -144,29 +150,6 @@ export async function readyFixtureHub(page, name) {
     await page.getByRole('button', { name: 'Switch project: Atlas' }).click();
     await page.getByRole('navigation', { name: 'Project switcher' }).waitFor();
     await page.getByPlaceholder('Find project or instance…').waitFor();
-  } else if (name === 'hub-review-live') {
-    await page.waitForFunction(() => window.__adg?.ready && window.__adg?.scope === 'review', null, { timeout: 30000 });
-    await page.getByRole('button', { name: 'Switch project: Atlas' }).waitFor();
-    await page.evaluate(async () => {
-      const post = body => fetch('api/comments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      await post({
-        action: 'create',
-        anchor: { kind: 'frame', source: 'design/components/toolbar.tsx', frame: 'zoom-bar', layer: 'components', chapter: 'components', x: 24, y: 16, frameX: 24, frameY: 16 },
-        target: { label: 'components/toolbar#zoom-bar' },
-        message: 'Check zoom bar contrast.',
-      });
-      await post({
-        action: 'create',
-        anchor: { kind: 'frame', source: 'design/components/button.tsx', frame: 'primary', layer: 'components', chapter: 'components', x: 96, y: 8, frameX: 96, frameY: 8 },
-        target: { label: 'components/button#primary' },
-        message: 'Verify primary button radius.',
-      });
-    });
-    await page.getByRole('button', { name: 'Comments, 2 open' }).waitFor();
   } else {
     await page.locator('#projects').getByText('Atlas', { exact: true }).waitFor();
     await page.locator('#instances').getByText('atlas.wt/hub-review', { exact: true }).waitFor();

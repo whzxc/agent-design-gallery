@@ -577,6 +577,16 @@ review page with inline `data:image/png;base64,...` images and `data.review` fra
 Failed runs keep completed rows from that run and, when writable, a partial manifest and
 review page. `reportPath:null` and `indexPath:null` mean the manifest/review write failed.
 
+### Review
+
+```sh
+adg review --base=<rev> [--theme=system|light|dark] [--out=<file.html>] [--viewer-url=<project-url>] [--exact] --json
+```
+
+`review` writes a single complete standalone HTML document and exits 0 whether or not changes were found. Its output is regenerated from the current working tree. The default path is `<configured output>/review.html`; explicit relative paths resolve from the project root. Frame links point to the registered hub or an explicit viewer URL. Access information from that URL is excluded from the artifact.
+
+The `data` object contains `path`, resolved `theme`, `base: { rev, sha }`, `current: { kind, head }`, `counts: { added, removed, moved, changed, direct, inherited }`, `groups`, `mode` (`hybrid` or `exact`), `structureMatches`, `pixelComparisons`, `complete`, `failures`, `bytes` and `generationMs`. `groups` uses the diff grouping schema. The hybrid pass may skip frames with equal supported observations; `--exact` skips only the impact-proven frames. On source build failure, exit 2 includes the path to the partial HTML and `failures: [{ source, side, code, message }]`. See [review handoff](design-toolkit.md#review-handoff).
+
 ### Owner
 
 `owner` is a finite, read-only lookup over the current project. It returns one
@@ -1526,30 +1536,15 @@ with `thread: null` after removing a thread. `create` and `move` accept `anchor`
 `revision`. Writes identify an existing thread with `id`. `edit` and `delete` identify a user message with
 `messageId`, and `create`, `reply` and `edit` supply the new text as `message`.
 
-### Review handoff cache and sheet
+### Diff export sheet
 
 `render` and `diff` accept `--theme=system`. On macOS it resolves through
 `defaults read -g AppleInterfaceStyle` (`Dark` selects dark); otherwise it resolves
-to light. JSON capture/comparison themes and selection themes contain the resolved
-`light` or `dark` value. Default comparison coverage remains both themes.
-
-An impacted diff writes `review-sheet.png` beside `index.html` and reports its
-absolute path and resolved theme in `data.review.sheet`. An explicit single theme
-selects that theme; otherwise the sheet follows system appearance. The
-[review handoff](design-toolkit.md#review-handoff) contract owns the sheet's layout.
-
-The hub requests only the current viewer theme. Its chrome and progress status
-appear immediately, and refresh retains the preceding result. Complete reviews
-are cached under the state directory by project, resolved base, HEAD, working-tree
-content fingerprint and theme. Impacted CLI diffs populate the same entries.
-Switching themes computes the missing theme, and source changes invalidate the
-cache through the existing live refresh.
-
-Source build failures are isolated during review, including failures at the base
-revision. The viewer, HTML review and sheet list each failed source, side
-and error while showing the remaining sources. JSON includes
-`failures: [{ source, side, code, message }]`; partial review artifacts and cache
-entries remain available with `complete: false`. An incomplete diff exits 2.
+to light. Default diff comparison coverage is both themes. An impacted diff
+writes `review-sheet.png` beside `index.html` and reports its absolute path and
+resolved theme in `data.review.sheet`. The sheet uses the system theme or the
+selected single theme and includes up to 12 image cells for added, changed and
+removed frames. Source build failures leave partial artifacts with `complete: false`.
 
 ### Chapter warnings
 
@@ -1580,5 +1575,4 @@ The page shows added, direct and inherited groups; groups expand to all members.
 The page ends with one moved entry, grouping pairs by source move and listing
 each frame count; renamed pairs show both `<source>#<frame>` references.
 `data.review.movePairs` carries both names as `before.frame` and `after.frame`.
-The [review handoff](design-toolkit.md#review-handoff) contract owns the sheet's
-selection and layout.
+The [standalone review](design-toolkit.md#review-handoff) uses the same grouping.

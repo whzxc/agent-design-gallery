@@ -1,10 +1,9 @@
 import inspectorFixtures from './inspector.json';
 import menuFixtures from './menus.json';
 import navigationFixtures from './navigation.json';
-import { reviewScopeTabOptions, scopeNavigation, scopeTabOptions } from './render-scope';
+import { scopeNavigation, scopeTabOptions } from './render-scope';
 
 export const viewerBarScopes = scopeTabOptions;
-export const viewerReviewScopes = reviewScopeTabOptions;
 export const viewerBarProject = { id: 'arc', name: scopeNavigation.layer.directory };
 
 export const viewerBarMore = menuFixtures.more;

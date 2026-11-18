@@ -8,7 +8,6 @@ export const scopeTabOptions = [
   { label: 'All designs' },
 ];
 
-export const reviewScopeTabOptions = [{ label: 'Review' }, ...scopeTabOptions];
 
 const options = [
   { label: 'Components' },

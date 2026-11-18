@@ -21,10 +21,6 @@
     {
       "name": "zoom-bar-comment-active",
       "commentPressed": true
-    },
-    {
-      "name": "zoom-bar-review",
-      "commentsOnly": true
     }
   ]
 }

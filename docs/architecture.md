@@ -10,7 +10,7 @@ The [board contract](boards.md) defines layout. Each chapter is one board at any
 
 Board placement puts chapters into layer columns, choosing the shortest column with leftmost tie-breaking. Column count targets a 16:10 layer band. Columns and boards are 240px apart; layer bands are 480px apart. Saving a source reflows its board and shifts boards below it in that column. Arrange recomputes column assignment. Layout stays independent of camera input and floating panels. The Tokens board leads scopes containing Tokens; the searchable token table remains available as a list view.
 
-Previews are SVG images with cropped viewBoxes, preserving document-local styles, identifiers, filters, and aspect ratios. Top-level legacy SVG notes are omitted from crops. The inspector shows declared frames and their notes; there is no Full sheet action. Board text remains crisp at every zoom level and accessible to selection and inspection. Specimens retain their rendered sizes and share the well backdrop. Only surface frames receive a one-pixel project-border edge; other frame edges are indicated on hover or selection. Selection, element picking, Uses and Used by, comments, Back, Fit, the minimap, search, keyboard shortcuts and fixture states remain attached to their source/frame identities. Architecture diagrams retain their own scope, and the Git review page retains its frame comparison layout.
+Previews are SVG images with cropped viewBoxes, preserving document-local styles, identifiers, filters, and aspect ratios. Top-level legacy SVG notes are omitted from crops. The inspector shows declared frames and their notes; there is no Full sheet action. Board text remains crisp at every zoom level and accessible to selection and inspection. Specimens retain their rendered sizes and share the well backdrop. Only surface frames receive a one-pixel project-border edge; other frame edges are indicated on hover or selection. Selection, element picking, Uses and Used by, comments, Back, Fit, the minimap, search, keyboard shortcuts and fixture states remain attached to their source/frame identities. Architecture diagrams retain their own scope and Git overlays.
 
 The server uses `src/toolkit/build-store.mjs` for TSX builds. Each source has a content hash over its rendered frames, CSS, imports and source identity; its input hash covers the actual bytes read from the source and dependency closure. Package/toolkit versions, discovery configuration and the code-file inventory identify the persistent build namespace. Dependency hashes are validated on restart. A helper addition or removal invalidates resolution-sensitive builds; ordinary edits use reverse dependency edges. Superseded work is cancelled, including first builds whose dependency closure is not known yet. The next scoped manifest rehashes invalidated, previously built sources in that scope. Unchanged output hashes reuse the existing geometry and previews. Filesystem modification times still update in navigation and labels.
 
@@ -395,21 +395,4 @@ comparison limit in the Inspector note. There is no viewer chrome addition.
 
 ## Review handoff
 
-`src/review-cache.mjs` owns the shared CLI/hub review identity and atomic JSON
-publication. Keys include the physical project root, resolved base commit, HEAD,
-changed tracked and untracked working-tree bytes, and resolved theme. Ignored
-generated output is excluded. The server deduplicates in-flight requests for an
-identity and serves complete cached review models directly. CLI impacted diffs
-publish those models after producing their artifacts.
-
-The viewer requests its current theme and retains the preceding review while a
-live refresh or theme switch runs. Progress and chrome remain visible. Diff output
-also includes a single-theme, DPR-2 review sheet alongside the self-contained HTML
-review. The sheet separates Added, Changed and Removed by colored section names and cell edges,
-uses up to 12 image cells and reports overflow in a closing line.
-
-Source build failures are isolated during review, including failures at the base
-revision. The viewer, HTML review and sheet header list each failed source, side
-and error while showing the remaining sources. JSON includes
-`failures: [{ source, side, code, message }]`; partial review artifacts and cache
-entries remain available with `complete: false`. An incomplete diff exits 2.
+`src/toolkit/review.mjs` owns standalone HTML generation. It consumes the same operation-local Git input trees and scheduling as `diff`. The hybrid pass removes supported frames with matching layout and paint observations, then calls the exact capture engine for the remaining rows. The generator compiles the selected frame documents into inert templates, reuses style sheets across specimens, and writes one HTML file. The browser mounts nearby cards and isolates their styles with Shadow DOM. See [review handoff](design-toolkit.md#review-handoff) for classification and output semantics.

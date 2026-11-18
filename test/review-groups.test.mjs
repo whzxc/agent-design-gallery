@@ -4,13 +4,11 @@ import path from 'node:path';
 import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { groupReview } from '../public/review-groups.js';
-import { buildReview } from '../public/review.js';
+import { groupReview } from '../src/toolkit/review-groups.mjs';
+import { buildReview } from '../src/toolkit/diff-document.mjs';
 import { diff, reviewChange } from '../src/toolkit/diff.mjs';
 import { loadConfig } from '../src/toolkit/config.mjs';
 import { starterTokens } from '../src/toolkit/project.mjs';
-import { viewerFile } from '../src/http.mjs';
-import { reviewCacheKey, readReviewCache } from '../src/review-cache.mjs';
 
 function frame(source, area, causes = ['design/components/button.tsx'], kind = 'inherited') {
   return { source, frame: 'default', status: 'changed', change: { kind, causes },
@@ -22,10 +20,6 @@ function review(changed) {
     counts: { added: 1, removed: 1, moved: 0, changed: changed.length },
     sections: { added: [{ source: 'new.tsx' }], removed: [{ source: 'old.tsx' }], changed } };
 }
-
-test('the viewer serves the shared grouping module imported by the review page', () => {
-  assert.equal(viewerFile('/review-groups.js'), 'review-groups.js');
-});
 
 test('cause sets are canonical, distinct, inherited-only and retain frame references', () => {
   const direct = frame('a.tsx', 8, ['a.tsx'], 'direct');
@@ -182,16 +176,5 @@ export default () => <Frame name="default"><Card/></Frame>;`);
     const persisted = JSON.parse(await readFile(data.reportPath, 'utf8'));
     assert.deepEqual(persisted.review, data.review);
     assert.deepEqual(persisted.comparisons.map(row => row.change), data.comparisons.map(row => row.change));
-    if (impacted) {
-      const key = await reviewCacheKey(current, 'HEAD', 'light', path.join(root, 'state'));
-      assert.equal(key.version, 5);
-      const cached = await readReviewCache(key);
-      assert.equal(cached.complete, false);
-      assert.equal(cached.failures.length, 2);
-      assert.equal(cached.counts.direct, 1);
-      assert.equal(cached.counts.inherited, 1);
-      assert.deepEqual(cached.groups[0].causes, ['design/modules/card/part.tsx']);
-      assert.deepEqual(cached.groups[0].representative.change, inherited.change);
-    }
   }
 });

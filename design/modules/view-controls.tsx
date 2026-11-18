@@ -126,7 +126,6 @@ export function ZoomBar({
   minimapPressed = false,
   commentPressed = false,
   commentDisabled = false,
-  commentsOnly = false,
 }: any) {
   const commentButton = (
     <IconButton
@@ -137,8 +136,6 @@ export function ZoomBar({
       disabled={commentDisabled}
     />
   );
-
-  if (commentsOnly) return <Toolbar>{commentButton}</Toolbar>;
 
   return (
     <Toolbar>

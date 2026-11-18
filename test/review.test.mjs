@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { request } from 'node:http';
-import { mkdtemp, mkdir, writeFile, readFile, rm, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, access } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -9,25 +8,8 @@ import { loadConfig } from '../src/toolkit/config.mjs';
 import { starterTokens } from '../src/toolkit/project.mjs';
 import { diff } from '../src/toolkit/diff.mjs';
 import { main } from '../src/cli.mjs';
-import { startHub } from '../src/hub.mjs';
-import { hubKey } from '../src/hub/auth.mjs';
-import { addRoot } from '../src/hub/registry.mjs';
-import { launch } from '../src/toolkit/browser.mjs';
 
-const forwarded = { 'X-Forwarded-Proto': 'https' };
-
-function rawStatus(url, headers) {
-  return new Promise((resolve, reject) => {
-    const req = request(url, { headers }, response => {
-      response.resume();
-      resolve(response.statusCode);
-    });
-    req.on('error', reject);
-    req.end();
-  });
-}
-
-test('diff writes a self-contained overwritten review index.html and hub viewer serves ?base=<rev> review', { timeout: 60000 }, async t => {
+test('diff overwrites artifacts and retains exact comparisons across both themes', { timeout: 60000 }, async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'adg-review-'));
   const project = path.join(root, 'project');
   const stateDirectory = path.join(root, 'state');
@@ -147,85 +129,22 @@ export default () => [
     ['dark', 'changed'],
   ]);
 
-  // Verify hub viewer + `adg link <viewer-url> --base=<rev>`.
-  await addRoot(project, 0, stateDirectory);
-  const hub = await startHub({ port: 0, stateDirectory });
-  t.after(() => hub.close());
-  const key = await hubKey(stateDirectory);
-  const auth = { ...forwarded, Authorization: `Bearer ${key}` };
-  const [registered] = await (await fetch(new URL('api/projects', hub.url), { headers: auth })).json();
-  const projectViewerUrl = new URL(registered.url, hub.url).href;
-
-  let linkStdout = '';
-  const linkExit = await main(
-    ['link', `${projectViewerUrl}?key=${key}`, `--base=${baseSha}`],
-    project,
-    { stdout: chunk => { linkStdout += chunk; }, stderr: () => {} },
-  );
-  assert.equal(linkExit, 0);
-  const reviewUrl = linkStdout.trim();
-  assert.equal(reviewUrl, `${projectViewerUrl}?base=${baseSha}`);
-
-  const shellJs = await fetch(new URL(`${registered.url}review.js`, hub.url), { headers: forwarded });
-  assert.equal(shellJs.status, 200);
-  assert.doesNotMatch(await shellJs.text(), /Review Demo/);
-  assert.equal(await rawStatus(new URL(`${registered.url}review?base=${baseSha}`, hub.url), forwarded), 401);
-
-  const statusBefore = git('status', '--porcelain');
-  const browser = await launch();
-  try {
-    const unauthContext = await browser.newContext({ extraHTTPHeaders: forwarded });
-    const unauthPage = await unauthContext.newPage();
-    await unauthPage.goto(reviewUrl);
-    await unauthPage.getByRole('heading', { name: 'Key required' }).waitFor();
-    await unauthContext.close();
-
-    const context = await browser.newContext({ extraHTTPHeaders: forwarded, colorScheme: 'dark' });
-    const page = await context.newPage({ viewport: { width: 1440, height: 900 } });
-    await page.goto(`${projectViewerUrl}?key=${key}&base=${baseSha}`);
-    await page.waitForFunction(() => window.__adg?.ready && window.__adg?.scope === 'review');
-    assert.equal(page.url(), reviewUrl);
-
-    const counts = await page.evaluate(() => window.__adg.review?.counts);
-    assert.deepEqual(counts, { added: 1, removed: 1, moved: 0, changed: 1, direct: 1, inherited: 0 });
-    assert.equal(await page.locator('#review-page').isVisible(), true);
-    assert.equal(await page.locator('.review-frame').count(), 2);
-    assert.equal(await page.locator('[data-section="removed"] img').count(), 0);
-    assert.equal(await page.locator('[data-section="direct"] .review-frame').count(), 1);
-    // The viewer requests its current theme with Before / After / Difference panes.
-    const themedCard = page.locator('.review-frame[data-frame="themed"]');
-    assert.deepEqual(
-      await themedCard.locator('.review-theme').evaluateAll(nodes => nodes.map(node => node.dataset.themeRow)),
-      ['dark'],
-    );
-    assert.equal(await themedCard.locator('img[src^="data:image/png;base64,"]').count(), 3);
-    assert.equal(git('status', '--porcelain'), statusBefore, 'hub review must not dirty the consumer checkout');
-
-    // Live SSE update when working-tree source changes: restore `legacy` so removed drops to 0.
-    await put(
-      'design/components/card.tsx',
-      `import { Frame } from 'adg';
-export default () => [
-  <Frame name="steady">
-    <div style={{ width: 96, height: 48, background: '#336699', color: '#ffffff' }}>Steady</div>
-  </Frame>,
-  <Frame name="legacy">
-    <div style={{ width: 96, height: 48, background: '#663333', color: '#ffffff' }}>Legacy</div>
-  </Frame>,
-  <Frame name="themed">
-    <div style={{ width: 96, height: 48, background: 'var(--canvas)', color: 'var(--text)' }}>Themed</div>
-  </Frame>,
-  <Frame name="fresh">
-    <div style={{ width: 96, height: 48, background: '#1f6f54', color: '#ffffff' }}>Fresh</div>
-  </Frame>,
-];\n`,
-    );
-    await page.waitForFunction(() => window.__adg?.ready && window.__adg?.review?.counts?.removed === 0);
-    assert.deepEqual(await page.evaluate(() => window.__adg.review.counts), { added: 1, removed: 0, moved: 0, changed: 1, direct: 1, inherited: 0 });
-    await context.close();
-  } finally {
-    await browser.close();
-  }
+  const standalone = path.join(root, 'standalone', 'review.html');
+  let stdout = '';
+  const code = await main(['review', `--base=${baseSha}`, '--theme=dark', `--out=${standalone}`, '--json',
+    '--viewer-url=https://design.example/p/project/?key=discard'], project,
+  { stdout: chunk => { stdout += chunk; }, stderr: () => {}, exit: () => {} });
+  assert.equal(code, 0, stdout);
+  const { data: report } = JSON.parse(stdout);
+  assert.equal(report.path, standalone);
+  assert.equal(report.mode, 'hybrid');
+  assert.equal(report.complete, true);
+  assert.equal(report.theme, 'dark');
+  assert.deepEqual(report.counts, { added: 1, removed: 1, moved: 0, changed: 1, direct: 1, inherited: 0 });
+  assert.deepEqual(await readdir(path.dirname(standalone)), ['review.html']);
+  const document = await readFile(standalone, 'utf8');
+  assert.match(document, /https:\/\/design\.example\/p\/project\/\?asset=components%2Fcard\.tsx&amp;frame=themed/);
+  assert.doesNotMatch(document, /key=discard/);
 
   // Commit changes and run diff against HEAD to verify output directory overwrite removes old frames/.
   git('add', '.');

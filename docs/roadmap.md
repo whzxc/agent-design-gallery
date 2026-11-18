@@ -85,7 +85,7 @@ that loaded slowly.
 
 - Board view (done): chapters from `gallery.json` groups with the trial board presentation, a visual Tokens board,
   column placement and tall-board widening, replacing the skyline packing. ARC and the client accepted it.
-- Publishing retirement (done): the CLI, configuration, JSON diagnostics, documentation and obsolete publishing tests are removed. The `?base=<rev>` review page stays.
+- Publishing retirement (done): the CLI, configuration, JSON diagnostics, documentation and obsolete publishing tests are removed.
 - Runtime (done): omit `undefined`, `null` and `false` style values instead of serializing them.
 - Review handoff (done): a review page that never shows a blank screen and reopens from a cache, one review theme
   following the Mac's appearance, changes grouped by cause, moved and renamed frames recognized, and one minimal

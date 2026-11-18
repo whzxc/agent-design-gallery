@@ -10,7 +10,6 @@ import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext
 import { sourceRelationships, relatedSources } from './relationships.js';
 import { contains, hitSelection, frameBox, exportFrames } from './selection.js';
 import { groupTokens, renderTokenTable, tokenBoardSection } from './token-catalog.js';
-import { renderReview } from './review.js';
 import { readViewRoute, viewURL } from './view-route.js';
 import { createBoardLayer } from './boards.js';
 import { createArranger } from './arrangement.js';
@@ -62,9 +61,6 @@ const boardLayer = createBoardLayer(viewport, (path, title, button) => {
 let manifest,
   catalog = null,
   tokenManifest = null,
-  reviewManifest = null,
-  reviewLoading = false,
-  leavingOverlay = false,
   tokenCategory = null,
   tokenList = false,
   tokenSearchWasBoard = false,
@@ -173,7 +169,7 @@ let route = {}, routeError;
 try { route = readViewRoute(new URL(location.href)); }
 catch (error) { routeError = error; }
 let initialLink = route.target, strictRoute = route.strict, queryView = !!route.isolated;
-let scopeRequest = fixtureName ? 'all' : (route.base && route.scope === 'default' ? 'review' : route.scope ?? 'default'), onlyFrame = route.onlyFrame ?? null;
+let scopeRequest = fixtureName ? 'all' : (route.scope ?? 'default'), onlyFrame = route.onlyFrame ?? null;
 let initializedScope, initializedFrame, scopeEntry;
 const currentItem = () => inspection || assets.find((a) => a.id === selectedId);
 function sameView(a, b) {
@@ -242,17 +238,17 @@ function back() {
 function changeScope(next, entry = null, record = true) {
   const nextFrame = entry?.onlyFrame ?? null;
   if (next === scopeRequest && nextFrame === onlyFrame) return;
-  const wasOverlay = scopeRequest === 'tokens' || scopeRequest === 'review' || !!tokenManifest || !!reviewManifest || leavingOverlay;
-  const nextOverlay = next === 'tokens' || next === 'review';
+  const wasOverlay = scopeRequest === 'tokens' || !!tokenManifest;
+  const nextOverlay = next === 'tokens';
   const preserveSearch = !fixtureState && !wasOverlay && !nextOverlay && ['all', 'layer'].includes(scopeKind(next)) && !!$("#search").value.trim();
-  if ((initializedScope || tokenManifest || reviewManifest) && !catalog) {
-    if (next === 'tokens' && manifest && !tokenManifest && !reviewManifest) manifest.view = { ...view };
-    if (record && !tokenManifest && !reviewManifest && next !== 'tokens' && next !== 'review') remember();
+  if ((initializedScope || tokenManifest) && !catalog) {
+    if (next === 'tokens' && manifest && !tokenManifest) manifest.view = { ...view };
+    if (record && !tokenManifest && next !== 'tokens') remember();
     void persistPreferences();
   }
   scopeRequest = next;
   onlyFrame = nextFrame;
-  queryView = entry?.queryView ?? (next !== 'review' && !['all', 'layer'].includes(scopeKind(next)));
+  queryView = entry?.queryView ?? !['all', 'layer'].includes(scopeKind(next));
   strictRoute = false;
   scopeEntry = entry;
   initialLink = null;
@@ -285,10 +281,9 @@ function toggleSidebar(value = !sidebar) {
 }
 function updateChrome() {
   updateSwitcherLabels();
-  const data = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
-  const opened = scopeRequest === 'review' || !!data?.directory;
+  const data = tokenManifest ?? catalog ?? manifest;
+  const opened = !!data?.directory;
   const showTokens = !!tokenManifest && tokenList;
-  const showReview = scopeRequest === 'review' || !!reviewManifest;
   $('#token-list-toggle').hidden = !tokenManifest;
   $('#token-list-toggle').disabled = !tokenManifest?.tokenBoard;
   $('#token-list-toggle').textContent = tokenList ? 'Board view' : 'List view';
@@ -302,7 +297,7 @@ function updateChrome() {
   }
   $('#token-board-button').hidden = !tokenManifest?.tokenBoard || !!fixtureState;
   const isolation = $('#scope-isolation');
-  const showIsolation = !fixtureState && !showReview && !tokenManifest && !!data?.scope && (['group', 'asset'].includes(scopeKind(data.scope)) || !!onlyFrame);
+  const showIsolation = !fixtureState && !tokenManifest && !!data?.scope && (['group', 'asset'].includes(scopeKind(data.scope)) || !!onlyFrame);
   isolation.hidden = !showIsolation;
   if (showIsolation) {
     const label = onlyFrame ? `${scopeLabel(data.scope)} · ${onlyFrame}` : scopeLabel(data.scope);
@@ -314,41 +309,33 @@ function updateChrome() {
       isolation.dataset.tooltip = 'Show full layer';
     }
   }
-  const canInspect = opened && !showTokens && !showReview && !!selected;
-  $('.gallery').classList.toggle('tokens-mode', showTokens || showReview);
+  const canInspect = opened && !showTokens && !!selected;
+  $('.gallery').classList.toggle('tokens-mode', showTokens);
   $('#token-catalog').hidden = !showTokens;
-  $('#review-page').hidden = !showReview;
-  viewport.inert = showTokens || showReview;
-  $('#sidebar').hidden = !opened || showReview || !sidebar;
-  $('#sidebar-toggle').hidden = showReview;
-  $('.search-divider').hidden = showReview;
-  $('.search-field').hidden = showReview;
+  viewport.inert = showTokens;
+  $('#sidebar').hidden = !opened || !sidebar;
   const allArch = assets.length > 0 && assets.every(a => a.path.endsWith('.mmd'));
-  const canComment = opened && !tokenManifest && scopeRequest !== 'layer:arch' && !allArch && !(showReview && reviewFrames.size === 0 && !reviewLoading);
+  const canComment = opened && !tokenManifest && scopeRequest !== 'layer:arch' && !allArch;
   const unavailableReason = canComment ? ''
     : tokenManifest ? 'Tokens take no comments.'
     : scopeRequest === 'layer:arch' || assets.some(a => a.path.endsWith('.mmd')) ? 'Architecture diagrams take no comments.'
-    : 'No commentable frames in this review.';
+    : '';
   $('#comment-tool').hidden = !!tokenManifest && !!fixtureState;
   $('#comment-tool').disabled = !canComment;
   $('#comment-tool').dataset.tooltip = canComment || !unavailableReason ? 'Comment (C)' : unavailableReason;
   commentUI?.setAvailable?.(canComment, unavailableReason);
-  $('#inspect').hidden = showReview;
   $('#app-bar').hidden = !opened;
   if (fixtureState) $('#app-directory .switcher-chevron').hidden = false;
   $('#tools').hidden = !opened;
   $('.zoom').hidden = !opened || showTokens;
-  $('.zoom').classList.toggle('comments-only', showReview);
-  $('.zoom').setAttribute('aria-label', showReview ? 'Review tools' : 'Canvas tools');
   $('#source').hidden = !canInspect || !inspector;
   $('#inspect').disabled = !canInspect;
   $('#inspect').setAttribute('aria-expanded', String(canInspect && inspector));
-  $('#canvas-background-section').hidden = showReview || showTokens;
-  $('#arrange').hidden = !!tokenManifest || showReview;
+  $('#arrange').hidden = !!tokenManifest;
   $('#zoom-fit-group').disabled = !!tokenManifest || active === null || !groups[active];
   $('#zoom-fit-selection').disabled = !!tokenManifest || !selected;
-  if (!opened || showReview) $('#minimap').hidden = true;
-  $('#sidebar-toggle').setAttribute('aria-expanded', String(opened && !showReview && sidebar));
+  if (!opened) $('#minimap').hidden = true;
+  $('#sidebar-toggle').setAttribute('aria-expanded', String(opened && sidebar));
   positionZoomMenu();
 }
 function positionZoomMenu() {
@@ -361,9 +348,8 @@ const media = matchMedia("(prefers-color-scheme: dark)");
 const modifiedDate = new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 window.__adg = {
   ready: false,
-  get metadataComplete() {return !reviewLoading && (!!reviewManifest || !!tokenManifest || (!!manifest && !manifest.loading));},
-  get scope() {return scopeRequest === 'review' ? 'review' : (reviewManifest ?? tokenManifest)?.scope ?? initializedScope;},
-  get review() {return reviewManifest?.review ?? null;},
+  get metadataComplete() {return !!tokenManifest || (!!manifest && !manifest.loading);},
+  get scope() {return tokenManifest?.scope ?? initializedScope;},
   get cachePending() {return cacheWrites+loading+queued.length;},
   get cacheFlush() {return flushCache();},
   get cacheFailures() {return cacheFailures;},
@@ -371,7 +357,7 @@ window.__adg = {
     return { ...view };
   },
   get assets() {
-    return reviewManifest || tokenManifest ? 0 : assets.length;
+    return tokenManifest ? 0 : assets.length;
   },
   get previews() {
     return {entries: cache.size, decoded: [...cache.values()].filter(e => e.image).length,
@@ -416,7 +402,7 @@ async function api(url, data, keepalive = false, signal) {
   return result;
 }
 function preferences() {
-  if (scopeRequest === 'review' || reviewManifest || tokenManifest || onlyFrame) return { theme };
+  if (tokenManifest || onlyFrame) return { theme };
   return {
     view,
     scope: initializedScope,
@@ -466,11 +452,11 @@ function restoreSelection(target) {
 }
 function persistPreferences(keepalive = false) {
   clearTimeout(saveTimer);
-  if (fixtureState || catalog || !(reviewManifest ?? tokenManifest ?? manifest)?.directory) return;
+  if (fixtureState || catalog || !(tokenManifest ?? manifest)?.directory) return;
   return api('preferences', preferences(), keepalive).catch(e => error(e.message));
 }
 function save() {
-  if(fixtureState || catalog || !(reviewManifest ?? tokenManifest ?? manifest)?.directory) return;
+  if(fixtureState || catalog || !(tokenManifest ?? manifest)?.directory) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(persistPreferences, 220);
 }
@@ -555,7 +541,6 @@ function navigate(action) {
 function scopedUI(data) { return !!data.layers && (!data.fixture || !!data.fixture.scope); }
 function scopeLabel(scope) {
   const target = scopeTarget(scope);
-  if (scope === 'review') return 'Review';
   if (scope === 'all') return 'All designs';
   if (scope === 'tokens') return 'Tokens';
   if (scopeKind(scope) === 'layer') return target[0].toUpperCase() + target.slice(1);
@@ -564,8 +549,7 @@ function scopeLabel(scope) {
 }
 function renderScopeTabs(data) {
   const tabs = $('#scope-tabs');
-  const hasBase = new URL(location.href).searchParams.has('base');
-  const choices = [...(hasBase ? ['review'] : []), ...(data.tokenSource ? ['tokens'] : []), ...(data.layers ?? []).map(layer => 'layer:' + layer), 'all'];
+  const choices = [...(data.tokenSource ? ['tokens'] : []), ...(data.layers ?? []).map(layer => 'layer:' + layer), 'all'];
   const signature = JSON.stringify([data.scope, choices]);
   $('#sidebar').classList.toggle('scoped', scopedUI(data));
   if (tabs.dataset.signature === signature) return;
@@ -624,13 +608,9 @@ function navFile(a, options = {}) {
   return row;
 }
 function renderNav() {
-  const data = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
+  const data = tokenManifest ?? catalog ?? manifest;
   if (!data) return;
   renderScopeTabs(data);
-  if (reviewManifest) {
-    requestDraw();
-    return;
-  }
   const scoped = scopedUI(data), kind = scoped ? scopeKind(data.scope) : null;
   const focusKey = document.activeElement?.dataset.navkey;
   const query = $("#search").value.trim().toLowerCase(), nodes = [];
@@ -837,7 +817,7 @@ function asScreen(box) {
   return { x: rect.left + view.x + box.x * view.scale, y: rect.top + view.y + box.y * view.scale,
     width: box.width * view.scale, height: box.height * view.scale };
 }
-const sourcePrefix = () => (reviewManifest ?? manifest)?.sourcePrefix ?? '';
+const sourcePrefix = () => manifest?.sourcePrefix ?? '';
 const projectSource = source => {
   const prefix = sourcePrefix();
   return !prefix || source.startsWith(prefix + '/') ? source : prefix + '/' + source;
@@ -850,7 +830,7 @@ let commentBoards = [];
 let commentCatalogRun, commentCatalogLoaded;
 function refreshCommentCatalog() {
   if (commentCatalogRun) return commentCatalogRun;
-  const catalog = !reviewManifest && manifest?.scope === 'all' ? Promise.resolve(manifest) : api('manifest');
+  const catalog = manifest?.scope === 'all' ? Promise.resolve(manifest) : api('manifest');
   commentCatalogRun = catalog.then(data => {
     commentBoards = groupAssets(data);
     commentCatalogLoaded = true;
@@ -896,71 +876,7 @@ function boardAttachment(thread) {
   return attached && { ...attached, chapter: board.title, layer: board.layer };
 }
 
-let reviewFrames = new Map();
-const reviewGeometry = new WeakMap();
-const frameKey = (source, frame) => JSON.stringify([source, frame]);
-function indexReviewFrames() {
-  reviewFrames = new Map();
-  for (const image of $('#review-page').querySelectorAll('[data-side="after"] img')) {
-    const card = image.closest('.review-frame');
-    if (card && commentable(card.dataset.source)) reviewFrames.set(frameKey(card.dataset.source, card.dataset.frame), image);
-  }
-}
-function primeReviewFrame(image) {
-  let record = reviewGeometry.get(image);
-  if (!record) {
-    const card = image.closest('.review-frame');
-    const path = designSource(card.dataset.source);
-    record = { part: null };
-    reviewGeometry.set(image, record);
-    record.promise = prepare({ path, onlyFrame: card.dataset.frame, version: reviewManifest?.revision ?? '' }, effectiveTheme)
-      .then(result => { record.part = result.parts[0]; })
-      .catch(() => {})
-      .finally(() => { if (image.isConnected) commentUI.render(); });
-  }
-  return record;
-}
-function reviewCanvas(image) {
-  const rect = image.getBoundingClientRect();
-  const part = primeReviewFrame(image).part;
-  const width = part?.width || image.naturalWidth / 2 || rect.width;
-  const height = part?.height || image.naturalHeight / 2 || rect.height;
-  const bounds = { x: 0, y: 0, width, height };
-  const sx = rect.width / width, sy = rect.height / height;
-  return { part, bounds, sx, sy, rect,
-    toScreen: box => ({ x: rect.left + box.x * sx, y: rect.top + box.y * sy, width: box.width * sx, height: box.height * sy }) };
-}
-function currentReviewImage(x, y) {
-  const image = document.elementsFromPoint(x, y).find(item => item.matches('#review-page [data-side="after"] img'));
-  return image && commentable(image.closest('.review-frame')?.dataset.source) ? image : null;
-}
-function targetOnReview(x, y, deepest) {
-  const image = currentReviewImage(x, y);
-  if (!image) return null;
-  const card = image.closest('.review-frame'), source = card.dataset.source, frameName = card.dataset.frame;
-  const { part, bounds, rect, sx, sy, toScreen } = reviewCanvas(image);
-  if (!sx || !sy) return null;
-  const point = { x: (x - rect.left) / sx, y: (y - rect.top) / sy };
-  const hit = part?.elements?.findLast(element => contains(element, point.x, point.y));
-  const element = commentElement(part?.elements, hit, deepest);
-  const box = element ?? bounds, path = designSource(source);
-  const group = commentBoards.find(board => board.assets.some(asset => asset.path === path));
-  return { ...placeComment({ source, frame: frameName, layer: group?.layer ?? path.split('/')[0],
-    chapter: group?.title, box, frameBox: bounds, element, owner: commentOwner(element, path),
-    label: commentLabel(path, frameName) }, point), revision: reviewManifest.review.current.head, x, y, box: toScreen(box) };
-}
 function locateComment(thread) {
-  if (reviewManifest) {
-    const image = reviewFrames.get(frameKey(thread.anchor.source, thread.anchor.frame));
-    if (!image || !image.getClientRects().length || !image.complete) return null;
-    const { part, bounds, sx, sy, rect } = reviewCanvas(image);
-    const scroll = $('#review-page .review-scroll').getBoundingClientRect();
-    const point = attachComment(thread, { frame: bounds, elements: part?.elements });
-    if (!point || !sx || !sy) return null;
-    const x = rect.left + sx * point.x, y = rect.top + sy * point.y;
-    if (!contains({ x: scroll.left, y: scroll.top, width: scroll.width, height: scroll.height }, x, y)) return null;
-    return { ...point, x, y };
-  }
   if (tokenManifest) return null;
   const point = boardAttachment(thread);
   return point && { ...point, ...asScreen({ x: point.x, y: point.y, width: 0, height: 0 }) };
@@ -978,17 +894,7 @@ function focusBoardComment(thread) {
 }
 let commentNavigation;
 async function navigateComment(thread) {
-  if (reviewManifest) {
-    const image = reviewFrames.get(frameKey(thread.anchor.source, thread.anchor.frame));
-    if (image) {
-      const details = image.closest('details');
-      if (details) details.open = true;
-      image.loading = 'eager';
-      image.scrollIntoView({ block: 'center' });
-      await Promise.all([image.decode().catch(() => {}), primeReviewFrame(image).promise]);
-      return true;
-    }
-  } else if (!tokenManifest && focusBoardComment(thread)) return true;
+  if (!tokenManifest && focusBoardComment(thread)) return true;
   const { layer } = commentBoardPlace(thread);
   const next = layer ? `layer:${layer}` : 'all';
   if (scopeRequest === next && !manifest?.loading) return false;
@@ -1013,11 +919,7 @@ function commentBoardPlace(thread) {
 }
 commentUI = createComments({
   toolButton: $('#comment-tool'), panelButton: $('#comments-toggle'), panel: $('#comments-panel'), layer: $('#comment-layer'),
-  hitTest: (x, y, deepest) => reviewManifest ? targetOnReview(x, y, deepest) : targetOnBoard(x, y, deepest),
-  preparePoint: (x, y) => {
-    const image = reviewManifest && currentReviewImage(x, y);
-    return image ? Promise.all([primeReviewFrame(image).promise, commentCatalogLoaded ? undefined : refreshCommentCatalog()]) : undefined;
-  },
+  hitTest: targetOnBoard,
   locate: locateComment, navigate: navigateComment, boardOrder: commentBoardOrder, boardPlace: commentBoardPlace, request: api,
   onPanelToggle: open => {
     if (open && inspector) {
@@ -1254,9 +1156,9 @@ function draw() {
   const endDrawing = globalThis.__adgTiming?.span('drawing');
   raf = 0;
   drawBackground();
-  if ((tokenManifest && tokenList) || scopeRequest === 'review' || reviewManifest) {
-    window.__adg.ready = scopeRequest === 'review' ? !!reviewManifest && !reviewLoading : true;
-    window.__adg.revision = (reviewManifest ?? tokenManifest)?.revision;
+  if (tokenManifest && tokenList) {
+    window.__adg.ready = true;
+    window.__adg.revision = tokenManifest.revision;
     if (fixtureState) document.documentElement.dataset.fixtureReady = fixtureState.name;
     endDrawing?.(); return;
   }
@@ -1333,7 +1235,7 @@ function draw() {
   }
   canvas.style.transform = `translate(${view.x - drawingView.x - drawingMargin}px,${view.y - drawingView.y - drawingMargin}px)`;
   updateOutlines();
-  boardLayer.camera(view, !!inspection || !!tokenManifest || !!reviewManifest);
+  boardLayer.camera(view, !!inspection || !!tokenManifest);
   const percentage = `${Math.round(view.scale * 100)}%`;
   if (zoomValue.textContent !== percentage) zoomValue.textContent = percentage;
   if (zoomOutput.value !== percentage) zoomOutput.value = percentage;
@@ -1385,33 +1287,15 @@ function applyTheme() {
   );
   palette.raised = css.getPropertyValue("--surface-sunken").trim();
   palette.muted = css.getPropertyValue("--text-secondary").trim();
-  const stageProps = [['canvas', 'canvas'], ['border', 'border'], ['surface', 'surface'], ['sunken', 'surface-sunken'], ['section', 'surface-section']];
   for (const sheet of document.styleSheets) {
     let rules;
     try { rules = sheet.cssRules; } catch { continue; }
     for (const rule of rules ?? []) {
       if (rule.selectorText === ':root' && rule.style.getPropertyValue('--canvas')) {
         backgroundColors.light = rule.style.getPropertyValue('--canvas').trim();
-        for (const [short, token] of stageProps) {
-          const val = rule.style.getPropertyValue('--' + token).trim();
-          if (val) document.documentElement.style.setProperty(`--stage-light-${short}`, val);
-        }
-        document.documentElement.style.setProperty('--review-canvas-light', backgroundColors.light);
-        const s = rule.style.getPropertyValue('--surface-sunken').trim(), b = rule.style.getPropertyValue('--surface').trim();
-        if (s) document.documentElement.style.setProperty('--review-checker-light-a', s);
-        if (b) document.documentElement.style.setProperty('--review-checker-light-b', b);
       }
       if (rule.selectorText === ':root[data-theme="dark"]' && rule.style.getPropertyValue('--canvas')) {
         backgroundColors.dark = rule.style.getPropertyValue('--canvas').trim();
-        for (const [short, token] of stageProps) {
-          const val = rule.style.getPropertyValue('--' + token).trim();
-          if (val) document.documentElement.style.setProperty(`--stage-dark-${short}`, val);
-        }
-        document.documentElement.style.setProperty('--review-canvas-dark', backgroundColors.dark);
-        const bd = rule.style.getPropertyValue('--border').trim(), da = rule.style.getPropertyValue('--surface').trim(), db = rule.style.getPropertyValue('--surface-section').trim();
-        if (bd) document.documentElement.style.setProperty('--review-border-dark', bd);
-        if (da) document.documentElement.style.setProperty('--review-checker-dark-a', da);
-        if (db) document.documentElement.style.setProperty('--review-checker-dark-b', db);
       }
     }
   }
@@ -1421,17 +1305,15 @@ function applyTheme() {
 }
 for (const b of $("#themes").children)
   b.onclick = () => {
-    const previousTheme = effectiveTheme;
     theme = b.dataset.theme;
     localStorage.setItem('adg-theme', theme);
     applyTheme();
-    if (previousTheme !== effectiveTheme || scopeRequest !== 'review') void refresh(true);
+    void refresh(true);
     save();
   };
 media.addEventListener("change", () => {
-  const previousTheme = effectiveTheme;
   applyTheme();
-  if (previousTheme !== effectiveTheme || scopeRequest !== 'review') void refresh(true);
+  void refresh(true);
 });
 viewport.addEventListener(
   "wheel",
@@ -1605,7 +1487,7 @@ function openSelectionContextMenu({ worldPoint = null, screenX, screenY, deepest
   ], { x: screenX, y: screenY, returnFocus });
 }
 viewport.addEventListener('contextmenu', e => {
-  if (reviewManifest || tokenManifest || !manifest?.directory) return;
+  if (tokenManifest || !manifest?.directory) return;
   e.preventDefault();
   viewport.focus({ preventScroll: true });
   const rect = viewport.getBoundingClientRect();
@@ -1619,7 +1501,7 @@ viewport.addEventListener('contextmenu', e => {
 });
 document.addEventListener('keydown', e => {
   if (!(e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) return;
-  if (reviewManifest || tokenManifest || !manifest?.directory || document.querySelector('dialog[open]')) return;
+  if (tokenManifest || !manifest?.directory || document.querySelector('dialog[open]')) return;
   e.preventDefault();
   const activeEl = document.activeElement;
   const box = selectedBox();
@@ -1630,10 +1512,10 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey ||
-      (tokenManifest && tokenList) || scopeRequest === 'review' || !!reviewManifest ||
+      (tokenManifest && tokenList) ||
       e.target.matches("input,textarea,select,[contenteditable]") ||
       document.querySelector("dialog[open], :popover-open")) return;
-  const inPanel = !!e.target.closest('#sidebar, #source, #comments-panel, #scope-tabs, #token-catalog, #review-page');
+  const inPanel = !!e.target.closest('#sidebar, #source, #comments-panel, #scope-tabs, #token-catalog');
   const v = view;
   if (e.key === "Enter") {
     if (tokenManifest || inPanel || e.target.closest('button,a,[role="button"]')) return;
@@ -1745,7 +1627,7 @@ $("#arrange").onclick = async () => {
   let placed;
   try {if(!data.loading)placed=await arranger.arrange(layoutData(data));}
   catch(failure){if(failure.name!=='AbortError')error(failure.message);requestDraw();return;}
-  if(manifest!==data || catalog!==previousCatalog || tokenManifest || reviewManifest){requestDraw();return;}
+  if(manifest!==data || catalog!==previousCatalog || tokenManifest){requestDraw();return;}
   layout(manifest,false,{placed,provisional:!!data.loading});
   $("#more-menu").hidePopover();
   selection();
@@ -1839,9 +1721,8 @@ function relationshipGraph(data, measured) {
   return sourceRelationships([...entries].map(([path,imports])=>({path,imports})));
 }
 function applyTokenManifest(data) {
-  const previous = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
+  const previous = tokenManifest ?? catalog ?? manifest;
   const entering = !tokenManifest || tokenManifest.directory !== data.directory;
-  leavingOverlay = false;
   tokenManifest = { ...data, tokenGroups: groupTokens(data.tokens ?? []) };
   if (entering) {
     tokenList = false;
@@ -1861,7 +1742,6 @@ function applyTokenManifest(data) {
     if (entering) frame(world);
     requestDraw();
   });
-  reviewManifest = null;
   scopeRequest = data.scope;
   catalog = null;
   if (entering) {
@@ -1887,93 +1767,12 @@ function applyTokenManifest(data) {
   renderNav();
   requestDraw();
 }
-function applyReviewManifest(data) {
-  const previous = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
-  leavingOverlay = false;
-  reviewManifest = data;
-  tokenManifest = null;
-  catalog = null;
-  scopeRequest = 'review';
-  fixtureState = null;
-  if (previous?.directory !== data.directory) {
-    sidebar = false;
-  }
-  for (const element of document.querySelectorAll('.directory-name')) element.textContent = data.label;
-  $('#app-directory').title = data.directory || '';
-  document.title = `${data.label} · Review — Agent Design Gallery`;
-  const url = viewURL(location.href, 'review');
-  if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
-  const scrollTop = $('#review-page .review-scroll')?.scrollTop ?? 0;
-  renderReview($('#review-page'), data.review, {
-    live: true,
-    theme: effectiveTheme,
-    onThemeChange: next => {
-      if (!['system', 'light', 'dark'].includes(next)) return;
-      theme = next;
-      localStorage.setItem('adg-theme', theme);
-      applyTheme();
-      void refresh(true);
-      save();
-    },
-    onExit: () => {
-      const u = new URL(location.href);
-      u.searchParams.delete('base');
-      history.replaceState(history.state, '', u);
-      leavingOverlay = true;
-      reviewManifest = null;
-      changeScope('default', null, false);
-    },
-    onOpenFrame: (src, frm) => {
-      const p = designSource(src);
-      changeScope('asset:' + p, { target: { path: p, form: frm } });
-    },
-  });
-  indexReviewFrames();
-  $('#review-page .review-scroll').scrollTop = scrollTop;
-  if (!performance.getEntriesByName('adg-review-content', 'mark').length) performance.mark('adg-review-content');
-  updateChrome();
-  commentUI.render();
-  renderNav();
-  requestDraw();
-}
-function setReviewLoading(value) {
-  reviewLoading = value;
-  const container = $('#review-page');
-  container.setAttribute('aria-busy', String(value));
-  container.querySelector('.review-progress')?.remove();
-  if (value) {
-    if (!container.firstElementChild) {
-      const header = document.createElement('header');
-      header.className = 'review-header';
-      const title = document.createElement('h1');
-      title.id = 'review-title';
-      title.textContent = (tokenManifest ?? catalog ?? manifest)?.label || 'Design review';
-      header.append(title);
-      container.append(header);
-      for (const element of document.querySelectorAll('.directory-name')) element.textContent = title.textContent;
-      renderScopeTabs({ scope: 'review', layers: [] });
-    }
-    const progress = document.createElement('div');
-    progress.className = 'review-progress';
-    progress.setAttribute('role', 'status');
-    const indicator = document.createElement('progress');
-    indicator.setAttribute('aria-label', 'Review progress');
-    const text = document.createElement('span');
-    text.textContent = `${reviewManifest ? 'Updating' : 'Loading'} ${effectiveTheme} review…`;
-    progress.append(indicator, text);
-    container.querySelector('.review-header').after(progress);
-  }
-  updateChrome();
-  if (value && !performance.getEntriesByName('adg-review-progress', 'mark').length) performance.mark('adg-review-progress');
-  requestDraw();
-}
 async function applyManifest(data, force = false) {
   if (data.scope === 'tokens') {
     if (force || tokenManifest?.directory !== data.directory || tokenManifest?.revision !== data.revision) applyTokenManifest(data);
     return;
   }
-  const leavingOverlayView = !!tokenManifest || !!reviewManifest || leavingOverlay;
-  leavingOverlay = false;
+  const leavingOverlayView = !!tokenManifest;
   const changedRoot = initializedDirectory !== data.directory, changedScope = initializedScope !== data.scope || initializedFrame !== onlyFrame;
   const first = changedRoot || changedScope;
   if (!force && !first && !leavingOverlayView && manifest.revision === data.revision)
@@ -2080,7 +1879,6 @@ async function applyManifest(data, force = false) {
   for(const key of metadataCache.keys())if(!live.has(key))metadataCache.delete(key);
   manifest = { ...data, assets: results, relationships:relationshipGraph(data,results), renderTheme: versionTheme };
   tokenManifest = null;
-  reviewManifest = null;
   // Early streamed worlds can use a much larger camera scale. Discard those
   // raster intermediates so the completed world starts at its exact final scale.
   if(streaming&&publishedCount)for(const entry of cache.values()){delete entry.bitmap;delete entry.bitmapScale;}
@@ -2281,16 +2079,6 @@ async function refresh(force = false) {
   fetching = true;refreshController=new AbortController();
   try {
     if (routeError) throw routeError;
-    if (scopeRequest === 'review') {
-      window.__adg.ready = false;
-      setReviewLoading(true);
-      const query = new URLSearchParams({ theme: effectiveTheme });
-      const signal = refreshController.signal, data = await api(`review?${query}`, null, false, signal);
-      signal.throwIfAborted();
-      applyReviewManifest(data);
-      error("");
-      return;
-    }
     const query=new URLSearchParams({context:metadataContext(),theme:effectiveTheme,scope:scopeRequest});
     if (strictRoute) query.set('strict', '1');
     if (onlyFrame) query.set('frame', onlyFrame);
@@ -2308,7 +2096,6 @@ async function refresh(force = false) {
     if(e.name!=='AbortError')error(e.message);
     else if(!refreshController.signal.aborted)pending=true;
   } finally {
-    if (reviewLoading && !pending) setReviewLoading(false);
     fetching = false;
     if (pending) {
       pending = false;
@@ -2316,45 +2103,9 @@ async function refresh(force = false) {
     }
   }
 }
-if (scopeRequest === 'review') {
-  const savedTheme = localStorage.getItem('adg-theme');
-  if (['system', 'light', 'dark'].includes(savedTheme)) theme = savedTheme;
-  applyTheme();
-  initSwitcher();
-}
-const reviewPage = $('#review-page');
-let reviewPress;
-reviewPage.addEventListener('pointermove', event => {
-  if (commentUI.active() && !reviewPress) commentUI.hover(event.clientX, event.clientY, event.altKey);
-});
-reviewPage.addEventListener('pointerleave', () => { reviewPress = null; commentUI.hover(); });
-reviewPage.addEventListener('pointerdown', event => {
-  if (event.button === 0 && commentUI.active()) reviewPress = { x: event.clientX, y: event.clientY, id: event.pointerId };
-});
-reviewPage.addEventListener('pointercancel', () => { reviewPress = null; });
-reviewPage.addEventListener('pointerup', async event => {
-  const press = reviewPress;
-  reviewPress = null;
-  if (!press || press.id !== event.pointerId || Math.hypot(event.clientX - press.x, event.clientY - press.y) > 4) return;
-  const image = currentReviewImage(event.clientX, event.clientY);
-  if (!image) return;
-  await Promise.all([primeReviewFrame(image).promise, commentCatalogLoaded ? undefined : refreshCommentCatalog()]);
-  if (commentUI.active() && image.isConnected) commentUI.click(event.clientX, event.clientY, event.altKey);
-});
-reviewPage.addEventListener('contextmenu', async event => {
-  const image = currentReviewImage(event.clientX, event.clientY);
-  if (!image) return;
-  event.preventDefault();
-  await Promise.all([primeReviewFrame(image).promise, commentCatalogLoaded ? undefined : refreshCommentCatalog()]);
-  const placement = targetOnReview(event.clientX, event.clientY, event.altKey);
-  if (placement) contextMenu.open([{ label: 'Comment', action: () => commentUI.place(placement) }], { x: event.clientX, y: event.clientY, returnFocus: reviewPage });
-});
-reviewPage.addEventListener('scroll', () => { commentUI.hover(); commentUI.reposition(); }, { capture: true, passive: true });
-reviewPage.addEventListener('load', () => commentUI.render(), true);
-reviewPage.addEventListener('toggle', () => commentUI.render(), true);
 await refresh();
 if(fixtureState) { try { await applyFixture(); } catch(e) { error(e.message); } }
-if ((reviewManifest || tokenManifest || manifest) && !isUnauthorized()) {
+if ((tokenManifest || manifest) && !isUnauthorized()) {
   const events = new EventSource(keyURL('events'));
   const refreshComments = () => commentUI.refresh().catch(err => error(err.message));
   events.addEventListener('comments', refreshComments);
@@ -2386,7 +2137,6 @@ if ((reviewManifest || tokenManifest || manifest) && !isUnauthorized()) {
 
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
-    if (reviewManifest || scopeRequest === 'review') return;
     e.preventDefault();
     $("#search").focus();
     return;
@@ -2394,7 +2144,6 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
   if (document.querySelector(":popover-open")) return;
   if (e.defaultPrevented) return;
-  if (reviewManifest || scopeRequest === 'review') return;
   if (tokenManifest) {
     if ($('#search').value) {
       e.preventDefault();
@@ -2427,7 +2176,7 @@ document.addEventListener("keydown", (e) => {
   viewport.focus({ preventScroll: true });
 });
 
-if (scopeRequest !== 'review') initSwitcher();
+initSwitcher();
 
 $('#token-list-toggle').onclick = () => {
   $('#more-menu').hidePopover();

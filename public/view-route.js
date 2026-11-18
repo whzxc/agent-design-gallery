@@ -43,7 +43,6 @@ export function viewURL(base, scope, target = {}, { isolated = false, onlyFrame 
   const url = new URL(base);
   url.pathname = viewerBase(url.pathname);
   for (const key of locatorKeys) url.searchParams.delete(key);
-  if (scope === 'review') return url;
   const { path, group, form, element } = target;
   if (onlyFrame) {
     url.searchParams.set('asset', path);

@@ -193,11 +193,12 @@ export async function buildArch(config,file,{snapshot,model:overlayModel,browser
   const result=await renderArch(overlayModel??checked.model,tokenSource,{browser});
   const legend=checked.classes.length?`<div class="arch-legend">${checked.classes.map(name=>`<span class="arch-key ${name}" style="--arch-color:var(--arch-${name})"><i class="arch-swatch"></i>${name}</span>`).join('')}</div>`:'';
   const html=`<section data-adg-arch>${legend}${result.svg}</section>`;
-  const css=`${archStyles()}\n${tokenSource}\nhtml,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-adg-frame]{display:flex;width:max-content}`;
+  const cssAfterTokens='\nhtml,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-adg-frame]{display:flex;width:max-content}';
+  const css=`${archStyles()}\n${tokenSource}${cssAfterTokens}`;
   const note=[metadata.body,metadata.owners.length?`Owners: ${metadata.owners.join(', ')}`:'',metadata.status?`Status: ${metadata.status}`:''].filter(Boolean).join('\n');
   const frame={frame:true,name:'default',html,note};
   frame.document=theme=>`<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="default">${html}</div></body></html>`;
-  return {frames:[frame],css,imports:[],dependencies};
+  return {frames:[frame],css,cssAfterTokens,imports:[],dependencies};
 }
 
 // Executed in the same Chromium page as ordinary frame checks. Bounds are in

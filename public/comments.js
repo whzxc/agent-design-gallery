@@ -191,7 +191,7 @@ function editor(placeholder, action, onSubmit) {
 }
 
 export function createComments({
-  toolButton, panelButton, panel, layer, hitTest, preparePoint, locate, navigate, boardPlace,
+  toolButton, panelButton, panel, layer, hitTest, locate, navigate, boardPlace,
   boardOrder = () => 0, request, onPanelToggle,
   initialThreads = [], initialComment, storageKey = `adg-comments-visible:${viewerBase(location.pathname)}`,
 }) {
@@ -479,7 +479,6 @@ export function createComments({
     pendingMoves.set(id, move);
     render();
     try {
-      if (preparePoint) await preparePoint(x, y);
       if (pendingMoves.get(id) !== move || !threads.has(id)) return;
       const target = hitTest(x, y, deepest);
       if (!target) return;

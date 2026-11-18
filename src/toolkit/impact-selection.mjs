@@ -92,7 +92,7 @@ export async function withImpacted(config, args, options, command, work) {
           if (selection.coverage.scope === 'partial') warnings.push({ code: 'IMPACT_COVERAGE_PARTIAL', message: 'Impact selection has partial frame/theme coverage.', next });
           if (!failure && !chosen.some(row => (command === 'diff' || row.after) && themes.some(theme => scheduled(row, theme)))) warnings.push({ code: 'IMPACT_NO_CHANGES', message: 'No capture or browser-evaluation jobs were scheduled.', next });
         }
-        if (failure && !['CHECK_FAILED', 'DIFF_FAILED'].includes(failure.code) && !(command === 'diff' && failure.reviewCacheable === true)) throw failure;
+        if (failure && !['CHECK_FAILED', 'DIFF_FAILED'].includes(failure.code) && !(command === 'diff' && failure.partialSourceFailures === true)) throw failure;
       },
       tolerateSourceFailures: command === 'diff',
     });
@@ -101,14 +101,14 @@ export async function withImpacted(config, args, options, command, work) {
     if (outcome?.data) outcome.data.timings = { ...outcome.data.timings, impactMs: plan.data.timings.totalMs - workMs, workMs, materializeMs: plan.data.timings.materializeMs, proofMs: plan.data.timings.proofMs, totalMs: plan.data.timings.totalMs };
   } catch (cause) {
     discardProofs();
-    if (failure) delete failure.reviewCacheable;
+    if (failure) delete failure.partialSourceFailures;
     if (!outcome?.data) cause.data = null;
     failure = outcome?.data ? commandFailure(cause, outcome.data, warnings) : cause;
   }
   if (outcome) outcome.warnings = [...new Set([...outcome.warnings, ...warnings])];
   if (outcome?.data?.reportPath) {
     try { await mkdir(path.dirname(outcome.data.reportPath), { recursive: true }); await writeFile(outcome.data.reportPath, JSON.stringify(outcome.data, null, 2) + '\n'); }
-    catch (cause) { discardProofs(); outcome.data.reportPath = null; if ('indexPath' in outcome.data) outcome.data.indexPath = null; failure = commandFailure(cause, outcome.data, outcome.warnings); delete failure.reviewCacheable; }
+    catch (cause) { discardProofs(); outcome.data.reportPath = null; if ('indexPath' in outcome.data) outcome.data.indexPath = null; failure = commandFailure(cause, outcome.data, outcome.warnings); delete failure.partialSourceFailures; }
   }
   if (failure) { if (outcome?.data) failure = commandFailure(failure, outcome.data, outcome.warnings); throw failure; }
   return outcome;

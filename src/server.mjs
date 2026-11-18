@@ -27,8 +27,6 @@ import { parseTokens } from './toolkit/tokens.mjs';
 import { tokenBoard } from './boards/token-board.mjs';
 import { sourceRelationships } from '../public/relationships.js';
 import { resolveScope } from '../public/assets.js';
-import { diff } from './toolkit/diff.mjs';
-import { reviewCacheKey, readReviewCache } from './review-cache.mjs';
 const digest = value => createHash('sha256').update(value).digest('hex');
 const tokenFile = 'tokens.css';
 function tokenSourcePath(directory, project) {
@@ -42,7 +40,6 @@ export async function startServer({
   port = 0,
   stateDirectory = defaultState,
   commentStateDirectory = stateDirectory,
-  reviewStateDirectory = commentStateDirectory,
   fixtures = null,
   readOnly = false,
   instanceId = randomUUID(),
@@ -67,7 +64,7 @@ export async function startServer({
     revision = 0,
     closing = false,
     buildStore, viewerCache, codePaths=new Set();
-  const overlayStores = new Map(), overlayHashes = new Set(), activeReviews = new Set(), pendingReviews = new Map();
+  const overlayStores = new Map(), overlayHashes = new Set();
   let resettingOverlays = false;
   const knownBuilds = new Map(), legacyDependencies = new Map(), failedSources=new Set(), dirtyBuilds=new Set();
   const describe=built=>({...built,css:undefined,frames:built.frames.map(({html,...frame})=>frame)});
@@ -445,41 +442,6 @@ export async function startServer({
     data.features={compactSources:1,persistedMetadata:1,incrementalHashes:1};
     return applyFixtureManifest(data,url.searchParams.get('fixture'));
   }
-  async function reviewManifest(url) {
-    const baseParam = url.searchParams.get('base');
-    if (typeof baseParam !== 'string' || !baseParam.trim())
-      throw new CliError('USAGE_INVALID', 'Set ?base=<rev> to a Git revision.');
-    if (!activeProject || !root)
-      throw new CliError('DIRECTORY_NOT_FOUND', 'No project is open.');
-    const data = baseManifest();
-    const { layers } = resolveScope(data, sources, 'all');
-    const theme = url.searchParams.get('theme') === 'dark' ? 'dark' : 'light';
-    const key = await reviewCacheKey(activeProject, baseParam, theme, reviewStateDirectory);
-    const wrap = review => ({ ...data, scope: 'review', layers, assets: [], base: { ...review.base, rev: baseParam }, review: { ...review, base: { ...review.base, rev: baseParam }, label: data.label } });
-    const cached = await readReviewCache(key);
-    if (cached) return wrap(cached);
-    if (!pendingReviews.has(key.directory)) {
-      const task = (async () => {
-        let review;
-        try {
-          await diff(activeProject, [], {
-            base: baseParam, impacted: true, theme,
-            'out-dir': path.join(key.directory, 'artifacts'),
-            'state-dir': reviewStateDirectory, json: true,
-          }, { log: () => {}, onReview: value => { review = value; } });
-        } catch (error) {
-          if (error.code !== 'DIFF_FAILED' && !(error.reviewCacheable === true && review)) throw error;
-        }
-        if (!review) throw new CliError('INTERNAL_ERROR', 'Review output was not produced.');
-        return review;
-      })();
-      pendingReviews.set(key.directory, task);
-      activeReviews.add(task);
-      task.finally(() => { pendingReviews.delete(key.directory); activeReviews.delete(task); }).catch(() => {});
-    }
-    return wrap(await pendingReviews.get(key.directory));
-  }
-
   async function sourceBuild(name) {
     const endBuild = perfSpan('build', name);
     let built;
@@ -674,9 +636,6 @@ export async function startServer({
       if (url.pathname === "/manifest") {
         content = JSON.stringify(await manifest(url));
         type = "application/json";
-      } else if (url.pathname === "/review") {
-        content = JSON.stringify(await reviewManifest(url));
-        type = "application/json";
       } else if (url.pathname === "/relationships") {
         const assets = await Promise.all([...files.keys()].filter(name => /\.(tsx|mmd)$/.test(name)).map(async name => ({path:name, imports:(await sourceBuild(name)).imports})));
         content = JSON.stringify(sourceRelationships(assets));
@@ -734,7 +693,6 @@ export async function startServer({
       },
       async () => { await writes; },
       async () => { await buildStore?.close(); },
-      async () => { await Promise.allSettled([...activeReviews]); },
       closeOverlays,
       async () => { await viewerCache?.close(); },
     ]) {

@@ -2,7 +2,7 @@
 
 [Asset rules and adoption](asset-rules.md) · [Agent CLI interface](agent-interface.md) · [ADG design](design.md) · [Architecture](architecture.md) · [Performance](performance.md)
 
-A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `adg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, and presents the library as boards in the viewer (`adg <directory>`), with comments and a Git review page.
+A project's `design/` directory holds TSX sources that define how its UI looks. The implementation follows them. The `adg` toolkit builds the sources into static frames, checks them, renders them for review, compares them with the running implementation, and presents the library as boards in the viewer (`adg <directory>`), with comments. `adg review` generates a standalone visual comparison.
 
 This document is the source format and authoring command contract. The [agent CLI interface](agent-interface.md) defines `--json` output, command data schemas, exit codes and recovery actions. The [design asset rules](asset-rules.md) define layers, ownership, states, frame naming, fidelity and lifecycle, with an adoption guide for existing projects. A project's own mapping and governance documents keep its direction, declared forms, implementation locations, approval process and concrete gaps.
 
@@ -562,61 +562,20 @@ the consumer's normal approval process.
 
 ## Review handoff
 
-Set `--base=<rev>` to the commit where the task started. Added, removed and changed frames come from Git, never from an agent-supplied list. A change report embeds the review sheet inline as a Markdown image by its absolute path, then gives one reachable review URL from `adg link <viewer-url> --base=<rev>`. It attaches no other screenshots and does not restate revisions, counts or changed files.
+```sh
+adg review --base=<rev> --json
+adg review --base=<rev> --theme=dark --out=output/design/review.html --viewer-url=https://gallery.example/p/project/
+```
 
-Review images show one theme: `system`, the Mac's current appearance (`defaults read -g AppleInterfaceStyle` reads `Dark`), otherwise light. `render` and `diff` accept `--theme=system` and report the resolved theme. Show the other theme as well only when the change alters theme-specific paint. Checks and diff verdicts still cover both themes.
+Use the commit where the task started as `--base`. Share the HTML file at `data.path` in the change report. By default it is `<configured output>/review.html`, and the one included theme follows the macOS system preference or uses light on other platforms. A relative `--out` resolves from the project root. The report describes the working tree at generation time. Run the command again when inputs change.
 
-Changed frames are grouped by cause:
-- A **direct** change is a frame whose own source changed. For a module folder, any file in that folder counts as its own source.
-- An **inherited** change is a frame whose own source is unchanged and that changed only through imported sources. Inherited frames group by the set of changed sources that reaches them, as the `diff --impacted` reasons report it.
-- An inherited frame whose changed-pixel area exceeds twice its group's median is an **outlier**.
+The report opens directly in a browser and needs no running viewer. Its full-width cards are organized into Added, Direct changes, Inherited changes, Removed and Moved. Added frames display After. Changed frames display Before, After and Difference in aligned panes. Before and After show the compiled frames on a solid preview well. ADG's injected capture backdrop is transparent so authored surfaces and controls keep their own paint. Previews mount near the viewport, and collapsed group members mount after expansion. Click **Enlarge** or a preview to inspect the comparison or one pane, fit it or view it at 100%. Click an available source breadcrumb and frame title to open that frame in the viewer. The link comes from the registered hub or an explicit `--viewer-url`. Use the board for comments.
 
-A frame whose source file moved keeps its identity. A removed and an added frame with the same frame name pair up when their sources are related, in this order:
-- a Git rename;
-- a module file that became a feature folder (`modules/x.tsx` to `modules/x/index.tsx` or another file in `modules/x/`);
-- the same exported part name;
-- an identical render in both themes.
+Direct changes edit a frame's source or its module feature folder. Inherited frames group by the set of changed inputs that reaches them. Each group shows the frame nearest the median changed-pixel area, with source order breaking ties. Members above twice the median appear as outliers. Removed and moved frames are listed by location. Move pairing keeps the existing Git rename, module folder, exported part and dual-theme pixel rules.
 
-A frame renamed during a move pairs up too: a removed and an added frame whose names differ form a pair when their renders, pixels and size, are identical in both themes, and neither frame belongs to a same-name pair. When several candidates match, the one from the related source wins. A remaining tie stays unpaired.
+The hybrid pass uses impact proofs first, then compares frame dimensions, text, layout and paint observations in Chromium. Matching observations for supported TSX frames skip screenshot capture. Moves, additions, removals, required structural parents, architecture frames, unassessed inputs and frames with complex paint or changed observations use the pixel pass. Observation equality has narrower coverage than pixel equality. Use `--exact` to run the pixel pass for every scheduled frame, or `adg diff --impacted --base=<rev> --json` for automated verdicts and comparison artifacts across both themes.
 
-A paired frame is compared like any other frame. When its pixels and size are identical in both themes, it is **moved**. Otherwise it is a direct change that names its previous source. Moved frames are neither added nor removed, and a renamed one names its previous `<source>#<frame>`.
-
-`data.review` reports `moved` with its pairs, splits `changed` into `direct` and `inherited`, and lists the groups with their causes and frames.
-
-The review page shows these entries in order:
-1. added frames;
-2. direct changes;
-3. one entry per inherited group, giving its cause and frame count, one representative before and after (the member with the median changed area, the first in source order on a tie) and the names of the other members;
-4. the outliers individually under their group;
-5. moved frames, as one entry that names the source moves and counts their frames, without images.
-
-The page expands a group to every member.
-
-The review sheet is one PNG that `adg diff --base=<rev> --impacted` writes next to its `index.html` and reports as `data.review.sheet` (absolute path and resolved theme). It uses the system theme, or the theme `--theme` names when it names exactly one. The sheet shows what changed and almost no text, so it reads at a glance inline in a chat; the review page holds the details.
-
-- **Title**: the project name. The sheet shows no revisions, counts, theme, causes or changed files.
-- **Sections**: Added, Changed and Removed, in that order. A section appears only when it has entries, starts on its own row under its name, and never mixes with another. Each section has its own light colour, green for Added, amber for Changed and red for Removed, on its name and its cell edges only. Cells keep the sheet's own background with no tint, so no colour mixes with the frames under review. The colours stay readable in both themes. Changed holds the direct changes, the inherited groups' representatives and the outliers, in the order above, with no label telling them apart. Moved frames are not shown, since their pixels did not change.
-- **Cells**: cells flow through two columns, 1600 CSS pixels wide in total at device scale 2. A cell's only text is its label: the source path relative to the design directory without its extension, then `#` and the frame name, as in `modules/files#source-local`. An inherited group's cell adds `+N` for the N other members it stands for. An added frame shows its render. A changed frame shows before and after side by side with an arrow pointing from before to after between them, and no Before or After labels. A frame scales down to fit its cell, at most 480 CSS pixels tall, and never scales up. The Removed section lists its frames by label, without images.
-- **Budget**: at most 12 images, where a before-and-after pair is one image. Places are reserved first, until the budget runs out: one for the first added frame, one for the first direct change, then one for each inherited group's representative, in group order. Every kind of change that occurred therefore shows at least one image. The remaining places go to the other added frames, direct changes and outliers, in the order above. Other group members take no place.
-- **Height**: at most 4000 CSS pixels. Entries that do not fit are not drawn. Only then does a closing line, `+N more in the review page`, count the frames left out.
-
-| Need | Command |
-| --- | --- |
-| Compute counts and write the local self-contained `index.html` review | `adg diff --base=<rev> --impacted --json` |
-| Print the reachable hub review URL for a change report | `adg link https://gallery.example/p/project/ --base=<rev>` |
-| Open a local loopback review server | `adg open ./design --base=<rev> --no-open` |
-| Link to one frame or layer during interactive browsing | `adg link https://gallery.example/p/project/ --asset=components/button.tsx --frame=disabled` |
-| Export frame PNGs for automation | `adg render components/button --frame=disabled --theme=dark --out-dir=output/design/render --json` |
-
-When `<viewer-url>` has no asset, group, layer or token locator, `--base=<rev>` opens the project's Git frame review page (`?base=<rev>`). Both the hub viewer (`/p/<slug>/?base=<rev>` and `/i/<id>/?base=<rev>`) and direct `adg open --base=<rev>` render the same counts and before, after and difference panels for TSX and architecture frames, refreshing live when working-tree sources change. Switch scope tabs in the viewer to browse individual layers or tokens while retaining `?base=<rev>`.
-
-The review page never shows a blank screen. Its chrome and a progress state appear at once, and a refresh keeps the previous result visible while it updates. It computes the viewer's current theme first and the other theme only when the viewer switches to it. Results are cached in the state directory by project, base commit, `HEAD`, a fingerprint of the working-tree files that differ from `HEAD`, and theme. Unchanged inputs reopen from the cache, and `adg diff --base=<rev> --impacted` writes the same cache entries, so a link from a change report opens without recomputing.
-
-A source that fails to build, on either side of the comparison, does not block the review. The review page, `index.html` and the review sheet show every other source, and they list each failed source with its error at the top. `adg diff` still reports the run as incomplete.
-
-`open` and `link` also accept an explicit locator (`--asset` with an optional `--frame`, `--group`, `--layer`, or `--tokens`, plus `--mode=query|path`) for interactive navigation. Source paths are relative to the design directory (or project root for `.mmd`) and include the extension. Passing a viewer URL to `adg link` without target flags cleans the URL, strips unrelated query parameters including access keys, and preserves or updates `base`. Share a reachable hub project URL for remote review and verify that it serves the changed checkout.
-
-`render` exports TSX frames at their exact bounds for automation. It defaults to both themes at 2×. `--theme` selects a theme, and a relative `--out-dir` resolves from the project root. `--json` emits one versioned envelope. `data.captures` is ordered by selected source, frame, then light before dark; each capture contains project-root-relative `source` with `/` separators, `frame`, `theme`, absolute PNG `path`, `scale`, CSS `width`/`height` and actual PNG `pixelWidth`/`pixelHeight`. `data` always contains `project`, `outputDirectory`, `complete`, `base`, `captures` and `deleted`, including `base: null` and `deleted: []` without a base. Failed batches advertise completed PNGs only. Human logs go to stderr under `--json`; default text output remains available for interactive use.
+Source build failures are listed by source and side. The remaining frames are included in the generated HTML and the command exits 2. The [CLI contract](agent-interface.md#review) defines result fields.
 
 ## Architecture sources
 
@@ -751,10 +710,7 @@ adg link https://gallery.example/p/project/ --asset=arch/mechanisms/work.mmd --b
 ```
 
 Source paths may be project-relative or absolute paths resolving inside the project
-root. On a clean viewer URL without an `--asset`, `--group`, `--layer` or `--tokens`
-target, `?base=<rev>` opens the Git frame review page for TSX and architecture frames;
-choosing the `Arch` scope or an `--asset=arch/...` target renders structural Mermaid
-overlays on the canvas. TSX-only named `render` invocations ignore `base` and retain
+root. With `?base=<rev>`, the `Arch` scope and `--asset=arch/...` targets render structural Mermaid overlays on the canvas. TSX-only named `render` invocations ignore `base` and retain
 their existing output format. Normal builds without `base` retain the same frame bytes,
 content hashes and JSON array format.
 
@@ -877,7 +833,7 @@ export default {
 
 ## Viewer conventions
 
-The viewer presents the design library as [boards](boards.md) and uses [comments](comments.md) for discussion. The Git `?base=<rev>` review page shows frame changes.
+The viewer presents the design library as [boards](boards.md) and uses [comments](comments.md) for discussion. Use `adg review --base=<rev>` to generate a standalone comparison of frame changes.
 
 The viewer reads the same sources and rebuilds a source, and the sources that import it, when it is saved. Each `gallery.json` group defines a chapter board, and each listed source becomes a section in file order. Unlisted sources form directory chapters. Mixed-layer groups split by layer; keep each project group within one layer. Surfaces use the same board presentation as other layers, with specimens at their rendered sizes. Headers, source labels and specimen captions scale with the camera. Source saves reflow the affected board and boards below it in the same column while preserving the camera. Arrange recomputes the column assignment. See the [README](../README.md) for viewer controls.
 

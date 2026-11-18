@@ -18,7 +18,8 @@ Sources follow strict downward layer order (`components` → `modules` → `surf
 
 - `design/components/`: shared controls and containers (`Button`, `IconButton`, `Field`, `TreeRow`, `MenuItem`, `CommentPin`, `Canvas`, `Panel`, `Toolbar`, `Separator`, `Tooltip`).
 - `design/modules/`: feature compositions and states:
-  - Viewer: live Board View (`BoardChapter`, `BoardSection`, `SpecimenWell`, `Minimap`), scope tabs and contents sidebar (`ScopeTabs`, `ScopeRow`, `Contents`), top and bottom toolbars (`ViewerBars`, `ViewerTools`, `ZoomBar`), popovers (`Menu`), selection details (`Inspector`), comment composer/thread/preview/panel (`CommentComposer`, `CommentThread`, `CommentPreview`, `CommentsPanel`), Git review page (`ReviewHeader`, `ReviewFailures`, `ReviewFrameCard`, `ReviewInheritedGroup`, `ReviewView`), keyboard shortcuts (`Shortcuts`, including `C` and `⇧C`), and token views (`TokenBoardPreview`, `TokenCatalog`).
+  - Viewer: live Board View (`BoardChapter`, `BoardSection`, `SpecimenWell`, `Minimap`), scope tabs and contents sidebar (`ScopeTabs`, `ScopeRow`, `Contents`), top and bottom toolbars (`ViewerBars`, `ViewerTools`, `ZoomBar`), popovers (`Menu`), selection details (`Inspector`), comment composer/thread/preview/panel (`CommentComposer`, `CommentThread`, `CommentPreview`, `CommentsPanel`), keyboard shortcuts (`Shortcuts`, including `C` and `⇧C`), and token views (`TokenBoardPreview`, `TokenCatalog`).
+  - Standalone review report (`ReviewHeader`, `ReviewFrameCard`, `ReviewLayout`, `ReviewZoom`).
   - Project access: resident hub picker and popover (`ProjectPicker`, `SwitcherMenu`, `Switcher`), hub home (`HubBar`, `HubHeading`, `Rescan`, `ProjectList`, `LiveInstances`, `HubEmpty`), and 401 access card (`AccessState` with inline key/`?key=` URL entry, `Unlock` submit, inline rejection error and `adg serve --print-key` hint).
 - `design/surfaces/`: full layouts for `canvas`, `tokens`, `inspector`, `review`, `hub-home`, `hub-switcher` and `hub-access`, bound as whole sources with `fixture` and `capture` metadata.
 
@@ -34,7 +35,7 @@ New visual directions carry `Frame proposed="<scope>"` while under review, are l
 ## Exceptions
 
 - `design/fixtures/` holds representative content and state data, not gallery sources.
-- Standalone offline HTML generators (`src/toolkit/review-sheet.mjs`, `src/toolkit/compare.mjs`, and `reviewDocumentHtml` in `public/review.js`) inline self-contained fallback CSS tokens so generated reports render without a running ADG server.
+- Standalone reports in `src/toolkit/review-document.mjs`, `diff-document.mjs`, `review-sheet.mjs` and `compare.mjs` inline their style tokens for offline viewing.
 - `public/comments.css` embeds a `24 × 24` SVG `cursor: url(...)` data URI with literal `#fff` and `#1c1c1a` paint because CSS cursor images cannot resolve custom properties.
 - Compare adapters in `adg.config.mjs`, `fixtures/viewer.mjs` and `fixtures/hub-compare.mjs` use fictional sample projects and temporary state directories.
 

@@ -14,10 +14,9 @@ import { commandFailure, cleanup, emptySelection } from './results.mjs';
 import { CliError, classifyError, asCliError, nextActions } from '../cli-output.mjs';
 import { withImpacted } from './impact-selection.mjs';
 import { resolveDiffPolicy } from './diff-policy.mjs';
-import { buildReview, reviewDocumentHtml } from '../../public/review.js';
+import { buildReview, reviewDocumentHtml } from './diff-document.mjs';
 import { resolveThemes, systemTheme } from './theme.mjs';
-import { renderReviewSheet, reviewForTheme } from './review-sheet.mjs';
-import { reviewCacheKey, writeReviewCache } from '../review-cache.mjs';
+import { renderReviewSheet } from './review-sheet.mjs';
 
 const metadata = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 const safeName = name => encodeURIComponent(name).replace(/\./g, '%2E');
@@ -165,9 +164,8 @@ function revisionReasons(pair) {
 
 async function writePair(output, pair, thresholds, reviewImages) {
   const { row, theme } = pair;
-  const directory = path.join(output, row.support ? 'support' : 'frames', ...row.source.split('/').map(safeName), safeName(row.frame), theme);
-  await mkdir(directory, { recursive: true });
-  const paths = {
+  const directory = output && path.join(output, row.support ? 'support' : 'frames', ...row.source.split('/').map(safeName), safeName(row.frame), theme);
+  const paths = directory ? {
     before: pair.before ? path.join(directory, 'before.png') : null,
     after: pair.after ? path.join(directory, 'after.png') : null,
     difference: path.join(directory, 'difference.png'),
@@ -176,7 +174,7 @@ async function writePair(output, pair, thresholds, reviewImages) {
     parentCurrentSnapshot: pair.snapshots ? path.join(directory, 'parent-current.snapshot.json') : null,
     report: path.join(directory, 'comparison.json'), parentIsolated: pair.isolated ? path.join(directory, 'parent-isolated.png') : null,
     bleedMask: pair.bleedMask ? path.join(directory, 'bleed-mask.png') : null,
-  };
+  } : null;
   const beforeSize = pair.before?.size ?? null, afterSize = pair.after?.size ?? null;
   const reasons = [];
   if (!pair.parent && row.status !== 'matched' && row.status !== 'moved') reasons.push(row.status);
@@ -206,11 +204,13 @@ async function writePair(output, pair, thresholds, reviewImages) {
   };
   if (!row.support && row.status !== 'moved') {
     reviewImages.set(comparison.id, {
-      before: pair.before ? `data:image/png;base64,${pair.before.png.toString('base64')}` : null,
-      after: pair.after ? `data:image/png;base64,${pair.after.png.toString('base64')}` : null,
+      before: output && pair.before ? `data:image/png;base64,${pair.before.png.toString('base64')}` : null,
+      after: output && pair.after ? `data:image/png;base64,${pair.after.png.toString('base64')}` : null,
       difference: `data:image/png;base64,${pair.difference.toString('base64')}`,
     });
   }
+  if (!directory) return comparison;
+  await mkdir(directory, { recursive: true });
   await Promise.all([
     pair.before && writeFile(paths.before, pair.before.png),
     pair.after && writeFile(paths.after, pair.after.png),
@@ -224,7 +224,7 @@ async function writePair(output, pair, thresholds, reviewImages) {
 }
 
 /** Exact ordinary frames and evidence-backed structural part comparisons. */
-export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock, session, onReview, readSystemTheme = systemTheme, renderSheet = renderReviewSheet, sheetTheme } = {}) {
+export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock, session, onReview, readSystemTheme = systemTheme, renderSheet = renderReviewSheet, sheetTheme, reviewOnly = false } = {}) {
   const started = performance.now(), scale = Number(options.scale ?? 2);
   if (!Number.isFinite(scale) || scale <= 0) throw new CliError('USAGE_INVALID', 'Invalid --scale; use a positive number.');
   const themes = resolveThemes(options.theme, readSystemTheme);
@@ -232,24 +232,11 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
   options = { ...options, theme: themes.length === 2 ? 'both' : themes[0] };
   if (options['out-dir'] === '') throw new CliError('USAGE_INVALID', 'Set --out-dir to a directory.');
   if (options.impacted && !session) {
-    const keys = !args.length && options.frame === undefined && scale === 2
-      ? await Promise.all(themes.map(theme => reviewCacheKey(config, options.base, theme, options['state-dir']))) : [];
-    let reviewModel, outcome, failure;
-    try {
-      outcome = await withImpacted(config, args, options, 'diff', selected =>
-        diff(config, args, options, { launchBrowser, prepareInputs, log, clock, session: selected, readSystemTheme, renderSheet, sheetTheme,
-          onReview: model => { reviewModel = model; onReview?.(model); } }));
-    } catch (error) { failure = error; }
-    // withImpacted has now verified the generation and closed the real input trees.
-    const data = outcome?.data ?? failure?.data;
-    if (reviewModel && (data?.complete && (!failure || failure.code === 'DIFF_FAILED') || failure?.reviewCacheable === true)) {
-      try { await Promise.all(keys.map(key => writeReviewCache(key, reviewForTheme(reviewModel, key.theme)))); }
-      catch (error) { throw commandFailure(error, data, outcome?.warnings ?? failure.warnings); }
-    }
-    if (failure) throw failure;
-    return outcome;
+    return withImpacted(config, args, options, 'diff', selected =>
+      diff(config, args, options, { launchBrowser, prepareInputs, log, clock, session: selected,
+        readSystemTheme, renderSheet, sheetTheme, onReview, reviewOnly }));
   }
-  const output = options['out-dir'] === undefined ? path.join(config.output, 'diff') : path.resolve(config.root, options['out-dir']);
+  const output = reviewOnly ? null : path.resolve(config.root, options['out-dir'] ?? path.join(config.output, 'diff'));
   const timings = { prepareMs: 0, buildMs: 0, captureMs: 0, compareMs: 0, writeMs: 0, totalMs: 0 };
   const warnings = [], completed = [], reviewImages = new Map();
   const hiddenMoveReasons = new Set(), pendingMoveComparisons = new Map();
@@ -282,7 +269,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
       review: { added: 0, removed: 0, moved: 0, changed: 0, direct: 0, inherited: 0, groups: [], movePairs: [], sheet: null },
       differencePalette: { equal: '#00000000', imperceptible: '#64748b', antialiasing: '#f59e0b', boundary_bleed: '#0ea5e9', bitmap_resampling: '#a855f7', other: '#ff00ff' }, reportPath: null, indexPath: null, timings,
     };
-    await timed('writeMs', () => Promise.all(['frames', 'support', 'report.json', 'index.html', 'review-sheet.png'].map(entry =>
+    if (output) await timed('writeMs', () => Promise.all(['frames', 'support', 'report.json', 'index.html', 'review-sheet.png'].map(entry =>
       rm(path.join(output, entry), { recursive: true, force: true }))));
     if (session ? session.chosen.some(row => row.source.endsWith('.mmd') && session.themes.some(theme => session.scheduled(row, theme))) : inputs.sources.length) browser = await launchBrowser();
     const built = await timed('buildMs', () => inputs.buildFrames({ browser, deferParts: true }));
@@ -370,7 +357,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
         throw failures[0].error;
       }
     }
-    if (options.impacted) await timed('writeMs', async () => {
+    if (output && options.impacted) await timed('writeMs', async () => {
       await mkdir(output, { recursive: true });
       browser ??= await launchBrowser();
       const model = buildReview({ ...data, complete: !data.failures.length }, reviewImages, { label: config.name ?? path.basename(config.root) });
@@ -414,9 +401,9 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
   })), sheet: data.review.sheet };
   onReview?.(reviewModel);
   timings.totalMs = performance.now() - started;
-  data.reportPath = path.join(output, 'report.json');
-  data.indexPath = path.join(output, 'index.html');
-  try {
+  if (output) try {
+    data.reportPath = path.join(output, 'report.json');
+    data.indexPath = path.join(output, 'index.html');
     await mkdir(output, { recursive: true });
     await writeFile(data.indexPath, reviewDocumentHtml(reviewModel));
     if (!session) await writeFile(data.reportPath, JSON.stringify(data, null, 2) + '\n');
@@ -427,7 +414,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     else primary = commandFailure(error, data, warnings);
   }
   if (primary) {
-    if (sourceFailureOnly) primary.reviewCacheable = true;
+    if (sourceFailureOnly) primary.partialSourceFailures = true;
     throw primary;
   }
   if (!options.json) log(`${data.verdict}: ${data.review.added} added, ${data.review.removed} removed, ${data.review.moved} moved, ${data.review.changed} changed (${data.summary.frames} frames). ${data.indexPath}`);
