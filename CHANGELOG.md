@@ -2,32 +2,13 @@
 
 ## 0.15.0
 
-- **Breaking:** Remove `adg annotations`, its API and viewer. Old annotation data is retired. The JSON command envelope is now schema version 2.
-- Add pinned Comments on boards and review images, live threads and a CLI for agents to read, reply and resolve.
-- Target the closest meaningful element when placing comments, keep changed pins opaque, and return stable hub links in comment results.
-- Preserve the hub's public comment-link origin across LaunchAgent reinstalls and separate pins visually from the designs under them.
-
-- Simplify review sheets to the project title and tinted Added, Changed and Removed sections. Show changed pairs with an arrow and inherited representatives with a `+N` label.
-
-- Recognize frames renamed during a move when both themes render identically. Prefer related sources, leave unresolved ties unpaired, and show the previous frame reference in review handoffs.
-
-- Pair relocated frames across revisions, validate moves in both themes, and summarize unchanged moves without images. Reserve review-sheet cells for the first addition and direct change before inherited representatives.
-
-- Render a compact two-column review sheet with a 12-cell budget, reserved inherited representatives and a 4000 CSS pixel height limit.
-
-- Group review changes into direct edits and shared inherited causes, with median-area representatives and outliers. Expand inherited groups in the page and spend the sheet image budget on distinct review entries.
-- Warn about component/module sources without chapters and chapters containing more than 12 sources, without failing checks.
-
-- Keep review frames available when a source fails at either revision. List source errors in the viewer, HTML and sheet, cache partial results, and retain incomplete diff status.
-
-- Cache review handoffs by project, Git revisions, working-tree content and theme. Show immediate progress, preserve results during live refresh and compute additional themes on demand.
-- Support `--theme=system` for render and diff and generate a single-theme inline review sheet with revisions, counts and up to 12 labelled cells. Impacted diffs warm the hub cache.
-
-- Give board specimens a single backdrop and let shadows and focus rings extend into isolated well padding. Keep screen edges on surface frames.
-- Group every Tokens section by source headings and draw proportionally scaled horizontal size bars.
-
-- Retire `adg publish`, its command help, JSON diagnostics and `publish` configuration. Remove the obsolete publishing tests and documentation.
-- Present design sources as chapter boards with a visual Tokens board, responsive specimen spans and deterministic layer columns. Preserve source/frame selection and Git-based review handoff.
+- **Breaking:** Move Git design reviews out of the viewer. Generate a self-contained HTML file with `adg review --base=<rev>`. The `--base` viewer parameter still supports architecture overlays.
+- Show native Before/After previews and pixel differences in one report. Mount frames on demand, enlarge each frame or pane, and open available source links on the project boards.
+- Prefilter unchanged frames by rendered structure and fall back to pixel comparison. Use `adg review --exact` to compare every scheduled frame by pixels. Reports group direct and inherited changes, recognize moved frames, and retain healthy results when a source fails.
+- **Breaking:** Remove `adg annotations` and retire old annotation data. Use pinned board comments with deep links and the `adg comments` commands to read, reply to, and resolve threads. The JSON command envelope is now schema version 2.
+- Present the design library as chapter boards with responsive specimen spans, deterministic placement, layer-scoped navigation, and a visual Tokens board.
+- Warn about component or module sources without chapters and chapters with more than 12 sources.
+- Support `--theme=system` for render and diff. Impacted diffs include a compact, single-theme review sheet of up to 12 cells.
 
 ## 0.14.1
 
