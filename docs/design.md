@@ -2,38 +2,42 @@
 
 [Asset rules](asset-rules.md) · [Design toolkit](design-toolkit.md) · [Architecture](architecture.md)
 
-This document records ADG's visual direction, declared forms, open proposals, deliberate exceptions and remaining gaps. Machine-readable counterparts live in `design/implementation.json`; this document does not duplicate that map or maintain a status ladder.
+This document records ADG's visual direction, declared forms, artwork budget, open proposals, deliberate exceptions and remaining gaps. Exact implementation counterparts live in `design/implementation.json` (version 1); this document keeps no counterpart rows or status ladder.
 
-## Direction
+## Direction and tokens
 
-ADG uses the Float direction. A dotted canvas fills the window. Neutral rounded panels carry the sidebar, top toolbars, zoom controls, inspector, menus and resident hub surfaces. Selection uses a monochrome ring. Themes come from `design/tokens.css`; no separate dark frames are authored.
+ADG uses the Float direction: a dotted canvas fills the window, neutral rounded panels carry floating chrome and resident hub surfaces, and selection uses a monochrome ring. Typography uses system UI fonts (`--font-ui`) and SF Mono (`--font-mono`).
 
-The review platform is macOS with system UI fonts. The primary implementation viewport is 1440 × 900, locale `en-US`, timezone `UTC`. The resident hub also declares 390 × 844 home and switcher forms. Runtime fixtures are defined by `adg.config.mjs` and `fixtures/viewer.mjs`.
+`design/tokens.css` (mirrored byte-for-byte to `public/tokens.css`) defines light and dark tokens grouped under section comments (`Typography`, `Shape`, `Control sizing`, `Surfaces and borders`, `Text and accents`, `Elevation`) so the Tokens Board derives group titles directly from the stylesheet. Both themes render from the same frames.
 
-## Declared forms
+The review platform is macOS at 1440 × 900 (`en-US`, `UTC`), plus 390 × 844 phone forms for the resident hub home and project switcher. `adg.config.mjs` requires ADG `>=0.15.0` and enables `check.strictLayers` and `check.lifecycle`.
 
-The library declares component forms in `design/components/`, feature forms in `design/modules/`, and full layouts in `design/surfaces/`:
+## Layers and declared forms
 
-- Components cover buttons, icon buttons, fields, rows, menu items, keycaps, panels, toolbars, tooltips and canvas primitives. The comment pin is shared by boards and review images, with open, changed and muted resolved forms.
-- Modules cover canvas presentation, navigation, inspector, menus, directory opening, shortcuts, view controls, token catalog, project switching and resident hub states. Comments owns the inline composer, open thread and both panel filters. View controls owns the Comment tool and open-comment count in the toolbars. The shortcuts dialog includes `C` and `⇧C`.
-- Surfaces cover canvas, token catalog, inspector, resident hub home, hub switcher and access shell. The canvas includes a captured region with a pin and its open thread.
-- Fixtures under `design/fixtures/` own representative content and capture records. Scenes and artwork remain supporting data.
+Sources follow strict downward layer order (`components` → `modules` → `surfaces`) and are grouped into viewer chapters by `design/gallery.json`:
 
-Each source contains only distinct appearances. Width-only reflow, locale-only copies and explanatory specimens are not declared forms. Surfaces use `fixture` and `capture` metadata when they describe an implemented page or region.
+- `design/components/`: shared controls and containers (`Button`, `IconButton`, `Field`, `TreeRow`, `MenuItem`, `CommentPin`, `Canvas`, `Panel`, `Toolbar`, `Separator`, `Tooltip`).
+- `design/modules/`: feature compositions and states:
+  - Viewer: live Board View (`BoardChapter`, `BoardSection`, `SpecimenWell`, `Minimap`), scope tabs and contents sidebar (`ScopeTabs`, `ScopeRow`, `Contents`), top and bottom toolbars (`ViewerBars`, `ViewerTools`, `ZoomBar`), popovers (`Menu`), selection details (`Inspector`), comment composer/thread/preview/panel (`CommentComposer`, `CommentThread`, `CommentPreview`, `CommentsPanel`), Git review page (`ReviewHeader`, `ReviewFailures`, `ReviewFrameCard`, `ReviewInheritedGroup`, `ReviewView`), keyboard shortcuts (`Shortcuts`, including `C` and `⇧C`), and token views (`TokenBoardPreview`, `TokenCatalog`).
+  - Project access: resident hub picker and popover (`ProjectPicker`, `SwitcherMenu`, `Switcher`), hub home (`HubBar`, `HubHeading`, `Rescan`, `ProjectList`, `LiveInstances`, `HubEmpty`), and 401 access card (`AccessState` with inline key/`?key=` URL entry, `Unlock` submit, inline rejection error and `adg serve --print-key` hint).
+- `design/surfaces/`: full layouts for `canvas`, `tokens`, `inspector`, `review`, `hub-home`, `hub-switcher` and `hub-access`, bound as whole sources with `fixture` and `capture` metadata.
+
+## Artwork and budgets
+
+- `design/art/adg-mark.svg`: vector brand/favicon mark (`32 × 32` viewBox, served at `/favicon.svg`), budget `<= 4 KB` (currently 317 B). Literal brand fills/strokes (`#5743AE`, `#FAF9FF`, `#DDD3FF`) are restricted to this mark.
+- Retired raster preview sheets (`design/art/arc-previews/`) have been removed; board frames compose live TSX specimens directly.
 
 ## Open proposals
 
-New visual directions are marked with `Frame proposed="<review scope>"` while review is active. Current proposals are kept in their source files and are listed by `adg check`; they are removed or bound to implementation when the review closes.
+New visual directions carry `Frame proposed="<scope>"` while under review, are listed by `adg check`, and are either bound in `design/implementation.json` or deleted when review closes. None are currently open.
 
 ## Exceptions
 
-- `scenes/*.ts`, fixture JSON/TS and `design/art/` are supporting data, not gallery layers.
-- The repository keeps ARC-derived preview artwork under `design/art/arc-previews/`; it is repository-only and excluded from the npm package.
-- ADG's compare adapter uses fictional development fixtures and temporary state; it does not represent a production account or service.
+- `design/fixtures/` holds representative content and state data, not gallery sources.
+- Standalone offline HTML generators (`src/toolkit/review-sheet.mjs`, `src/toolkit/compare.mjs`, and `reviewDocumentHtml` in `public/review.js`) inline self-contained fallback CSS tokens so generated reports render without a running ADG server.
+- `public/comments.css` embeds a `24 × 24` SVG `cursor: url(...)` data URI with literal `#fff` and `#1c1c1a` paint because CSS cursor images cannot resolve custom properties.
+- Compare adapters in `adg.config.mjs`, `fixtures/viewer.mjs` and `fixtures/hub-compare.mjs` use fictional sample projects and temporary state directories.
 
 ## Gaps
 
-- The directory-opening module retains historical dialog forms. The current viewer has no browser directory dialog.
-- Minimap geometry still differs from the runtime CSS.
-- Some inspector and canvas captures retain historical crops while runtime header and scroll geometry continue to converge.
-- Hub fixtures open the current regions with a fictional registry. The existing hub artwork still depicts the earlier sample registry and layout.
+- None currently open across declared viewer and hub surfaces.

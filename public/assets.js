@@ -285,7 +285,7 @@ export function arrange(data, { placed, previousGroups } = {}) {
       const asset = byPath.get(section.asset);
       for (const frame of section.frames) {
         const crop = { ...frame.crop, width: frame.w, height: frame.h, id: frame.id, name: frame.name };
-        items.push({ ...asset, name: section.title, component: false, id: `${asset.path}#${frame.id}`, kind: 'flow', group,
+        items.push({ ...asset, name: section.title, sourceComponent: asset.sourceComponent ?? !!asset.component, component: false, id: `${asset.path}#${frame.id}`, kind: 'flow', group,
           x: board.x + section.x + frame.x, y: board.y + section.y + frame.y,
           width: frame.w, height: frame.h, shown: [crop],
           well: {x:board.x+section.x+frame.well.x,y:board.y+section.y+frame.well.y,width:frame.well.w,height:frame.well.h},

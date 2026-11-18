@@ -2,1246 +2,479 @@
   "version": 1,
   "mappings": [
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/button.tsx",
-          "part": "Button"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "button", "anchor": "button { border:0;" },
+      "design": [{ "source": "design/components/button.tsx", "part": "Button" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/button.tsx",
-          "part": "Button"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "zoom-options", "anchor": "#zoom-options {" },
+      "design": [{ "source": "design/components/button.tsx", "part": "Button" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
+      "implementation": { "file": "public/hub.css", "symbol": "rescan", "anchor": "#rescan {" },
       "design": [
-        {
-          "source": "design/components/canvas.tsx",
-          "part": "Canvas"
-        }
+        { "source": "design/components/button.tsx", "part": "Button" },
+        { "source": "design/modules/hub-home.tsx", "part": "Rescan" }
       ]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/canvas.tsx",
-          "part": "Canvas"
-        }
-      ]
+      "implementation": { "file": "public/access.css", "symbol": "access-submit", "anchor": ".access-submit {" },
+      "design": [{ "source": "design/components/button.tsx", "part": "Button" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/canvas.tsx",
-          "part": "Drawing"
-        }
-      ]
+      "implementation": { "file": "public/comments.css", "symbol": "adg-comment-action", "anchor": ".adg-comment-card .adg-comment-action," },
+      "design": [{ "source": "design/components/button.tsx", "part": "Button" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/canvas.tsx",
-          "part": "Drawing"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "icon-button", "anchor": ".icon-button {" },
+      "design": [{ "source": "design/components/icon-button.tsx", "part": "IconButton" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/canvas.tsx",
-          "part": "Screen"
-        }
-      ]
+      "implementation": { "file": "public/comments.css", "symbol": "comment-tool", "anchor": "#comment-tool[aria-pressed=\"true\"] {" },
+      "design": [{ "source": "design/components/icon-button.tsx", "part": "IconButton" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/canvas.tsx",
-          "part": "Screen"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "picker", "anchor": ".picker {" },
+      "design": [{ "source": "design/components/field.tsx", "part": "Field" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/canvas.tsx",
-          "part": "Scrim"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "search-field", "anchor": ".search-field { width:216px;" },
+      "design": [{ "source": "design/components/field.tsx", "part": "Field" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/canvas.tsx",
-          "part": "Scrim"
-        }
-      ]
+      "implementation": { "file": "public/access.css", "symbol": "access-input", "anchor": ".access-input {" },
+      "design": [{ "source": "design/components/field.tsx", "part": "Field" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/field.tsx",
-          "part": "Field"
-        }
-      ]
+      "implementation": { "file": "public/hub.css", "symbol": "hub-search", "anchor": ".hub-search { width:240px;" },
+      "design": [{ "source": "design/components/field.tsx", "part": "Field" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/field.tsx",
-          "part": "Field"
-        }
-      ]
+      "implementation": { "file": "public/switcher.css", "symbol": "switcher-search", "anchor": ".switcher-search {" },
+      "design": [{ "source": "design/components/field.tsx", "part": "Field" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/icon-button.tsx",
-          "part": "IconButton"
-        }
-      ]
+      "implementation": { "file": "public/app.js", "symbol": "makeRow", "anchor": "function makeRow(" },
+      "design": [{ "source": "design/components/tree-row.tsx", "part": "TreeRow" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/icon-button.tsx",
-          "part": "IconButton"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "tree-row", "anchor": ".tree-row { display:flex;" },
+      "design": [{ "source": "design/components/tree-row.tsx", "part": "TreeRow" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/menu-item.tsx",
-          "part": "Menu"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "menu-button", "anchor": ".menu button {" },
+      "design": [{ "source": "design/components/menu-item.tsx", "part": "MenuItem" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
+      "implementation": { "file": "public/context-menu.js", "symbol": "createContextMenu" },
       "design": [
-        {
-          "source": "design/components/menu-item.tsx",
-          "part": "Menu"
-        }
+        { "source": "design/components/menu-item.tsx", "part": "MenuItem" },
+        { "source": "design/modules/menus.tsx", "part": "Menu" }
       ]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/menu-item.tsx",
-          "part": "MenuItem"
-        }
-      ]
+      "implementation": { "file": "public/comments.js", "symbol": "makePin", "anchor": "function makePin(" },
+      "design": [{ "source": "design/components/comment-pin.tsx", "part": "CommentPin" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/menu-item.tsx",
-          "part": "MenuItem"
-        }
-      ]
+      "implementation": { "file": "public/comments.css", "symbol": "adg-comment-pin", "anchor": ".adg-comments-layer .adg-comment-pin {" },
+      "design": [{ "source": "design/components/comment-pin.tsx", "part": "CommentPin" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/panel.tsx",
-          "part": "Panel"
-        }
-      ]
+      "implementation": { "file": "public/app.js", "symbol": "drawBackground", "anchor": "function drawBackground()" },
+      "design": [{ "source": "design/components/canvas.tsx", "part": "Canvas" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/panel.tsx",
-          "part": "Panel"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "canvas-background", "anchor": "id=\"canvas-background\"" },
+      "design": [{ "source": "design/components/canvas.tsx", "part": "Canvas" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "AppBar"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "floating", "anchor": ".floating {" },
+      "design": [{ "source": "design/components/panel.tsx", "part": "Panel" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "AppBar"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "app-bar", "anchor": "#app-bar { top:12px;" },
+      "design": [{ "source": "design/components/toolbar.tsx", "part": "Toolbar" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "Separator"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "separator", "anchor": ".separator { width:1px;" },
+      "design": [{ "source": "design/components/toolbar.tsx", "part": "Separator" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "Separator"
-        }
-      ]
+      "implementation": { "file": "public/app.js", "symbol": "bindTooltip", "anchor": "function bindTooltip(" },
+      "design": [{ "source": "design/components/tooltip.tsx", "part": "Tooltip" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "Toolbar"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "tooltip", "anchor": "#tooltip {" },
+      "design": [{ "source": "design/components/tooltip.tsx", "part": "Tooltip" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "Toolbar"
-        }
-      ]
+      "implementation": { "file": "src/boards/board.mjs", "symbol": "boardHeader" },
+      "design": [{ "source": "design/modules/canvas.tsx", "part": "BoardChapter" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "Tools"
-        }
-      ]
+      "implementation": { "file": "src/boards/board.mjs", "symbol": "sectionMarkup" },
+      "design": [{ "source": "design/modules/canvas.tsx", "part": "BoardSection" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "Tools"
-        }
-      ]
+      "implementation": { "file": "src/boards/board.mjs", "symbol": "boardCss" },
+      "design": [{ "source": "design/modules/canvas.tsx", "part": "SpecimenWell" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
+      "implementation": { "file": "public/boards.js", "symbol": "createBoardLayer" },
       "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "ViewerBars"
-        }
+        { "source": "design/modules/canvas.tsx", "part": "BoardChapter" },
+        { "source": "design/modules/canvas.tsx", "part": "BoardSection" },
+        { "source": "design/modules/canvas.tsx", "part": "SpecimenWell" },
+        { "source": "design/surfaces/canvas.tsx" }
       ]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "ViewerBars"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "chapter-board", "anchor": ".chapter-board {" },
+      "design": [{ "source": "design/modules/canvas.tsx", "part": "BoardChapter" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "ViewerTools"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "board-source", "anchor": ".board-source {" },
+      "design": [{ "source": "design/modules/canvas.tsx", "part": "BoardSection" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "ViewerTools"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "board-caption", "anchor": ".board-caption {" },
+      "design": [{ "source": "design/modules/canvas.tsx", "part": "SpecimenWell" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "ZoomBar"
-        }
-      ]
+      "implementation": { "file": "public/app.js", "symbol": "drawMap", "anchor": "function drawMap()" },
+      "design": [{ "source": "design/modules/canvas.tsx", "part": "Minimap" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "ZoomBar"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "minimap", "anchor": "id=\"minimap\"" },
+      "design": [{ "source": "design/modules/canvas.tsx", "part": "Minimap" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/tooltip.tsx",
-          "part": "Tooltip"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "minimap", "anchor": "#minimap { right:12px;" },
+      "design": [{ "source": "design/modules/canvas.tsx", "part": "Minimap" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/tooltip.tsx",
-          "part": "Tooltip"
-        }
-      ]
+      "implementation": { "file": "public/app.js", "symbol": "renderScopeTabs", "anchor": "function renderScopeTabs(" },
+      "design": [{ "source": "design/modules/navigation.tsx", "part": "ScopeTabs" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/components/tree-row.tsx",
-          "part": "TreeRow"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "scope-tabs", "anchor": "id=\"scope-tabs\"" },
+      "design": [{ "source": "design/modules/navigation.tsx", "part": "ScopeTabs" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/components/tree-row.tsx",
-          "part": "TreeRow"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "scope-tabs", "anchor": "#scope-tabs { display:flex;" },
+      "design": [{ "source": "design/modules/navigation.tsx", "part": "ScopeTabs" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/canvas.tsx",
-          "part": "AssetLabel"
-        }
-      ]
+      "implementation": { "file": "public/app.js", "symbol": "scopeAction", "anchor": "function scopeAction(" },
+      "design": [{ "source": "design/modules/navigation.tsx", "part": "ScopeRow" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/canvas.tsx",
-          "part": "AssetLabel"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "scope-row", "anchor": ".scope-row {" },
+      "design": [{ "source": "design/modules/navigation.tsx", "part": "ScopeRow" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/canvas.tsx",
-          "part": "Minimap"
-        }
-      ]
+      "implementation": { "file": "public/app.js", "symbol": "renderNav", "anchor": "function renderNav()" },
+      "design": [{ "source": "design/modules/navigation.tsx", "part": "Contents" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/canvas.tsx",
-          "part": "Minimap"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "sidebar", "anchor": "id=\"sidebar\"" },
+      "design": [{ "source": "design/modules/navigation.tsx", "part": "Contents" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-access.tsx",
-          "part": "AccessShell"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "sidebar", "anchor": "#sidebar { top:" },
+      "design": [{ "source": "design/modules/navigation.tsx", "part": "Contents" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
+      "implementation": { "file": "public/app.js", "symbol": "updateChrome", "anchor": "function updateChrome()" },
       "design": [
-        {
-          "source": "design/modules/hub-access.tsx",
-          "part": "AccessShell"
-        }
+        { "source": "design/modules/view-controls.tsx", "part": "ViewerBars" },
+        { "source": "design/modules/view-controls.tsx", "part": "ViewerTools" },
+        { "source": "design/modules/view-controls.tsx", "part": "ZoomBar" }
       ]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-access.tsx",
-          "part": "AccessState"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "app-bar", "anchor": "id=\"app-bar\"" },
+      "design": [{ "source": "design/modules/view-controls.tsx", "part": "ViewerBars" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-access.tsx",
-          "part": "AccessState"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "tools", "anchor": "id=\"tools\"" },
+      "design": [{ "source": "design/modules/view-controls.tsx", "part": "ViewerTools" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "HubBar"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "tools", "anchor": "#tools { top:12px;" },
+      "design": [{ "source": "design/modules/view-controls.tsx", "part": "ViewerTools" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "HubBar"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "zoom", "anchor": "class=\"zoom floating\"" },
+      "design": [{ "source": "design/modules/view-controls.tsx", "part": "ZoomBar" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "HubEmpty"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "zoom", "anchor": ".zoom { left:50%;" },
+      "design": [{ "source": "design/modules/view-controls.tsx", "part": "ZoomBar" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "HubEmpty"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "more-menu", "anchor": "id=\"more-menu\"" },
+      "design": [{ "source": "design/modules/menus.tsx", "part": "Menu" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "HubHeading"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "zoom-menu", "anchor": "id=\"zoom-menu\"" },
+      "design": [{ "source": "design/modules/menus.tsx", "part": "Menu" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "HubHeading"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "menu", "anchor": ".menu { position:fixed;" },
+      "design": [{ "source": "design/modules/menus.tsx", "part": "Menu" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
+      "implementation": { "file": "public/app.js", "symbol": "selection", "anchor": "function selection()" },
       "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "LiveInstances"
-        }
+        { "source": "design/modules/inspector.tsx", "part": "Inspector" },
+        { "source": "design/surfaces/inspector.tsx" }
       ]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
+      "implementation": { "file": "public/index.html", "symbol": "source", "anchor": "id=\"source\"" },
       "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "LiveInstances"
-        }
+        { "source": "design/modules/inspector.tsx", "part": "Inspector" },
+        { "source": "design/surfaces/inspector.tsx" }
       ]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "ProjectList"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "source", "anchor": "#source { top:" },
+      "design": [{ "source": "design/modules/inspector.tsx", "part": "Inspector" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "ProjectList"
-        }
-      ]
+      "implementation": { "file": "public/comments.js", "symbol": "place", "anchor": "function place(target)" },
+      "design": [{ "source": "design/modules/comments.tsx", "part": "CommentComposer" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "Rescan"
-        }
-      ]
+      "implementation": { "file": "public/comments.css", "symbol": "adg-comment-editor", "anchor": ".adg-comment-editor { display: grid;" },
+      "design": [{ "source": "design/modules/comments.tsx", "part": "CommentComposer" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/hub-home.tsx",
-          "part": "Rescan"
-        }
-      ]
+      "implementation": { "file": "public/comments.js", "symbol": "makeCard", "anchor": "function makeCard(id, from)" },
+      "design": [{ "source": "design/modules/comments.tsx", "part": "CommentThread" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/inspector.tsx",
-          "part": "Inspector"
-        }
-      ]
+      "implementation": { "file": "public/comments.css", "symbol": "adg-comment-card", "anchor": ".adg-comments-layer .adg-comment-card {" },
+      "design": [{ "source": "design/modules/comments.tsx", "part": "CommentThread" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/inspector.tsx",
-          "part": "Inspector"
-        }
-      ]
+      "implementation": { "file": "public/comments.js", "symbol": "renderPreview", "anchor": "function renderPreview(" },
+      "design": [{ "source": "design/modules/comments.tsx", "part": "CommentPreview" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/menus.tsx",
-          "part": "Menu"
-        }
-      ]
+      "implementation": { "file": "public/comments.css", "symbol": "adg-comment-preview", "anchor": ".adg-comments-layer .adg-comment-preview {" },
+      "design": [{ "source": "design/modules/comments.tsx", "part": "CommentPreview" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/menus.tsx",
-          "part": "Menu"
-        }
-      ]
+      "implementation": { "file": "public/comments.js", "symbol": "renderPanel", "anchor": "function renderPanel(" },
+      "design": [{ "source": "design/modules/comments.tsx", "part": "CommentsPanel" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/navigation.tsx",
-          "part": "Contents"
-        }
-      ]
+      "implementation": { "file": "public/comments.css", "symbol": "adg-comments-panel", "anchor": ".adg-comments-panel {\n  position: fixed;" },
+      "design": [{ "source": "design/modules/comments.tsx", "part": "CommentsPanel" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/navigation.tsx",
-          "part": "Contents"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "comments-panel", "anchor": "id=\"comments-panel\"" },
+      "design": [{ "source": "design/modules/comments.tsx", "part": "CommentsPanel" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/navigation.tsx",
-          "part": "ScopePicker"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "keys", "anchor": "id=\"keys\"" },
+      "design": [{ "source": "design/modules/shortcuts.tsx", "part": "Shortcuts" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/navigation.tsx",
-          "part": "ScopePicker"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "keys", "anchor": "#keys { width:380px;" },
+      "design": [{ "source": "design/modules/shortcuts.tsx", "part": "Shortcuts" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
+      "implementation": { "file": "public/token-catalog.js", "symbol": "renderTokenTable" },
       "design": [
-        {
-          "source": "design/modules/navigation.tsx",
-          "part": "ScopeRow"
-        }
+        { "source": "design/modules/tokens.tsx", "part": "TokenCatalog" },
+        { "source": "design/surfaces/tokens.tsx" }
       ]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
+      "implementation": { "file": "public/index.html", "symbol": "token-catalog", "anchor": "id=\"token-catalog\"" },
       "design": [
-        {
-          "source": "design/modules/navigation.tsx",
-          "part": "ScopeRow"
-        }
+        { "source": "design/modules/tokens.tsx", "part": "TokenCatalog" },
+        { "source": "design/surfaces/tokens.tsx" }
       ]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/navigation.tsx",
-          "part": "ScopeTabs"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "token-catalog", "anchor": "#token-catalog { inset:" },
+      "design": [{ "source": "design/modules/tokens.tsx", "part": "TokenCatalog" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/navigation.tsx",
-          "part": "ScopeTabs"
-        }
-      ]
+      "implementation": { "file": "src/boards/token-board.mjs", "symbol": "tokenBoard" },
+      "design": [{ "source": "design/modules/tokens.tsx", "part": "TokenBoardPreview" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/navigation.tsx",
-          "part": "Sidebar"
-        }
-      ]
+      "implementation": { "file": "public/boards.js", "symbol": "tokens", "anchor": "tokens(board, onMeasure)" },
+      "design": [{ "source": "design/modules/tokens.tsx", "part": "TokenBoardPreview" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/navigation.tsx",
-          "part": "Sidebar"
-        }
-      ]
+      "implementation": { "file": "public/review.js", "symbol": "renderReviewBody" },
+      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewHeader" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/open-directory.tsx",
-          "part": "OpenDialog"
-        }
-      ]
+      "implementation": { "file": "public/review.js", "symbol": "renderReviewFailures" },
+      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewFailures" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/open-directory.tsx",
-          "part": "OpenDialog"
-        }
-      ]
+      "implementation": { "file": "public/review.js", "symbol": "renderFrameCard", "anchor": "function renderFrameCard(" },
+      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewFrameCard" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/project-switcher.tsx",
-          "part": "ProjectPicker"
-        }
-      ]
+      "implementation": { "file": "public/review.js", "symbol": "renderGroup", "anchor": "function renderGroup(" },
+      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewInheritedGroup" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
+      "implementation": { "file": "public/review.js", "symbol": "renderReview" },
       "design": [
-        {
-          "source": "design/modules/project-switcher.tsx",
-          "part": "ProjectPicker"
-        }
+        { "source": "design/modules/review.tsx", "part": "ReviewView" },
+        { "source": "design/surfaces/review.tsx" }
       ]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/project-switcher.tsx",
-          "part": "Switcher"
-        }
-      ]
+      "implementation": { "file": "public/style.css", "symbol": "review-page", "anchor": "#review-page { inset:" },
+      "design": [{ "source": "design/modules/review.tsx", "part": "ReviewView" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/project-switcher.tsx",
-          "part": "Switcher"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "review-page", "anchor": "id=\"review-page\"" },
+      "design": [{ "source": "design/surfaces/review.tsx" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/project-switcher.tsx",
-          "part": "SwitcherMenu"
-        }
-      ]
+      "implementation": { "file": "public/app.js", "symbol": "applyReviewManifest", "anchor": "function applyReviewManifest(" },
+      "design": [{ "source": "design/surfaces/review.tsx" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/project-switcher.tsx",
-          "part": "SwitcherMenu"
-        }
-      ]
+      "implementation": { "file": "public/switcher.js", "symbol": "updateSwitcherLabels" },
+      "design": [{ "source": "design/modules/project-switcher.tsx", "part": "ProjectPicker" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/project-switcher.tsx",
-          "part": "SwitcherRow"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "app-directory", "anchor": "id=\"app-directory\"" },
+      "design": [{ "source": "design/modules/project-switcher.tsx", "part": "ProjectPicker" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/project-switcher.tsx",
-          "part": "SwitcherRow"
-        }
-      ]
+      "implementation": { "file": "public/switcher.js", "symbol": "render", "anchor": "function render() {" },
+      "design": [{ "source": "design/modules/project-switcher.tsx", "part": "SwitcherMenu" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
+      "implementation": { "file": "public/switcher.js", "symbol": "initSwitcher" },
       "design": [
-        {
-          "source": "design/modules/shortcuts.tsx",
-          "part": "Kbd"
-        }
+        { "source": "design/modules/project-switcher.tsx", "part": "Switcher" },
+        { "source": "design/surfaces/hub-switcher.tsx" }
       ]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
+      "implementation": { "file": "public/switcher.css", "symbol": "project-switcher", "anchor": "#project-switcher { position:fixed;" },
       "design": [
-        {
-          "source": "design/modules/shortcuts.tsx",
-          "part": "Kbd"
-        }
+        { "source": "design/modules/project-switcher.tsx", "part": "SwitcherMenu" },
+        { "source": "design/modules/project-switcher.tsx", "part": "Switcher" },
+        { "source": "design/surfaces/hub-switcher.tsx" }
       ]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
+      "implementation": { "file": "public/instance-actions.js", "symbol": "instanceCloseButton" },
       "design": [
-        {
-          "source": "design/modules/shortcuts.tsx",
-          "part": "Shortcuts"
-        }
+        { "source": "design/modules/project-switcher.tsx", "part": "SwitcherMenu" },
+        { "source": "design/modules/hub-home.tsx", "part": "LiveInstances" }
       ]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/shortcuts.tsx",
-          "part": "Shortcuts"
-        }
-      ]
+      "implementation": { "file": "public/hub.html", "symbol": "hub-bar", "anchor": "class=\"hub-bar\"" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "HubBar" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/tokens.tsx",
-          "part": "TokenCatalog"
-        }
-      ]
+      "implementation": { "file": "public/hub.css", "symbol": "hub-bar", "anchor": ".hub-bar {" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "HubBar" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/tokens.tsx",
-          "part": "TokenCatalog"
-        }
-      ]
+      "implementation": { "file": "public/hub.js", "symbol": "updateRescanState", "anchor": "function updateRescanState()" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "Rescan" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/view-controls.tsx",
-          "part": "AppBar"
-        }
-      ]
+      "implementation": { "file": "public/hub.html", "symbol": "rescan", "anchor": "id=\"rescan\"" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "Rescan" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/view-controls.tsx",
-          "part": "AppBar"
-        }
-      ]
+      "implementation": { "file": "public/hub.js", "symbol": "renderLists", "anchor": "function renderLists()" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "HubHeading" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/modules/view-controls.tsx",
-          "part": "Tools"
-        }
-      ]
+      "implementation": { "file": "public/hub.html", "symbol": "hub-heading", "anchor": "class=\"hub-heading\"" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "HubHeading" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/modules/view-controls.tsx",
-          "part": "Tools"
-        }
-      ]
+      "implementation": { "file": "public/hub.css", "symbol": "hub-heading", "anchor": ".hub-heading {" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "HubHeading" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/canvas.tsx"
-        }
-      ]
+      "implementation": { "file": "public/hub.js", "symbol": "projectRow", "anchor": "function projectRow(" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "ProjectList" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/canvas.tsx"
-        }
-      ]
+      "implementation": { "file": "public/hub.html", "symbol": "projects", "anchor": "id=\"projects\"" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "ProjectList" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/hub-access.tsx"
-        }
-      ]
+      "implementation": { "file": "public/hub.css", "symbol": "project-columns", "anchor": ".project-columns { display:grid;" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "ProjectList" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/hub-access.tsx"
-        }
-      ]
+      "implementation": { "file": "public/hub.js", "symbol": "instanceRow", "anchor": "function instanceRow(" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "LiveInstances" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/hub-home.tsx"
-        }
-      ]
+      "implementation": { "file": "public/hub.html", "symbol": "live-section", "anchor": "class=\"live-section\"" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "LiveInstances" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/hub-home.tsx"
-        }
-      ]
+      "implementation": { "file": "public/hub.css", "symbol": "instance-row", "anchor": ".instance-row { padding:16px 20px;" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "LiveInstances" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/hub-switcher.tsx"
-        }
-      ]
+      "implementation": { "file": "public/hub.js", "symbol": "empty", "anchor": "function empty(title, detail)" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "HubEmpty" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/hub-switcher.tsx"
-        }
-      ]
+      "implementation": { "file": "public/hub.css", "symbol": "hub-empty", "anchor": ".hub-empty {" },
+      "design": [{ "source": "design/modules/hub-home.tsx", "part": "HubEmpty" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/inspector.tsx"
-        }
-      ]
+      "implementation": { "file": "public/hub.html", "symbol": "hub", "anchor": "id=\"hub\"" },
+      "design": [{ "source": "design/surfaces/hub-home.tsx" }]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/inspector.tsx"
-        }
-      ]
+      "implementation": { "file": "public/hub.js", "symbol": "refresh", "anchor": "async function refresh()" },
+      "design": [{ "source": "design/surfaces/hub-home.tsx" }]
     },
     {
-      "implementation": {
-        "directory": "public/"
-      },
+      "implementation": { "file": "public/auth.js", "symbol": "showUnauthorized" },
       "design": [
-        {
-          "source": "design/surfaces/tokens.tsx"
-        }
+        { "source": "design/modules/hub-access.tsx", "part": "AccessState" },
+        { "source": "design/surfaces/hub-access.tsx" }
       ]
     },
     {
-      "implementation": {
-        "directory": "src/"
-      },
-      "design": [
-        {
-          "source": "design/surfaces/tokens.tsx"
-        }
-      ]
+      "implementation": { "file": "public/access.css", "symbol": "access-card", "anchor": ".access-card {" },
+      "design": [{ "source": "design/modules/hub-access.tsx", "part": "AccessState" }]
     },
     {
-      "implementation": {
-        "file": "public/comments.js"
-      },
-      "design": [
-        {
-          "source": "design/components/comment-pin.tsx",
-          "part": "CommentPin"
-        },
-        {
-          "source": "design/modules/comments.tsx",
-          "part": "CommentComposer"
-        },
-        {
-          "source": "design/modules/comments.tsx",
-          "part": "CommentThread"
-        },
-        {
-          "source": "design/modules/comments.tsx",
-          "part": "CommentsPanel"
-        },
-        {
-          "source": "design/surfaces/canvas.tsx",
-          "frames": [
-            "comment-thread"
-          ]
-        },
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "ViewerTools"
-        },
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "ZoomBar"
-        }
-      ]
+      "implementation": { "file": "public/access.css", "symbol": "access-shell", "anchor": ".access-shell {" },
+      "design": [{ "source": "design/surfaces/hub-access.tsx" }]
     },
     {
-      "implementation": {
-        "file": "public/comments.css"
-      },
-      "design": [
-        {
-          "source": "design/components/comment-pin.tsx",
-          "part": "CommentPin"
-        },
-        {
-          "source": "design/modules/comments.tsx",
-          "part": "CommentComposer"
-        },
-        {
-          "source": "design/modules/comments.tsx",
-          "part": "CommentThread"
-        },
-        {
-          "source": "design/modules/comments.tsx",
-          "part": "CommentsPanel"
-        },
-        {
-          "source": "design/surfaces/canvas.tsx",
-          "frames": [
-            "comment-thread"
-          ]
-        },
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "ViewerTools"
-        }
-      ]
+      "implementation": { "file": "public/index.html", "symbol": "gallery-viewport", "anchor": "class=\"gallery-viewport\"" },
+      "design": [{ "source": "design/surfaces/canvas.tsx" }]
     },
     {
-      "implementation": {
-        "file": "public/app.js"
-      },
-      "design": [
-        {
-          "source": "design/components/comment-pin.tsx",
-          "part": "CommentPin"
-        },
-        {
-          "source": "design/surfaces/canvas.tsx",
-          "frames": [
-            "comment-thread"
-          ]
-        }
-      ]
+      "implementation": { "file": "public/app.js", "symbol": "applyManifest", "anchor": "async function applyManifest(" },
+      "design": [{ "source": "design/surfaces/canvas.tsx" }]
     },
     {
-      "implementation": {
-        "file": "public/index.html"
-      },
-      "design": [
-        {
-          "source": "design/modules/comments.tsx",
-          "part": "CommentsPanel"
-        },
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "ViewerTools"
-        },
-        {
-          "source": "design/components/toolbar.tsx",
-          "part": "ZoomBar"
-        },
-        {
-          "source": "design/modules/shortcuts.tsx",
-          "part": "Shortcuts"
-        }
-      ]
+      "implementation": { "file": "public/app.js", "symbol": "applyTokenManifest", "anchor": "function applyTokenManifest(" },
+      "design": [{ "source": "design/surfaces/tokens.tsx" }]
     }
   ]
 }

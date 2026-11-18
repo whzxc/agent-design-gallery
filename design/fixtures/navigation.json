@@ -1,451 +1,82 @@
 {
+  "layer": {
+    "scopedIndent": 20,
+    "scopeAction": "field",
+    "rows": [
+      {
+        "form": "group",
+        "label": "Essentials",
+        "meta": "8",
+        "icon": "chevron-down"
+      },
+      {
+        "form": "item",
+        "label": "button",
+        "icon": "component"
+      },
+      {
+        "form": "item",
+        "label": "icon-button",
+        "icon": "component"
+      },
+      {
+        "form": "item",
+        "label": "switch",
+        "icon": "component"
+      },
+      {
+        "form": "item",
+        "label": "search",
+        "icon": "component"
+      },
+      {
+        "form": "item-selected",
+        "label": "field",
+        "icon": "component"
+      },
+      {
+        "form": "item",
+        "label": "tag",
+        "icon": "component"
+      },
+      {
+        "form": "item",
+        "label": "card",
+        "icon": "component"
+      },
+      {
+        "form": "item",
+        "label": "single-choice",
+        "icon": "component"
+      },
+      {
+        "form": "group",
+        "label": "Agents & quota",
+        "meta": "4",
+        "icon": "chevron-right"
+      },
+      {
+        "form": "group",
+        "label": "Tasks & interactions",
+        "meta": "3",
+        "icon": "chevron-right"
+      },
+      {
+        "form": "group",
+        "label": "Connections & MCP",
+        "meta": "2",
+        "icon": "chevron-right"
+      },
+      {
+        "form": "group",
+        "label": "components",
+        "meta": "14",
+        "icon": "chevron-right"
+      }
+    ]
+  },
   "search": {
-    "rows": [
-      {
-        "form": "item-selected",
-        "label": "state-pill",
-        "meta": "5 forms",
-        "icon": "component"
-      }
-    ],
-    "search": true,
-    "specimen": true,
-    "directory": "arc",
-    "query": "pill",
-    "resultCount": 2
-  },
-  "canvas-components": {
-    "search": false,
-    "rows": [
-      {
-        "form": "root",
-        "label": "All designs",
-        "meta": "51",
-        "icon": "layout-grid"
-      },
-      {
-        "form": "group",
-        "label": "Essentials",
-        "meta": "8",
-        "icon": "chevron-down"
-      },
-      {
-        "form": "item",
-        "label": "button",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "icon-button",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "switch",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "search",
-        "icon": "component"
-      },
-      {
-        "form": "item-selected",
-        "label": "field",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "tag",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "card",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "single-choice",
-        "icon": "component"
-      },
-      {
-        "form": "group",
-        "label": "Agents & quota",
-        "meta": "6",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Tasks & interactions",
-        "meta": "5",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Connections & MCP",
-        "meta": "6",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "components",
-        "meta": "14",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "surfaces",
-        "meta": "12",
-        "icon": "chevron-right"
-      }
-    ],
-    "height": 876,
-    "directory": "agent-remote-control",
-    "query": ""
-  },
-  "canvas-zoomed": {
-    "search": false,
-    "rows": [
-      {
-        "form": "root",
-        "label": "All designs",
-        "meta": "51",
-        "icon": "layout-grid"
-      },
-      {
-        "form": "group",
-        "label": "Essentials",
-        "meta": "8",
-        "icon": "chevron-down"
-      },
-      {
-        "form": "item",
-        "label": "button",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "icon-button",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "switch",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "search",
-        "icon": "component"
-      },
-      {
-        "form": "item-selected",
-        "label": "field",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "tag",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "card",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "single-choice",
-        "icon": "component"
-      },
-      {
-        "form": "group",
-        "label": "Agents & quota",
-        "meta": "6",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Tasks & interactions",
-        "meta": "5",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Connections & MCP",
-        "meta": "6",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "components",
-        "meta": "14",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "surfaces",
-        "meta": "12",
-        "icon": "chevron-right"
-      }
-    ],
-    "height": 876,
-    "directory": "agent-remote-control",
-    "query": ""
-  },
-  "canvas-surfaces": {
-    "search": false,
-    "rows": [
-      {
-        "form": "root",
-        "label": "All designs",
-        "meta": "51",
-        "icon": "layout-grid"
-      },
-      {
-        "form": "group",
-        "label": "Essentials",
-        "meta": "8",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Agents & quota",
-        "meta": "6",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Tasks & interactions",
-        "meta": "5",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Connections & MCP",
-        "meta": "6",
-        "icon": "chevron-down"
-      },
-      {
-        "form": "item",
-        "label": "copy-field",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "setup-choice",
-        "icon": "component"
-      },
-      {
-        "form": "item-selected",
-        "label": "mcp-hub",
-        "icon": "app-window"
-      },
-      {
-        "form": "item",
-        "label": "connections",
-        "icon": "app-window"
-      },
-      {
-        "form": "item",
-        "label": "relay-hosting",
-        "icon": "app-window"
-      },
-      {
-        "form": "item",
-        "label": "platforms",
-        "icon": "app-window"
-      },
-      {
-        "form": "group",
-        "label": "components",
-        "meta": "14",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "surfaces",
-        "meta": "12",
-        "icon": "chevron-right"
-      }
-    ],
-    "height": 876,
-    "directory": "agent-remote-control",
-    "query": ""
-  },
-  "inspector-frame": {
-    "search": false,
-    "rows": [
-      {
-        "form": "root",
-        "label": "All designs",
-        "meta": "51",
-        "icon": "layout-grid"
-      },
-      {
-        "form": "group",
-        "label": "Essentials",
-        "meta": "8",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Agents & quota",
-        "meta": "6",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Tasks & interactions",
-        "meta": "5",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Connections & MCP",
-        "meta": "6",
-        "icon": "chevron-down"
-      },
-      {
-        "form": "item",
-        "label": "copy-field",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "setup-choice",
-        "icon": "component"
-      },
-      {
-        "form": "item-selected",
-        "label": "mcp-hub",
-        "icon": "app-window"
-      },
-      {
-        "form": "item",
-        "label": "connections",
-        "icon": "app-window"
-      },
-      {
-        "form": "item",
-        "label": "relay-hosting",
-        "icon": "app-window"
-      },
-      {
-        "form": "item",
-        "label": "platforms",
-        "icon": "app-window"
-      },
-      {
-        "form": "group",
-        "label": "components",
-        "meta": "14",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "surfaces",
-        "meta": "12",
-        "icon": "chevron-right"
-      }
-    ],
-    "height": 876,
-    "directory": "agent-remote-control",
-    "query": ""
-  },
-  "inspector-component": {
-    "search": false,
-    "rows": [
-      {
-        "form": "root",
-        "label": "All designs",
-        "meta": "51",
-        "icon": "layout-grid"
-      },
-      {
-        "form": "group",
-        "label": "Essentials",
-        "meta": "8",
-        "icon": "chevron-down"
-      },
-      {
-        "form": "item-selected",
-        "label": "button",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "icon-button",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "switch",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "search",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "field",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "tag",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "card",
-        "icon": "component"
-      },
-      {
-        "form": "item",
-        "label": "single-choice",
-        "icon": "component"
-      },
-      {
-        "form": "group",
-        "label": "Agents & quota",
-        "meta": "6",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Tasks & interactions",
-        "meta": "5",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "Connections & MCP",
-        "meta": "6",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "components",
-        "meta": "14",
-        "icon": "chevron-right"
-      },
-      {
-        "form": "group",
-        "label": "surfaces",
-        "meta": "12",
-        "icon": "chevron-right"
-      }
-    ],
-    "height": 876,
-    "directory": "agent-remote-control",
-    "query": ""
-  },
-  "search-results": {
-    "search": true,
+    "searchCount": "2 results",
     "rows": [
       {
         "form": "item-selected",
@@ -459,10 +90,51 @@
         "meta": "form",
         "icon": "component"
       }
-    ],
-    "height": 248,
-    "directory": "agent-remote-control",
-    "query": "pill",
-    "resultCount": 2
+    ]
+  },
+  "searchEmpty": {
+    "searchCount": "0 results in Components",
+    "searchAllAction": true,
+    "rows": []
+  },
+  "tokens": {
+    "rows": [
+      {
+        "form": "root-selected",
+        "label": "All tokens",
+        "meta": "44",
+        "icon": "layout-grid"
+      },
+      {
+        "form": "item",
+        "label": "Colors",
+        "meta": "26",
+        "icon": "palette"
+      },
+      {
+        "form": "item",
+        "label": "Typography",
+        "meta": "8",
+        "icon": "type"
+      },
+      {
+        "form": "item",
+        "label": "Spacing & size",
+        "meta": "2",
+        "icon": "ruler"
+      },
+      {
+        "form": "item",
+        "label": "Radii",
+        "meta": "5",
+        "icon": "corner-up-right"
+      },
+      {
+        "form": "item",
+        "label": "Shadows",
+        "meta": "3",
+        "icon": "layers"
+      }
+    ]
   }
 }

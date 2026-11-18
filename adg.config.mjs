@@ -40,8 +40,45 @@ async function prepareCommentThread(page, state) {
   await page.getByRole('heading', { name: `#${number} ${target}`, exact: true }).waitFor();
 }
 
+async function prepareBoardComments(page, state) {
+  const { commentExample, changedExample } = comments;
+  const [left, top] = state.origin;
+  const first = '2025-12-31T23:58:00Z', second = '2025-12-31T23:59:00Z', older = '2025-12-31T23:46:00Z';
+  const threads = [
+    {
+      id: 'fixture-board-open', number: commentExample.number, status: 'open', revision: null,
+      anchor: { kind: 'chapter', source: null, frame: null, layer: 'components', chapter: state.group, element: null,
+        x: (536 - left) / state.scale, y: (244 + 26 - top) / state.scale, frameX: null, frameY: null },
+      target: { label: commentExample.target, tag: null, text: null, owner: null, displayName: commentExample.displayName },
+      messages: [
+        { id: 'fixture-board-m1', author: { kind: 'user' }, text: commentExample.messages[0].text, at: first, editedAt: null },
+        { id: 'fixture-board-m2', author: { kind: 'agent', name: commentExample.messages[1].author }, text: commentExample.messages[1].text, at: second, editedAt: null },
+      ],
+      createdAt: first, updatedAt: second, resolvedAt: null, resolvedBy: null,
+    },
+    {
+      id: 'fixture-board-changed', number: changedExample.number, status: 'open', state: 'changed', revision: null,
+      anchor: { kind: 'chapter', source: null, frame: null, layer: 'components', chapter: state.group, element: null,
+        x: (486 - left) / state.scale, y: (280 + 26 - top) / state.scale, frameX: null, frameY: null },
+      target: { label: changedExample.target, tag: null, text: null, owner: null, displayName: null },
+      messages: [
+        { id: 'fixture-board-m3', author: { kind: 'user' }, text: changedExample.messages[0].text, at: older, editedAt: null },
+      ],
+      createdAt: older, updatedAt: older, resolvedAt: null, resolvedBy: null,
+    },
+  ];
+  await mkdir(path.dirname(fixtureStore), { recursive: true });
+  await writeFile(fixtureStore, JSON.stringify({ nextNumber: changedExample.number + 1, threads }));
+  await page.getByRole('button', { name: `Comment #${commentExample.number}, ${commentExample.target}`, exact: true }).waitFor();
+  await page.getByRole('button', { name: `Comment #${changedExample.number}, ${changedExample.target}, changed`, exact: true }).waitFor();
+  await page.locator('#comments-toggle').click();
+  await page.locator('#comment-tool').click();
+  await page.mouse.move(0, 0);
+  await page.locator('#comments-panel').getByText(`#${changedExample.number}`, { exact: true }).waitFor();
+}
+
 export default {
-  requires: '>=0.5.0',
+  requires: '>=0.15.0',
   check: { strictLayers: true, lifecycle: true },
   compare: {
     port: 5188,
@@ -74,6 +111,27 @@ export default {
       if (error) throw new Error(`ADG fixture ${name}: ${error}`);
       const state = fixtureStates[name];
       if (name === comments.commentCanvas.fixture) await prepareCommentThread(page, state);
+      if (name === 'viewer-board-comments') await prepareBoardComments(page, state);
+      if (name === 'viewer-tokens-list') {
+        if (await page.locator('#sidebar').isHidden()) await page.locator('#sidebar-toggle').click();
+        const toggle = page.locator('#token-view-toggle');
+        if (await toggle.isVisible()) await toggle.click();
+        else { await page.locator('#more').click(); await page.locator('#token-list-toggle').click(); }
+        await page.mouse.move(0, 0);
+        await page.locator('#token-table').waitFor({ state: 'visible' });
+      }
+      if (name === 'sample-inspect-component') {
+        const point = await page.evaluate(() => {
+          const item = window.__adg.items.find(entry => entry.path === 'surfaces/mcp-hub.tsx');
+          const view = window.__adg.view;
+          return item ? { x: view.x + (item.x + 80) * view.scale, y: view.y + (item.y + 80) * view.scale } : null;
+        });
+        if (point) {
+          await page.mouse.click(point.x, point.y);
+          await page.mouse.move(0, 0);
+          await page.getByText('Frames using this export', { exact: true }).waitFor();
+        }
+      }
       if (state.tooltip || state.hoverScope) {
         await page.getByRole('button', { name: state.hoverScope ?? 'Inspector', exact: true }).hover();
         await page.getByRole('tooltip').waitFor({ state: 'visible' });

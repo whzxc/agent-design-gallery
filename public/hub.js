@@ -4,9 +4,20 @@ import { instanceCloseButton } from './instance-actions.js';
 
 const projects = document.querySelector('#projects');
 const instances = document.querySelector('#instances');
+const liveSection = document.querySelector('.live-section');
 const error = document.querySelector('#error');
 const rescan = document.querySelector('#rescan');
+const searchBox = document.querySelector('#hub-search');
+const searchInput = document.querySelector('#hub-search-input');
+const searchKey = document.querySelector('#hub-search-key');
+const searchClear = document.querySelector('#hub-search-clear');
 const media = matchMedia('(prefers-color-scheme: dark)');
+
+let projectData = [];
+let instanceData = [];
+let rootData = [];
+let rescanning = false;
+
 function applyTheme() {
   const saved = localStorage.getItem('adg-theme');
   document.documentElement.dataset.theme = saved === 'light' || saved === 'dark' ? saved : media.matches ? 'dark' : 'light';
@@ -41,6 +52,19 @@ function relativeTime(value) {
   const days = Math.floor(seconds / 86400);
   return `${days} ${days === 1 ? 'day' : 'days'} ago`;
 }
+function proxyReason(reason) {
+  if (reason === 'proxy-auth-unsupported') return 'Update ADG to proxy';
+  if (reason === 'health-unavailable') return 'Viewer not responding';
+  return 'Proxy unavailable';
+}
+function formatCounts(project) {
+  if (project.sourceCount == null && project.frameCount == null) return '—';
+  const s = project.sourceCount ?? 0;
+  const sources = `${s} ${s === 1 ? 'source' : 'sources'}`;
+  if (project.frameCount == null) return sources;
+  const f = project.frameCount;
+  return `${sources} · ${f} ${f === 1 ? 'frame' : 'frames'}`;
+}
 function change(project, phone = false) {
   const node = element('span', phone ? 'phone-change' : 'hub-change desktop-change');
   if (project.lastDesignChange?.dirty) {
@@ -57,8 +81,9 @@ function change(project, phone = false) {
 }
 function git(branch, head) {
   const node = element('div', 'hub-git');
-  const label = element('span', '', branch || '—');
-  label.title = branch || '';
+  const text = branch || (head ? 'HEAD' : '—');
+  const label = element('span', '', text);
+  label.title = branch || (head ? 'Detached HEAD' : '');
   node.append(glyph('git-branch', 13), label);
   if (head) node.append(element('code', '', head));
   return node;
@@ -83,7 +108,7 @@ function projectRow(project) {
   pathNode.title = path;
   identity.append(name, pathNode);
   columns.append(identity, change(project), git(project.branch, project.head),
-    element('div', 'hub-counts', `${project.sourceCount ?? '—'} sources · ${project.frameCount ?? '—'} frames`));
+    element('div', 'hub-counts', formatCounts(project)));
   row.append(columns);
   if (incompatible || project.error) {
     const warning = element('div', 'hub-warning');
@@ -100,23 +125,34 @@ function instanceRow(instance) {
   const identity = element('div', 'instance-identity');
   identity.append(destination(instance.projectName ?? instance.name ?? instance.id,
     instance.proxyable ? instance.url ?? `/i/${encodeURIComponent(instance.id)}/` : null, 'radio'));
-  const branch = git(instance.branch);
-  const started = element('span', 'instance-start', `· Started ${relativeTime(instance.startedAt)}`);
+  const meta = element('div', 'hub-git instance-meta');
+  if (instance.branch) {
+    const branchLabel = element('span', '', instance.branch);
+    branchLabel.title = instance.branch;
+    meta.append(glyph('git-branch', 13), branchLabel);
+  }
+  if (instance.port != null) meta.append(element('code', '', `:${instance.port}`));
+  if (instance.directory) {
+    const dir = element('span', 'instance-dir', instance.directory);
+    dir.title = instance.directory;
+    meta.append(dir);
+  }
+  const started = element('span', 'instance-start', `${meta.childElementCount ? '· ' : ''}Started ${relativeTime(instance.startedAt)}`);
   started.title = instance.startedAt || '';
-  branch.append(started);
-  identity.append(branch);
+  meta.append(started);
+  identity.append(meta);
   row.append(identity);
   if (!instance.proxyable) {
-    const warning = element('span', 'instance-warning', 'Proxy unavailable');
+    const warning = element('span', 'instance-warning', proxyReason(instance.reason));
     warning.prepend(glyph('circle-alert', 14));
     row.append(warning);
   }
   if (instance.stoppable) {
     row.classList.add('instance-row-closeable');
     row.append(instanceCloseButton(instance, 'instance-close', () => {
-      row.remove();
-      document.querySelector('.live-section').hidden = !instances.childElementCount;
-      (instances.querySelector('a, button') ?? rescan).focus({ preventScroll: true });
+      instanceData = instanceData.filter(item => item !== instance);
+      renderLists();
+      (instances.querySelector('a, button') ?? (rescan.disabled ? document.querySelector('#projects a') : rescan))?.focus({ preventScroll: true });
     }, report));
   }
   return row;
@@ -128,22 +164,63 @@ function empty(title, detail) {
   node.append(glyph('folders', 24), copy);
   return node;
 }
-async function refresh() {
-  const [projectData, instanceData, roots] = await Promise.all([api('api/projects'), api('api/instances'), api('api/roots')]);
-  if (projectData.length) {
+function matchesQuery(fields, query) {
+  if (!query) return true;
+  return fields.some(value => value && String(value).toLowerCase().includes(query));
+}
+function updateRescanState() {
+  rescan.disabled = rescanning || rootData.length === 0;
+  rescan.toggleAttribute('data-loading', rescanning);
+  rescan.title = !rescanning && rootData.length === 0 ? 'No roots registered' : '';
+  rescan.replaceChildren(glyph(rescanning ? 'loader-circle' : 'refresh-cw', 14),
+    element('span', '', rescanning ? 'Rescanning…' : 'Rescan'));
+}
+function renderLists() {
+  const total = projectData.length + instanceData.length;
+  const showSearch = total >= 5;
+  searchBox.hidden = !showSearch;
+  if (!showSearch && searchInput.value) {
+    searchInput.value = '';
+    searchClear.hidden = true;
+    searchKey.hidden = false;
+  }
+  const query = showSearch ? searchInput.value.trim().toLowerCase() : '';
+  const filteredProjects = projectData.filter(project =>
+    matchesQuery([project.name, project.design, project.path, project.branch, project.head], query));
+  const filteredInstances = instanceData.filter(instance =>
+    matchesQuery([instance.projectName, instance.name, instance.id, instance.directory, instance.branch, instance.port != null ? `:${instance.port}` : ''], query));
+
+  if (filteredProjects.length) {
+    projects.hidden = false;
     projects.className = 'hub-list';
     const header = element('div', 'project-columns project-header');
     header.append(...['Projects', 'Design changed', 'Git', 'Designs'].map(label => element('span', '', label)));
-    projects.replaceChildren(header, ...projectData.map(projectRow));
+    projects.replaceChildren(header, ...filteredProjects.map(projectRow));
+  } else if (query) {
+    if (filteredInstances.length) {
+      projects.hidden = true;
+      projects.replaceChildren();
+    } else {
+      projects.hidden = false;
+      projects.className = '';
+      projects.replaceChildren(empty('No matches', `Nothing matched “${searchInput.value.trim()}”.`));
+    }
   } else {
+    projects.hidden = false;
     projects.className = '';
-    projects.replaceChildren(empty(roots.length ? 'No projects found' : 'No roots registered', roots.length
-      ? `No design sources found in the ${roots.length} registered ${roots.length === 1 ? 'root' : 'roots'}.`
-      : 'Register a root in the hub configuration to list projects.'));
+    projects.replaceChildren(empty(rootData.length ? 'No projects found' : 'No roots registered', rootData.length
+      ? `No design sources found in the ${rootData.length} registered ${rootData.length === 1 ? 'root' : 'roots'}.`
+      : 'Run adg root add <dir> to register a workspace.'));
   }
+
   instances.className = 'hub-list';
-  instances.replaceChildren(...instanceData.map(instanceRow));
-  document.querySelector('.live-section').hidden = !instanceData.length;
+  instances.replaceChildren(...filteredInstances.map(instanceRow));
+  liveSection.hidden = !filteredInstances.length;
+}
+async function refresh() {
+  [projectData, instanceData, rootData] = await Promise.all([api('api/projects'), api('api/instances'), api('api/roots')]);
+  updateRescanState();
+  renderLists();
 }
 function report(failure) {
   if (isUnauthorized()) return;
@@ -151,10 +228,37 @@ function report(failure) {
   error.hidden = false;
 }
 function pending(value) {
-  rescan.disabled = value;
-  rescan.replaceChildren(glyph(value ? 'loader-circle' : 'refresh-cw', 14),
-    element('span', '', value ? 'Rescanning…' : 'Rescan'));
+  rescanning = value;
+  updateRescanState();
 }
+
+searchInput.addEventListener('input', () => {
+  const hasValue = Boolean(searchInput.value);
+  searchClear.hidden = !hasValue;
+  searchKey.hidden = hasValue;
+  renderLists();
+});
+searchClear.addEventListener('click', () => {
+  searchInput.value = '';
+  searchClear.hidden = true;
+  searchKey.hidden = false;
+  renderLists();
+  searchInput.focus();
+});
+searchInput.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && searchInput.value) {
+    event.preventDefault();
+    searchClear.click();
+  }
+});
+document.addEventListener('keydown', event => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f' && !searchBox.hidden) {
+    event.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+  }
+});
+
 rescan.addEventListener('click', async () => {
   pending(true);
   error.hidden = true;

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="same-origin">
-  <title>ADG</title>
+  <title>Projects — Agent Design Gallery</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="tokens.css">
   <link rel="stylesheet" href="hub.css">
@@ -18,7 +18,15 @@
       <section aria-labelledby="projects-title">
         <div class="hub-heading">
           <h1 id="projects-title">Projects</h1>
-          <button id="rescan" type="button"><span data-icon="refresh-cw" data-size="14"></span><span>Rescan</span></button>
+          <div class="hub-controls">
+            <div id="hub-search" class="hub-search" hidden>
+              <span data-icon="search" data-size="14"></span>
+              <input id="hub-search-input" type="search" placeholder="Find project or instance…" aria-label="Find project or instance" autocomplete="off">
+              <kbd id="hub-search-key">⌘F</kbd>
+              <button id="hub-search-clear" type="button" aria-label="Clear search" hidden><span data-icon="x" data-size="14"></span></button>
+            </div>
+            <button id="rescan" type="button"><span data-icon="refresh-cw" data-size="14"></span><span>Rescan</span></button>
+          </div>
         </div>
         <p id="error" role="alert" hidden></p>
         <div id="projects"></div>

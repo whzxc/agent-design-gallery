@@ -3,14 +3,13 @@ import { createComments } from './comments.js';
 import { attachComment, commentElement, commentLabel, placeComment } from './comment-anchors.js';
 import { initSwitcher, updateSwitcherLabels } from './switcher.js';
 import { dataFetch, keyURL, isUnauthorized } from './auth.js';
-import { Labels } from "./labels.js";
 import { fitArea, fitView } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
 import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext, measuredMetadata, previewAddress, compactPreparedSource, scopeKind, scopeTarget } from "./assets.js";
 import { sourceRelationships, relatedSources } from './relationships.js';
 import { contains, hitSelection, frameBox, exportFrames } from './selection.js';
-import { groupTokens, renderTokenTable } from './token-catalog.js';
+import { groupTokens, renderTokenTable, tokenBoardSection } from './token-catalog.js';
 import { renderReview } from './review.js';
 import { readViewRoute, viewURL } from './view-route.js';
 import { createBoardLayer } from './boards.js';
@@ -19,25 +18,59 @@ const arranger = createArranger();
 window.addEventListener('pagehide',()=>arranger.close());
 // ARC's gallery layout and camera model, decoupled from its React runtime.
 const $ = (selector) => document.querySelector(selector);
+const copyTimers = new WeakMap();
+function flashCopied(button) {
+  if (!button) return;
+  const holder = button.querySelector('[data-icon]');
+  button.dataset.copied = 'true';
+  if (holder) holder.innerHTML = icon('check', Number(holder.dataset.size) || 12);
+  clearTimeout(copyTimers.get(button));
+  copyTimers.set(button, setTimeout(() => {
+    delete button.dataset.copied;
+    if (holder) holder.innerHTML = icon(holder.dataset.icon || 'copy', Number(holder.dataset.size) || 12);
+  }, 1200));
+}
 const viewport = $(".gallery-viewport"),
   canvas = $("#drawings"),
   ctx = canvas.getContext("2d"),
   background = $("#canvas-background"),
   backgroundContext = background.getContext("2d", { alpha: false });
-const boardLayer = createBoardLayer(viewport, (path, title) => {
+const boardLayer = createBoardLayer(viewport, (path, title, button) => {
   const asset = assets.find(a => a.path === path);
   if (asset) selectSource(asset);
-  navigator.clipboard.writeText(title).catch(failure => error(`Cannot copy name: ${failure.message}`));
+  navigator.clipboard.writeText(title).then(() => {
+    flashCopied(button);
+    if ($('#error').textContent.startsWith('Cannot copy name:')) error('');
+  }, failure => error(`Cannot copy name: ${failure.message}`));
+}, {
+  onSelectFrame(source, frameName) {
+    const item = assets.find(a => a.path === source && (a.component || a.shown[0]?.name === frameName));
+    const part = item?.parts.find(p => p.name === frameName);
+    if (item && part) selectFrame(item, part);
+    else if (item) selectSource(item);
+  },
+  onFocusFrame(source, frameName) {
+    const item = assets.find(a => a.path === source && (a.component || a.shown[0]?.name === frameName));
+    const part = item?.parts.find(p => p.name === frameName);
+    if (item && part) inspectForm(item, part);
+  },
+  onCopyError(failure) {
+    if (failure) error(`Cannot copy token name: ${failure.message}`);
+    else if ($('#error').textContent.startsWith('Cannot copy token name:')) error('');
+  },
 });
 let manifest,
   catalog = null,
   tokenManifest = null,
   reviewManifest = null,
   reviewLoading = false,
+  leavingOverlay = false,
   tokenCategory = null,
   tokenList = false,
+  tokenSearchWasBoard = false,
   tokenHeight = 0,
   pendingNavigation = null,
+  commentUI = null,
   groups = [],
   assets = [],
   world = { x: 0, y: 0, width: 1, height: 1 },
@@ -56,16 +89,6 @@ let raf = 0,
   loading = 0,
   queued = [],
   palette = {};
-const labelLayer = new Labels($("#labels"), copyError => {
-  if (copyError) error(`Cannot copy name: ${copyError.message}`);
-  else if ($('#error').textContent.startsWith('Cannot copy name:')) error('');
-}, target => {
-  const a=assets.find(a=>a.path===target.path && (target.form===undefined || a.component || a.shown[0].id===target.form));
-  if (target.form !== undefined) selectFrame(a,a?.parts.find(p=>p.id===target.form));
-  else selectSource(a);
-});
-document.fonts.ready.then(() => {labelLayer.metrics.clear();requestDraw()});
-let labelsDirty = true, labelObstacles = null;
 let drawingDirty = true, drawingView = null, drawingMargin = 0, drawingReady = 0, drawingCount = 0;
 const zoomValue = $("#zoom-value"), zoomOutput = $("output");
 const cache = new Map(),
@@ -153,7 +176,21 @@ let initialLink = route.target, strictRoute = route.strict, queryView = !!route.
 let scopeRequest = fixtureName ? 'all' : (route.base && route.scope === 'default' ? 'review' : route.scope ?? 'default'), onlyFrame = route.onlyFrame ?? null;
 let initializedScope, initializedFrame, scopeEntry;
 const currentItem = () => inspection || assets.find((a) => a.id === selectedId);
+function sameView(a, b) {
+  return !!a && !!b && a.x === b.x && a.y === b.y && a.scale === b.scale;
+}
 function remember() {
+  const prev = history.at(-1);
+  if (prev &&
+      prev.scope === initializedScope &&
+      (prev.onlyFrame ?? null) === (onlyFrame ?? null) &&
+      prev.active === active &&
+      prev.selected === selected &&
+      prev.selectedForm === selectedForm &&
+      (prev.selectedElement?.id ?? null) === (selectedElement?.id ?? null) &&
+      sameView(prev.view, view)) {
+    return;
+  }
   history.push({
     view: { ...view },
     scope: initializedScope,
@@ -170,11 +207,26 @@ function remember() {
   });
   if (history.length > 40) history.shift();
 }
+function exitIsolation(record = true) {
+  const data = catalog ?? manifest;
+  const asset = data?.assets?.[0];
+  const seg = asset?.layer ?? asset?.path?.split('/')[0];
+  const next = data?.layers?.length === 1
+    ? `layer:${data.layers[0]}`
+    : seg && ['components', 'modules', 'surfaces', 'arch'].includes(seg) && (!data?.layers || data.layers.includes(seg))
+      ? `layer:${seg}`
+      : 'all';
+  changeScope(next, null, record);
+}
 function back() {
   if (catalog) return;
   const old = history.pop();
   if (!old && onlyFrame) {
     changeScope(initializedScope, null, false);
+    return;
+  }
+  if (!old && ['group', 'asset'].includes(scopeKind(initializedScope))) {
+    exitIsolation(false);
     return;
   }
   if (old) {
@@ -190,6 +242,9 @@ function back() {
 function changeScope(next, entry = null, record = true) {
   const nextFrame = entry?.onlyFrame ?? null;
   if (next === scopeRequest && nextFrame === onlyFrame) return;
+  const wasOverlay = scopeRequest === 'tokens' || scopeRequest === 'review' || !!tokenManifest || !!reviewManifest || leavingOverlay;
+  const nextOverlay = next === 'tokens' || next === 'review';
+  const preserveSearch = !fixtureState && !wasOverlay && !nextOverlay && ['all', 'layer'].includes(scopeKind(next)) && !!$("#search").value.trim();
   if ((initializedScope || tokenManifest || reviewManifest) && !catalog) {
     if (next === 'tokens' && manifest && !tokenManifest && !reviewManifest) manifest.view = { ...view };
     if (record && !tokenManifest && !reviewManifest && next !== 'tokens' && next !== 'review') remember();
@@ -202,10 +257,26 @@ function changeScope(next, entry = null, record = true) {
   scopeEntry = entry;
   initialLink = null;
   pendingNavigation = null;
-  if (searchReturn) sidebar = searchReturn.sidebar;
-  searchReturn = null;
-  $("#search").value = '';
+  tokenSearchWasBoard = false;
+  if (!preserveSearch) {
+    if (searchReturn) sidebar = searchReturn.sidebar;
+    searchReturn = null;
+    $("#search").value = '';
+  }
   void refresh(true);
+}
+function setTokenList(next) {
+  if (next === tokenList) return;
+  if (!next && !tokenManifest?.tokenBoard) return;
+  tokenList = next;
+  tokenSearchWasBoard = false;
+  updateChrome();
+  renderNav();
+  if (!tokenList && tokenHeight && world.height <= 1) {
+    world = { x: 0, y: 0, width: tokenManifest.tokenBoard.width, height: tokenHeight };
+    frame(world);
+  }
+  requestDraw();
 }
 function toggleSidebar(value = !sidebar) {
   sidebar = value;
@@ -214,11 +285,35 @@ function toggleSidebar(value = !sidebar) {
 }
 function updateChrome() {
   updateSwitcherLabels();
-  const opened = scopeRequest === 'review' || !!(reviewManifest ?? tokenManifest ?? catalog ?? manifest)?.directory;
+  const data = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
+  const opened = scopeRequest === 'review' || !!data?.directory;
   const showTokens = !!tokenManifest && tokenList;
   const showReview = scopeRequest === 'review' || !!reviewManifest;
   $('#token-list-toggle').hidden = !tokenManifest;
+  $('#token-list-toggle').disabled = !tokenManifest?.tokenBoard;
   $('#token-list-toggle').textContent = tokenList ? 'Board view' : 'List view';
+  const tokenToggle = $('#token-view-toggle');
+  tokenToggle.hidden = !tokenManifest || !!fixtureState;
+  tokenToggle.disabled = !tokenManifest?.tokenBoard;
+  const tokenMode = tokenList ? 'board' : 'list';
+  if (tokenToggle.dataset.mode !== tokenMode) {
+    tokenToggle.dataset.mode = tokenMode;
+    tokenToggle.innerHTML = `${icon(tokenList ? 'layout-grid' : 'list', 14)}<span>${tokenList ? 'Board view' : 'List view'}</span>`;
+  }
+  $('#token-board-button').hidden = !tokenManifest?.tokenBoard || !!fixtureState;
+  const isolation = $('#scope-isolation');
+  const showIsolation = !fixtureState && !showReview && !tokenManifest && !!data?.scope && (['group', 'asset'].includes(scopeKind(data.scope)) || !!onlyFrame);
+  isolation.hidden = !showIsolation;
+  if (showIsolation) {
+    const label = onlyFrame ? `${scopeLabel(data.scope)} · ${onlyFrame}` : scopeLabel(data.scope);
+    if (isolation.dataset.label !== label) {
+      isolation.dataset.label = label;
+      isolation.innerHTML = `${icon('square-dashed', 12)}<span></span>${icon('x', 12)}`;
+      isolation.querySelector('span').textContent = label;
+      isolation.setAttribute('aria-label', `Exit isolated scope: ${label}`);
+      isolation.dataset.tooltip = 'Show full layer';
+    }
+  }
   const canInspect = opened && !showTokens && !showReview && !!selected;
   $('.gallery').classList.toggle('tokens-mode', showTokens || showReview);
   $('#token-catalog').hidden = !showTokens;
@@ -228,9 +323,16 @@ function updateChrome() {
   $('#sidebar-toggle').hidden = showReview;
   $('.search-divider').hidden = showReview;
   $('.search-field').hidden = showReview;
-  const canComment = opened && !tokenManifest && scopeRequest !== 'layer:arch';
-  $('#comment-tool').hidden = !canComment;
+  const allArch = assets.length > 0 && assets.every(a => a.path.endsWith('.mmd'));
+  const canComment = opened && !tokenManifest && scopeRequest !== 'layer:arch' && !allArch && !(showReview && reviewFrames.size === 0 && !reviewLoading);
+  const unavailableReason = canComment ? ''
+    : tokenManifest ? 'Tokens take no comments.'
+    : scopeRequest === 'layer:arch' || assets.some(a => a.path.endsWith('.mmd')) ? 'Architecture diagrams take no comments.'
+    : 'No commentable frames in this review.';
+  $('#comment-tool').hidden = !!tokenManifest && !!fixtureState;
   $('#comment-tool').disabled = !canComment;
+  $('#comment-tool').dataset.tooltip = canComment || !unavailableReason ? 'Comment (C)' : unavailableReason;
+  commentUI?.setAvailable?.(canComment, unavailableReason);
   $('#inspect').hidden = showReview;
   $('#app-bar').hidden = !opened;
   if (fixtureState) $('#app-directory .switcher-chevron').hidden = false;
@@ -241,7 +343,10 @@ function updateChrome() {
   $('#source').hidden = !canInspect || !inspector;
   $('#inspect').disabled = !canInspect;
   $('#inspect').setAttribute('aria-expanded', String(canInspect && inspector));
-  $('#arrange').hidden = showTokens || showReview;
+  $('#canvas-background-section').hidden = showReview || showTokens;
+  $('#arrange').hidden = !!tokenManifest || showReview;
+  $('#zoom-fit-group').disabled = !!tokenManifest || active === null || !groups[active];
+  $('#zoom-fit-selection').disabled = !!tokenManifest || !selected;
   if (!opened || showReview) $('#minimap').hidden = true;
   $('#sidebar-toggle').setAttribute('aria-expanded', String(opened && !showReview && sidebar));
   positionZoomMenu();
@@ -371,7 +476,7 @@ function save() {
 }
 window.addEventListener('pagehide', () => void persistPreferences(true));
 document.addEventListener('visibilitychange', () => {if (document.hidden) void persistPreferences(true)});
-const layoutData = data => onlyFrame ? { ...data, assets: data.assets.map(asset => ({ ...asset, component: false, parts: asset.parts.filter(part => part.name === onlyFrame) })) } : data;
+const layoutData = data => onlyFrame ? { ...data, assets: data.assets.map(asset => ({ ...asset, sourceComponent: !!asset.component, component: false, parts: asset.parts.filter(part => part.name === onlyFrame) })) } : data;
 function layout(data, preserve = false, options = {}) {
   const endArrangement = globalThis.__adgTiming?.span('arrangement', undefined, {sources:data.assets.length,provisional:!!options.provisional});
   const previousGroups = groups,
@@ -416,9 +521,19 @@ function layout(data, preserve = false, options = {}) {
     }),
   );
   $("#empty").hidden = !!assets.length || !!data.tokenBoard || !data.directory;
-  if (!assets.length) $("#empty").textContent = scopedUI(data) ? 'No assets in this scope.' : 'No SVG files in this directory.';
+  if (!assets.length) $("#empty").textContent = scopedUI(data) ? 'No assets in this scope.' : 'No design sources in this directory.';
   endArrangement?.({items:assets.length});
   if (assets.length) globalThis.__adgTiming?.mark('first-layout');
+}
+function assetTitle(path = '') {
+  const parts = path.split('/');
+  const filename = parts.at(-1) ?? '';
+  return filename === 'index.tsx' && parts.length > 1
+    ? parts.at(-2)
+    : filename.replace(/\.(tsx|svg|mmd)$/i, '');
+}
+function displayName(a) {
+  return a?.path ? assetTitle(a.path) : a?.name ?? '';
 }
 function makeRow(name, label, count, className = 'tree-row') {
   const button = document.createElement('button'); button.className = className;
@@ -429,8 +544,8 @@ function makeRow(name, label, count, className = 'tree-row') {
 }
 function searchResults(query) {
   const entries = (catalog ?? manifest).assets;
-  const files = entries.filter(a => a.name.toLowerCase().includes(query)).map(a => ({ a }));
-  const forms = entries.flatMap(a => a.name.toLowerCase().includes(query) ? [] : (a.parts ?? []).filter(p => p.name.toLowerCase().includes(query)).map(p => ({ a, p })));
+  const files = entries.filter(a => displayName(a).toLowerCase().includes(query)).map(a => ({ a }));
+  const forms = entries.flatMap(a => displayName(a).toLowerCase().includes(query) ? [] : (a.parts ?? []).filter(p => p.name.toLowerCase().includes(query)).map(p => ({ a, p })));
   return [...files, ...forms];
 }
 function navigate(action) {
@@ -444,7 +559,7 @@ function scopeLabel(scope) {
   if (scope === 'all') return 'All designs';
   if (scope === 'tokens') return 'Tokens';
   if (scopeKind(scope) === 'layer') return target[0].toUpperCase() + target.slice(1);
-  if (scopeKind(scope) === 'asset') return target.split('/').at(-1).replace(/\.(tsx|svg)$/i,'');
+  if (scopeKind(scope) === 'asset') return assetTitle(target);
   return target;
 }
 function renderScopeTabs(data) {
@@ -480,6 +595,7 @@ $('#scope-tabs').addEventListener('keydown', event => {
     : step ? tabs[(index + step + tabs.length) % tabs.length] : null;
   if (!target) return;
   event.preventDefault();
+  event.stopPropagation();
   target.focus();
   target.click();
 });
@@ -496,14 +612,15 @@ function scopeAction(kind, key, label) {
 }
 function navFile(a, options = {}) {
   const { indent=false, isolate=false } = options;
-  const item=makeRow((a.component ?? a.path.startsWith('components/'))?'component':'app-window',a.name,undefined,'tree-row file');
+  const label = displayName(a);
+  const item=makeRow((a.component ?? a.path.startsWith('components/'))?'component':'app-window',label,undefined,'tree-row file');
   item.dataset.navkey=`file:${a.path}`;
   item.setAttribute('aria-current',String(selected===a.path));
   item.onclick=()=>navigate(()=>focusAsset(assets.find(x=>x.path===a.path)));
   if (!isolate) return item;
   const row=document.createElement('div');row.className='scope-row';
   if (indent) row.classList.add('scope-row-indent');
-  row.append(item,scopeAction('asset',a.path,a.name));
+  row.append(item,scopeAction('asset',a.path,label));
   return row;
 }
 function renderNav() {
@@ -530,6 +647,16 @@ function renderNav() {
       button.setAttribute('aria-current', String(tokenCategory === category));
       button.onclick = () => {
         tokenCategory = category;
+        if (!tokenList) {
+          if (!category) {
+            frame(world);
+          } else {
+            const slug = tokenBoardSection(category);
+            const box = slug && boardLayer.tokenSection(slug);
+            if (box) commit(fitView(box, fitArea(width, height, sidebar, false), 24));
+            else setTokenList(true);
+          }
+        }
         $('.token-scroll').scrollTop = 0;
         renderNav();
       };
@@ -544,16 +671,27 @@ function renderNav() {
     });
   } else if (query) {
     const results = searchResults(query), heading = document.createElement('h3');
-    heading.className='search-count'; heading.textContent=`${results.length} ${results.length === 1 ? 'result' : 'results'}`; nodes.push(heading);
+    heading.className = 'search-count';
+    heading.textContent = results.length === 0 && data.scope && data.scope !== 'all'
+      ? `0 results in ${scopeLabel(data.scope)}`
+      : `${results.length} ${results.length === 1 ? 'result' : 'results'}`;
+    nodes.push(heading);
+    if (results.length === 0 && data.scope && data.scope !== 'all') {
+      const expand = makeRow('layout-grid', 'Search All designs', undefined, 'tree-row search-result');
+      expand.dataset.navkey = 'search:all';
+      expand.onclick = () => changeScope('all');
+      nodes.push(expand);
+    }
     for (const { a, p } of results) {
+      const name = displayName(a);
       const component = a.component ?? a.path.startsWith('components/');
-      const button=makeRow(component?'component':'app-window',p ? `${a.name} · ${p.name}` : a.name,p ? 'form' : a.parts ? `${a.parts.length} ${component?'forms':'frames'}` : undefined,'tree-row search-result');
+      const button=makeRow(component?'component':'app-window',p ? `${name} · ${p.name}` : name,p ? 'form' : a.parts ? `${a.parts.length} ${component?'forms':'frames'}` : undefined,'tree-row search-result');
       button.dataset.navkey=`search:${a.path}:${p?.id ?? ''}`;
       button.setAttribute('aria-current',String(selected===a.path && (!p || selectedForm===p.id)));
       button.onclick=()=>navigate(()=>p ? inspectForm(a,p) : focusAsset(assets.find(item=>item.path===a.path)));
       if (scoped && kind!=='asset' && !p) {
         const row=document.createElement('div');row.className='scope-row';
-        row.append(button,scopeAction('asset',a.path,a.name));nodes.push(row);
+        row.append(button,scopeAction('asset',a.path,name));nodes.push(row);
       } else nodes.push(button);
     }
   } else if (kind === 'asset') {
@@ -594,7 +732,7 @@ function renderNav() {
   requestDraw();
 }
 function renderRelationships(source) {
-  const basename = path => path.split('/').at(-1).replace(/\.tsx$/, '');
+  const basename = path => assetTitle(path);
   for (const [id,direction] of [['uses','uses'],['used-by','usedBy']]) {
     const entries=relatedSources(manifest?.relationships ?? {},source,direction), directories=new Map();
     for (const entry of entries) {
@@ -607,7 +745,7 @@ function renderRelationships(source) {
       const group=document.createElement('section'),heading=document.createElement('h5');
       heading.className='relationship-directory';heading.textContent=directory;group.append(heading);
       for (const entry of directories.get(directory)) {
-        const via=entry.via.map(path=>basename(path)===basename(entry.path)?path.replace(/\.tsx$/,''):basename(path)).join(' → ');
+        const via=entry.via.map(path=>basename(path)===basename(entry.path)?path.replace(/(\/index)?\.(tsx|mmd|svg)$/i,''):basename(path)).join(' → ');
         const button=makeRow(directory==='surfaces'?'app-window':'component',basename(entry.path)+(via?` · via ${via}`:''),undefined,'tree-row relationship-row'+(entry.direct?'':' indirect'));
         button.dataset.relatedPath=entry.path;button.dataset.direct=String(entry.direct);
         button.title=entry.path+(entry.via.length?` via ${entry.via.join(' → ')}`:'');
@@ -630,22 +768,23 @@ function selection() {
   if (!selected) inspector = false;
   syncSelectionURL();
   renderNav(); updateChrome();
-  $('#back').disabled = !history.length && !onlyFrame;
+  $('#back').disabled = !history.length && !onlyFrame && !['group', 'asset'].includes(scopeKind(initializedScope));
   const host=currentItem(), part=host?.parts.find(p=>p.id===selectedForm);
   const owner=selectedElement?.owner;
   const hasExport=!!owner?.export;
   const a=hasExport ? manifest?.assets.find(a=>a.path===owner.source) ?? manifest?.extraAssets?.find(a=>a.path===owner.source) ?? {path:owner.source,parts:[]} : host;
   if(a) {
-    $('#source-name').textContent=hasExport ? owner.export : a.name;$('#source-path').textContent=a.path;
+    const isComponent = a.sourceComponent ?? a.component ?? manifest?.assets.find(x => x.path === a.path)?.component ?? a.path?.startsWith('components/');
+    $('#source-name').textContent=hasExport ? owner.export : displayName(a);$('#source-path').textContent=a.path;
     $('#source-path').title=a.path;
     $('#frame-detail').hidden=!part;
     $('#frame-name').textContent=part?.name ?? '';
     const size=selectedElement ?? part;
     $('#frame-size').textContent=size?`${Math.round(size.width)} × ${Math.round(size.height)}`:'';
-    $('#forms-heading').textContent=hasExport?'Frames using this export':a.component?'Forms':'Frames';
+    $('#forms-heading').textContent=hasExport?'Frames using this export':isComponent?'Forms':'Frames';
     const forms=hasExport?exportFrames(a,owner):a.parts;
     $('#forms').replaceChildren(...forms.map(p=>{
-      const button=makeRow(a.component?'component':'app-window',p.name,`${Math.round(p.width)} × ${Math.round(p.height)}`);
+      const button=makeRow(isComponent?'component':'app-window',p.name,`${Math.round(p.width)} × ${Math.round(p.height)}`);
       button.classList.add('frame-row');button.title=p.name;
       button.dataset.frame=p.name;
       button.setAttribute('aria-current',String(!hasExport && selectedForm===p.id));
@@ -660,11 +799,19 @@ function selection() {
 }
 function selectSource(a) {
   if (!a) return;
-  remember();inspection=null;selected=a.path;selectedId=a.id;selectedForm=null;selectedElement=null;active=a.group;expanded.add(active);selection();
+  const unchanged = !inspection && selected === a.path && selectedId === a.id && selectedForm === null && selectedElement === null && active === a.group;
+  if (!(unchanged && sameView(history.at(-1)?.view, view) && history.at(-1)?.scope === initializedScope)) remember();
+  inspection=null;selected=a.path;selectedId=a.id;selectedForm=null;selectedElement=null;active=a.group;expanded.add(active);selection();
 }
 function selectFrame(a,p,element=null) {
   if (!a || !p) return;
-  remember();selected=a.path;selectedId=a.id;selectedForm=p.id;active=a.group;selectedElement=element?{...element,owner:elementOwner(element,a.path)}:null;
+  const nextElement = element ? { ...element, owner: elementOwner(element, a.path) } : null;
+  const unchanged = selected === a.path && selectedId === a.id && selectedForm === p.id && active === a.group &&
+    (selectedElement?.id ?? null) === (nextElement?.id ?? null) &&
+    (selectedElement?.owner?.source ?? null) === (nextElement?.owner?.source ?? null) &&
+    (selectedElement?.owner?.export ?? null) === (nextElement?.owner?.export ?? null);
+  if (!(unchanged && sameView(history.at(-1)?.view, view) && history.at(-1)?.scope === initializedScope)) remember();
+  selected=a.path;selectedId=a.id;selectedForm=p.id;active=a.group;selectedElement=nextElement;
   expanded.add(active);selection();
 }
 function clearSelection() { selected=null;selectedId=null;selectedForm=null;selectedElement=null;inspection=null;selection(); }
@@ -864,7 +1011,7 @@ function commentBoardPlace(thread) {
   const board = commentBoards.find(group => path ? group.assets.some(asset => asset.path === path) : boardGroup(thread, group));
   return board ? { layer: board.layer, chapter: board.title } : { changed: commentBoards.length > 0 };
 }
-const commentUI = createComments({
+commentUI = createComments({
   toolButton: $('#comment-tool'), panelButton: $('#comments-toggle'), panel: $('#comments-panel'), layer: $('#comment-layer'),
   hitTest: (x, y, deepest) => reviewManifest ? targetOnReview(x, y, deepest) : targetOnBoard(x, y, deepest),
   preparePoint: (x, y) => {
@@ -872,10 +1019,25 @@ const commentUI = createComments({
     return image ? Promise.all([primeReviewFrame(image).promise, commentCatalogLoaded ? undefined : refreshCommentCatalog()]) : undefined;
   },
   locate: locateComment, navigate: navigateComment, boardOrder: commentBoardOrder, boardPlace: commentBoardPlace, request: api,
+  onPanelToggle: open => {
+    if (open && inspector) {
+      inspector = false;
+      updateChrome();
+      requestDraw(true, false);
+    }
+  },
 });
 document.addEventListener('keydown', event => commentUI.key(event));
-$('#comments-toggle').addEventListener('click', () => { if (!commentCatalogLoaded) void refreshCommentCatalog(); });
+$('#comments-toggle').addEventListener('click', () => {
+  if (!commentCatalogLoaded) void refreshCommentCatalog();
+  if (!$('#comments-panel').hidden && inspector) {
+    inspector = false;
+    updateChrome();
+    requestDraw(true, false);
+  }
+});
 function updateOutlines() {
+  viewport.dataset.hoverHit = String(!!hoveredElement && !commentUI.active());
   commentUI.reposition();
   const hover=hoveredElement,origin=hover?.part?frameBox(hover.asset,hover.part):null;
   const hoverBox=hover?.element?{...hover.element,x:origin.x+hover.element.x,y:origin.y+hover.element.y}:origin;
@@ -899,6 +1061,10 @@ function frame(box, padding = 0) {
   commit(box===world ? fitWorld(cameraArea(),manifest) : fitView(box, cameraArea(), padding));
 }
 function fit() {
+  if (tokenManifest) {
+    frame(world);
+    return;
+  }
   remember();
   inspection = null;
   selected = null;
@@ -914,7 +1080,7 @@ function focusAsset(a) {
 }
 function inspectForm(a,p,minScale=0) {
   if (!a || !p) return;
-  const item=assets.find(item=>item.path===a.path && (a.component || item.shown[0].id===p.id));
+  const item=assets.find(item=>item.path===a.path && (item.component || item.shown[0].id===p.id));
   if (!item) {
     if (initializedScope !== 'all') {
       changeScope(`asset:${a.path}`, { target: { path: a.path, form: p.name } });
@@ -935,7 +1101,6 @@ function zoom(scale, x = cameraArea().x + cameraArea().width / 2, y = cameraArea
 }
 function commit(next) {
   window.__adg.ready = false;
-  labelsDirty ||= view.scale !== next.scale;
   view = next;
   moving = true;
   requestDraw(false, false);
@@ -946,9 +1111,8 @@ function commit(next) {
     requestDraw();
   }, 150);
 }
-function requestDraw(labelsChanged = true, drawingChanged = true) {
+function requestDraw(_labelsChanged = true, drawingChanged = true) {
   drawingDirty ||= drawingChanged;
-  if (labelsChanged) { labelsDirty = true; labelObstacles = null; }
   if (!raf) raf = requestAnimationFrame(draw);
 }
 function visible(a, margin = 0) {
@@ -1103,9 +1267,9 @@ function draw() {
     window.__adg.ready = tokenHeight > 0;
     window.__adg.revision = tokenManifest.revision;
     if (fixtureState && window.__adg.ready) document.documentElement.dataset.fixtureReady=fixtureState.name;
+    drawMap();
     endDrawing?.(); return;
   }
-  if (!labelObstacles) readChromeBounds();
   const displayed = manifest?.renderTheme === effectiveTheme ? inspection ? [inspection] : assets : [];
   // Keep a margin around a settled drawing. Pans can move that
   // retained Canvas layer without replaying or resampling the entire scene.
@@ -1170,7 +1334,6 @@ function draw() {
   canvas.style.transform = `translate(${view.x - drawingView.x - drawingMargin}px,${view.y - drawingView.y - drawingMargin}px)`;
   updateOutlines();
   boardLayer.camera(view, !!inspection || !!tokenManifest || !!reviewManifest);
-  if (inspection) drawLabels(displayed); else labelLayer.clear();
   const percentage = `${Math.round(view.scale * 100)}%`;
   if (zoomValue.textContent !== percentage) zoomValue.textContent = percentage;
   if (zoomOutput.value !== percentage) zoomOutput.value = percentage;
@@ -1190,71 +1353,6 @@ function draw() {
 }
 function backgroundColor() { return backgroundChoice === 'theme' ? palette.canvas : backgroundColors[backgroundChoice]; }
 
-function readChromeBounds() {
-  const vr = viewport.getBoundingClientRect();
-  labelObstacles = [];
-  for (const el of document.querySelectorAll('.floating, :popover-open, dialog[open], #tooltip:not([hidden])')) {
-    if (el.hidden) continue;
-    const style = getComputedStyle(el);
-    if (style.visibility === 'hidden' || style.display === 'none') continue;
-    const r = el.getBoundingClientRect(), box = { x:r.x-vr.x, y:r.y-vr.y, width:r.width, height:r.height };
-    labelObstacles.push(box);
-  }
-}
-function drawLabels(displayed) {
-  if (!labelsDirty && labelLayer.pan(view)) return;
-  const candidates = [], screen = box => ({ x: view.x + box.x * view.scale, y: view.y + box.y * view.scale });
-  const caption = Number.parseFloat(palette['text-caption']), meta = Number.parseFloat(palette['text-meta']), section = Number.parseFloat(palette['text-section']);
-  const part = (text, size, weight, color, gap = 0) => ({ text, size, weight, color, gap });
-  const title = (...args) => ({...part(...args),copyText:args[0]});
-  const sourceTitle = (a,...args) => ({...title(...args),selection:{path:a.path}});
-  const frameTitle = (a,p,...args) => ({...title(...args),selection:{path:a.path,form:p.id}});
-  const modified = a => a.modified ? [{...part(a.modified.text,meta,400,palette['text-tertiary'],10),...a.modified,optional:true}] : [];
-  const heading = (x, y, right) => {
-    const half = meta * .6;
-    let left = Math.max(8, x), edge = Math.min(width - 8, right);
-    const center = Math.max(8 + half, y);
-    for (const obstacle of labelObstacles) {
-      if (center + half <= obstacle.y || center - half >= obstacle.y + obstacle.height) continue;
-      if (obstacle.x + obstacle.width <= left || obstacle.x >= edge) continue;
-      if (obstacle.x - 12 - left >= edge - obstacle.x - obstacle.width - 12) edge = obstacle.x - 12;
-      else left = obstacle.x + obstacle.width + 12;
-    }
-    return {x:left,y:center,slot:Math.max(0,edge-left),pinned:left !== x || center !== y};
-  };
-  if (!inspection && scopeKind(manifest?.scope)!=='asset') for (const g of groups) {
-    if (!visible(g)) continue;
-    const p = screen(g);
-    candidates.push({ id: `section:${g.title}`, x: p.x, y: p.y - 16, slot: g.width * view.scale, parts: [title(g.title, section, 650, palette.text), {...part(`${g.assets.length} assets`, meta, 400, palette['text-tertiary'], 8),optional:true}] });
-  }
-  if (view.scale >= .2) {
-    const flows = new Set();
-    const labeled = selectedId ? [...displayed].sort((a,b) => Number(b.id === selectedId) - Number(a.id === selectedId)) : displayed;
-    for (const a of labeled) {
-      if (!visible(a)) continue;
-      const p = screen(a), chosen = selectedId === a.id;
-      if (a.kind === 'set' || inspection) {
-        candidates.push({ id: `set:${a.id}`, ...heading(p.x,p.y-12,p.x+(a.width+64)*view.scale-10),
-          parts:[sourceTitle(a,inspection ? a.shown[0].name : a.name,meta,550,chosen ? palette.text : palette['text-secondary']), ...(!inspection ? [{ ...part(`${a.parts.length} ${a.parts.length === 1 ? 'form' : 'forms'}`,meta,400,palette['text-tertiary'],6), optional: true },...modified(a)] : [])] });
-        if (!inspection && view.scale >= .75 && a.parts.length > 1) {
-          const crop = a.shown[0];
-          candidates.push(...a.parts.map(form => ({ id:`form:${a.id}:${form.id}`,x:p.x+(form.x-crop.x)*view.scale,y:p.y+(form.y-crop.y)*view.scale-9.5,slot:Infinity,height:13,paddingRight:6,within:{x:p.x,y:p.y,width:a.width*view.scale,height:a.height*view.scale},
-            parts:[frameTitle(a,form,form.name,caption,400,palette['text-tertiary'])] })));
-        }
-      } else {
-        if (!flows.has(a.path)) {
-          flows.add(a.path);
-          const family = displayed.filter(item => item.path === a.path), first = family[0];
-          const origin = screen(first), right = Math.max(...family.map(item => item.x+item.width));
-          candidates.push({ id:`flow:${a.path}`,...heading(origin.x,origin.y-34,origin.x+(right-first.x)*view.scale),parts:[sourceTitle(a,a.name,meta,600,palette['text-secondary']),{...part(`${a.parts.length} ${a.parts.length === 1 ? 'frame' : 'frames'}`,meta,400,palette['text-tertiary'],6),optional:true},...modified(a)] });
-        }
-        candidates.push({ id:`frame:${a.id}`,x:p.x,y:p.y-12,slot:(a.width+64)*view.scale,parts:[frameTitle(a,a.shown[0],a.shown[0].name,caption,chosen?550:400,chosen?palette.text:palette['text-tertiary'])] });
-      }
-    }
-  }
-  labelLayer.update(candidates,labelObstacles,width,height,palette['font-ui'],view);
-  labelsDirty = false;
-}
 function mapGeometry() {
   const scale=Math.min(168/world.width,100/world.height);
   return {scale,x:(200-world.width*scale)/2,y:(132-world.height*scale)/2};
@@ -1263,10 +1361,15 @@ function drawMap() {
   const map=$("#minimap");if(map.hidden)return;
   if(map.width!==200*dpr||map.height!==132*dpr){map.width=200*dpr;map.height=132*dpr}
   const c=map.getContext('2d'),{scale:s,x,y}=mapGeometry();c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,200,132);
-  for(const g of groups){c.fillStyle=palette['surface-section'];c.strokeStyle=palette.border;c.beginPath();c.roundRect(x+g.x*s,y+g.y*s,g.width*s,g.height*s,4);c.fill();c.stroke()}
+  const boxes = tokenManifest
+    ? [{ x: 0, y: 0, width: world.width, height: world.height }]
+    : manifest?.scope === 'all' && manifest.tokenBoard && tokenHeight
+      ? [{ x: 0, y: 0, width: manifest.tokenBoard.width, height: tokenHeight }, ...groups]
+      : groups;
+  for(const g of boxes){c.fillStyle=palette['surface-section'];c.strokeStyle=palette.border;c.beginPath();c.roundRect(x+g.x*s,y+g.y*s,g.width*s,g.height*s,4);c.fill();c.stroke()}
   c.strokeStyle=palette.accent;c.lineWidth=1;
   const area=cameraArea();
-  c.strokeRect(x+(area.x-view.x)/view.scale*s,y+(area.y-view.y)/view.scale*s,area.width/view.scale*s,area.height/view.scale*s);
+  c.strokeRect(x+(area.x-view.x)/view.scale*s,y+(area.y-view.y)/view.scale*s,Math.max(6,area.width/view.scale*s),Math.max(6,area.height/view.scale*s));
 }
 
 function applyTheme() {
@@ -1282,9 +1385,35 @@ function applyTheme() {
   );
   palette.raised = css.getPropertyValue("--surface-sunken").trim();
   palette.muted = css.getPropertyValue("--text-secondary").trim();
-  for (const sheet of document.styleSheets) for(const rule of sheet.cssRules ?? []) {
-    if(rule.selectorText === ':root' && rule.style.getPropertyValue('--canvas')) backgroundColors.light=rule.style.getPropertyValue('--canvas').trim();
-    if(rule.selectorText === ':root[data-theme="dark"]' && rule.style.getPropertyValue('--canvas')) backgroundColors.dark=rule.style.getPropertyValue('--canvas').trim();
+  const stageProps = [['canvas', 'canvas'], ['border', 'border'], ['surface', 'surface'], ['sunken', 'surface-sunken'], ['section', 'surface-section']];
+  for (const sheet of document.styleSheets) {
+    let rules;
+    try { rules = sheet.cssRules; } catch { continue; }
+    for (const rule of rules ?? []) {
+      if (rule.selectorText === ':root' && rule.style.getPropertyValue('--canvas')) {
+        backgroundColors.light = rule.style.getPropertyValue('--canvas').trim();
+        for (const [short, token] of stageProps) {
+          const val = rule.style.getPropertyValue('--' + token).trim();
+          if (val) document.documentElement.style.setProperty(`--stage-light-${short}`, val);
+        }
+        document.documentElement.style.setProperty('--review-canvas-light', backgroundColors.light);
+        const s = rule.style.getPropertyValue('--surface-sunken').trim(), b = rule.style.getPropertyValue('--surface').trim();
+        if (s) document.documentElement.style.setProperty('--review-checker-light-a', s);
+        if (b) document.documentElement.style.setProperty('--review-checker-light-b', b);
+      }
+      if (rule.selectorText === ':root[data-theme="dark"]' && rule.style.getPropertyValue('--canvas')) {
+        backgroundColors.dark = rule.style.getPropertyValue('--canvas').trim();
+        for (const [short, token] of stageProps) {
+          const val = rule.style.getPropertyValue('--' + token).trim();
+          if (val) document.documentElement.style.setProperty(`--stage-dark-${short}`, val);
+        }
+        document.documentElement.style.setProperty('--review-canvas-dark', backgroundColors.dark);
+        const bd = rule.style.getPropertyValue('--border').trim(), da = rule.style.getPropertyValue('--surface').trim(), db = rule.style.getPropertyValue('--surface-section').trim();
+        if (bd) document.documentElement.style.setProperty('--review-border-dark', bd);
+        if (da) document.documentElement.style.setProperty('--review-checker-dark-a', da);
+        if (db) document.documentElement.style.setProperty('--review-checker-dark-b', db);
+      }
+    }
   }
   backgroundColors.neutral=`color-mix(in srgb, ${backgroundColors.light} 50%, ${backgroundColors.dark})`;
   updateChoices();
@@ -1387,9 +1516,12 @@ function up(e) {
       y = (e.clientY - rect.top - view.y) / view.scale;
     const hit=hitSelection(inspection?[inspection]:assets,x,y);
     if (commentUI.active()) commentUI.click(e.clientX, e.clientY, e.altKey);
-    else if(hit?.part) selectFrame(hit.asset,hit.part,hit.element);
-    else if(hit) selectSource(hit.asset);
-    else clearSelection();
+    else {
+      commentUI?.dismiss?.();
+      if(hit?.part) selectFrame(hit.asset,hit.part,hit.element);
+      else if(hit) selectSource(hit.asset);
+      else clearSelection();
+    }
   }
   if (viewport.hasPointerCapture(e.pointerId))
     viewport.releasePointerCapture(e.pointerId);
@@ -1413,6 +1545,7 @@ function openSelectionContextMenu({ worldPoint = null, screenX, screenY, deepest
         label: 'Show in Inspector',
         action: () => {
           inspector = true;
+          commentUI?.closePanel?.();
           selection();
           $('#copy-path')?.focus({ preventScroll: true });
         },
@@ -1422,6 +1555,7 @@ function openSelectionContextMenu({ worldPoint = null, screenX, screenY, deepest
         disabled: !owner?.export,
         action: async () => {
           inspector = true;
+          commentUI?.closePanel?.();
           if (owner?.source && !manifest?.assets.some(item => item.path === owner.source) && !manifest?.extraAssets?.some(item => item.path === owner.source)) {
             try {
               const loaded = await sourceFor({ path: owner.source, version: manifest?.revision ?? 0 }, effectiveTheme);
@@ -1437,6 +1571,7 @@ function openSelectionContextMenu({ worldPoint = null, screenX, screenY, deepest
         label: 'Show usages',
         action: () => {
           inspector = true;
+          commentUI?.closePanel?.();
           selection();
           $('#used-by-heading')?.scrollIntoView({ block: 'nearest' });
           ($('#used-by button') ?? $('#copy-path'))?.focus({ preventScroll: true });
@@ -1454,6 +1589,7 @@ function openSelectionContextMenu({ worldPoint = null, screenX, screenY, deepest
         label: 'Show in Inspector',
         action: () => {
           inspector = true;
+          commentUI?.closePanel?.();
           selection();
           $('#copy-frame')?.focus({ preventScroll: true });
         },
@@ -1493,16 +1629,21 @@ document.addEventListener('keydown', e => {
   openSelectionContextMenu({ worldPoint: null, screenX: sx, screenY: sy, returnFocus: activeEl instanceof HTMLElement ? activeEl : viewport });
 });
 document.addEventListener("keydown", (e) => {
-  if (e.metaKey || e.ctrlKey || e.altKey || e.target.matches("input,textarea,[contenteditable]") || document.querySelector("dialog[open], :popover-open")) return;
+  if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey ||
+      (tokenManifest && tokenList) || scopeRequest === 'review' || !!reviewManifest ||
+      e.target.matches("input,textarea,select,[contenteditable]") ||
+      document.querySelector("dialog[open], :popover-open")) return;
+  const inPanel = !!e.target.closest('#sidebar, #source, #comments-panel, #scope-tabs, #token-catalog, #review-page');
   const v = view;
-  if (e.key === "+" || e.key === "=") zoom(v.scale * 1.25);
+  if (e.key === "Enter") {
+    if (tokenManifest || inPanel || e.target.closest('button,a,[role="button"]')) return;
+    const a=currentItem(),p=a?.parts.find(p=>p.id===selectedForm);if(p) inspectForm(a,p);else focusAsset(a);
+  }
+  else if (inPanel) return;
+  else if (e.key === "+" || e.key === "=") zoom(v.scale * 1.25);
   else if (e.key === "-") zoom(v.scale / 1.25);
   else if (e.key === "0") fit();
   else if (e.key === "Escape") return;
-  else if (e.key === "Enter") {
-    if (e.target.closest('button,a,[role="button"]')) return;
-    const a=currentItem(),p=a?.parts.find(p=>p.id===selectedForm);if(p) inspectForm(a,p);else focusAsset(a);
-  }
   else if (e.key === "1") zoom(1);
   else if (e.key.startsWith("Arrow"))
     commit({
@@ -1534,14 +1675,18 @@ for (const [id, action] of Object.entries({
     action();
   };
 $("#back").onclick = back;
+$("#scope-isolation").onclick = () => exitIsolation(true);
+$("#token-view-toggle").onclick = () => setTokenList(!tokenList);
+$("#token-board-button").onclick = () => setTokenList(false);
 $('#sidebar-toggle').onclick = () => toggleSidebar();
 $('#inspect').onclick = () => {
   inspector = !inspector;
+  if (inspector) commentUI?.closePanel?.();
   updateChrome();
   requestDraw(true, false);
 };
-$('#copy-path').onclick=()=>navigator.clipboard.writeText($('#source-path').textContent).catch(e=>error(e.message));
-$('#copy-frame').onclick=()=>navigator.clipboard.writeText($('#frame-name').textContent).catch(e=>error(e.message));
+$('#copy-path').onclick=()=>navigator.clipboard.writeText($('#source-path').textContent).then(()=>flashCopied($('#copy-path')),e=>error(e.message));
+$('#copy-frame').onclick=()=>navigator.clipboard.writeText($('#frame-name').textContent).then(()=>flashCopied($('#copy-frame')),e=>error(e.message));
 $("#fullscreen").onclick = () => {
   $("#more-menu").hidePopover();
   const p = document.fullscreenElement
@@ -1559,17 +1704,43 @@ $("#map-toggle").onclick = () => {
   $("#map-toggle").setAttribute("aria-pressed", String(!$("#minimap").hidden));
   requestDraw();
 };
-$("#minimap").onclick = e => {
-  const {scale:s,x,y}=mapGeometry(),r=e.target.getBoundingClientRect(),area=cameraArea();
-  remember();inspection=null;selection();
+let minimapDragging = false;
+function scrubMinimap(e) {
+  const map = $("#minimap");
+  const {scale:s,x,y}=mapGeometry(),r=map.getBoundingClientRect(),area=cameraArea();
   commit({...view,x:area.x+area.width/2-(e.clientX-r.left-x)/s*view.scale,y:area.y+area.height/2-(e.clientY-r.top-y)/s*view.scale});
-};
+}
+$("#minimap").addEventListener("pointerdown", e => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  minimapDragging = true;
+  $("#minimap").setPointerCapture(e.pointerId);
+  if (!tokenManifest) {
+    remember();
+    inspection = null;
+    selection();
+  }
+  scrubMinimap(e);
+});
+$("#minimap").addEventListener("pointermove", e => {
+  if (!minimapDragging) return;
+  scrubMinimap(e);
+});
+for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) {
+  $("#minimap").addEventListener(event, e => {
+    if (!minimapDragging) return;
+    minimapDragging = false;
+    if ($("#minimap").hasPointerCapture(e.pointerId)) $("#minimap").releasePointerCapture(e.pointerId);
+    requestDraw();
+  });
+}
 $("#shortcuts").onclick = () => {
   $("#more-menu").hidePopover();
   $("#keys").showModal();
 };
 $("#arrange").onclick = async () => {
   const data=manifest,previousCatalog=catalog;
+  if (!data) return;
   window.__adg.ready=false;
   let placed;
   try {if(!data.loading)placed=await arranger.arrange(layoutData(data));}
@@ -1580,10 +1751,22 @@ $("#arrange").onclick = async () => {
   selection();
 };
 $("#search").oninput = () => {
+  const hasQuery = !!$("#search").value.trim();
   if (tokenManifest) {
+    if (hasQuery && !tokenList) {
+      tokenSearchWasBoard = true;
+      tokenList = true;
+      updateChrome();
+      requestDraw();
+    } else if (!hasQuery && tokenSearchWasBoard) {
+      tokenList = false;
+      tokenSearchWasBoard = false;
+      updateChrome();
+      requestDraw();
+    }
     $('.token-scroll').scrollTop = 0;
-  } else if ($("#search").value.trim()) {
-    searchReturn ??= { view: { ...view }, sidebar, active, selected, selectedId, selectedForm, selectedElement, inspection };
+  } else if (hasQuery) {
+    searchReturn ??= { scope: initializedScope, view: { ...view }, sidebar, active, selected, selectedId, selectedForm, selectedElement, inspection };
     toggleSidebar(true);
   } else if (searchReturn) {
     toggleSidebar(searchReturn.sidebar);
@@ -1592,10 +1775,43 @@ $("#search").oninput = () => {
   renderNav();
 };
 $("#search-clear").onclick=()=>{$("#search").value="";$("#search").oninput();$("#search").focus()};
+function moduleRows() {
+  if ($("#sidebar").hidden) return [];
+  return [...$("#modules").querySelectorAll("button:is(.tree-row, .group-name):not(:disabled)")].filter(el => el.offsetParent !== null);
+}
 $("#search").onkeydown = (e) => {
-  if (e.key === "Enter")
+  if (e.key === "Enter") {
     $("#modules .search-result")?.click();
+    return;
+  }
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    const rows = moduleRows();
+    if (!rows.length) return;
+    e.preventDefault();
+    e.stopPropagation();
+    (e.key === "ArrowDown" ? rows[0] : rows.at(-1)).focus();
+  }
 };
+$("#modules").addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const rows = moduleRows();
+  if (!rows.length) return;
+  const current = e.target.closest(".scope-row, .group-row")?.querySelector("button:is(.tree-row, .group-name)") ?? e.target;
+  const index = rows.indexOf(current);
+  if (index < 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.key === "ArrowDown") {
+    if (index + 1 < rows.length) rows[index + 1].focus();
+    else if (!$(".search-field").hidden) $("#search").focus();
+  } else if (index > 0) {
+    rows[index - 1].focus();
+  } else if (!$(".search-field").hidden) {
+    $("#search").focus();
+  } else {
+    rows.at(-1).focus();
+  }
+});
 $("#minus").onclick = () => zoom(view.scale / 1.25);
 $("#plus").onclick = () => zoom(view.scale * 1.25);
 function resizeViewport() {
@@ -1625,10 +1841,15 @@ function relationshipGraph(data, measured) {
 function applyTokenManifest(data) {
   const previous = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
   const entering = !tokenManifest || tokenManifest.directory !== data.directory;
+  leavingOverlay = false;
   tokenManifest = { ...data, tokenGroups: groupTokens(data.tokens ?? []) };
-  if (entering) tokenList = false;
+  if (entering) {
+    tokenList = false;
+    tokenSearchWasBoard = false;
+  }
   if (!data.tokenBoard) {
     tokenList = true;
+    tokenSearchWasBoard = false;
     tokenHeight = 0;
   }
   canvas.width = canvas.width;
@@ -1668,6 +1889,7 @@ function applyTokenManifest(data) {
 }
 function applyReviewManifest(data) {
   const previous = reviewManifest ?? tokenManifest ?? catalog ?? manifest;
+  leavingOverlay = false;
   reviewManifest = data;
   tokenManifest = null;
   catalog = null;
@@ -1682,7 +1904,30 @@ function applyReviewManifest(data) {
   const url = viewURL(location.href, 'review');
   if (url.href !== location.href) window.history.replaceState(window.history.state, '', url);
   const scrollTop = $('#review-page .review-scroll')?.scrollTop ?? 0;
-  renderReview($('#review-page'), data.review);
+  renderReview($('#review-page'), data.review, {
+    live: true,
+    theme: effectiveTheme,
+    onThemeChange: next => {
+      if (!['system', 'light', 'dark'].includes(next)) return;
+      theme = next;
+      localStorage.setItem('adg-theme', theme);
+      applyTheme();
+      void refresh(true);
+      save();
+    },
+    onExit: () => {
+      const u = new URL(location.href);
+      u.searchParams.delete('base');
+      history.replaceState(history.state, '', u);
+      leavingOverlay = true;
+      reviewManifest = null;
+      changeScope('default', null, false);
+    },
+    onOpenFrame: (src, frm) => {
+      const p = designSource(src);
+      changeScope('asset:' + p, { target: { path: p, form: frm } });
+    },
+  });
   indexReviewFrames();
   $('#review-page .review-scroll').scrollTop = scrollTop;
   if (!performance.getEntriesByName('adg-review-content', 'mark').length) performance.mark('adg-review-content');
@@ -1727,7 +1972,8 @@ async function applyManifest(data, force = false) {
     if (force || tokenManifest?.directory !== data.directory || tokenManifest?.revision !== data.revision) applyTokenManifest(data);
     return;
   }
-  const leavingOverlayView = !!tokenManifest || !!reviewManifest;
+  const leavingOverlayView = !!tokenManifest || !!reviewManifest || leavingOverlay;
+  leavingOverlay = false;
   const changedRoot = initializedDirectory !== data.directory, changedScope = initializedScope !== data.scope || initializedFrame !== onlyFrame;
   const first = changedRoot || changedScope;
   if (!force && !first && !leavingOverlayView && manifest.revision === data.revision)
@@ -1759,7 +2005,6 @@ async function applyManifest(data, force = false) {
   window.__adg.ready = false;
   if (first) {
     cache.clear();
-    labelLayer.clear();
     queued = [];
     selected = null;
     selectedId = null;
@@ -1771,7 +2016,7 @@ async function applyManifest(data, force = false) {
   }
   const versionTheme = effectiveTheme;
   const link = initializedDirectory === undefined && !fixtureState ? initialLink : null;
-  const entry = !changedRoot && scopeRequest===data.scope ? scopeEntry : null;
+  const entry = (!changedRoot || leavingOverlayView) && scopeRequest===data.scope ? scopeEntry : null;
   const groupTitle = groups[active]?.title;
 
   const previous=manifest, results=new Array(data.assets.length), signal=refreshController?.signal;
@@ -1916,14 +2161,46 @@ function updateChoices() {
   }
 }
 for(const button of $("#backgrounds").children) button.onclick=()=>{backgroundChoice=button.dataset.background;updateChoices();requestDraw()};
+function menuItems(menu) {
+  return [...menu.querySelectorAll('button:not(:disabled)')].filter(el => !el.hidden && el.offsetParent !== null);
+}
 for(const [id,trigger] of [['zoom-menu','zoom-options'],['more-menu','more']]) {
-  $("#"+id).addEventListener('toggle',event=>{
-    $("#"+trigger).setAttribute(id === "more-menu" ? "aria-expanded" : "aria-pressed", String(event.newState === "open"));
+  const menu = $("#"+id), btn = $("#"+trigger);
+  menu.addEventListener('toggle',event=>{
+    btn.setAttribute(id === "more-menu" ? "aria-expanded" : "aria-pressed", String(event.newState === "open"));
     if(event.newState==='open') {
       for(const other of document.querySelectorAll(':popover-open')) if(other.id!==id) other.hidePopover();
       hideTooltip();positionZoomMenu();
     }
     requestDraw();
+  });
+  menu.addEventListener('keydown', event => {
+    const items = menuItems(menu);
+    if (!items.length) return;
+    const index = items.indexOf(document.activeElement);
+    const next = event.key === 'ArrowDown' ? items[index < 0 ? 0 : (index + 1) % items.length]
+      : event.key === 'ArrowUp' ? items[index <= 0 ? items.length - 1 : index - 1]
+      : event.key === 'Home' ? items[0]
+      : event.key === 'End' ? items.at(-1)
+      : null;
+    if (!next) return;
+    event.preventDefault();
+    event.stopPropagation();
+    next.focus();
+  });
+  btn.addEventListener('keydown', event => {
+    if (!menu.matches(':popover-open')) return;
+    const items = menuItems(menu);
+    if (!items.length) return;
+    if (event.key === 'ArrowDown' || event.key === 'Home') {
+      event.preventDefault();
+      event.stopPropagation();
+      items[0].focus();
+    } else if (event.key === 'ArrowUp' || event.key === 'End') {
+      event.preventDefault();
+      event.stopPropagation();
+      items.at(-1).focus();
+    }
   });
 }
 let tooltipTimer;
@@ -1943,12 +2220,29 @@ function bindTooltip(button, trailing = false) {
 }
 for(const button of document.querySelectorAll('[data-tooltip]')) bindTooltip(button);
 $("#keys-close").onclick=()=>$("#keys").close();
+$("#keys").addEventListener('click', event => {
+  if (event.target !== $("#keys")) return;
+  const r = $("#keys").getBoundingClientRect();
+  if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) {
+    $("#keys").close();
+  }
+});
 for(const dialog of document.querySelectorAll('dialog')) {
   dialog.addEventListener('toggle', () => requestDraw());
   dialog.addEventListener('close',()=>{viewport.focus({preventScroll:true});requestDraw()});
 }
 document.addEventListener('keydown',event=>{
-  if(event.key==='?'&&!event.target.matches('input,textarea')&&!document.querySelector('dialog[open]')) {event.preventDefault();hideTooltip();$("#keys").showModal()}
+  if (event.key !== '?' || event.metaKey || event.ctrlKey || event.altKey || event.target.matches('input,textarea,select,[contenteditable]')) return;
+  if ($("#keys").open) {
+    event.preventDefault();
+    $("#keys").close();
+    return;
+  }
+  if (!document.querySelector('dialog[open]')) {
+    event.preventDefault();
+    hideTooltip();
+    $("#keys").showModal();
+  }
 });
 async function applyFixture() {
   const state=fixtureState;if(!state)return;
@@ -2092,7 +2386,7 @@ if ((reviewManifest || tokenManifest || manifest) && !isUnauthorized()) {
 
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
-    if (reviewManifest) return;
+    if (reviewManifest || scopeRequest === 'review') return;
     e.preventDefault();
     $("#search").focus();
     return;
@@ -2100,9 +2394,14 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
   if (document.querySelector(":popover-open")) return;
   if (e.defaultPrevented) return;
-  if (reviewManifest) return;
+  if (reviewManifest || scopeRequest === 'review') return;
   if (tokenManifest) {
-    if ($('#search').value) $('#search-clear').click();
+    if ($('#search').value) {
+      e.preventDefault();
+      $('#search-clear').click();
+    } else if (document.activeElement === $('#search')) {
+      viewport.focus({ preventScroll: true });
+    }
     return;
   }
   if (searchReturn) {
@@ -2110,13 +2409,27 @@ document.addEventListener("keydown", (e) => {
     searchReturn = null;
     $("#search").value = "";
     toggleSidebar(old.sidebar);
-    ({ active, selected, selectedId, selectedForm, selectedElement = null, inspection } = old);
-    selection();
-    commit(old.view);
-  } else clearSelection();
+    if (old.scope === initializedScope) {
+      ({ active, selected, selectedId, selectedForm, selectedElement = null, inspection } = old);
+      selection();
+      commit(old.view);
+    } else {
+      renderNav();
+    }
+  } else if ($("#search").value) {
+    $("#search").value = "";
+    $("#search").oninput();
+  } else if (selected) {
+    clearSelection();
+  } else if (!$("#back").disabled) {
+    back();
+  }
   viewport.focus({ preventScroll: true });
 });
 
 if (scopeRequest !== 'review') initSwitcher();
 
-$('#token-list-toggle').onclick = () => {tokenList=!tokenList;updateChrome();requestDraw();};
+$('#token-list-toggle').onclick = () => {
+  $('#more-menu').hidePopover();
+  setTokenList(!tokenList);
+};

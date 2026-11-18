@@ -1,39 +1,76 @@
 import { Frame } from 'adg';
-import { frames } from '../fixtures/menu-captures';
-import { Drawing } from '../components/canvas';
-import { Screen } from '../components/canvas';
-import { Tools, ViewerTools, ZoomBar } from '../components/toolbar';
-import menuFixtures from '../fixtures/menus.json';
-import { viewerBarMore } from '../fixtures/viewer-bars';
-import { scenes } from '../scenes/menus';
+import { Button } from '../components/button';
+import { IconButton } from '../components/icon-button';
+import { MenuItem } from '../components/menu-item';
 import { Panel } from '../components/panel';
-import { MenuItem, Menu as SharedMenu } from '../components/menu-item';
+import { Toolbar } from '../components/toolbar';
+import menuFixtures from '../fixtures/menus.json';
+
 export function Menu({ rows, width = 220 }: any) {
-  return <SharedMenu rows={rows} width={width} />;
+  return (
+    <Panel form="menu" width={width}>
+      <div class="p-[6px]">
+        {rows.map((row: any, i: number) => (
+          <>
+            {i > 0 && (row.form === 'label' || row.divider) && <div class="mx-[2px] my-1 h-px bg-border" />}
+            <MenuItem {...row} />
+          </>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function MoreTrigger() {
+  return (
+    <Toolbar>
+      <IconButton icon="messages-square" label="Comments" />
+      <IconButton icon="ellipsis" form="active" label="More" expanded />
+      <IconButton icon="panel-right" label="Inspector" disabled />
+    </Toolbar>
+  );
 }
 
 export default () => [
-  <Frame name="default">
-    <Menu {...menuFixtures.default} />
-  </Frame>,
-  <Frame name="viewer-more" fixture="viewer-top-bars-more"
-    capture={{ page: true, origin: '1132 0', viewport: '1440x900' }}>
-    <div class="flex min-h-[464px] w-[308px] items-start justify-end bg-canvas p-3">
-      <ViewerTools inspectorDisabled menu={<Menu {...viewerBarMore} />} />
+  <Frame name="more">
+    <div class="flex flex-col items-end gap-2 bg-canvas p-4">
+      <MoreTrigger />
+      <Menu {...menuFixtures.more} />
     </div>
   </Frame>,
-  ...frames.map(({ chrome, ...frame }) => (
-    <Frame {...frame}>
-      <Screen width={frame.width} height={frame.height} drawing={<Drawing nodes={scenes[frame.name]} />}>
-        {chrome.map(({ kind, left, top, menu, ...props }: any) => {
-          const Component = kind === 'menu' ? Menu : kind === 'tools' ? Tools : ZoomBar;
-          return (
-            <div class="absolute" style={{ left, top }}>
-              <Component {...(kind === 'menu' ? menuFixtures[menu] : props)} />
-            </div>
-          );
-        })}
-      </Screen>
-    </Frame>
-  )),
+  <Frame name="more-tokens">
+    <div class="flex flex-col items-end gap-2 bg-canvas p-4">
+      <MoreTrigger />
+      <Menu {...menuFixtures.moreTokens} />
+    </div>
+  </Frame>,
+  <Frame name="zoom">
+    <div class="flex flex-col items-center gap-2 bg-canvas p-4">
+      <Menu {...menuFixtures.zoom} />
+      <Toolbar>
+        <IconButton icon="minus" label="Zoom out" />
+        <Button form="zoom-open" label="48%" />
+        <IconButton icon="plus" label="Zoom in" />
+      </Toolbar>
+    </div>
+  </Frame>,
+  <Frame name="context-element">
+    <div class="flex flex-col items-start gap-2 bg-canvas p-4">
+      <div class="rounded-field outline-2 outline-offset-2 outline-accent">
+        <Button label="Unlock" />
+      </div>
+      <Menu {...menuFixtures.contextElement} />
+    </div>
+  </Frame>,
+  <Frame name="context-frame">
+    <div class="flex flex-col items-start gap-2 bg-canvas p-4">
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-center rounded-card bg-surface px-6 py-4 outline-2 -outline-offset-2 outline-accent">
+          <Button form="secondary" label="Cancel" />
+        </div>
+        <span class="font-mono text-meta text-text">secondary</span>
+      </div>
+      <Menu {...menuFixtures.contextFrame} />
+    </div>
+  </Frame>,
 ];

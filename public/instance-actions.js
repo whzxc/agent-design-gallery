@@ -8,8 +8,11 @@ export function instanceCloseButton(instance, className, closed, report) {
   button.title = `Close instance: ${instance.name ?? instance.id} (:${instance.port})`;
   button.setAttribute('aria-label', button.title);
   button.innerHTML = icon('x');
-  button.onclick = async () => {
+  button.onclick = async event => {
+    event.stopPropagation();
     button.disabled = true;
+    button.dataset.loading = 'true';
+    button.innerHTML = icon('loader-circle');
     try {
       const response = await dataFetch(`/api/instances/${encodeURIComponent(instance.id)}/stop`, { method: 'POST' });
       if (!response.ok && response.status !== 404) {
@@ -20,7 +23,11 @@ export function instanceCloseButton(instance, className, closed, report) {
     } catch (error) {
       if (!isUnauthorized()) report(error);
     } finally {
-      button.disabled = false;
+      delete button.dataset.loading;
+      if (button.isConnected) {
+        button.innerHTML = icon('x');
+        button.disabled = false;
+      }
     }
   };
   return button;

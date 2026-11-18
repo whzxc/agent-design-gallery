@@ -1,4 +1,5 @@
 import { groupReview } from './review-groups.js';
+import { icon } from './icons.js';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
@@ -110,17 +111,21 @@ function renderSide(side, label, src, absentLabel, alt, theme, source) {
   return `<figure class="review-pane" data-side="${escapeHtml(side)}"><figcaption>${escapeHtml(label)}${source ? ` · <code>${escapeHtml(source)}</code>` : ''}</figcaption>${body}</figure>`;
 }
 
-function renderFrameCard(item, { paired = false, label: statusLabel = item.status } = {}) {
+function renderFrameCard(item, { paired = false, label: statusLabel = item.status, live = false } = {}) {
   const label = `${item.source}#${item.frame}`;
+  const sides = item.status === 'added'
+    ? ['after']
+    : (paired && !item.themes.some(t => t.images?.difference))
+      ? ['before', 'after']
+      : ['before', 'after', 'difference'];
   const themeBlocks = item.themes.map(themeItem => {
     const theme = themeItem.theme;
     const summary = themeSummary(themeItem);
-    const sides = item.status === 'added' ? ['after'] : paired ? ['before', 'after'] : ['before', 'after', 'difference'];
     const absentLabels = { before: 'Absent at base', after: 'Removed in working tree', difference: 'No difference image' };
     const panes = sides.map(side => {
       const source = side === 'before' ? item.previousSource : null;
       const alt = `${source ? `${source}#${item.frame}` : label} (${theme} ${side})`;
-      return renderSide(side, side[0].toUpperCase() + side.slice(1), themeItem.images[side], absentLabels[side], alt, theme, source);
+      return renderSide(side, side[0].toUpperCase() + side.slice(1), themeItem.images?.[side], absentLabels[side], alt, theme, source);
     }).join('');
     return `<div class="review-theme" data-theme-row="${escapeHtml(theme)}" data-verdict="${escapeHtml(themeItem.verdict)}">
       <div class="review-theme-head">
@@ -132,10 +137,16 @@ function renderFrameCard(item, { paired = false, label: statusLabel = item.statu
       </div>
     </div>`;
   }).join('');
+  const openButton = live && item.status !== 'removed'
+    ? `<button type="button" class="review-open-board" data-open-source="${escapeHtml(item.source)}" data-open-frame="${escapeHtml(item.frame)}"><span>Open on board</span>${icon('arrow-up-right', 12)}</button>`
+    : '';
   return `<article class="review-frame" data-source="${escapeHtml(item.source)}" data-frame="${escapeHtml(item.frame)}" data-status="${escapeHtml(item.status)}">
     <header class="review-frame-head">
       <h3><code>${escapeHtml(label)}</code></h3>
-      <span class="review-status-pill" data-status="${escapeHtml(item.status)}">${escapeHtml(statusLabel)}</span>
+      <div class="review-frame-actions">
+        <span class="review-status-pill" data-status="${escapeHtml(item.status)}">${escapeHtml(statusLabel)}</span>
+        ${openButton}
+      </div>
     </header>
     <div class="review-themes">${themeBlocks}</div>
   </article>`;
@@ -172,20 +183,30 @@ function sameFrame(left, right) {
   return left.source === right.source && left.frame === right.frame;
 }
 
-function renderGroup(group) {
+function renderGroup(group, { live = false } = {}) {
+  const outliers = group.outliers.filter(entry => !sameFrame(entry, group.representative));
   const others = group.frames.filter(entry => !sameFrame(entry, group.representative));
-  const remaining = others.filter(entry => !group.outliers.some(outlier => sameFrame(entry, outlier)));
+  const remaining = others.filter(entry => !outliers.some(outlier => sameFrame(entry, outlier)));
   const causes = group.causes.map(cause => `<code>${escapeHtml(cause)}</code>`).join(', ');
   return `<article class="review-group">
-    <header class="review-group-head"><h3>${causes}</h3><span>${group.frames.length} frames</span></header>
-    ${renderFrameCard(group.representative, { paired: true, label: 'Representative' })}
-    ${others.length ? renderNames(others) : ''}
-    ${group.outliers.map(entry => renderFrameCard(entry, { paired: true, label: 'Outlier' })).join('')}
-    ${remaining.length ? `<details class="review-group-members"><summary role="button">Show all ${group.frames.length} frames</summary><div class="review-section-list">${remaining.map(entry => renderFrameCard(entry, { paired: true, label: 'Inherited' })).join('')}</div></details>` : ''}
+    <header class="review-group-head"><h3>${causes}</h3><span>${group.frames.length} ${group.frames.length === 1 ? 'frame' : 'frames'}</span></header>
+    ${renderFrameCard(group.representative, { paired: true, label: 'Representative', live })}
+    ${outliers.map(entry => renderFrameCard(entry, { paired: true, label: 'Outlier', live })).join('')}
+    ${remaining.length ? `<details class="review-group-members"><summary>Show ${remaining.length} more inherited ${remaining.length === 1 ? 'frame' : 'frames'}</summary><div class="review-section-list">${remaining.map(entry => renderFrameCard(entry, { paired: true, label: 'Inherited', live })).join('')}</div></details>` : ''}
   </article>`;
 }
 
-export function renderReviewBody(review) {
+function renderCount(kind, value, innerHtml, live) {
+  const zeroAttr = value === 0 ? ' data-zero="true"' : '';
+  if (live && value > 0) {
+    return `<button type="button" class="review-count" data-kind="${kind}">${innerHtml}</button>`;
+  }
+  return `<span class="review-count" data-kind="${kind}"${zeroAttr}>${innerHtml}</span>`;
+}
+
+export function renderReviewBody(review, options = {}) {
+  const live = Boolean(options.live);
+  const activeTheme = options.theme ?? (typeof document !== 'undefined' ? document.documentElement.dataset.theme : 'light');
   const grouped = { ...review, ...groupReview(review) };
   const { counts } = grouped;
   const baseLabel = review.base?.sha
@@ -194,9 +215,9 @@ export function renderReviewBody(review) {
   const headLabel = review.current?.head ? `working tree (${shortSha(review.current.head)})` : 'working tree';
   const direct = (review.sections?.changed ?? []).filter(entry => entry.change?.kind !== 'inherited');
   const sectionSpecs = [
-    ['added', 'Added', review.sections?.added ?? [], items => items.map(item => renderFrameCard(item)).join('')],
-    ['direct', 'Direct changes', direct, items => items.map(item => renderFrameCard(item)).join('')],
-    ['inherited', 'Inherited changes', grouped.groups ?? [], items => items.map(renderGroup).join('')],
+    ['added', 'Added', review.sections?.added ?? [], items => items.map(item => renderFrameCard(item, { live })).join('')],
+    ['direct', 'Direct changes', direct, items => items.map(item => renderFrameCard(item, { live })).join('')],
+    ['inherited', 'Inherited changes', grouped.groups ?? [], items => items.map(group => renderGroup(group, { live })).join('')],
     ['removed', 'Removed', review.sections?.removed ?? [], renderNames],
     ['moved', 'Moved', review.movePairs ?? [], renderReviewMoves],
   ];
@@ -210,6 +231,13 @@ export function renderReviewBody(review) {
   const empty = renderedSections
     ? ''
     : `<p class="review-empty" role="status">No added, removed, moved, or changed frames against <code>${escapeHtml(review.base?.rev ?? 'base')}</code>.</p>`;
+  const controls = live ? `<div class="review-header-controls">
+      <div class="review-theme-switch" role="group" aria-label="Review theme">
+        <button type="button" data-review-theme="light" aria-pressed="${activeTheme === 'light'}">Light</button>
+        <button type="button" data-review-theme="dark" aria-pressed="${activeTheme === 'dark'}">Dark</button>
+      </div>
+      <button type="button" class="review-exit">${icon('x', 14)}<span>Exit review</span></button>
+    </div>` : '';
 
   return `<header class="review-header">
     <div class="review-heading">
@@ -217,50 +245,103 @@ export function renderReviewBody(review) {
       <code class="review-revisions">base ${escapeHtml(baseLabel)} → ${escapeHtml(headLabel)}</code>
     </div>
     <div class="review-counts" data-review-counts>
-      <span class="review-count" data-kind="added"><strong>${counts.added}</strong> added</span>
-      <span class="review-count" data-kind="removed"><strong>${counts.removed}</strong> removed</span>
-      <span class="review-count" data-kind="moved"><strong>${counts.moved}</strong> moved</span>
-      <span class="review-count" data-kind="changed"><strong>${counts.changed}</strong> changed (direct ${counts.direct}, inherited ${counts.inherited})</span>
+      ${renderCount('added', counts.added, `<strong>${counts.added}</strong> added`, live)}
+      ${renderCount('removed', counts.removed, `<strong>${counts.removed}</strong> removed`, live)}
+      ${renderCount('moved', counts.moved, `<strong>${counts.moved}</strong> moved`, live)}
+      ${renderCount('changed', counts.changed, `<strong>${counts.changed}</strong> changed (direct ${counts.direct}, inherited ${counts.inherited})`, live)}
     </div>
+    ${controls}
   </header>
   <div class="review-scroll">${renderReviewFailures(review.failures)}${renderedSections}${empty}</div>`;
 }
 
-export function renderReview(container, review) {
-  container.innerHTML = renderReviewBody(review);
+export function renderReview(container, review, options = {}) {
+  const doc = container.ownerDocument;
+  if (doc?.head && !doc.getElementById('adg-review-styles')) {
+    const style = doc.createElement('style');
+    style.id = 'adg-review-styles';
+    style.textContent = REVIEW_STYLES;
+    doc.head.append(style);
+  }
+  container.innerHTML = renderReviewBody(review, options);
+  if (!options.live) return;
+  const scrollContainer = container.querySelector('.review-scroll');
+  for (const button of container.querySelectorAll('button.review-count[data-kind]')) {
+    button.addEventListener('click', () => {
+      const kind = button.dataset.kind;
+      const target = kind === 'changed'
+        ? container.querySelector('[data-section="direct"], [data-section="inherited"]')
+        : container.querySelector(`[data-section="${kind}"]`);
+      if (!target) return;
+      if (scrollContainer) {
+        const top = target.getBoundingClientRect().top - scrollContainer.getBoundingClientRect().top + scrollContainer.scrollTop - 12;
+        const behavior = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+        scrollContainer.scrollTo({ top: Math.max(0, top), behavior });
+      } else {
+        target.scrollIntoView({ block: 'start' });
+      }
+    });
+  }
+  for (const button of container.querySelectorAll('[data-review-theme]')) {
+    button.addEventListener('click', () => {
+      options.onThemeChange?.(button.dataset.reviewTheme);
+    });
+  }
+  container.querySelector('.review-exit')?.addEventListener('click', () => {
+    options.onExit?.();
+  });
+  for (const button of container.querySelectorAll('.review-open-board')) {
+    button.addEventListener('click', () => {
+      options.onOpenFrame?.(button.dataset.openSource, button.dataset.openFrame);
+    });
+  }
 }
 
 export const REVIEW_STYLES = `
-.review-failures { padding:16px; border:1px solid var(--border); border-radius:8px; background:var(--surface-sunken); overflow-wrap:anywhere; }
-.review-failures h2 { margin:0 0 8px; font-size:14px; }
+.review-failures { padding:16px; border:1px solid var(--border); border-radius:var(--radius-row); background:var(--surface-sunken); overflow-wrap:anywhere; }
+.review-failures h2 { margin:0 0 8px; font-size:var(--text-section); }
 .review-failures ul { margin:0; padding-left:20px; }
 .review-failures li + li { margin-top:8px; }
 
-.review-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 20px; padding:16px 20px; border-bottom:1px solid var(--border); flex:none; }
-.review-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 12px; min-width:0; }
+.review-header { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 16px; padding:16px 20px; border-bottom:1px solid var(--border); flex:none; }
+.review-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 12px; min-width:0; margin-right:auto; }
 .review-heading h1 { font-size:var(--text-title); font-weight:650; line-height:20px; margin:0; }
 .review-revisions { font:var(--text-meta)/1.4 var(--font-mono); color:var(--text-secondary); }
 .review-counts { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
-.review-count { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px; background:var(--surface-sunken); font-size:var(--text-meta); color:var(--text-secondary); }
+.review-count { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border:1px solid transparent; border-radius:var(--radius-pill, 999px); background:var(--surface-sunken); font:var(--text-meta)/1.2 var(--font-ui); color:var(--text-secondary); }
+.review-count[data-zero="true"] { opacity:.6; }
+button.review-count { cursor:pointer; }
+button.review-count:hover { border-color:var(--border); color:var(--text); }
+button.review-count:focus-visible { outline:1px solid var(--accent); outline-offset:1px; }
 .review-count strong { font-family:var(--font-mono); font-weight:650; color:var(--text); }
+.review-header-controls { display:flex; align-items:center; gap:8px; }
+.review-theme-switch { display:inline-flex; align-items:center; gap:2px; padding:3px; border-radius:var(--radius-field, 9px); background:var(--surface-sunken); }
+.review-theme-switch button { height:24px; padding:0 8px; border:0; border-radius:var(--radius-keycap, 6px); background:none; color:var(--text-secondary); font:550 var(--text-meta)/1 var(--font-ui); cursor:pointer; }
+.review-theme-switch button[aria-pressed="true"] { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgb(0 0 0 / 8%); }
+.review-exit { display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 10px; border:1px solid var(--border); border-radius:var(--radius-field, 9px); background:var(--surface); color:var(--text-secondary); font:550 var(--text-meta)/1 var(--font-ui); cursor:pointer; }
+.review-exit:hover { background:var(--surface-sunken); color:var(--text); }
 .review-scroll { min-height:0; flex:1; overflow:auto; padding:20px; display:flex; flex-direction:column; gap:28px; }
 .review-section { display:flex; flex-direction:column; gap:14px; }
 .review-section-title { display:flex; align-items:center; gap:8px; font-size:var(--text-section); font-weight:650; color:var(--text); margin:0; }
-.review-section-count { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 6px; border-radius:999px; background:var(--surface-sunken); font:600 var(--text-caption)/1 var(--font-mono); color:var(--text-secondary); }
+.review-section-count { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 6px; border-radius:var(--radius-pill, 999px); background:var(--surface-sunken); font:600 var(--text-caption)/1 var(--font-mono); color:var(--text-secondary); }
 .review-section-list { display:flex; flex-direction:column; gap:16px; }
 .review-frame { border:1px solid var(--border); border-radius:var(--radius-menu); background:var(--surface-section); overflow:hidden; }
 .review-frame-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border); background:var(--surface); }
-.review-frame-head h3 { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px; margin:0; font-size:var(--text-body); font-weight:600; color:var(--text); }
-.review-frame-head code { font:var(--text-meta)/1.4 var(--font-mono); color:var(--text-secondary); }
+.review-frame-head h3 { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px; margin:0; min-width:0; font-size:var(--text-body); font-weight:600; color:var(--text); }
+.review-frame-head code { font:var(--text-meta)/1.4 var(--font-mono); color:var(--text-secondary); overflow-wrap:anywhere; }
+.review-frame-actions { display:flex; align-items:center; gap:8px; flex:none; }
+.review-open-board { display:inline-flex; align-items:center; gap:4px; height:24px; padding:0 8px; border:1px solid var(--border); border-radius:var(--radius-row); background:var(--surface); color:var(--text-secondary); font:550 var(--text-caption)/1 var(--font-ui); cursor:pointer; }
+.review-open-board:hover { background:var(--surface-sunken); color:var(--text); }
 .review-group { display:flex; flex-direction:column; gap:14px; padding:16px; border:1px solid var(--border); border-radius:var(--radius-menu); }
 .review-group-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
 .review-group-head h3 { margin:0; font:var(--text-meta)/1.5 var(--font-mono); overflow-wrap:anywhere; }
 .review-group-head span { flex:none; color:var(--text-secondary); }
 .review-names { margin:0; padding-left:20px; font:var(--text-meta)/1.6 var(--font-mono); overflow-wrap:anywhere; }
-.review-group-members summary { cursor:pointer; color:var(--text-secondary); }
+.review-group-members summary { cursor:pointer; color:var(--text-secondary); font-size:var(--text-meta); font-weight:550; }
+.review-group-members summary:hover { color:var(--text); }
 .review-group-members[open] summary { margin-bottom:14px; }
 .review-dot { color:var(--text-tertiary); }
-.review-status-pill { flex:none; padding:2px 8px; border-radius:999px; background:var(--surface-sunken); font-size:var(--text-caption); font-weight:600; text-transform:capitalize; color:var(--text-secondary); }
+.review-status-pill { flex:none; padding:2px 8px; border-radius:var(--radius-pill, 999px); background:var(--surface-sunken); font-size:var(--text-caption); font-weight:600; text-transform:capitalize; color:var(--text-secondary); }
 .review-themes { display:flex; flex-direction:column; gap:1px; background:var(--border); }
 .review-theme { background:var(--surface); padding:14px 16px 16px; display:flex; flex-direction:column; gap:10px; }
 .review-theme-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
@@ -270,10 +351,10 @@ export const REVIEW_STYLES = `
 @media (max-width:900px) { .review-columns { grid-template-columns:1fr; } }
 .review-pane { margin:0; display:flex; flex-direction:column; gap:6px; min-width:0; }
 .review-pane figcaption { font-size:var(--text-caption); font-weight:550; color:var(--text-secondary); }
-.review-stage { border:1px solid var(--border); border-radius:var(--radius-row); padding:10px; display:flex; align-items:center; justify-content:center; min-height:96px; overflow:auto; background:#ecece9; }
-.review-stage[data-stage-theme="dark"] { background:#121212; border-color:#2d2d2d; }
-.review-stage-diff { background:repeating-conic-gradient(var(--surface-sunken) 0% 25%, var(--surface) 0% 50%) 50% / 14px 14px; }
-.review-stage-diff[data-stage-theme="dark"] { background:repeating-conic-gradient(#1f1f1f 0% 25%, #161616 0% 50%) 50% / 14px 14px; }
+.review-stage { --review-stage-bg:var(--review-canvas-light, #ecece9); --review-stage-border:var(--border); border:1px solid var(--review-stage-border); border-radius:var(--radius-row); padding:10px; display:flex; align-items:center; justify-content:center; min-height:96px; overflow:auto; background:var(--review-stage-bg); }
+.review-stage[data-stage-theme="dark"] { --review-stage-bg:var(--review-canvas-dark, #121212); --review-stage-border:var(--review-border-dark, #2d2d2d); }
+.review-stage-diff { --review-checker-a:var(--review-checker-light-a, #f1f1ee); --review-checker-b:var(--review-checker-light-b, #ffffff); background:repeating-conic-gradient(var(--review-checker-a) 0% 25%, var(--review-checker-b) 0% 50%) 50% / 14px 14px; }
+.review-stage-diff[data-stage-theme="dark"] { --review-checker-a:var(--review-checker-dark-a, #1f1f1f); --review-checker-b:var(--review-checker-dark-b, #161616); }
 .review-stage img { display:block; max-width:100%; height:auto; }
 .review-absent { border:1px dashed var(--border); border-radius:var(--radius-row); min-height:96px; padding:12px; display:flex; align-items:center; justify-content:center; text-align:center; font-size:var(--text-meta); color:var(--text-tertiary); background:var(--surface-sunken); }
 .review-empty { margin:12px 0; color:var(--text-secondary); font-size:var(--text-body); }
@@ -300,7 +381,10 @@ export function reviewDocumentHtml(review) {
       --text-caption: 11px;
       --radius-panel: 14px;
       --radius-menu: 12px;
+      --radius-field: 9px;
       --radius-row: 8px;
+      --radius-keycap: 6px;
+      --radius-pill: 999px;
       --canvas: #ecece9;
       --surface: #ffffff;
       --surface-section: #f5f5f3;
@@ -309,6 +393,7 @@ export function reviewDocumentHtml(review) {
       --text: #1c1c1a;
       --text-secondary: #5b5b57;
       --text-tertiary: #7c7c77;
+      --accent: #1c1c1a;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -320,6 +405,7 @@ export function reviewDocumentHtml(review) {
         --text: #efefed;
         --text-secondary: #a8a8a4;
         --text-tertiary: #85857f;
+        --accent: #efefed;
       }
     }
     * { box-sizing: border-box; }

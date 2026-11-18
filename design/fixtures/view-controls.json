@@ -1,27 +1,30 @@
 {
-  "appBar": {
-    "specimen": true,
-    "directory": "arc"
+  "isolatedBar": {
+    "project": "agent-design-gallery",
+    "scopes": ["Tokens", "Components", "Modules", "Surfaces", "All designs"],
+    "isolation": "field · error",
+    "search": "Find assets…"
   },
   "zoomBarStates": [
     {
-      "name": "zoom-bar"
+      "name": "zoom-bar",
+      "backDisabled": true
     },
     {
       "name": "zoom-bar-menu-open",
       "active": true
     },
     {
-      "name": "zoom-bar-back-disabled",
-      "backDisabled": true
-    },
-    {
       "name": "zoom-bar-minimap-pressed",
       "minimapPressed": true
     },
     {
-      "name": "zoom-bar-comment-pressed",
+      "name": "zoom-bar-comment-active",
       "commentPressed": true
+    },
+    {
+      "name": "zoom-bar-review",
+      "commentsOnly": true
     }
   ]
 }

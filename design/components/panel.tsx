@@ -1,15 +1,19 @@
 import { Frame } from 'adg';
 import { panelSpecimens } from '../fixtures/containers';
 
+export type PanelForm = 'floating' | 'menu' | 'dialog' | 'popover';
+
 export function Panel({
-  form = 'sidebar',
+  form = 'floating',
   width = 260,
   height,
+  bordered = false,
   children,
 }: {
-  form?: string;
+  form?: PanelForm | string;
   width?: number;
   height?: number;
+  bordered?: boolean;
   children?: unknown;
 }) {
   const shape =
@@ -17,9 +21,13 @@ export function Panel({
       ? 'rounded-menu shadow-menu'
       : form === 'dialog'
         ? 'rounded-dialog shadow-menu'
-        : 'rounded-panel shadow-float';
+        : form === 'popover'
+          ? 'rounded-panel shadow-menu'
+          : 'rounded-panel shadow-float';
+  const border = bordered ? 'border border-border' : '';
+
   return (
-    <section class={`flex flex-col bg-surface ${shape}`} style={{ width, height }}>
+    <section class={`flex flex-col bg-surface ${shape} ${border}`} style={{ width, height }}>
       {children}
     </section>
   );

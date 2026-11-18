@@ -4,6 +4,7 @@ const endpoint = 'api/comments';
 const dragThreshold = 5;
 const pinHeight = 26;
 const gutter = 8;
+const noticeTimeoutMs = 4000;
 const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
 
 function element(tag, className, text) {
@@ -52,6 +53,12 @@ function messageMeta(message) {
 
 function label(thread) {
   return thread.target?.label || thread.anchor?.frame || thread.anchor?.source || thread.anchor?.chapter || 'Board';
+}
+
+function secondaryTarget(thread) {
+  const primary = label(thread);
+  const detail = thread.target?.displayName;
+  return detail && detail !== primary ? detail : '';
 }
 
 function replyCount(thread) {
@@ -108,6 +115,34 @@ function setStatus(node, text = '') {
   node.hidden = !text;
 }
 
+function makeStateBadge(state = 'changed') {
+  const node = element('span', 'adg-comment-changed', state === 'missing' ? 'Missing' : 'Changed');
+  node.dataset.state = state;
+  return node;
+}
+
+function makeConfirmBar(promptText, onConfirm, onCancel) {
+  const bar = element('div', 'adg-comment-confirm');
+  const text = element('span', 'adg-comment-confirm-label', promptText);
+  const actions = element('div', 'adg-comment-confirm-actions');
+  const cancel = button('Cancel', 'adg-comment-action', onCancel);
+  const confirm = button('Delete', 'adg-comment-action adg-comment-danger-button', async () => {
+    confirm.disabled = true;
+    cancel.disabled = true;
+    try {
+      await onConfirm();
+    } finally {
+      if (bar.isConnected) {
+        confirm.disabled = false;
+        cancel.disabled = false;
+      }
+    }
+  });
+  actions.append(cancel, confirm);
+  bar.append(text, actions);
+  return { bar, cancel, confirm };
+}
+
 function editor(placeholder, action, onSubmit) {
   const form = element('form', 'adg-comment-editor');
   const field = element('textarea');
@@ -121,6 +156,8 @@ function editor(placeholder, action, onSubmit) {
   const submit = element('button', 'adg-comment-action adg-comment-primary', action);
   submit.type = 'submit';
   submit.disabled = true;
+  submit.title = '⌘↩';
+  submit.setAttribute('aria-keyshortcuts', 'Meta+Enter Control+Enter');
   const actions = element('div', 'adg-comment-editor-actions');
   actions.append(submit);
   form.append(field, status, actions);
@@ -155,7 +192,7 @@ function editor(placeholder, action, onSubmit) {
 
 export function createComments({
   toolButton, panelButton, panel, layer, hitTest, preparePoint, locate, navigate, boardPlace,
-  boardOrder = () => 0, request,
+  boardOrder = () => 0, request, onPanelToggle,
   initialThreads = [], initialComment, storageKey = `adg-comments-visible:${viewerBase(location.pathname)}`,
 }) {
   panel.classList.add('adg-comments-panel');
@@ -174,10 +211,18 @@ export function createComments({
   const openFilter = button('Open', null, () => setFilter('open'));
   const resolvedFilter = button('Resolved', null, () => setFilter('resolved'));
   filterBar.append(openFilter, resolvedFilter);
+
+  const hiddenBanner = element('div', 'adg-comment-pins-banner');
+  hiddenBanner.append(
+    element('span', null, 'Pins hidden'),
+    button('Show (⇧C)', 'adg-comment-action', () => setVisible(true)),
+  );
+
   header.append(element('h2', null, 'Comments'), closeButton('Close comments', () => setPanel(false, true)));
-  panel.replaceChildren(header, filterBar, list);
+  panel.replaceChildren(header, filterBar, hiddenBanner, list);
   const count = element('span', 'adg-comment-count');
   count.setAttribute('aria-hidden', 'true');
+  count.hidden = true;
   panelButton.append(count);
 
   const outline = element('div', 'adg-comment-outline');
@@ -193,6 +238,8 @@ export function createComments({
   layer.replaceChildren(outline, highlightLabel, pins, preview, notice);
 
   let tool = false;
+  let available = !toolButton.disabled;
+  let unavailableReason = '';
   let visible = true;
   try { visible = localStorage.getItem(storageKey) !== 'false'; } catch {}
   let threads = new Map(initialThreads.map(thread => [thread.id, thread]));
@@ -205,26 +252,58 @@ export function createComments({
   let drag = null;
   let navigation = 0;
   let version = 0;
+  let noticeTimer = 0;
   let writeQueue = Promise.resolve();
   let refreshing = null;
   let refreshAgain = false;
   let listSignature = '';
-  let previewThread = null;
+  let previewSignature = '';
   const pinNodes = new Map();
   const rowNodes = new Map();
   const replyDrafts = new Map();
   const pendingMoves = new Map();
   const unlocated = new Set();
 
-  function active() { return tool && !toolButton.disabled; }
+  function canUseTool() { return available && !toolButton.disabled; }
+  function active() { return tool && canUseTool(); }
+
+  function showNotice(text = '') {
+    clearTimeout(noticeTimer);
+    setStatus(notice, text);
+    if (text) noticeTimer = setTimeout(() => setStatus(notice), noticeTimeoutMs);
+  }
 
   function updateTool() {
-    toolButton.setAttribute('aria-pressed', String(active()));
-    document.body.classList.toggle('adg-comment-tool-active', active());
+    const isActive = active();
+    toolButton.setAttribute('aria-pressed', String(isActive));
+    toolButton.dataset.tooltip = isActive
+      ? 'Exit comment mode (C)'
+      : (canUseTool() ? 'Comment (C)' : (unavailableReason || 'Comments unavailable in this view.'));
+    document.body.classList.toggle('adg-comment-tool-active', isActive);
+    if (!isActive) delete document.body.dataset.commentTarget;
+    hiddenBanner.hidden = visible;
+    panelButton.dataset.pinsHidden = String(!visible);
+  }
+
+  function setAvailable(nextAvailable, reason = '') {
+    const next = Boolean(nextAvailable);
+    const nextReason = next ? '' : String(reason || '');
+    const changedAvailability = available !== next || unavailableReason !== nextReason || toolButton.disabled !== !next;
+    available = next;
+    unavailableReason = nextReason;
+    toolButton.disabled = !available;
+    toolButton.toggleAttribute('aria-disabled', !available);
+    if (!available) {
+      tool = false;
+      highlightPoint = null;
+    }
+    updateTool();
+    if (changedAvailability) render();
   }
 
   function toggle(force = !active()) {
-    tool = Boolean(force) && !toolButton.disabled;
+    tool = Boolean(force) && canUseTool();
+    if (tool && !visible) setVisible(true);
     if (!tool) highlightPoint = null;
     updateTool();
     render();
@@ -244,10 +323,18 @@ export function createComments({
   }
 
   function setPanel(open, focus = false) {
+    open = Boolean(open);
     panel.hidden = !open;
     panelButton.setAttribute('aria-expanded', String(open));
+    onPanelToggle?.(open);
     render();
     if (focus) (open ? (filter === 'open' ? openFilter : resolvedFilter) : panelButton).focus({ preventScroll: true });
+  }
+
+  function closePanel() {
+    if (panel.hidden) return false;
+    setPanel(false, false);
+    return true;
   }
 
   function setFilter(next) {
@@ -257,25 +344,27 @@ export function createComments({
     render();
   }
 
-  function report(error) { setStatus(notice, error?.message || 'Could not update comments.'); }
+  function report(error) { showNotice(error?.message || 'Could not update comments.'); }
 
   function currentLocation(thread) {
     const point = locate(thread);
     return point && Number.isFinite(point.x) && Number.isFinite(point.y) ? point : null;
   }
 
-  function changed(thread, point) {
-    return Boolean(point?.changed || thread.state === 'changed' || thread.state === 'gone' || (!point && unlocated.has(thread.id)));
+  function threadState(thread, point, boardChanged = false) {
+    if (thread.state === 'gone' || (!point && unlocated.has(thread.id))) return 'missing';
+    if (point?.changed || thread.state === 'changed' || boardChanged) return 'changed';
+    return '';
   }
-
-  function markChanged() { return element('span', 'adg-comment-changed', 'Changed'); }
 
   function renderPanel(locations) {
     const countOpen = [...threads.values()].filter(thread => thread.status === 'open').length;
-    if (count.textContent !== String(countOpen)) {
-      count.textContent = countOpen;
-      panelButton.setAttribute('aria-label', `Comments, ${countOpen} open`);
-    }
+    count.hidden = countOpen === 0;
+    if (count.textContent !== String(countOpen)) count.textContent = String(countOpen);
+    const nextAriaLabel = countOpen ? `Comments, ${countOpen} open` : 'Comments';
+    if (panelButton.getAttribute('aria-label') !== nextAriaLabel) panelButton.setAttribute('aria-label', nextAriaLabel);
+    hiddenBanner.hidden = visible;
+    panelButton.dataset.pinsHidden = String(!visible);
     if (panel.hidden) return;
     openFilter.setAttribute('aria-pressed', String(filter === 'open'));
     resolvedFilter.setAttribute('aria-pressed', String(filter === 'resolved'));
@@ -284,20 +373,24 @@ export function createComments({
       const board = !point?.layer || !point?.chapter ? boardPlace?.(thread) : null;
       const group = [point?.layer ?? board?.layer ?? thread.anchor?.layer, point?.chapter ?? board?.chapter ?? thread.anchor?.chapter]
         .filter(Boolean).join(' / ');
-      return { thread, group, changed: changed(thread, point) || !!board?.changed, order: filter === 'open' ? boardOrder(thread) : 0 };
+      const state = threadState(thread, point, !!board?.changed);
+      return { thread, group, state, detail: secondaryTarget(thread), order: filter === 'open' ? boardOrder(thread) : 0 };
     });
     items.sort((a, b) => filter === 'open'
       ? (a.order ?? Infinity) - (b.order ?? Infinity) || a.thread.number - b.thread.number
       : (Date.parse(b.thread.resolvedAt) - Date.parse(a.thread.resolvedAt)) || b.thread.number - a.thread.number);
-    const signature = JSON.stringify([filter, card?.id, items.map(({ thread, group, changed }) =>
-      [thread.id, thread.updatedAt, thread.messages.length, group, changed])]);
+    const emptyCopy = filter === 'open'
+      ? (canUseTool() ? 'Press C and click a frame to start a comment.' : (unavailableReason || 'Comments unavailable in this view.'))
+      : 'No resolved comments.';
+    const signature = JSON.stringify([filter, card?.id, emptyCopy, items.map(({ thread, group, state, detail }) =>
+      [thread.id, thread.updatedAt, thread.messages.length, group, state, detail])]);
     if (listSignature === signature) return;
     listSignature = signature;
     const focused = list.contains(document.activeElement) ? document.activeElement.dataset.commentId : null;
     list.replaceChildren();
     rowNodes.clear();
     if (!items.length) {
-      list.append(element('p', 'adg-comment-empty', filter === 'open' ? 'Press C and click a frame to start a comment.' : 'No resolved comments.'));
+      list.append(element('p', 'adg-comment-empty', emptyCopy));
       return;
     }
     let group;
@@ -312,13 +405,15 @@ export function createComments({
       if (card?.id === thread.id) row.setAttribute('aria-current', 'true');
       const title = element('span', 'adg-comment-row-title');
       title.append(element('span', 'adg-comment-number', `#${thread.number}`), element('strong', null, label(thread)));
-      if (item.changed) title.append(markChanged());
+      if (item.state) title.append(makeStateBadge(item.state));
       const first = thread.messages[0];
       const last = thread.messages.at(-1);
       const meta = element('span', 'adg-comment-row-meta adg-comment-meta');
       if (last) meta.append(element('span', null, authorName(last.author)), timeLabel(last.at));
       meta.append(element('span', 'adg-comment-reply-count', replyCount(thread)));
-      row.append(title, element('span', 'adg-comment-excerpt', first?.text), meta);
+      row.append(title);
+      if (item.detail) row.append(element('span', 'adg-comment-target adg-comment-meta', item.detail));
+      row.append(element('span', 'adg-comment-excerpt', first?.text), meta);
       rowNodes.set(thread.id, row);
       list.append(row);
     }
@@ -329,6 +424,8 @@ export function createComments({
     const point = drag?.moved && !drag.cancelled ? drag : active() ? highlightPoint : null;
     const target = point ? hitTest(point.x, point.y, point.deepest) : null;
     const box = target?.box;
+    if (active()) document.body.dataset.commentTarget = String(!!box);
+    else delete document.body.dataset.commentTarget;
     outline.hidden = !box;
     highlightLabel.hidden = !box;
     if (!box) return;
@@ -347,15 +444,23 @@ export function createComments({
     renderHighlight();
   }
 
-  function renderPreview(positions, width, height) {
+  function renderPreview(positions, locations, width, height) {
     const thread = threads.get(previewId);
     const point = positions.get(previewId);
     preview.hidden = !thread || !point || !!card || !!draft || !!drag;
     if (preview.hidden) return;
-    if (previewThread !== thread) {
-      previewThread = thread;
+    const state = threadState(thread, locations.get(previewId));
+    const detail = secondaryTarget(thread);
+    const nextSignature = JSON.stringify([thread.id, thread.updatedAt, thread.messages.length, state, detail]);
+    if (previewSignature !== nextSignature) {
+      previewSignature = nextSignature;
       const first = thread.messages[0];
       preview.replaceChildren();
+      const head = element('div', 'adg-comment-row-title');
+      head.append(element('span', 'adg-comment-number', `#${thread.number}`), element('strong', null, label(thread)));
+      if (state) head.append(makeStateBadge(state));
+      preview.append(head);
+      if (detail) preview.append(element('p', 'adg-comment-target adg-comment-meta', detail));
       if (first) preview.append(messageMeta(first), element('p', 'adg-comment-excerpt', first.text));
       preview.append(element('p', 'adg-comment-meta', replyCount(thread)));
     }
@@ -456,7 +561,7 @@ export function createComments({
       const point = dragged ? drag : locations.get(thread.id);
       const pinWidth = Math.max(34, 15 + String(thread.number).length * 7);
       const onScreen = point && point.x >= 0 && point.x <= width && point.y >= 0 && point.y <= height;
-      const shown = visible && onScreen && (thread.status !== 'resolved' || (!panel.hidden && filter === 'resolved'));
+      const shown = visible && onScreen && (selected || thread.status !== 'resolved' || (!panel.hidden && filter === 'resolved'));
       let nodes = pinNodes.get(thread.id);
       if (!shown) {
         if (nodes) nodes.pin.hidden = nodes.stem.hidden = true;
@@ -475,11 +580,12 @@ export function createComments({
       position(pin, slot.x, slot.y);
       pin.hidden = false;
       pin.style.width = `${pinWidth}px`;
-      pin.toggleAttribute('data-changed', changed(thread, locations.get(thread.id)));
+      const state = threadState(thread, locations.get(thread.id));
+      pin.toggleAttribute('data-changed', Boolean(state));
       pin.toggleAttribute('data-resolved', thread.status === 'resolved');
       pin.toggleAttribute('data-dragging', dragged);
       pin.setAttribute('aria-expanded', String(selected));
-      pin.setAttribute('aria-label', `Comment #${thread.number}, ${label(thread)}${pin.hasAttribute('data-changed') ? ', changed' : ''}`);
+      pin.setAttribute('aria-label', `Comment #${thread.number}, ${label(thread)}${state ? `, ${state}` : ''}`);
       stem.hidden = !dx && !dy;
       if (!stem.hidden) {
         position(stem, point.x, point.y);
@@ -506,13 +612,13 @@ export function createComments({
       updateTool();
       renderPanel(locations);
     }
-    renderPreview(positions, width, height);
+    renderPreview(positions, locations, width, height);
     const panelBox = panel.hidden ? null : panel.getBoundingClientRect();
     if (card) {
       const thread = threads.get(card.id);
       const point = locations.get(card.id);
       if (thread) {
-        if (!geometryOnly) updateCard(card, thread, changed(thread, point));
+        if (!geometryOnly) updateCard(card, thread, threadState(thread, point));
         const fallback = (rowNodes.get(card.id) ?? panelButton).getBoundingClientRect();
         placeCard(card.node, positions.get(card.id) ?? point ?? { x: fallback.left, y: fallback.bottom }, width, height, panelBox);
       }
@@ -537,13 +643,16 @@ export function createComments({
     const origin = { x: target.x ?? box?.x ?? box?.left, y: target.y ?? box?.y ?? box?.top };
     if (!Number.isFinite(origin.x) || !Number.isFinite(origin.y)) return false;
     if (draft?.editor.pending()) return true;
+    const preservedText = draft?.editor.field.value.trim() ? draft.editor.field.value : '';
+    const preservedFrom = draft?.from;
+    if (!visible) setVisible(true);
     closeDraft(false);
     closeThread(false);
     navigation++;
     highlightPoint = null;
     previewId = null;
     const snapshot = placement(target);
-    const from = document.activeElement;
+    const from = preservedFrom ?? document.activeElement;
     const node = element('section', 'adg-comment-card adg-comment-composer');
     const title = element('h2', null, 'New comment');
     const heading = element('header', 'adg-comment-card-header');
@@ -555,6 +664,10 @@ export function createComments({
       if (visible && thread) await openThread(thread.id, { from });
       render();
     });
+    if (preservedText) {
+      input.field.value = preservedText;
+      input.update();
+    }
     node.setAttribute('aria-label', 'New comment');
     node.append(heading, input.form);
     const pin = element('span', 'adg-comment-pin adg-comment-draft-pin', '+');
@@ -563,6 +676,7 @@ export function createComments({
     layer.append(pin, node);
     render();
     input.field.focus({ preventScroll: true });
+    if (preservedText) input.field.setSelectionRange(preservedText.length, preservedText.length);
     return true;
   }
 
@@ -576,13 +690,25 @@ export function createComments({
     return true;
   }
 
+  function dismiss() {
+    const closedMenu = closeMenu(false);
+    const closedCard = closeThread(false);
+    const closedDraft = draft && !draft.editor.pending() && !draft.editor.field.value.trim() ? closeDraft(false) : false;
+    if (closedMenu || closedCard || closedDraft) {
+      render();
+      return true;
+    }
+    return false;
+  }
+
   function click(x, y, deepest) {
     if (active()) {
       const target = hitTest(x, y, deepest);
       if (target) place({ ...target, x, y });
+      else dismiss();
       return true;
     }
-    if (closeThread(false)) render();
+    dismiss();
     return false;
   }
 
@@ -622,7 +748,7 @@ export function createComments({
     trigger.setAttribute('aria-label', name);
     trigger.setAttribute('aria-expanded', 'false');
     for (const [title, action, destructive] of actions) {
-      items.append(button(title, destructive ? 'adg-comment-danger' : null, () => { closeMenu(true); action(); }));
+      items.append(button(title, destructive ? 'adg-comment-danger' : null, () => { closeMenu(true); action(trigger); }));
     }
     wrapper.append(trigger);
     return wrapper;
@@ -646,6 +772,7 @@ export function createComments({
   async function openThread(id, { go = false, from } = {}) {
     const thread = threads.get(id);
     if (!thread) return false;
+    if (!visible) setVisible(true);
     const sequence = ++navigation;
     if (go && navigate) {
       try {
@@ -671,8 +798,11 @@ export function createComments({
 
   function commentURL(thread) {
     const current = new URL(window.location.href);
-    const url = thread.link ? new URL(thread.link) : current;
-    if (current.searchParams.has('base')) url.searchParams.set('base', current.searchParams.get('base'));
+    const url = thread.link ? new URL(thread.link) : new URL(current.href);
+    const reviewPage = document.querySelector('#review-page');
+    const onReview = Boolean(reviewPage && !reviewPage.hidden);
+    if (onReview && current.searchParams.has('base')) url.searchParams.set('base', current.searchParams.get('base'));
+    else url.searchParams.delete('base');
     url.pathname = viewerBase(url.pathname);
     for (const parameter of ['scope', 'group', 'asset', 'frame', 'element']) url.searchParams.delete(parameter);
     url.searchParams.set('comment', thread.number);
@@ -680,11 +810,58 @@ export function createComments({
     return url.href;
   }
 
+  function cancelConfirm(view, restore = false) {
+    if (!view?.confirm) return false;
+    const previous = view.confirm;
+    view.confirm = null;
+    if (previous.row) {
+      delete previous.row.dataset.content;
+      view.threadMessages = null;
+    } else {
+      previous.bar.remove();
+    }
+    if (restore && previous.trigger?.isConnected) previous.trigger.focus({ preventScroll: true });
+    return true;
+  }
+
+  function confirmDeleteThread(view, trigger) {
+    stopEditing(view);
+    cancelConfirm(view, false);
+    const { bar, confirm } = makeConfirmBar(
+      'Delete thread?',
+      () => view.safely(() => mutate('delete-thread', { id: view.id })),
+      () => { cancelConfirm(view, true); render(); },
+    );
+    view.confirm = { kind: 'thread', bar, trigger };
+    view.messages.before(bar);
+    render();
+    confirm.focus({ preventScroll: true });
+  }
+
+  function confirmDeleteMessage(view, thread, message, row, trigger) {
+    stopEditing(view);
+    cancelConfirm(view, false);
+    const { bar, confirm } = makeConfirmBar(
+      'Delete message?',
+      async () => {
+        await view.safely(() => mutate('delete', { id: thread.id, messageId: message.id }));
+        if (view.confirm?.messageId === message.id) cancelConfirm(view, false);
+      },
+      () => { cancelConfirm(view, true); render(); },
+    );
+    view.confirm = { kind: 'message', messageId: message.id, row, bar, trigger };
+    row.append(bar);
+    render();
+    confirm.focus({ preventScroll: true });
+  }
+
   function makeCard(id, from) {
     const node = element('section', 'adg-comment-card adg-comment-thread');
     node.tabIndex = -1;
     const title = element('h2');
-    const stale = markChanged();
+    const targetLabel = element('p', 'adg-comment-target adg-comment-meta');
+    targetLabel.hidden = true;
+    const stale = makeStateBadge();
     const messages = element('div', 'adg-comment-messages');
     messages.tabIndex = 0;
     messages.setAttribute('aria-label', 'Messages');
@@ -701,15 +878,14 @@ export function createComments({
       catch (error) { setStatus(status, error.message || 'Could not update the thread.'); }
       if (node.isConnected) render();
     };
+    let view;
     const actions = makeMenu('Thread actions', [
       ['Copy link', () => void safely(async () => {
         await navigator.clipboard.writeText(commentURL(threads.get(id)));
         status.classList.add('adg-comment-copied');
         setStatus(status, 'Link copied.');
       })],
-      ['Delete thread', () => {
-        if (window.confirm(`Delete comment #${threads.get(id).number} and its replies?`)) void safely(() => mutate('delete-thread', { id }));
-      }, true],
+      ['Delete thread', trigger => confirmDeleteThread(view, trigger), true],
     ]);
     const close = closeButton('Close thread', () => { navigation++; closeThread(true); render(); });
     const heading = element('header', 'adg-comment-card-header');
@@ -736,17 +912,25 @@ export function createComments({
       resolve.disabled = false;
     });
     reply.actions.prepend(resolve);
-    node.append(heading, messages, resolution, status, reply.form);
-    return { id, from, node, title, stale, messages, resolution, reply, resolve, safely, threadMessages: null, edit: null };
+    node.append(heading, targetLabel, messages, resolution, status, reply.form);
+    view = { id, from, node, title, targetLabel, stale, messages, resolution, reply, resolve, safely, threadMessages: null, edit: null, confirm: null };
+    return view;
   }
 
-  function updateCard(view, thread, stale) {
+  function updateCard(view, thread, state) {
     const title = `#${thread.number} ${label(thread)}`;
     if (view.title.textContent !== title) {
       view.title.textContent = title;
       view.node.setAttribute('aria-label', title);
     }
-    view.stale.hidden = !stale;
+    const detail = secondaryTarget(thread);
+    view.targetLabel.hidden = !detail;
+    if (view.targetLabel.textContent !== detail) view.targetLabel.textContent = detail;
+    view.stale.hidden = !state;
+    if (state) {
+      view.stale.textContent = state === 'missing' ? 'Missing' : 'Changed';
+      view.stale.dataset.state = state;
+    }
     const resolved = thread.status === 'resolved';
     view.resolve.textContent = resolved ? 'Reopen' : 'Resolve';
     view.resolution.hidden = !resolved;
@@ -764,12 +948,13 @@ export function createComments({
       rows.delete(message.id);
       row.dataset.messageId = message.id;
       const content = JSON.stringify(message);
-      if (view.edit?.id !== message.id && row.dataset.content !== content) {
+      const locked = view.edit?.id === message.id || view.confirm?.messageId === message.id;
+      if (!locked && row.dataset.content !== content) {
         row.dataset.content = content;
         const meta = messageMeta(message);
         if (message.author?.kind === 'user') meta.append(makeMenu('Message actions', [
           ['Edit', () => editMessage(view, message, row)],
-          ['Delete', () => void view.safely(() => mutate('delete', { id: thread.id, messageId: message.id })), true],
+          ['Delete', trigger => confirmDeleteMessage(view, thread, message, row, trigger), true],
         ]));
         row.replaceChildren(meta, element('p', 'adg-comment-message-text', message.text));
       }
@@ -778,6 +963,7 @@ export function createComments({
     }
     for (const [id, row] of rows) {
       if (view.edit?.id === id) view.edit = null;
+      if (view.confirm?.messageId === id) view.confirm = null;
       row.remove();
     }
     view.messages.scrollTop = nearEnd ? view.messages.scrollHeight : scrollTop;
@@ -793,6 +979,7 @@ export function createComments({
   }
 
   function editMessage(view, message, row) {
+    cancelConfirm(view, false);
     stopEditing(view);
     const input = editor('Edit message', 'Save', async text => {
       await mutate('edit', { id: view.id, messageId: message.id, message: text });
@@ -820,7 +1007,7 @@ export function createComments({
 
   function mutate(action, fields) {
     const write = writeQueue.then(async () => {
-      setStatus(notice);
+      showNotice();
       const result = await request(endpoint, { action, ...fields });
       version++;
       if (result?.thread) threads.set(result.thread.id, result.thread);
@@ -873,9 +1060,11 @@ export function createComments({
   }
 
   function escape() {
-    const handled = cancelDrag() || closeMenu(true) || (card && stopEditing(card)) || closeDraft(true) || closeThread(true);
-    if (handled) {
-      navigation++;
+    const hadNotice = !notice.hidden;
+    if (hadNotice) showNotice();
+    const handled = cancelDrag() || closeMenu(true) || (card && cancelConfirm(card, true)) || (card && stopEditing(card)) || closeDraft(true) || closeThread(true);
+    if (handled || hadNotice) {
+      if (handled) navigation++;
       render();
       return true;
     }
@@ -891,7 +1080,7 @@ export function createComments({
     } else {
       if (event.key.toLowerCase() !== 'c' || event.metaKey || event.ctrlKey || event.altKey ||
         event.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return false;
-      if (!event.shiftKey && toolButton.disabled) return false;
+      if (!event.shiftKey && !canUseTool()) return false;
       if (!event.repeat) {
         if (event.shiftKey) setVisible();
         else toggle();
@@ -914,5 +1103,5 @@ export function createComments({
   panelButton.addEventListener('click', () => setPanel(panel.hidden, panel.hidden));
   render();
   if (initialComment != null) queueMicrotask(() => { void openLink(initialComment); });
-  return { active, place, click, hover, render, reposition: () => render(true), refresh, key, openLink };
+  return { active, place, click, hover, render, reposition: () => render(true), refresh, key, openLink, closePanel, dismiss, setAvailable };
 }

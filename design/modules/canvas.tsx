@@ -1,86 +1,131 @@
 import { Frame, Icon } from 'adg';
-import { Drawing } from '../components/canvas';
-import { minimapSpecimen, assetLabelSpecimen, assetLabelNote, drawingSpecimen } from '../fixtures/canvas';
+import { Button } from '../components/button';
+import { IconButton } from '../components/icon-button';
+import { boardChapterSpecimen, minimapSpecimen } from '../fixtures/canvas';
 
-export { Drawing } from '../components/canvas';
+export function BoardChapter({
+  number = 1,
+  project = 'agent-design-gallery',
+  layer = 'Components',
+  title,
+  sourceCount,
+  frameCount,
+  countLabel = 'frames',
+  width = 1680,
+  children,
+}: any) {
+  const sourcesText = `${sourceCount} ${sourceCount === 1 ? 'source' : 'sources'}`;
+  return (
+    <article class="bg-surface px-20 pt-16 pb-20 text-text" style={{ width }}>
+      <header class="flex items-end justify-between gap-16 pb-14">
+        <div>
+          <p class="flex items-center gap-3 text-caption font-semibold tracking-[2px] text-text-tertiary uppercase">
+            <span
+              class="grid h-7 min-w-7 place-items-center rounded-pill bg-text px-[6px]
+                font-mono text-caption tracking-normal text-surface"
+            >
+              {String(number).padStart(2, '0')}
+            </span>
+            <span>
+              {project} · {layer}
+            </span>
+          </p>
+          <h1 class="mt-4 text-[48px] leading-[56px] font-semibold">{title}</h1>
+        </div>
+        <p class="shrink-0 text-right text-body text-text-secondary">
+          {sourcesText} · {frameCount} {countLabel}
+        </p>
+      </header>
+      {children}
+    </article>
+  );
+}
+
+export function BoardSection({ title, path, modified, selected = false, copied = false, children }: any) {
+  return (
+    <section class="grid grid-cols-[280px_minmax(0,1fr)] gap-14 border-t border-border py-12">
+      <div class="w-[280px]">
+        <button type="button" class="flex items-center gap-[6px] text-left text-[22px] leading-[28px] font-semibold">
+          <span>{title}</span>
+          {(copied || selected) && (
+            <Icon name={copied ? 'check' : 'copy'} size={14} class="shrink-0 text-text-tertiary" />
+          )}
+        </button>
+        <p class="mt-5 flex items-center gap-[6px] font-mono text-caption text-text-tertiary">
+          <Icon name="file-code" size={12} class="shrink-0" />
+          <span class="min-w-0 [overflow-wrap:anywhere]">{path}</span>
+        </p>
+        {modified && <p class="mt-2 text-caption text-text-tertiary">{modified}</p>}
+      </div>
+      <div class="grid min-w-0 grid-cols-12 items-start gap-x-6 gap-y-8">{children}</div>
+    </section>
+  );
+}
+
+export function SpecimenWell({ name, note, proposed, span = 6, surface = false, selected = false, children }: any) {
+  const colSpan =
+    span === 12
+      ? 'col-span-12'
+      : span === 8
+        ? 'col-span-8'
+        : span === 6
+          ? 'col-span-6'
+          : span === 4
+            ? 'col-span-4'
+            : 'col-span-3';
+  const ring = selected ? 'outline-2 -outline-offset-2 outline-accent' : '';
+  const detail = proposed ? (note ? `${note} · Proposed: ${proposed}` : `Proposed: ${proposed}`) : note;
+
+  return (
+    <figure class={`flex min-w-0 flex-col gap-3 ${colSpan}`} style={{ '--span': span }}>
+      <div class={`flex min-h-24 items-center justify-center rounded-card bg-canvas px-6 py-8 ${ring}`}>
+        {surface ? <div class="border border-border">{children}</div> : children}
+      </div>
+      <figcaption class="flex flex-col gap-[2px] font-mono text-meta leading-[17px]">
+        <span>{name}</span>
+        {detail && <small class="font-ui text-meta leading-[17px] text-text-tertiary">{detail}</small>}
+      </figcaption>
+    </figure>
+  );
+}
+
 export function Minimap({
-  specimen = false,
   boxes = [],
   viewport = [90, 12, 98, 68],
 }: {
-  specimen?: boolean;
   boxes?: number[][];
   viewport?: number[];
 }) {
-  const [x, y, width, height] = viewport;
+  const [vx, vy, vw, vh] = viewport;
   return (
-    <svg data-free width={200} height={132} class="overflow-visible">
-      <rect width="200" height="132" rx="12" class="fill-surface" />
-      {boxes.map(([x, y, width, height]) => (
-        <rect x={x} y={y} width={width} height={height} rx={4} class="fill-surface-section stroke-border" />
-      ))}
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        rx={specimen ? 4 : 0}
-        stroke-width={specimen ? 1.5 : 1}
-        class="fill-none stroke-accent"
-      />
-    </svg>
-  );
-}
-export function AssetLabel({
-  name,
-  count,
-  modified,
-  timestamp,
-  copied = false,
-  hovered = false,
-}: {
-  name: string;
-  count: string;
-  modified: string;
-  timestamp: string;
-  copied?: boolean;
-  hovered?: boolean;
-}) {
-  const visibility =
-    copied || hovered ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100';
-  return (
-    <div class="flex items-center gap-[6px] text-meta leading-[1.2]">
-      <button
-        type="button"
-        aria-label={copied ? `Copied ${name}` : `Copy ${name} name`}
-        class="group flex items-center gap-1 text-left font-[550] text-text-secondary"
-      >
-        <span>{name}</span>
-        <Icon name={copied ? 'check' : 'copy'} size={12} class={`text-text-tertiary ${visibility}`} />
-      </button>
-      <span class="text-text-tertiary">{count}</span>
-      <time class="ml-1 text-text-tertiary" title={timestamp}>
-        {modified}
-      </time>
+    <div class="h-[132px] w-[200px] overflow-hidden rounded-card bg-surface shadow-float">
+      <svg data-free width={200} height={132}>
+        {boxes.map(([x, y, width, height]) => (
+          <rect x={x} y={y} width={width} height={height} rx={4} class="fill-surface-section stroke-border" />
+        ))}
+        <rect x={vx} y={vy} width={vw} height={vh} rx={0} stroke-width={1} class="fill-none stroke-accent" />
+      </svg>
     </div>
   );
 }
 
+const { sections, ...chapterMeta } = boardChapterSpecimen;
+
 export default () => [
-  <Frame name="drawing">
-    <svg data-free width={280} height={150}>
-      <Drawing nodes={drawingSpecimen} />
-    </svg>
+  <Frame name="board-chapter">
+    <BoardChapter {...chapterMeta}>
+      {sections.map(({ specimens, ...section }) => (
+        <BoardSection {...section}>
+          {specimens.map(({ kind, props, ...well }) => (
+            <SpecimenWell {...well}>
+              {kind === 'button' ? <Button {...props} /> : <IconButton {...props} />}
+            </SpecimenWell>
+          ))}
+        </BoardSection>
+      ))}
+    </BoardChapter>
   </Frame>,
   <Frame name="minimap">
     <Minimap {...minimapSpecimen} />
   </Frame>,
-  ...['modified', 'hover', 'copied'].map((name) => (
-    <Frame name={`asset-label-${name}`} note={assetLabelNote}>
-      <div class="flex flex-col gap-3 bg-canvas p-6">
-        <AssetLabel {...assetLabelSpecimen} copied={name === 'copied'} hovered={name === 'hover'} />
-        <div class="h-20 w-[360px] rounded-artboard border border-border bg-surface-section" />
-      </div>
-    </Frame>
-  )),
 ];

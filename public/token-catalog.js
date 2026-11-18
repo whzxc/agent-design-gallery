@@ -1,9 +1,14 @@
 import { icon } from './icons.js';
 
 const categories = [
-  ['Colors', 'palette'], ['Typography', 'type'], ['Spacing & size', 'ruler'], ['Radii', 'corner-up-right'],
-  ['Shadows', 'layers'], ['Motion', 'timer'], ['Other', 'list'],
+  ['Colors', 'palette', 'colour'], ['Typography', 'type', 'type'], ['Spacing & size', 'ruler', 'sizing'],
+  ['Radii', 'corner-up-right', 'shape'], ['Shadows', 'layers', 'elevation'], ['Motion', 'timer', 'motion'],
+  ['Other', 'list', null],
 ];
+
+export function tokenBoardSection(category) {
+  return categories.find(([label]) => label === category)?.[2] ?? null;
+}
 
 function resolveValue(name, values) {
   const seen = new Set();
@@ -90,7 +95,7 @@ function tokenName(name, onCopyError) {
   button.onclick = async () => {
     try {
       await navigator.clipboard.writeText(name);
-      button.setAttribute('data-copied', '');
+      button.setAttribute('data-copied', 'true');
       button.setAttribute('aria-label', `Copied ${name}`);
       glyph.innerHTML = icon('check', 12);
       clearTimeout(timer);

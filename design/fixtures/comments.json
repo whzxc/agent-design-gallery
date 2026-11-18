@@ -4,6 +4,16 @@
     "changed",
     "resolved"
   ],
+  "emptyOpen": "Press C and click a frame to start a comment.",
+  "emptyResolved": "No resolved comments.",
+  "pinsHidden": "Pins hidden",
+  "previewExample": {
+    "number": 1,
+    "author": "You",
+    "time": "2 minutes ago",
+    "text": "Could the Open action be more specific?",
+    "replies": "1 reply"
+  },
   "commentExample": {
     "number": 1,
     "target": "components / Essentials",
@@ -21,9 +31,22 @@
       }
     ]
   },
+  "changedExample": {
+    "number": 3,
+    "target": "components/button#primary",
+    "changed": true,
+    "messages": [
+      {
+        "author": "You",
+        "time": "14 minutes ago",
+        "text": "Align the icon gap with the picker control."
+      }
+    ]
+  },
   "resolvedExample": {
     "number": 2,
     "target": "components/field#default",
+    "resolvedBy": "Codex",
     "messages": [
       {
         "author": "You",

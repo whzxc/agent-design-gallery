@@ -1,12 +1,10 @@
 export const treeRowForms = [
-  { form: "root", width: 236, label: "All designs", icon: "layout-grid", meta: "25" },
-  { form: "root-selected", width: 236, label: "All designs", icon: "layout-grid", meta: "25" },
-  { form: "group", width: 236, label: "Essentials", icon: "chevron-right", meta: "8" },
-  { form: "group-selected", width: 236, label: "Essentials", icon: "chevron-down", meta: "8" },
-  { form: "item", width: 236, label: "button", icon: "component", meta: "5 forms" },
-  { form: "item-selected", width: 236, label: "field", icon: "component", meta: "2 forms" },
-  { form: "two-line", width: 300, label: "arc", icon: "folder", meta: "~/projects/arc/design" },
-  { form: "two-line-selected", width: 300, label: "hub", icon: "folder", meta: "~/projects/hub/design" },
+  { form: 'root', width: 236, label: 'All tokens', icon: 'layout-grid', meta: '38' },
+  { form: 'root-selected', width: 236, label: 'All tokens', icon: 'layout-grid', meta: '38' },
+  { form: 'group', width: 236, label: 'Controls', icon: 'chevron-down', meta: '6' },
+  { form: 'group-collapsed', width: 236, label: 'Controls', icon: 'chevron-right', meta: '6' },
+  { form: 'item', width: 236, label: 'button', icon: 'component', meta: '6 forms' },
+  { form: 'item-selected', width: 236, label: 'field', icon: 'component', meta: '5 forms' },
 ];
 
 export const menuItemForms = [
@@ -14,5 +12,7 @@ export const menuItemForms = [
   { form: 'item-active', label: 'Fit group' },
   { form: 'check', label: 'System' },
   { form: 'option', label: 'Light' },
+  { form: 'disabled', label: 'Fit selection' },
+  { form: 'danger', label: 'Delete thread' },
   { form: 'label', label: 'Theme' },
 ];

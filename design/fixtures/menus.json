@@ -1,6 +1,11 @@
 {
-  "default": {
+  "more": {
+    "width": 240,
     "rows": [
+      {
+        "form": "item",
+        "label": "Fullscreen"
+      },
       {
         "form": "label",
         "label": "Theme"
@@ -8,24 +13,6 @@
       {
         "form": "check",
         "label": "System"
-      },
-      {
-        "form": "option",
-        "label": "Light"
-      }
-    ]
-  },
-  "display": {
-    "width": 220,
-    "rows": [
-      {
-        "form": "label",
-        "label": "Theme"
-      },
-      {
-        "form": "check",
-        "label": "System",
-        "icon": "check"
       },
       {
         "form": "option",
@@ -41,8 +28,7 @@
       },
       {
         "form": "check",
-        "label": "Match theme",
-        "icon": "check"
+        "label": "Match theme"
       },
       {
         "form": "option",
@@ -55,6 +41,51 @@
       {
         "form": "option",
         "label": "Neutral"
+      },
+      {
+        "form": "item",
+        "label": "Arrange current group",
+        "divider": true
+      },
+      {
+        "form": "item",
+        "label": "Keyboard shortcuts",
+        "meta": "?"
+      }
+    ]
+  },
+  "moreTokens": {
+    "width": 240,
+    "rows": [
+      {
+        "form": "item",
+        "label": "Fullscreen"
+      },
+      {
+        "form": "label",
+        "label": "Theme"
+      },
+      {
+        "form": "check",
+        "label": "System"
+      },
+      {
+        "form": "option",
+        "label": "Light"
+      },
+      {
+        "form": "option",
+        "label": "Dark"
+      },
+      {
+        "form": "item",
+        "label": "List view",
+        "divider": true
+      },
+      {
+        "form": "item",
+        "label": "Keyboard shortcuts",
+        "meta": "?"
       }
     ]
   },
@@ -67,12 +98,13 @@
         "meta": "0"
       },
       {
-        "form": "item-active",
+        "form": "item",
         "label": "Fit group"
       },
       {
         "form": "item",
-        "label": "Fit selection"
+        "label": "Fit selection",
+        "disabled": true
       },
       {
         "form": "item",
@@ -82,17 +114,53 @@
       }
     ]
   },
-  "more": {
-    "width": 240,
+  "contextElement": {
+    "width": 220,
     "rows": [
       {
         "form": "item",
-        "label": "Arrange current group"
+        "label": "Comment"
       },
       {
         "form": "item",
-        "label": "Keyboard shortcuts",
-        "meta": "?"
+        "label": "Copy element reference"
+      },
+      {
+        "form": "item",
+        "label": "Show in Inspector"
+      },
+      {
+        "form": "item",
+        "label": "Select owning component"
+      },
+      {
+        "form": "item",
+        "label": "Show usages"
+      }
+    ]
+  },
+  "contextFrame": {
+    "width": 220,
+    "rows": [
+      {
+        "form": "item",
+        "label": "Comment"
+      },
+      {
+        "form": "item",
+        "label": "Copy frame name"
+      },
+      {
+        "form": "item",
+        "label": "Copy source path"
+      },
+      {
+        "form": "item",
+        "label": "Show in Inspector"
+      },
+      {
+        "form": "item",
+        "label": "Fit frame"
       }
     ]
   }

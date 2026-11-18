@@ -9,7 +9,7 @@ export const boardCss = `
 [data-adg-header] h1{margin:16px 0 0;font-size:48px;line-height:56px;font-weight:600;letter-spacing:-.02em}
 [data-adg-eyebrow]{display:flex;align-items:center;gap:12px;margin:0;font-size:var(--text-caption,11px);font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--adg-muted)}
 [data-adg-number]{display:grid;place-items:center;min-width:28px;height:28px;padding:0 6px;border-radius:var(--radius-pill,999px);background:var(--action,var(--adg-text));color:var(--on-action,var(--surface,#fff));font-family:var(--font-mono,monospace);letter-spacing:0}
-[data-adg-counts]{margin:0;font-size:var(--text-small,13px);line-height:1.6;color:var(--text-secondary,#666)}
+[data-adg-counts]{margin:0;font-size:var(--text-body,var(--text-small,13px));line-height:1.6;color:var(--text-secondary,#666)}
 [data-adg-section]{display:grid;grid-template-columns:280px minmax(0,1fr);gap:56px;border-top:1px solid var(--adg-border);padding:48px 0}
 [data-adg-section-label] h2{margin:0;font-size:22px;line-height:28px;font-weight:600;letter-spacing:-.01em;overflow-wrap:anywhere}
 [data-adg-source]{display:flex;align-items:flex-start;gap:6px;margin-top:20px;color:var(--adg-muted);font:var(--text-caption,11px)/1.6 var(--font-mono,monospace);overflow-wrap:anywhere}
@@ -17,7 +17,7 @@ export const boardCss = `
 [data-adg-section-content]{min-width:0}
 [data-adg-specimens]{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:32px 24px;align-items:start}
 [data-adg-specimens]>figure{margin:0;min-width:0;display:flex;flex-direction:column;gap:12px;grid-column:span var(--adg-span,12)}
-[data-adg-well]{display:flex;align-items:center;justify-content:center;min-height:96px;padding:32px 24px;border-radius:var(--radius-card,12px);background:var(--adg-canvas);overflow:hidden}
+[data-adg-well]{display:flex;align-items:center;justify-content:center;min-height:96px;padding:32px 24px;border-radius:var(--radius-card,var(--radius-menu,12px));background:var(--adg-canvas);overflow:hidden}
 [data-adg-well]>[data-adg-frame]{flex-shrink:0}
 [data-adg-specimens] figcaption{display:flex;flex-direction:column;gap:2px;font:var(--text-meta,12px)/17px var(--font-mono,monospace);overflow-wrap:anywhere}
 [data-adg-specimens] figcaption small{font:var(--text-meta,12px)/17px var(--font-ui,system-ui,sans-serif);color:var(--adg-muted)}
