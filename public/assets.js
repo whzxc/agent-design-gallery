@@ -301,7 +301,7 @@ export function arrange(data, { placed, previousGroups } = {}) {
 function formDocument(form,css,theme) {
   if(form.document)return form.document;
   const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="${escape(form.name)}" style="${form.width ? `width:${form.width}px;` : 'width:max-content;'}${form.height ? `height:${form.height}px;` : ''}">${form.html}</div></body></html>`;
+  return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><meta name="darkreader-lock"><style data-adg-style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="${escape(form.name)}" style="${form.width ? `width:${form.width}px;` : 'width:max-content;'}${form.height ? `height:${form.height}px;` : ''}">${form.html}</div></body></html>`;
 }
 async function prepareSource(asset, built, theme, signal) {
   const endMeasurement = globalThis.__adgTiming?.span('measurement', asset.path, {frames:built.frames.length});
@@ -342,7 +342,14 @@ async function prepareSource(asset, built, theme, signal) {
       const content=frame.contentDocument.createElement('div');
       content.setAttribute('xmlns','http://www.w3.org/1999/xhtml');
       content.setAttribute('style','font:16px/1.5 var(--font-ui);color:var(--text);');
-      content.append(frame.contentDocument.querySelector('style').cloneNode(true),shell.cloneNode(true));
+      const style=frame.contentDocument.createElement('style');
+      const sourceStyle=frame.contentDocument.querySelector('style[data-adg-style]')
+        ?? frame.contentDocument.querySelector('head > style:not([class])')
+        ?? frame.contentDocument.querySelector('style');
+      style.textContent=typeof built.css==='string' && !form.document
+        ? built.css
+        : (sourceStyle?.textContent ?? '');
+      content.append(style,shell.cloneNode(true));
       parts.push({id:String(index),name:form.name,note:form.note,proposed:form.proposed,width:box.width,height:box.height,elements,markup:new XMLSerializer().serializeToString(content)});
       endFrame?.();
     }

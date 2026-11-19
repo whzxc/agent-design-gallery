@@ -453,3 +453,78 @@ test('frame and element selection expose transitive relationships, matching expo
     assert.deepEqual(errors,[]);
   } finally {await browser.close();await server.close()}
 });
+
+test('prepare ignores extension-injected style tags when serializing SVG previews', {timeout:30000}, async t => {
+  const stateDirectory = await temporary(t);
+  const server = await startServer({directory:path.join(root,'fixtures/arc-sample/design'),stateDirectory});
+  const browser = await launch();
+  try {
+    const page = await browser.newPage();
+    await page.goto(server.url, {waitUntil:'load'});
+    const result = await page.evaluate(async () => {
+      const lockMeta = document.querySelector('meta[name="darkreader-lock"]');
+      const desc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'srcdoc');
+      const injectedSources = [];
+      Object.defineProperty(HTMLIFrameElement.prototype, 'srcdoc', {
+        configurable: true,
+        get() { return desc.get.call(this); },
+        set(value) {
+          const patched = String(value).replace(
+            '<head>',
+            '<head><style class="darkreader darkreader--root-vars" media="screen"></style>',
+          );
+          injectedSources.push(patched);
+          desc.set.call(this, patched);
+        },
+      });
+      try {
+        const { prepare, compactPreparedSource, imageURL } = await import('/assets.js');
+        const data = await (await fetch('/manifest?scope=all')).json();
+        const target = data.assets.find(a => a.path.endsWith('.tsx'));
+        const prepared = await prepare(target, 'dark');
+        const compacted = compactPreparedSource(prepared);
+        const crops = [];
+        for (const part of compacted.parts) {
+          const url = imageURL(compacted, part);
+          try {
+            const svgText = await (await fetch(url)).text();
+            const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+            const styles = [...doc.querySelectorAll('style')];
+            crops.push({
+              id: part.id,
+              styleCount: styles.length,
+              styleAttrs: styles.map(s => s.getAttributeNames()),
+              styleLen: styles[0]?.textContent?.length ?? 0,
+              hasParserError: !!doc.querySelector('parsererror'),
+              hasDarkreader: svgText.includes('darkreader'),
+            });
+          } finally {
+            URL.revokeObjectURL(url);
+          }
+        }
+        return {
+          hasDarkreaderLock: !!lockMeta,
+          sawInjectedFrameLock: injectedSources.some(s => s.includes('<meta name="darkreader-lock">') && s.includes('<style data-adg-style>')),
+          hasDarkreaderInSource: prepared.source.includes('darkreader'),
+          crops,
+        };
+      } finally {
+        Object.defineProperty(HTMLIFrameElement.prototype, 'srcdoc', desc);
+      }
+    });
+    assert.equal(result.hasDarkreaderLock, true);
+    assert.equal(result.sawInjectedFrameLock, true);
+    assert.equal(result.hasDarkreaderInSource, false);
+    assert.ok(result.crops.length > 0);
+    for (const crop of result.crops) {
+      assert.equal(crop.styleCount, 1);
+      assert.deepEqual(crop.styleAttrs, [[]]);
+      assert.ok(crop.styleLen > 500, `Expected full ADG CSS in crop ${crop.id}, got ${crop.styleLen} chars`);
+      assert.equal(crop.hasParserError, false);
+      assert.equal(crop.hasDarkreader, false);
+    }
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+});
