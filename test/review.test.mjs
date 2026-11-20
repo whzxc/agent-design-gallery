@@ -137,6 +137,7 @@ export default () => [
   assert.equal(code, 0, stdout);
   const { data: report } = JSON.parse(stdout);
   assert.equal(report.path, standalone);
+  assert.equal(report.format, 'html');
   assert.equal(report.mode, 'hybrid');
   assert.equal(report.complete, true);
   assert.equal(report.theme, 'dark');
@@ -145,6 +146,22 @@ export default () => [
   const document = await readFile(standalone, 'utf8');
   assert.match(document, /https:\/\/design\.example\/p\/project\/\?asset=components%2Fcard\.tsx&amp;frame=themed/);
   assert.doesNotMatch(document, /key=discard/);
+
+  stdout = '';
+  const pngCode = await main(['review', `--base=${baseSha}`, '--theme=dark', '--format=png', '--json'], project,
+    { stdout: chunk => { stdout += chunk; }, stderr: () => {}, exit: () => {} });
+  assert.equal(pngCode, 0, stdout);
+  const { data: png } = JSON.parse(stdout);
+  assert.equal(png.path, path.join(config.output, 'review.png'));
+  assert.equal(png.format, 'png');
+  assert.equal(png.theme, report.theme);
+  assert.equal(png.mode, report.mode);
+  assert.equal(png.complete, true);
+  assert.deepEqual(png.counts, report.counts);
+  assert.deepEqual(png.groups, report.groups);
+  const image = await readFile(png.path);
+  assert.equal(image.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  assert.equal(image.length, png.bytes);
 
   // Commit changes and run diff against HEAD to verify output directory overwrite removes old frames/.
   git('add', '.');

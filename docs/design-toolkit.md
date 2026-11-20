@@ -562,18 +562,21 @@ the consumer's normal approval process.
 
 ```sh
 adg review --base=<rev> --json
+adg review --base=<rev> --format=png --json
 adg review --base=<rev> --theme=dark --out=output/design/review.html --viewer-url=https://gallery.example/p/project/
 ```
 
-Use the commit where the task started as `--base`. Provide only the direct link to the generated HTML at `data.path` in the design handoff. By default the file is `<configured output>/review.html` and includes the macOS system theme or light on other platforms. A relative `--out` resolves from the project root. Regenerate the report when its design inputs change.
+Use the commit where the task started as `--base`. Share the artifact at `data.path`. HTML is the default and suits frame-by-frame review and approvals. In Antigravity, use `--format=png` for routine review and attach the generated PNG as a conversation artifact. The default path is `<configured output>/review.html` or `<configured output>/review.png`. A relative `--out` resolves from the project root and its extension must match the format. Both formats default to the macOS system theme or light on other platforms. Regenerate the report when its design inputs change.
 
-The report opens directly in a browser and needs no running viewer. Its full-width cards are organized into Added, Direct changes, Inherited changes, Removed and Moved. Added frames display After. Changed frames display Before, After and Difference in aligned panes. Before and After show the compiled frames on a solid preview well. ADG's injected capture backdrop is transparent so authored surfaces and controls keep their own paint. Previews mount near the viewport, and collapsed group members mount after expansion. Click **Enlarge** or a preview to inspect the comparison or one pane, fit it or view it at 100%. Click an available source breadcrumb and frame title to open that frame in the viewer. The link comes from the registered hub or an explicit `--viewer-url`. Use the board for comments.
+The HTML opens directly in a browser and needs no running viewer. Its full-width cards are organized into Added, Direct changes, Inherited changes, Removed and Moved. Added frames display After. Changed frames display Before, After and Difference in aligned panes. Before and After show the compiled frames on a solid preview well. ADG's injected capture backdrop is transparent so authored surfaces and controls keep their own paint. Previews mount near the viewport, and collapsed group members mount after expansion. Click **Enlarge** or a preview to inspect the comparison or one pane, fit it or view it at 100%. Click an available source breadcrumb and frame title to open that frame in the viewer. The link comes from the registered hub or an explicit `--viewer-url`. Use the board for comments.
+
+The PNG shows up to 12 image cards at 2× with added frames, before-and-after comparisons and representative inherited changes. It also lists removed and moved frames. The footer counts frames omitted by grouping or by the sheet's size limit.
 
 Direct changes edit a frame's source or its module feature folder. Inherited frames group by the set of changed inputs that reaches them. Each group shows the frame nearest the median changed-pixel area, with source order breaking ties. Members above twice the median appear as outliers. Removed and moved frames are listed by location. Move pairing keeps the existing Git rename, module folder, exported part and dual-theme pixel rules.
 
 The hybrid pass uses impact proofs first, then compares frame dimensions, text, layout and paint observations in Chromium. Matching observations for supported TSX frames skip screenshot capture. Moves, additions, removals, required structural parents, architecture frames, unassessed inputs and frames with complex paint or changed observations use the pixel pass. Observation equality has narrower coverage than pixel equality. Use `--exact` to run the pixel pass for every scheduled frame, or `adg diff --impacted --base=<rev> --json` for automated verdicts and comparison artifacts across both themes.
 
-Source build failures are listed by source and side. The remaining frames are included in the generated HTML and the command exits 2. The [CLI contract](agent-interface.md#review) defines result fields.
+Source build failures are listed by source and side. The generated artifact includes the available results and the command exits 2. The [CLI contract](agent-interface.md#review) defines result fields.
 
 ## Architecture sources
 

@@ -82,17 +82,22 @@ test('ordinary and impacted diff retain healthy artifacts with failures on oppos
       assert.equal(data.impact.coverage.proofComplete, false);
     }
   }
-  let stdout = '';
-  const code = await main(['review', '--base=HEAD', '--theme=light', '--exact', '--json'], project,
-    { stdout: value => { stdout += value; }, stderr: () => {}, exit: () => {} });
-  assert.equal(code, 2, stdout);
-  const { data: report, error } = JSON.parse(stdout);
-  assert.equal(error.code, 'SOURCE_BUILD_FAILED');
-  assert.equal(report.complete, false);
-  assert.equal(report.mode, 'exact');
-  assertFailures(report.failures);
-  assert.equal(report.counts.changed, 1);
-  assert.match(await readFile(report.path, 'utf8'), /Some sources could not be built/);
+  for (const format of ['html', 'png']) {
+    let stdout = '';
+    const code = await main(['review', '--base=HEAD', '--theme=light', '--exact', `--format=${format}`, '--json'], project,
+      { stdout: value => { stdout += value; }, stderr: () => {}, exit: () => {} });
+    assert.equal(code, 2, stdout);
+    const { data: report, error } = JSON.parse(stdout);
+    assert.equal(error.code, 'SOURCE_BUILD_FAILED');
+    assert.equal(report.complete, false);
+    assert.equal(report.mode, 'exact');
+    assert.equal(report.format, format);
+    assertFailures(report.failures);
+    assert.equal(report.counts.changed, 1);
+    const artifact = await readFile(report.path);
+    if (format === 'html') assert.match(artifact.toString(), /Some sources could not be built/);
+    else assert.equal(artifact.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  }
 });
 
 test('architecture metadata failure excludes the source on both revision sides', { timeout: 30000 }, async t => {

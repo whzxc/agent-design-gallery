@@ -162,7 +162,7 @@ function revisionReasons(pair) {
   return reasons;
 }
 
-async function writePair(output, pair, thresholds, reviewImages) {
+async function writePair(output, pair, thresholds, reviewImages, reviewFormat) {
   const { row, theme } = pair;
   const directory = output && path.join(output, row.support ? 'support' : 'frames', ...row.source.split('/').map(safeName), safeName(row.frame), theme);
   const paths = directory ? {
@@ -202,11 +202,15 @@ async function writePair(output, pair, thresholds, reviewImages) {
     metadata: { before: row.before ? { locale: row.before.locale ?? null, proposed: row.before.proposed ?? null, fixture: row.before.fixture ?? null, capture: row.before.capture ?? null } : null,
       after: row.after ? { locale: row.after.locale ?? null, proposed: row.after.proposed ?? null, fixture: row.after.fixture ?? null, capture: row.after.capture ?? null } : null }, paths,
   };
-  if (!row.support && row.status !== 'moved') {
+  const pngSummary = reviewFormat === 'png';
+  const shownInSummary = row.status === 'added' ||
+    (row.status !== 'removed' && (row.previousSource || comparison.verdict === 'changed'));
+  const embedCaptures = output || pngSummary;
+  if (!row.support && row.status !== 'moved' && (!pngSummary || shownInSummary)) {
     reviewImages.set(comparison.id, {
-      before: output && pair.before ? `data:image/png;base64,${pair.before.png.toString('base64')}` : null,
-      after: output && pair.after ? `data:image/png;base64,${pair.after.png.toString('base64')}` : null,
-      difference: `data:image/png;base64,${pair.difference.toString('base64')}`,
+      before: embedCaptures && pair.before ? `data:image/png;base64,${pair.before.png.toString('base64')}` : null,
+      after: embedCaptures && pair.after ? `data:image/png;base64,${pair.after.png.toString('base64')}` : null,
+      difference: pngSummary ? null : `data:image/png;base64,${pair.difference.toString('base64')}`,
     });
   }
   if (!directory) return comparison;
@@ -224,7 +228,7 @@ async function writePair(output, pair, thresholds, reviewImages) {
 }
 
 /** Exact ordinary frames and evidence-backed structural part comparisons. */
-export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock, session, onReview, readSystemTheme = systemTheme, renderSheet = renderReviewSheet, sheetTheme, reviewOnly = false } = {}) {
+export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock, session, onReview, readSystemTheme = systemTheme, renderSheet = renderReviewSheet, sheetTheme, reviewFormat } = {}) {
   const started = performance.now(), scale = Number(options.scale ?? 2);
   if (!Number.isFinite(scale) || scale <= 0) throw new CliError('USAGE_INVALID', 'Invalid --scale; use a positive number.');
   const themes = resolveThemes(options.theme, readSystemTheme);
@@ -234,9 +238,9 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
   if (options.impacted && !session) {
     return withImpacted(config, args, options, 'diff', selected =>
       diff(config, args, options, { launchBrowser, prepareInputs, log, clock, session: selected,
-        readSystemTheme, renderSheet, sheetTheme, onReview, reviewOnly }));
+        readSystemTheme, renderSheet, sheetTheme, onReview, reviewFormat }));
   }
-  const output = reviewOnly ? null : path.resolve(config.root, options['out-dir'] ?? path.join(config.output, 'diff'));
+  const output = reviewFormat ? null : path.resolve(config.root, options['out-dir'] ?? path.join(config.output, 'diff'));
   const timings = { prepareMs: 0, buildMs: 0, captureMs: 0, compareMs: 0, writeMs: 0, totalMs: 0 };
   const warnings = [], completed = [], reviewImages = new Map();
   const hiddenMoveReasons = new Set(), pendingMoveComparisons = new Map();
@@ -333,7 +337,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
           }
           return pairs.filter(item => themes.includes(item.theme));
         });
-        const rows = await phase('writeMs', selected, pair => writePair(output, pair, thresholds, reviewImages));
+        const rows = await phase('writeMs', selected, pair => writePair(output, pair, thresholds, reviewImages, reviewFormat));
         for (const row of rows) {
           context?.comparisons.set(comparisonIdentity(row, row.theme), row);
           if (supportKeys.has(frameIdentity(row))) { data.support.push(row); data.summary.supportComparisons++; }

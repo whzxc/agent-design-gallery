@@ -580,12 +580,12 @@ review page. `reportPath:null` and `indexPath:null` mean the manifest/review wri
 ### Review
 
 ```sh
-adg review --base=<rev> [--theme=system|light|dark] [--out=<file.html>] [--viewer-url=<project-url>] [--exact] --json
+adg review --base=<rev> [--format=html|png] [--theme=system|light|dark] [--out=<file>] [--viewer-url=<project-url>] [--exact] --json
 ```
 
-`review` writes a single complete standalone HTML document and exits 0 whether or not changes were found. Its output is regenerated from the current working tree. The default path is `<configured output>/review.html`; explicit relative paths resolve from the project root. Frame links point to the registered hub or an explicit viewer URL. Access information from that URL is excluded from the artifact.
+`review` writes one artifact from the current working tree and exits 0 for a complete review, including an empty review. The default format is `html` at `<configured output>/review.html`. Select `png` to write a 2× summary at `<configured output>/review.png`. Explicit relative paths resolve from the project root, and the extension must match the format. HTML frame links point to the registered hub or an explicit viewer URL. Access information from that URL is excluded from the artifact.
 
-The `data` object contains `path`, resolved `theme`, `base: { rev, sha }`, `current: { kind, head }`, `counts: { added, removed, moved, changed, direct, inherited }`, `groups`, `mode` (`hybrid` or `exact`), `structureMatches`, `pixelComparisons`, `complete`, `failures`, `bytes` and `generationMs`. `groups` uses the diff grouping schema. The hybrid pass may skip frames with equal supported observations; `--exact` skips only the impact-proven frames. On source build failure, exit 2 includes the path to the partial HTML and `failures: [{ source, side, code, message }]`. See [review handoff](design-toolkit.md#review-handoff).
+The `data` object contains `path`, `format`, resolved `theme`, `base: { rev, sha }`, `current: { kind, head }`, `counts: { added, removed, moved, changed, direct, inherited }`, `groups`, `mode` (`hybrid` or `exact`), `structureMatches`, `pixelComparisons`, `complete`, `failures`, `bytes` and `generationMs`. `counts` and `groups` describe the comparison independently of the number of frames pictured in the PNG. `groups` uses the diff grouping schema. The hybrid pass may skip frames with equal supported observations; `--exact` skips only the impact-proven frames. On source build failure, exit 2 includes the path to the partial artifact and `failures: [{ source, side, code, message }]`. See [review handoff](design-toolkit.md#review-handoff).
 
 ### Owner
 
@@ -1543,8 +1543,9 @@ with `thread: null` after removing a thread. `create` and `move` accept `anchor`
 to light. Default diff comparison coverage is both themes. An impacted diff
 writes `review-sheet.png` beside `index.html` and reports its absolute path and
 resolved theme in `data.review.sheet`. The sheet uses the system theme or the
-selected single theme and includes up to 12 image cells for added, changed and
-removed frames. Source build failures leave partial artifacts with `complete: false`.
+selected single theme and includes up to 12 image cards for added and changed
+frames, plus lists of removed and moved frames. Source build failures leave partial
+artifacts with `complete: false`.
 
 ### Chapter warnings
 

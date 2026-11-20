@@ -48,9 +48,10 @@ Path links locate a selection within its design hierarchy. Query links open an i
 
 ```sh
 adg review --base=<rev> --json
+adg review --base=<rev> --format=png --json
 ```
 
-Choose the task's starting commit and share the HTML at `data.path`. The file opens offline, renders the frames on demand, and supports enlargement and frame links to the project's ADG boards. The current system theme is the default. Use `--viewer-url` when the project is served by a different hub, or `--exact` to compare every frame scheduled by impact analysis. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
+Choose the task's starting commit and share the artifact at `data.path`. The default HTML opens offline and supports enlargement and board links. Use PNG for a static summary in clients such as Antigravity. The current system theme is the default. Use `--viewer-url` to point HTML links at a different hub, or `--exact` to compare every frame scheduled by impact analysis. See the [review handoff workflow](docs/design-toolkit.md#review-handoff).
 
 Every command accepts `--json`: finite commands return one versioned envelope, while foreground `open`/`serve` stream NDJSON events. `render` PNGs are in `data.captures`, with CSS and PNG pixel dimensions. See the [agent CLI interface](docs/agent-interface.md) for schemas, exits and recovery actions.
 
@@ -257,7 +258,7 @@ The LaunchAgent `org.agent-design-gallery.hub` starts the resident hub at login 
 
 ### Review handoff
 
-`adg review` compares the resolved Git base against the current working tree and writes one HTML file. Frames are grouped by direct and inherited change. Each inherited group starts with the median-area representative and its outliers, and expands to show every member. Before and After are rendered as native document content; the Difference pane shows the pixel diff. Click a preview to enlarge it or a frame title to open its source on a registered ADG board.
+`adg review` compares the resolved Git base against the current working tree and writes one artifact. In HTML, frames are grouped by direct and inherited change. Each inherited group starts with the median-area representative and its outliers, and expands to show every member. Before and After are rendered as native document content; the Difference pane shows the pixel diff. Click a preview to enlarge it or a frame title to open its source on a registered ADG board. With `--format=png`, the artifact is a static summary with up to 12 image cards and an omitted-frame count when applicable.
 
 The default hybrid pass uses equal rendered structure to skip screenshots for supported frames, and runs the pixel comparison for the rest. Use `adg review --exact` when pixel-equivalent review coverage is required. `adg diff` exposes exact comparison artifacts and verdicts for automation.
 

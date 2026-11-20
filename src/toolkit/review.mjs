@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import path from 'node:path';
 import { CliError } from '../cli-output.mjs';
@@ -10,9 +10,10 @@ import { launch, loadFrame } from './browser.mjs';
 import { diff } from './diff.mjs';
 import { installFramePrimitives } from './frame-primitives.mjs';
 import { impactRowKey, withImpacted } from './impact-selection.mjs';
-import { readGroups } from './project.mjs';
+import { readGroups, relative } from './project.mjs';
 import { reviewDocument } from './review-document.mjs';
 import { observeFrame } from './review-observation.mjs';
+import { renderReviewSheet } from './review-sheet.mjs';
 import { compileSpecimens } from './review-specimens.mjs';
 import { resolveThemes } from './theme.mjs';
 
@@ -82,32 +83,7 @@ async function observeUnchanged(session, theme) {
   }
 }
 
-/** Generate a standalone, single-theme review without starting a viewer. */
-export async function review(config, values, { log = console.log } = {}) {
-  const started = performance.now();
-  const [theme] = resolveThemes(values.theme ?? 'system');
-  const destination = path.resolve(config.root, values.out ?? path.join(config.output, 'review.html'));
-  const projectURL = values['viewer-url'] ?? await hubProjectURL(config.root);
-  const viewer = projectURL ? previewURL(projectURL, previewTarget({})) : null;
-  if (viewer) viewer.search = '';
-  const locate = sourceLocator(config, viewer);
-  const options = { base: values.base, theme, impacted: true, json: true };
-  let model, built, skipped;
-  const { data, warnings } = await withImpacted(config, [], options, 'diff', async session => {
-    skipped = values.exact ? new Set() : await observeUnchanged(session, theme);
-    const buildFrames = session.diffInputs.buildFrames, scheduled = session.scheduled;
-    session.diffInputs.buildFrames = async options => (built = await buildFrames(options));
-    session.scheduled = (row, theme) => scheduled(row, theme) && !skipped.has(impactRowKey(row, theme));
-    try {
-      return await diff(config, [], options, { session, reviewOnly: true, onReview: value => { model = value; } });
-    } catch (error) {
-      if (error.code !== 'DIFF_FAILED' && !error.partialSourceFailures) throw error;
-      return { data: error.data, warnings: error.warnings };
-    } finally {
-      session.scheduled = scheduled;
-    }
-  });
-
+function buildHtmlReview(model, data, built, theme, locate) {
   const { compileFrame, assets } = compileSpecimens({ built, theme });
   const comparisons = new Map(data.comparisons.filter(row => row.theme === theme).map(row => [identity(row), row]));
   const cards = [...model.sections.added, ...model.sections.changed].map((entry, index) => {
@@ -122,18 +98,66 @@ export async function review(config, values, { log = console.log } = {}) {
   const report = { title: model.label, theme, base: model.base.sha, head: model.current.head, counts: model.counts, cards,
     groups: data.review.groups, removed: model.sections.removed.map(entry => ({ ...entry, origin: locate(entry, true) })),
     moved: model.movePairs.map(({ before, after }) => ({ before: locate(before, true), after: locate(after) })), failures: model.failures };
-  const html = reviewDocument(report, assets());
+  return reviewDocument(report, assets());
+}
+
+/** Generate a standalone, single-theme review without starting a viewer. */
+export async function review(config, values, { log = console.log } = {}) {
+  const started = performance.now();
+  const format = values.format ?? 'html';
+  const [theme] = resolveThemes(values.theme ?? 'system');
+  const destination = path.resolve(config.root, values.out ?? path.join(config.output, `review.${format}`));
+  let locate;
+  if (format === 'html') {
+    const projectURL = values['viewer-url'] ?? await hubProjectURL(config.root);
+    const viewer = projectURL ? previewURL(projectURL, previewTarget({})) : null;
+    if (viewer) viewer.search = '';
+    locate = sourceLocator(config, viewer);
+  }
+  const options = { base: values.base, theme, impacted: true, json: true };
+  let model, built, skipped, baseConfig;
+  const { data, warnings } = await withImpacted(config, [], options, 'diff', async session => {
+    skipped = values.exact ? new Set() : await observeUnchanged(session, theme);
+    const scheduled = session.scheduled;
+    if (format === 'html') {
+      const buildFrames = session.diffInputs.buildFrames;
+      session.diffInputs.buildFrames = async options => (built = await buildFrames(options));
+    }
+    baseConfig = session.diffInputs.before.config;
+    session.scheduled = (row, theme) => scheduled(row, theme) && !skipped.has(impactRowKey(row, theme));
+    try {
+      return await diff(config, [], options, { session, reviewFormat: format, onReview: value => { model = value; } });
+    } catch (error) {
+      if (error.code !== 'DIFF_FAILED' && !error.partialSourceFailures) throw error;
+      return { data: error.data, warnings: error.warnings };
+    } finally {
+      session.scheduled = scheduled;
+    }
+  });
+
   const temporary = `${destination}.${randomUUID()}.tmp`;
   await mkdir(path.dirname(destination), { recursive: true });
+  let bytes;
   try {
-    await writeFile(temporary, html);
+    if (format === 'png') {
+      const browser = await launch();
+      try {
+        const designDirs = { before: relative(baseConfig, baseConfig.design), after: relative(config, config.design) };
+        await renderReviewSheet(browser, model, theme, temporary, data.comparisons, designDirs);
+      } finally {
+        await browser.close();
+      }
+    } else {
+      await writeFile(temporary, buildHtmlReview(model, data, built, theme, locate));
+    }
+    ({ size: bytes } = await stat(temporary));
     await rename(temporary, destination);
   } finally {
     await rm(temporary, { force: true });
   }
-  const result = { path: destination, base: model.base, current: model.current, theme, counts: model.counts, groups: data.review.groups,
+  const result = { path: destination, format, base: model.base, current: model.current, theme, counts: model.counts, groups: data.review.groups,
     mode: values.exact ? 'exact' : 'hybrid', structureMatches: skipped.size, pixelComparisons: data.summary.comparisons,
-    complete: model.complete, failures: model.failures, bytes: Buffer.byteLength(html), generationMs: performance.now() - started };
+    complete: model.complete, failures: model.failures, bytes, generationMs: performance.now() - started };
   if (!values.json) log(`${destination}\n${result.counts.added} added, ${result.counts.changed} changed, ${result.counts.removed} removed, ${result.counts.moved} moved.`);
   if (!result.complete) throw new CliError('SOURCE_BUILD_FAILED', 'Review contains source build failures.', { data: result, warnings });
   return { data: result, warnings };
