@@ -10,7 +10,14 @@
   {
     "title": "Today",
     "subjects": ["Add an empty search state", "Adjust menu elevation"],
-    "globalCauses": ["adg.config.mjs", "bun.lock"],
+    "globalCauses": [
+      "adg.config.mjs",
+      "package.json",
+      "bun.lock",
+      "design/fixtures/recent-updates.json",
+      "fixtures/viewer.mjs",
+      "src/toolkit/recent-structure.mjs"
+    ],
     "rows": [
       {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty", "status": "added"},
       {"source": "design/modules/project-switcher.tsx", "frame": "project-picker", "status": "changed", "causes": ["design/tokens.css"]},

@@ -31,7 +31,7 @@ declared sizes; board view changes their placement and the chrome around them, n
 
 ### Playable
 
-The prototype map groups frames by connected transition edges and places them in columns from each flow's start. Arrows name their triggers, including return paths and multiple gestures between the same endpoints. **Play flow** starts at the marked frame. The project's motion graph supplies the start and any available flow label and ID. If the current scope excludes the start, the visible edges determine the entry frame.
+The prototype map groups frames by connected transition edges and places them in columns from each flow's start. Arrows name their triggers. Return gestures each have their own lane and entry point on the target frame. **Play flow** starts at the marked frame. The project's motion graph supplies the start and any available flow label and ID. If the current scope excludes the start, the visible edges determine the entry frame.
 
 Hover a playable specimen or select it to reveal Play at its top-right. The icon scales from 20 to 32 screen pixels and disappears at thumbnail sizes. Press **P** to play the selected frame. Exiting playback restores focus to the invoking control. Project discovery caches compact edge summaries per sidecar, and the watcher updates changed owners. Static browsing and the map reuse this index. Opening the player loads a scene.
 
@@ -39,7 +39,7 @@ Hover a playable specimen or select it to reveal Play at its top-right. The icon
 
 **This week** groups frames under Uncommitted, Today and Earlier this week. Weeks start Monday at midnight in the viewer's local time zone. Uncommitted compares HEAD to the working tree, including untracked inputs. Committed periods represent net changes along first-parent history by committer time.
 
-Each period groups its previews by source. Added and changed frames show **New** or **Edited**. Moved frames show their former path and use the current specimen. Shared component, fixture, token and CSS inputs appear as collapsed groups with counts. Expanding a group shows its previews with **Affected by shared input** badges. A period header lists global config or lockfile changes once. Removed frames appear as a text list.
+Each period groups its previews by source. Added and changed frames show **New** or **Edited**. Moved frames show their former path and use the current specimen. Shared component, fixture, token and CSS inputs appear as collapsed groups with counts. Expanding a group shows its previews with **Affected by shared input** badges. A period header summarizes global changes with a file count and up to two named causes. Expand the summary for the files grouped by directory. Removed frames appear as a text list.
 
 **Visual changes** runs the two-endpoint, two-theme review comparison for the selected period on request. The board shows progress and a cancel control. Verdicts annotate the frame cards, including visually unchanged results. An incomplete comparison leaves missing verdicts unknown. Leaving the board or changing ranges cancels pending work. The worker materializes Git objects in private hub cache directories and cleans up after completion or cancellation.
 

@@ -151,32 +151,36 @@ const boardAction = 'inline-flex h-(--control-size) items-center gap-[6px] round
 const sourceStyle = 'font-mono text-meta';
 
 function PlayableBoard() {
-  const cards = [['project-picker', 26, 86], ['switcher-open', 476, 86], ['switcher-empty', 926, 86], ['project-picker-instance', 926, 340]] as const;
+  const cards = [['project-picker', 48, 281], ['switcher-open', 498, 281], ['switcher-empty', 948, 154], ['project-picker-instance', 948, 408]] as const;
+  const routes = [
+    { d: 'M1196 212H1210V140H484V347H498', x: 847, y: 136, label: 'Click clear search' },
+    { d: 'M746 331H760V112H34V331H48', x: 397, y: 108, label: 'Press Esc' },
+    { d: 'M746 347H768V84H26V347H48', x: 397, y: 80, label: 'Click picker' },
+    { d: 'M1196 228H1218V56H18V363H48', x: 618, y: 52, label: 'Press Esc' },
+    { d: 'M1196 244H1226V28H10V379H48', x: 618, y: 24, label: 'Click picker' },
+    { d: 'M296 355C397 355,397 363,498 363', x: 397, y: 349, label: 'Click picker · Press ↓ · Press ↑' },
+    { d: 'M746 363C847 363,847 228,948 228', x: 847, y: 285.5, label: 'Type Nova' },
+    { d: 'M746 379C847 379,847 482,948 482', x: 847, y: 420.5, label: 'Click live instance' },
+  ];
   return <section class={sectionStyle}>
     <header class="flex items-center justify-between">
       <h2 class="text-title font-semibold">project-switcher</h2>
       <button type="button" class={boardAction}><Icon name="play" size={14} />Play flow</button>
     </header>
-    <div class="relative mt-3 h-[578px] overflow-hidden">
-      <svg aria-hidden="true" data-free class="absolute inset-0" width={1234} height={578}>
+    <div class="relative mt-3 h-[646px] overflow-hidden">
+      <svg aria-hidden="true" data-free class="absolute inset-0" width={1236} height={646}>
         <defs><marker id="board-flow-arrow" viewBox="0 0 8 8" refX={7} refY={4} markerWidth={7} markerHeight={7} orient="auto">
           <path d="M0 0L8 4L0 8Z" class="fill-text-tertiary" />
         </marker></defs>
-        {['M274 168H476', 'M724 168H926', 'M724 168C825 168 825 422 926 422', 'M724 168H748V50H11V168H26', 'M1174 168H1198V14H457V168H476'].map(d =>
+        {routes.map(({ d }) =>
           <path key={d} d={d} marker-end="url(#board-flow-arrow)" stroke-width={1.25} class="fill-none stroke-text-tertiary" />)}
       </svg>
       {cards.map(([name, x, y], i) => <div data-free key={name} class="absolute w-[248px]" style={{ left: x, top: y }}>
         <BoardFrameCard name={name} badge={i === 0 ? 'Start' : undefined} source />
       </div>)}
-      {[
-        { x: 375, y: 150, title: 'Click picker · Press ↓ · Press ↑' },
-        { x: 825, y: 150, title: 'Type Nova' },
-        { x: 825, y: 281, title: 'Click first instance' },
-        { x: 380, y: 46, title: 'Press Esc · Click picker' },
-        { x: 827, y: 29, title: 'Click clear search' },
-      ].map(({ x, y, title }) => <span data-free key={title}
-        class="absolute -translate-x-1/2 -translate-y-full rounded-field bg-surface-sunken px-[6px] py-[3px] text-caption"
-        style={{ left: x, top: y }}>{title}</span>)}
+      {routes.map(({ d, x, y, label }) => <span data-free key={d}
+        class="absolute -translate-x-1/2 -translate-y-full rounded-field bg-surface-sunken px-[6px] py-[3px] text-caption whitespace-nowrap"
+        style={{ left: x, top: y }}>{label}</span>)}
     </div>
   </section>;
 }
@@ -186,6 +190,34 @@ type HistoryPeriod = {
   globalCauses?: string[];
   rows: { source: string; frame: string; status: string; causes?: string[] }[];
 };
+
+function GlobalInputs({ files, open }: { files: string[]; open: boolean }) {
+  const named = files.slice(0, 2);
+  const remaining = files.length - named.length;
+  const directories = new Map<string, string[]>();
+  for (const file of [...files].sort()) {
+    const parts = file.split('/');
+    const name = parts.pop()!;
+    const directory = parts.join('/');
+    directories.set(directory, [...(directories.get(directory) ?? []), name]);
+  }
+  return <details open={open} class="mt-[5px]">
+    <summary class="flex items-center text-body whitespace-nowrap text-text-secondary">
+      <Icon name={open ? 'chevron-down' : 'chevron-right'} size={11} class="mr-1" />
+      <span>Global inputs changed: {files.length} files</span>
+      <span class="ml-[.3em] truncate"> ({named.join(', ')}</span>
+      <span>{remaining ? ', +' + remaining : ''})</span>
+    </summary>
+    {open && <div class="mt-[9px] grid grid-cols-4 gap-x-5 gap-y-3">
+      {[...directories].map(([directory, names]) => <section key={directory || '.'}>
+        <h3 class="font-mono text-meta text-text-secondary">{directory || 'Project root'}</h3>
+        <ul class="mt-[3px] list-disc pl-[18px] text-meta text-text-secondary">
+          {names.map(name => <li key={name}>{name}</li>)}
+        </ul>
+      </section>)}
+    </div>}
+  </details>;
+}
 
 function RecentBoard({ sinceVisit }: { sinceVisit: boolean }) {
   const example: HistoryPeriod[] = recentPeriods.filter(period => !sinceVisit || period.title !== 'Earlier this week');
@@ -199,10 +231,10 @@ function RecentBoard({ sinceVisit }: { sinceVisit: boolean }) {
       const sources = [...new Set(period.rows.filter(row => row.status !== 'removed').map(row => row.source))];
       const removed = period.rows.filter(row => row.status === 'removed');
       return <section key={period.title} class={sectionStyle}>
-        <header class="flex items-center justify-between">
-          <div>
+        <header class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
             <h2 class="text-title font-semibold">{period.title}</h2>
-            {period.globalCauses && <p class="mt-[5px] text-body text-text-secondary">Global inputs changed · {period.globalCauses.join(', ')}</p>}
+            {period.globalCauses && <GlobalInputs files={period.globalCauses} open={sinceVisit} />}
           </div>
           <button type="button" class={boardAction}>Visual changes</button>
         </header>

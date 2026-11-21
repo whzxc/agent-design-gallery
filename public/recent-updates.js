@@ -246,7 +246,7 @@ export function createHistoryFilter(update) {
         const heading = node('div');
         heading.append(node('h2', '', period.title));
         if (period.globalCauses?.length)
-          heading.append(node('p', 'recent-global view-board-status', 'Global inputs changed · ' + period.globalCauses.join(', ')));
+          heading.append(globalInputs(period.globalCauses, expanded, JSON.stringify([periodKey, 'global'])));
         const visual = visualStates.get(period);
         const action = node('button', 'view-board-action', verifying?.period === period ? 'Cancel comparison' : 'Visual changes');
         action.setAttribute('aria-label', action.textContent + ' · ' + period.title);
@@ -357,6 +357,58 @@ export function createHistoryFilter(update) {
       if (focus) container.querySelector('[data-recent-focus="' + CSS.escape(focus) + '"]')?.focus({ preventScroll: true });
     }
   };
+}
+
+function causePriority(file) {
+  const name = file.split('/').at(-1);
+  if (/^adg\.config\.[cm]?[jt]s$/.test(name)) return 0;
+  if (name === 'package.json') return 1;
+  if (/^(?:package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?)$/.test(name)) return 2;
+  return file.includes('/') ? 4 : 3;
+}
+
+function globalInputs(causes, expanded, id) {
+  const files = [...new Set(causes)];
+  const named = [...files].sort((a, b) => causePriority(a) - causePriority(b) ||
+    Number(a.includes('/')) - Number(b.includes('/')) || a.localeCompare(b)).slice(0, 2);
+  const remaining = files.length - named.length;
+  const details = node('details', 'recent-global');
+  const summary = node('summary', 'view-board-status');
+  summary.dataset.recentFocus = id;
+  summary.append(
+    node('span', '', 'Global inputs changed: ' + files.length + (files.length === 1 ? ' file' : ' files')),
+    node('span', 'recent-global-sample', ' (' + named.join(', ')),
+    node('span', '', (remaining ? ', +' + remaining : '') + ')')
+  );
+  details.open = expanded.has(id);
+  details.append(summary);
+  const showList = () => {
+    if (!details.open) {
+      expanded.delete(id);
+      return;
+    }
+    expanded.add(id);
+    if (details.children.length > 1) return;
+    const directories = new Map();
+    for (const file of files.sort((a, b) => a.localeCompare(b))) {
+      const separator = file.lastIndexOf('/');
+      const directory = separator < 0 ? '' : file.slice(0, separator);
+      if (!directories.has(directory)) directories.set(directory, []);
+      directories.get(directory).push(file.slice(separator + 1));
+    }
+    const groups = node('div', 'recent-global-list');
+    for (const directory of [...directories.keys()].sort((a, b) => a.localeCompare(b))) {
+      const group = node('section');
+      const list = node('ul');
+      for (const file of directories.get(directory)) list.append(node('li', '', file));
+      group.append(node('h3', 'view-source-name', directory || 'Project root'), list);
+      groups.append(group);
+    }
+    details.append(groups);
+  };
+  if (details.open) showList();
+  details.ontoggle = showList;
+  return details;
 }
 
 function identity({ source, frame }) {

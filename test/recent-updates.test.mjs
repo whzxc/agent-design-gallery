@@ -131,6 +131,53 @@ test('contract: directory visit checkpoints survive reload and remain independen
   assert.equal((await visit(last)).baseline,'b'.repeat(40));
 });
 
+test('contract: both history ranges bound the global input summary and disclose all files by directory', async t => {
+  const stateDirectory = await mkdtemp(path.join(tmpdir(), 'adg-global-inputs-'));
+  const directory = path.resolve('fixtures/arc-sample/design');
+  const server = await startServer({ directory, stateDirectory, readOnly: true });
+  const browser = await launch();
+  t.after(async () => { await browser.close(); await server.close(); await rm(stateDirectory, { recursive: true, force: true }); });
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const head = 'a'.repeat(40), baseline = 'b'.repeat(40), branch = 'fixture';
+  const directories = ['src/toolkit', 'fixtures'];
+  const globalCauses = [
+    ...directories.flatMap(dir => Array.from({ length: 29 }, (_, i) => `${dir}/input-${i}.mjs`)),
+    'package-lock.json', 'README.md', 'package.json', 'adg.config.mjs'
+  ];
+  await page.addInitScript(({ directory, branch, baseline }) => {
+    localStorage.setItem('adg-visit:' + JSON.stringify([directory, branch]), JSON.stringify({ started: 0, head: baseline }));
+  }, { directory, branch, baseline });
+  await page.route('**/api/recent-visit', route => route.fulfill({ json: { head, branch } }));
+  await page.route('**/api/recent-state', route => route.fulfill({ json: { head, branch, generation: 'fixture' } }));
+  const requests = [];
+  await page.route('**/api/recent-updates?*', route => {
+    requests.push(new URL(route.request().url()).searchParams.get('since'));
+    const periods = [{ title: 'Today', head, base: baseline, complete: true, rows: [], globalCauses }];
+    return route.fulfill({ json: { head, branch, available: true, complete: true, generation: 'fixture', periods } });
+  });
+
+  await page.goto(new URL('view/all?view=recent', server.url).href);
+  const details = page.locator('.recent-global');
+  const summary = details.locator('summary');
+  for (const since of [null, baseline]) {
+    if (since) await page.getByRole('button', { name: 'Since my last visit' }).click();
+    await summary.waitFor();
+    assert.equal(requests.at(-1), since);
+    assert.equal(await details.getAttribute('open'), null);
+    const text = await summary.textContent();
+    const match = /^Global inputs changed: 62 files \((.+), \+60\)$/.exec(text);
+    assert.ok(match, text);
+    assert.deepEqual(match[1].split(', '), ['adg.config.mjs', 'package.json']);
+    assert.equal(await details.getByRole('listitem').count(), 0);
+    await summary.press('Enter');
+    await details.getByRole('heading', { name: 'src/toolkit', exact: true }).waitFor();
+    assert.deepEqual(await details.getByRole('heading').allTextContents(), ['Project root', 'fixtures', 'src/toolkit']);
+    assert.equal(await details.getByRole('listitem').count(), globalCauses.length);
+    await summary.press('Enter');
+    assert.equal(await details.getByRole('listitem').count(), 0);
+  }
+});
+
 test('lifecycle: cancelling an open comparison releases its revision cache and preserves board service',async t=>{
   const stateDirectory=await mkdtemp(path.join(tmpdir(),'adg-cancel-'));
   const server=await startServer({directory:path.resolve('design'),stateDirectory,readOnly:true});

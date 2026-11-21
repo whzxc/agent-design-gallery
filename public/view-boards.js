@@ -82,8 +82,39 @@ function triggerLabel({ trigger, label }) {
   return name ? action + ' ' + name : label || action;
 }
 
-const cardWidth = 248, cardHeight = 230, columnGap = 202, rowGap = 24;
-const stepX = cardWidth + columnGap, stepY = cardHeight + rowGap;
+const cardWidth = 248, cardHeight = 230, rowGap = 24;
+const stepY = cardHeight + rowGap, bendStep = 8;
+
+function groupLinks(links, endpoint) {
+  const groups = new Map();
+  for (const link of links) {
+    const key = endpoint(link);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(link);
+  }
+  return groups;
+}
+
+// Order the side ports and elbows together so neighboring routes do not run
+// along the same card edge or share an arrowhead.
+function placePorts(links, positions, linksByColumn, side) {
+  const outgoing = side === 'from';
+  for (const [id, endpoints] of groupLinks(links, link => link[side])) {
+    const { y } = positions.get(id);
+    const gap = Math.min(16, 110 / Math.max(1, endpoints.length - 1));
+    endpoints.forEach((link, i) => {
+      link[side + 'Y'] = y + 74 + gap * (i - (endpoints.length - 1) / 2);
+    });
+  }
+  for (const endpoints of linksByColumn.values()) {
+    endpoints.sort((a, b) => a[side + 'Y'] - b[side + 'Y']);
+    endpoints.forEach((link, i) => {
+      const { x } = positions.get(link[side]);
+      const inset = 14 + i * bendStep;
+      link[side + 'Bend'] = x + (outgoing ? cardWidth + inset : -inset);
+    });
+  }
+}
 
 export function renderPrototype(container, flows, frames, { card, play, title }) {
   const groups = flows.map(flow => {
@@ -105,21 +136,34 @@ export function renderPrototype(container, flows, frames, { card, play, title })
       if (!columns.has(rank)) columns.set(rank, []);
       columns.get(rank).push(id);
     }
-    const pairs = new Map();
+    const forward = new Map(), tracks = [];
     for (const link of flow.links) {
+      const label = triggerLabel(link);
+      const adjacent = flow.ranks.get(link.to) === flow.ranks.get(link.from) + 1;
+      if (!adjacent) {
+        tracks.push({ from: link.from, to: link.to, id: link.id, label, lane: tracks.length });
+        continue;
+      }
       const pair = frameKey(link.from, link.to);
-      if (!pairs.has(pair)) pairs.set(pair, { from: link.from, to: link.to, labels: new Set() });
-      pairs.get(pair).labels.add(triggerLabel(link));
+      if (!forward.has(pair)) forward.set(pair, { from: link.from, to: link.to, labels: new Set() });
+      forward.get(pair).labels.add(label);
     }
+    const connections = [...tracks, ...forward.values()];
+    const fromColumns = groupLinks(tracks, link => flow.ranks.get(link.from));
+    const toColumns = groupLinks(tracks, link => flow.ranks.get(link.to));
+    const maxBends = groups => Math.max(0, ...[...groups.values()].map(links => links.length));
+    const bendRoom = 16 + Math.max(maxBends(fromColumns), maxBends(toColumns)) * bendStep;
+    const columnGap = Math.max(202, 2 * bendRoom + 24);
+    const stepX = cardWidth + columnGap;
+    const firstColumn = Math.max(26, 16 + (toColumns.get(0)?.length ?? 0) * bendStep);
+    const lastColumn = Math.max(26, 16 + (fromColumns.get(columns.size - 1)?.length ?? 0) * bendStep);
     const scroll = boardElement('div', 'prototype-scroll');
     const graph = boardElement('div', 'prototype-map');
     const positions = new Map();
-    const adjacent = link => flow.ranks.get(link.to) === flow.ranks.get(link.from) + 1;
     const columnsHeight = Math.max(...[...columns.values()].map(items => items.length)) * stepY - rowGap;
-    const tracks = [...pairs.values()].filter(link => !adjacent(link));
-    const trackGap = 36;
+    const trackGap = 28;
     const offset = tracks.length * trackGap + 14;
-    const graphWidth = (columns.size - 1) * stepX + cardWidth + 83;
+    const graphWidth = firstColumn + (columns.size - 1) * stepX + cardWidth + lastColumn;
     const graphHeight = columnsHeight + offset + 8;
     graph.style.cssText = `width:${graphWidth}px;height:${graphHeight}px`;
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -131,7 +175,7 @@ export function renderPrototype(container, flows, frames, { card, play, title })
     graph.append(svg);
     for (const [rank, items] of columns) {
       items.forEach((id, row) => {
-        const x = 26 + rank * stepX;
+        const x = firstColumn + rank * stepX;
         const y = offset + (columnsHeight - (items.length * stepY - rowGap)) / 2 + row * stepY;
         positions.set(id, { x, y });
         const node = card(frames.get(id), { badge: id === flow.start ? 'Start' : '' });
@@ -140,27 +184,30 @@ export function renderPrototype(container, flows, frames, { card, play, title })
         graph.append(node);
       });
     }
-    for (const link of pairs.values()) {
-      const a = positions.get(link.from), b = positions.get(link.to);
-      const forward = adjacent(link);
-      const x = a.x + cardWidth, y = a.y + 82;
-      const endY = b.y + 82;
-      const track = forward ? 0 : tracks.indexOf(link);
-      const laneY = offset - (track + 1) * trackGap + 14;
-      const fromX = x + 16 + (track % 5) * 7;
-      const endX = b.x - 15 - (track % 2) * 6;
-      const mid = x + columnGap / 2;
+    placePorts(connections, positions, fromColumns, 'from');
+    placePorts(connections, positions, toColumns, 'to');
+    for (const link of connections) {
+      const x = positions.get(link.from).x + cardWidth;
+      const endX = positions.get(link.to).x;
+      const { fromY: y, toY: endY, fromBend, toBend } = link;
+      const routed = link.lane !== undefined;
+      const laneY = offset - (link.lane + 1) * trackGap + 14;
+      const mid = (x + endX) / 2;
       const arrow = document.createElementNS(svg.namespaceURI, 'path');
-      const path = forward
-        ? `M${x} ${y} C${mid} ${y},${mid} ${endY},${b.x} ${endY}`
-        : `M${x} ${y} H${fromX} V${laneY} H${endX} V${endY} H${b.x}`;
+      const path = routed
+        ? `M${x} ${y} H${fromBend} V${laneY} H${toBend} V${endY} H${endX}`
+        : `M${x} ${y} C${mid} ${y},${mid} ${endY},${endX} ${endY}`;
       arrow.setAttribute('d', path);
       arrow.setAttribute('marker-end', `url(#${marker})`);
+      if (routed) arrow.dataset.edge = link.id;
       svg.append(arrow);
-      const label = boardElement('span', 'prototype-trigger', [...link.labels].filter(Boolean).join(' · '));
-      label.style.left = (forward ? mid : (fromX + endX) / 2) + 'px';
-      label.style.top = (forward ? (y + endY) / 2 - 14 : laneY - 6) + 'px';
-      label.setAttribute('aria-label', frames.get(link.from).part.name + ' to ' + frames.get(link.to).part.name + ' · ' + label.textContent);
+      const text = routed ? link.label : [...link.labels].filter(Boolean).join(' · ');
+      const label = boardElement('span', 'prototype-trigger', text);
+      label.style.left = (routed ? (fromBend + toBend) / 2 : mid) + 'px';
+      label.style.top = (routed ? laneY - 4 : (y + endY) / 2 - 10) + 'px';
+      label.title = text;
+      if (routed) label.dataset.edge = link.id;
+      label.setAttribute('aria-label', frames.get(link.from).part.name + ' to ' + frames.get(link.to).part.name + ' · ' + text);
       graph.append(label);
     }
     scroll.append(graph);

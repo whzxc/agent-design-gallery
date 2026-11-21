@@ -53,6 +53,8 @@ async function readyPlayback(page, name) {
       if (name.endsWith('on-board')) {
         await page.getByRole('button',{name:'Since my last visit'}).click();
         await page.getByRole('heading', { name: 'Today', exact: true }).waitFor();
+        await page.locator('.recent-global summary').evaluate(summary => summary.click());
+        await page.getByRole('heading', { name: 'Project root', exact: true }).waitFor();
         await page.locator('.recent-source').filter({ has: page.getByRole('heading', { name: 'modules/project-switcher.tsx' }) })
           .locator('summary').evaluate(summary => summary.click());
         await page.getByText('Affected by shared input', { exact: true }).waitFor();
