@@ -204,6 +204,110 @@ Never guess between remaining candidates by text, position, DOM index, or a fram
 
 An edge with `unsupported:[{"effect":"topology-spring","reason":"Velocity and spring state depend on the gesture."}]` declares a coverage gap, visible in inspect, check warnings and review. Keep real endpoints, trigger and focus. V1 presents the reason and offers a labeled instant jump for the whole edge in place of timed playback. Unsupported is an effect annotation and leaves asset status intact.
 
+### Motion tokens and patterns
+
+Keep duration and easing tokens in `tokens.css`. Patterns can also reference CSS
+lengths for distance, unitless nonnegative scales, and nonnegative CSS times for
+stagger. A spring named `--motion-spring-<name>` takes two declarations:
+`--motion-spring-<name>-duration` (a positive CSS time) and
+`--motion-spring-<name>-bounce` (0 through 0.8). Aliases and dark overrides use
+the usual token syntax. In frame CSS, use `var(--motion-spring-<name>-duration)`
+and the generated `var(--motion-spring-<name>)` timing function. The CSS curve is
+a sampled `linear()` approximation. Run `adg motion --css` to export the token
+sheet with derived springs, or `adg motion --json` for
+`data.springs.light[name]` and `data.springs.dark[name]`. Each includes
+`{duration, bounce, easing}`. Duration is milliseconds. Divide it by 1000
+when passing the raw duration to Motion's JavaScript spring transition.
+
+The Motion section of the Tokens board includes ten built-in patterns.
+Projects can override them and declare their own in `design/motion-patterns.json`
+(or next to `tokens.css` in the configured design directory).
+
+| Kind | Actions | Built-in patterns |
+| --- | --- | --- |
+| `transition` | `enter`, `exit`, `replace` | `fade`, `slide`, `spring-pop`, `crossfade-replace`, `stagger` |
+| `layout` | `resize`, `reflow`, `avoid` | `expand-collapse`, `size-transition`, `avoid-reflow` |
+| `continuous` | `follow` | `follow` |
+| `ambient` | `loop` | `ambient-loop` |
+
+A pattern has a kebab-case ID, a kind and action, a specimen `effect`, a list
+of affected `properties`, and `parameters`. The specimen effects are `fade`,
+`expand`, `size`, `slide`, `pop`, `crossfade`, `follow`, `avoid`,
+`stagger`, `pulse`, `aurora`, `shimmer` and `spin`. Use the closest
+representative effect for a family of related consumers. Parameters reference
+tokens by CSS custom property name. Supply `duration` and `easing` or a
+`spring` name, plus optional `distance`, `scale`, `stagger` or numeric
+`fromOpacity` (0–1) where applicable. Optional `enter` and `exit`
+objects override those parameters for their direction. Built-in overrides
+inherit unspecified fields and base parameters. The interruption policy is
+`finish` (settle), `retarget` (start from the current value) or `cancel`
+(stop). Reduced motion is `instant` (apply the result without interpolation)
+or `static` (show a resting state).
+
+```json
+{
+  "version": 1,
+  "patterns": {
+    "fade": {
+      "parameters": { "duration": "--motion-base", "easing": "--ease-enter" },
+      "exit": { "duration": "--motion-fast", "easing": "--ease-exit" }
+    },
+    "aurora-border": {
+      "kind": "ambient",
+      "action": "loop",
+      "effect": "aurora",
+      "properties": ["background", "transform"],
+      "parameters": { "duration": "--motion-aurora", "easing": "--adg-motion-linear" },
+      "interrupt": "cancel",
+      "reduced": "static",
+      "frames": [{ "source": "design/components/task-card.tsx", "frame": "task-card-aurora" }],
+      "consumers": [
+        { "file": "ui/task-card.css", "match": "keyframes:task-aurora" },
+        { "file": "ui/task-card.css", "match": "css:.task-card[data-aurora]" },
+        { "file": "ui/TaskCard.tsx", "match": "attribute:data-aurora", "within": "TaskCard" }
+      ]
+    }
+  }
+}
+```
+
+Register code consumers by project-relative `file` and an exact `match`
+from the inventory. For CSS these are `keyframes:<name>` and
+`css:<selector-list>` (serialized selector). For Motion imports they are
+`motion:<property-or-export>`, including `layout`, `animate`,
+`AnimatePresence`, `useSpring` and spring options. Inline JS styles use
+`style:<property>`. Optional links for JSX hooks and Web Animations use
+`attribute:data-…` and `web:animate`. Use `call:spring` for a custom spring method. Narrow a JS/TS match with `within`
+and the enclosing named declaration. Each mapped code location, explicitly
+listed frame, and pattern-backed edge is one place. Open a card's usage
+count for links to those locations. Use `?scope=tokens&section=motion`
+to open the Motion section directly.
+
+A version 1 sidecar edge may replace `duration`, `easing`, `phases`,
+`interrupt` and `reduced` with
+`"pattern": {"id": "fade", "direction": "enter", "targets": [{"anchor": "panel"}]}`.
+The edge still owns its ID, endpoints, trigger and focus. If omitted,
+`direction` uses the pattern's action. Fade entry/exit and crossfade compile to
+opacity tracks. Discrete resize/reflow, slide and spring pop compile to
+matched geometry tracks with authored endpoints. Spring pop uses width and
+height to represent scale. The discrete player supports `finish` with
+`instant` reduction. Follow, live avoidance, stagger and ambient effects
+belong to live specimens and runtime code. Existing handwritten phases
+continue to work.
+
+Whole-project `adg check` scans Git-tracked and nonignored local CSS and
+JS/TS/JSX/TSX source for animation and transition declarations, keyframes
+and Motion library usage. Generated output, dependencies, test sources and
+symlinks are skipped. Static detection covers CSS stylesheets, CSS
+templates and authored inline style declarations. Mappings are checked
+against observed locations. Explicitly declared patterns with zero consumers
+produce a finding. The shared built-ins are available even in projects that
+have yet to adopt them. `check.strictMotion` makes unmapped, unused, and
+unreadable sources errors. By default they are warnings with totals and up
+to 16 examples. Use `adg check --motion-only --motion-details --json` to
+list the complete inventory findings without building frames. A full check
+also evaluates the existing frame and edge rules.
+
 ### ARC layer pilot
 
 | Edge family | Track recipe and outcome |

@@ -3,6 +3,8 @@ import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { availableParallelism } from 'node:os';
 import { motionSummary, motionRows, readMotion } from './motion.mjs';
+import { scanMotion } from './motion-inventory.mjs';
+import { loadMotionPatterns } from './motion-patterns.mjs';
 import { motionEvaluator } from './motion-check.mjs';
 import { sourceMotion } from './motion-css.mjs';
 import { buildSource } from './build.mjs';
@@ -226,6 +228,34 @@ export async function check(config, args = [], options = {}, log = console.log, 
   };
   try {
     const motion = session?.views[1].motion ?? readMotion(config);
+    if (!args.length && !session) {
+      const inventory = scanMotion(config, loadMotionPatterns(config), motion);
+      const issues = options['motion-details'] ? inventory.issues : inventory.issues.slice(0, 16);
+      data.motionPatterns = {
+        animations: inventory.animations, unmapped: inventory.unmapped, unused: inventory.unused,
+        findings: inventory.issues.length, omitted: inventory.issues.length - issues.length,
+      };
+      for (const { source, ...issue } of issues) {
+        if (config.check?.strictMotion) add(issue, path.join(config.root, source));
+        else {
+          const message = source + (issue.line ? ':' + issue.line : '') + ': ' + issue.message;
+          warnings.push({ code: issue.code, message, next: [] });
+          if (!options.json) log('WARNING ' + message);
+        }
+      }
+      if (data.motionPatterns.omitted && !options.json)
+        log(data.motionPatterns.omitted + ' more motion inventory findings. Use --motion-details for all locations.');
+      if (options['motion-only']) {
+        for (const { source, ...finding } of motion.findings) add(finding, path.join(config.root, source));
+        for (const problem of humanProblems) error(problem);
+        data.complete = true;
+        const message = 'Motion inventory: ' + inventory.animations + ' animation sites, ' + inventory.unmapped +
+          ' unmapped, ' + inventory.unused + ' unused patterns.';
+        log(message);
+        if (data.findings.length) throw new CliError('CHECK_FAILED', message, { data, warnings, humanReported: true });
+        return { data, warnings };
+      }
+    }
     const directories = sourceDirectories(config);
     const chapterFiles = listSources(config.design, directories).map(file => path.relative(config.design, file).split(path.sep).join('/'));
     const chapters = chapterWarnings(chapterFiles, readGroups(config.design, directories), directories);

@@ -13,6 +13,7 @@ import { contains, hitSelection, frameBox, exportFrames } from './selection.js';
 import { groupTokens, renderTokenTable, tokenBoardSection } from './token-catalog.js';
 import { readViewRoute, viewURL } from './view-route.js';
 import { createBoardLayer } from './boards.js';
+import { installMotionSpecimens } from './motion-specimens.js';
 import { createArranger } from './arrangement.js';
 const arranger = createArranger();
 window.addEventListener('pagehide',()=>arranger.close());
@@ -56,6 +57,7 @@ const boardLayer = createBoardLayer(viewport, (path, title, button) => {
     else if ($('#error').textContent.startsWith('Cannot copy token name:')) error('');
   },
 });
+installMotionSpecimens($('#board-chrome'));
 function locateFrame(source, frameName) {
   const item = assets.find(a => a.path === source && (a.component || a.shown[0]?.name === frameName));
   const part = item?.parts.find(p => p.name === frameName);
@@ -641,7 +643,7 @@ function renderNav() {
           } else {
             const slug = tokenBoardSection(category);
             const box = slug && boardLayer.tokenSection(slug);
-            if (box) commit(fitView(box, fitArea(width, height, sidebar, false), 24));
+            if (box) commit(fitView(slug === 'motion' ? { ...box, height: Math.min(box.height, 650) } : box, fitArea(width, height, sidebar, false), 24));
             else setTokenList(true);
           }
         }
@@ -653,6 +655,8 @@ function renderNav() {
     addCategory('All tokens', 'layout-grid', data.tokenGroups.reduce((total, group) => total + group.rows.length, 0), null);
     const rule = document.createElement('div'); rule.className = 'rule'; nodes.push(rule);
     for (const {label, glyph, rows} of data.tokenGroups) addCategory(label, glyph, rows.length, label);
+    if (!tokenList && data.motionPatternCount && !data.tokenGroups.some(group => group.label === 'Motion'))
+      addCategory('Motion', 'timer', data.motionPatternCount, 'Motion');
     renderTokenTable($('#token-catalog'), data, tokenCategory, query, copyError => {
       if (copyError) error(`Cannot copy token name: ${copyError.message}`);
       else if ($('#error').textContent.startsWith('Cannot copy token name:')) error('');
@@ -1872,10 +1876,15 @@ function applyTokenManifest(data) {
   canvas.width = canvas.width;
   boardLayer.update([], [], data);
   boardLayer.camera(view, false);
-  boardLayer.tokens(data.tokenBoard, height => {
-    tokenHeight=height;
-    world={x:0,y:0,width:data.tokenBoard.width,height};
-    if (entering) frame(world);
+  boardLayer.tokens(data.tokenBoard, boardHeight => {
+    tokenHeight=boardHeight;
+    world={x:0,y:0,width:data.tokenBoard.width,height:boardHeight};
+    if (entering) {
+      const section = data.fixture?.section ?? new URLSearchParams(location.search).get('section');
+      const box = section === 'motion' && boardLayer.tokenSection(section);
+      if (box) commit(fitView({ ...box, height: Math.min(box.height, 650) }, fitArea(width, height, sidebar, false), 24));
+      else frame(world);
+    }
     requestDraw();
   });
   scopeRequest = data.scope;

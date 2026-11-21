@@ -325,3 +325,35 @@ export default () => [
     </div>
   </Frame>,
 ];
+
+const motionSamples = [
+  { title: 'Fade', kind: 'transition · enter', properties: 'opacity', enter: '220ms', exit: '140ms', size: [52, 34] },
+  { title: 'Expand collapse', kind: 'layout · resize', properties: 'height, opacity', enter: '220ms', exit: '140ms', size: [86, 58] },
+  { title: 'Size transition', kind: 'layout · resize', properties: 'width, height', enter: '220ms', size: [52, 34] },
+] as const;
+
+export function MotionPatternCards() {
+  return (
+    <div class="grid grid-cols-3 gap-6">
+      {motionSamples.map(sample => (
+        <article class="flex flex-col gap-3 rounded-panel border border-border p-5">
+          <h3 class="text-[17px] font-bold">{sample.title}</h3>
+          <p class="text-body text-text-tertiary">{sample.kind}</p>
+          <div class="grid h-[116px] place-items-center rounded-row bg-canvas" aria-hidden="true">
+            <span class="rounded-row bg-text" style={{ width: sample.size[0], height: sample.size[1] }} />
+          </div>
+          <p class="text-body text-text-tertiary">Reduced motion · instant</p>
+          <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-body text-text-tertiary">
+            <dt>Properties</dt><dd>{sample.properties}</dd>
+            <dt>{'exit' in sample ? 'Enter' : 'Parameters'}</dt>
+            <dd>duration <code>--adg-motion-base</code> · {sample.enter}<br />easing <code>--adg-motion-enter</code> · cubic-bezier(.2,.75,.25,1)</dd>
+            {'exit' in sample && <><dt>Exit</dt><dd>duration <code>--adg-motion-fast</code> · {sample.exit}<br />easing <code>--adg-motion-exit</code> · cubic-bezier(.4,0,.8,.35)</dd></>}
+            <dt>Interrupt</dt><dd>finish</dd>
+            <dt>Reduced motion</dt><dd>instant</dd>
+          </dl>
+          <p class="text-body text-text-tertiary">Used in 0 places</p>
+        </article>
+      ))}
+    </div>
+  );
+}

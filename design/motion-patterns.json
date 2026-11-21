@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "patterns": {
+    "busy-spinner": {
+      "kind": "ambient",
+      "action": "loop",
+      "effect": "spin",
+      "properties": ["transform"],
+      "parameters": {"duration": "--motion-spinner", "easing": "--adg-motion-linear"},
+      "interrupt": "cancel",
+      "reduced": "static",
+      "consumers": [
+        {"file": "public/hub.css", "match": "keyframes:hub-spin"},
+        {"file": "public/hub.css", "match": "css:#rescan:disabled[data-loading] .icon,.instance-close[data-loading] .icon"},
+        {"file": "public/switcher.css", "match": "keyframes:switcher-spin"},
+        {"file": "public/switcher.css", "match": "css:.switcher-close[data-loading] .icon"}
+      ]
+    }
+  }
+}

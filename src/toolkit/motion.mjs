@@ -6,6 +6,8 @@ import { jsonLocations } from './json-locations.mjs';
 import { portablePath } from './owner-locators.mjs';
 import { motionFlows } from './motion-flows.mjs';
 import { relative } from './project.mjs';
+import { loadMotionPatterns, patternEdge } from './motion-patterns.mjs';
+import { motionPrimitives } from './motion-primitives.mjs';
 
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fields = (value, allowed) => object(value) && Object.keys(value).every((key) => allowed.includes(key));
@@ -139,6 +141,7 @@ export function readMotion(config, files = motionFiles(config)) {
     declarations = [],
     findings = [],
     ids = new Map();
+  let catalog;
   for (const file of files) {
     const source = relative(config, file),
       owner = source.replace(/\.motion\.json$/, '.tsx');
@@ -189,8 +192,11 @@ export function readMotion(config, files = motionFiles(config)) {
         problems.push(code);
         issue(code, pointer + suffix, message, edge?.id);
       };
-      validateShape(edge, report);
-      const record = { source, owner, edge, pointer, locations, valid: problems.length === 0 };
+      const pattern = edge?.pattern;
+      const resolved = pattern === undefined ? edge : patternEdge(edge, catalog ??= loadMotionPatterns(config), report);
+      if (!problems.length) validateShape(resolved, report);
+      const record = { source, owner, edge: resolved, pointer, locations, valid: problems.length === 0,
+        ...(pattern === undefined ? {} : { pattern }) };
       records.push(record);
       if (!edgeId(edge?.id)) return;
       if (!ids.has(edge.id)) ids.set(edge.id, []);
@@ -234,7 +240,12 @@ function validEasing(raw) {
   return !steps || Number(steps[1]) >= (steps[2]?.toLowerCase() === 'jump-none' ? 2 : 1);
 }
 
+const expandedTokens = new WeakMap();
 export function resolveMotionToken(tokens, theme, name, kind) {
+  if (typeof name === 'string' && /^(--adg-motion-|--motion-spring-)/.test(name)) {
+    if (!expandedTokens.has(tokens)) expandedTokens.set(tokens, motionPrimitives(tokens).tokens);
+    tokens = expandedTokens.get(tokens);
+  }
   const names = [],
     invalid = () => ({ names, value: null });
   if (typeof name !== 'string' || !/^--[\w-]+$/.test(name)) return invalid();

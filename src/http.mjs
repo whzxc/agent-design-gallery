@@ -12,7 +12,7 @@ export const viewerFiles = {
   '/boards.js': 'boards.js', '/assets.js': 'assets.js', '/frame-identity.js': 'frame-identity.js', '/icons.js': 'icons.js', '/layout.js': 'layout.js',
   '/arrangement.js': 'arrangement.js', '/arrangement-worker.js': 'arrangement-worker.js',
   '/relationships.js': 'relationships.js', '/selection.js': 'selection.js', '/style.css': 'style.css', '/tokens.css': 'tokens.css',
-  '/token-catalog.js': 'token-catalog.js',
+  '/token-catalog.js': 'token-catalog.js', '/motion-specimens.js': 'motion-specimens.js',
   '/comments.js': 'comments.js', '/comments.css': 'comments.css', '/comment-anchors.js': 'comment-anchors.js', '/context-menu.js': 'context-menu.js',
   '/player.js': 'player.js', '/player.css': 'player.css', '/motion-identity.js': 'motion-identity.js',
   '/motion-flow.js': 'motion-flow.js', '/motion-scene.js': 'motion-scene.js', '/motion-paint.js': 'motion-paint.js',

@@ -6,7 +6,7 @@ import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 import { CliError, createOutput, withHumanOutput } from './cli-output.mjs';
 
-export const commands = ['comments', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'review', 'owner', 'impact', 'inspect'];
+export const commands = ['comments', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'review', 'owner', 'impact', 'inspect', 'motion'];
 const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
 const usage = {
   comments: '[[list] [--status=open|resolved|all] [--source=<path>] [--frame=<name>] | read <n> | reply <n> --author=<name> --message=<text> | resolve <n> --author=<name> [--message=<text>]] [--state-dir=<path>] [--json]',
@@ -15,8 +15,9 @@ const usage = {
   serve: '[--port=4310] [--state-dir=<path>] [--print-key | --rotate-key]',
   service: 'install|uninstall|status|logs|migrate [--state-dir=<path>] [--port=4310] [--public-origin=<origin>]',
   root: 'add <dir> [--depth=2] | remove <dir> | list | scan [dir] [--state-dir=<path>]',
-  migrate: '[project]', init: '', check: '[source...] [--transitions] [--read-only] [--impacted --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--state-dir=<path>] [--explain]]', render: '[source...] [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--base=<rev>] [--impacted [--state-dir=<path>] [--explain]]',
-  compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
+  motion: '[--css | --json]',
+  migrate: '[project]', init: '', check: '[source...] [--transitions] [--read-only] [--motion-only] [--motion-details] [--impacted --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--state-dir=<path>] [--explain]]', render: '[source...] [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--base=<rev>] [--impacted [--state-dir=<path>] [--explain]]',
+  compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] [--no-screenshots] | --all',
   diff: '[source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--impacted [--state-dir=<path>] [--explain]]',
   review: '--base=<rev> [--format=html|png] [--theme=system|light|dark] [--out=<file>] [--viewer-url=<project-url>] [--exact] [--json]',
   owner: '[--transitions] (--transition=<id> | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --text=<text> [--contains] [--locale=<tag>] | --color=<css> | --token=<name> | --part=<source>[#<Export>]) [--theme=both|light|dark] [--state-dir=<path>] [--json]',
@@ -24,6 +25,7 @@ const usage = {
   impact: '[--transitions] (--source=<path>... [--part=<name>] | --token=<name>... | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --base=<rev> [--head=<rev>]) [--theme=both|light|dark] [--explain] [--state-dir=<path>] [--json]',
 };
 const details = {
+  motion: 'Export project motion tokens and raw spring parameters. --css emits a token stylesheet with generated linear() springs.',
   comments: 'List open project comment threads by default, or read, reply to or resolve a thread by number, #number or ID. Run from the project directory.',
   migrate: 'Rename a project configuration and runtime imports, update editor paths and ignore entries, remove old generated files and regenerate declarations. Refuses mixed config names; safe to run again.',
   serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes. --print-key prints the key and exits; --rotate-key rotates the running hub key and exits. Forwarded data requests require a header or query key; direct-local requests are exempt.',
@@ -65,7 +67,9 @@ export function parseCli(args) {
   if (command === 'serve') for (const name of ['print-key', 'rotate-key']) options[name] = { type: 'boolean' };
   if (command === 'open') options['no-open'] = { type: 'boolean' };
   if (command === 'open' || command === 'link') options.tokens = { type: 'boolean' };
-  if (command === 'check') options['read-only'] = { type: 'boolean' };
+  if (command === 'check') for (const name of ['read-only','motion-only','motion-details']) options[name] = { type: 'boolean' };
+  if (command === 'compare') options['no-screenshots'] = { type: 'boolean' };
+  if (command === 'motion') options.css = { type: 'boolean' };
   if (['render', 'check', 'diff'].includes(command)) { options.impacted = { type: 'boolean' }; options.explain = { type: 'boolean' }; }
   if (command === 'owner' || command === 'inspect') options.contains = { type: 'boolean' };
   if (['inspect','owner','impact','check'].includes(command)) options.transitions = {type:'boolean'};
@@ -83,6 +87,10 @@ export function parseCli(args) {
   const { values, positionals } = parsed;
   if (globalJson) values.json = true;
   if (!values.help && !values.version) {
+    if (command === 'motion' && (positionals.length || values.css && values.json)) throw new CliError('USAGE_INVALID', 'Choose --css or --json.');
+    if (command === 'check' && ((values['motion-only'] && (positionals.length || values.impacted || values.transitions)) ||
+        (values['motion-details'] && (positionals.length || values.impacted))))
+      throw new CliError('USAGE_INVALID', 'Motion inventory flags apply to a whole-project check.');
     if (command === 'review') {
       const format = values.format ?? 'html';
       if (positionals.length || !values.base?.trim() ||
@@ -231,6 +239,21 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
       : action === 'read'
         ? await readCommentContext(config, stateDir, id)
         : await changeComment(config.root, stateDir, { action, id, message: values.message }, { author: values.author });
+    if (!values.json) output.log(JSON.stringify(data, null, 2));
+    return { data };
+  }
+  if (command === 'motion') {
+    const { loadMotionPatterns, patternParameters } = await import('./toolkit/motion-patterns.mjs');
+    const { motionTokenCss } = await import('./toolkit/motion-primitives.mjs');
+    const { tokens, springs, patterns } = loadMotionPatterns(config);
+    if (values.css) {
+      output.log(motionTokenCss(tokens).trimEnd());
+      return { data: null };
+    }
+    const used = new Set([...patterns.values()].flatMap(pattern => ['enter', 'exit'].flatMap(direction => Object.values(patternParameters(pattern, direction)))));
+    const names = Object.fromEntries([...tokens.light].filter(([name]) => used.has(name) || /^--(?:adg-motion|motion)-/.test(name)).map(([name, value]) =>
+      [name, { light: value, ...(tokens.dark.has(name) ? { dark: tokens.dark.get(name) } : {}) }]));
+    const data = { tokens: names, springs };
     if (!values.json) output.log(JSON.stringify(data, null, 2));
     return { data };
   }

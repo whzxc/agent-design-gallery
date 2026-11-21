@@ -24,6 +24,7 @@ export const states = {
   'viewer-top-bars-panels': { ...topBars, sidebar: true, inspector: true, asset: 'components/button.tsx', sourceOnly: true },
   'viewer-board-comments': { ...topBars, camera: 'origin', origin: [236, 84], scale: 0.48 },
   'viewer-top-bars-tokens': { theme: 'light', themeChoice: 'system', sidebar: false, scope: 'tokens' },
+  'viewer-motion-patterns': { theme: 'light', sidebar: false, scope: 'tokens', section: 'motion' },
   'viewer-tokens-list': { theme: 'light', themeChoice: 'system', sidebar: true, scope: 'tokens' },
   'viewer-top-bars-more': { ...topBars, themeChoice: 'system', menu: 'more-menu' },
   'scope-group-action': { ...layerScope, camera: 'group', hoverScope: 'Render only this group: Essentials' },

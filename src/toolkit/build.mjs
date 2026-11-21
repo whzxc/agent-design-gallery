@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadTokens, refreshTypes, rejectLegacy, relative, isSourcePath, sourceDirectories, isFeatureInternal } from './project.mjs';
 import { themeCss, parseTokens } from './tokens.mjs';
+import { motionPrimitives, motionTokenCss } from './motion-primitives.mjs';
 import { componentOwner } from './runtime.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
 import { frameDocument } from './frame-document.mjs';
@@ -179,12 +180,15 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
   const classes = [...new Set(frames.flatMap(f => [...f.html.matchAll(/\bclass="([^"]*)"/g)].flatMap(m => m[1].split(/\s+/))))];
   const utilities = compiler.build(classes);
   const defaults = 'html,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-adg-frame]{display:flex;align-items:flex-start;position:relative;background:var(--canvas)}[data-adg-frame]>*,svg{flex-shrink:0} @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}';
-  const css = `${utilities}\n${tokenSource}\n${defaults}`;
+  const hasSprings = [...tokens.light.keys()].some(name => /^--motion-spring-.+-(?:duration|bounce)$/.test(name));
+  const generated = hasSprings ? motionTokenCss(motionPrimitives(tokens).generated) : '';
+  const cssAfterTokens = `\n${generated}${defaults}`;
+  const css = `${utilities}\n${tokenSource}${cssAfterTokens}`;
   for (const frame of frames) {
     frame.document = theme => frameDocument(frame, theme, css);
     if (write) { const destination = path.join(config.output, path.relative(base,file).replace(/\.tsx$/, ''), `${encodeURIComponent(frame.name)}.html`); mkdirSync(path.dirname(destination),{recursive:true}); writeFileSync(destination,frame.document('light')); }
   }
   return { ...(observationDynamic?{observationDynamic:true}:{}), frames, parts, dependencies: [...dependencies], imports: [...imports].sort(), css,
-    tokenCss: tokenSource, cssWithoutTokens: `${utilities}\n${defaults}`,
-    cssBeforeTokens: `${utilities}\n`, cssAfterTokens: `\n${defaults}` };
+    tokenCss: tokenSource, cssWithoutTokens: `${utilities}${cssAfterTokens}`,
+    cssBeforeTokens: `${utilities}\n`, cssAfterTokens };
 }

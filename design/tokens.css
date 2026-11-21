@@ -12,6 +12,7 @@
   /* Motion */
   --motion-navigation: 0ms;
   --motion-switcher: 160ms;
+  --motion-spinner: 900ms;
   --ease-switcher: ease-out;
 
   /* Shape */

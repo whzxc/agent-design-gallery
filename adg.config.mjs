@@ -171,7 +171,7 @@ export default {
   requires: '>=0.16.0',
   check: { strictLayers: true, strictMotion: true, lifecycle: true },
   compare: {
-    port: 5188,
+    port: Number(process.env.ADG_COMPARE_PORT ?? 5188),
     viewport: '1440x900',
     async start({ port, root }) {
       const temporary = await mkdtemp(path.join(tmpdir(), 'adg-fixture-'));
@@ -191,7 +191,7 @@ export default {
           const hub = await startFixtureHub(port, temporary);
           return async () => { try { await hub.close(); } finally { await rm(temporary, { recursive: true, force: true }); } };
         }
-        const directory = path.join(root, 'fixtures/arc-sample/design');
+        const directory = path.join(root, selectedFixture === 'viewer-motion-patterns' ? 'design' : 'fixtures/arc-sample/design');
         fixtureStore = await commentFile((await loadConfig(directory)).root, temporary);
         const server = await startServer({ directory, port, stateDirectory: temporary,
           fixtures: { states: fixtureStates, recent, assetModifiedAt } });

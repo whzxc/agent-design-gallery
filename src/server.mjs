@@ -26,6 +26,8 @@ import { refreshTypes, archFiles, isSourcePath, readGroups, sourceDirectories, i
 import { loadConfig } from './toolkit/config.mjs';
 import { parseTokens } from './toolkit/tokens.mjs';
 import { tokenBoard } from './boards/token-board.mjs';
+import { loadMotionPatterns, motionPatternFile } from './toolkit/motion-patterns.mjs';
+import { motionCodeExcerpt, scanMotion } from './toolkit/motion-inventory.mjs';
 import { sourceRelationships } from '../public/relationships.js';
 import { resolveScope } from '../public/assets.js';
 const digest = value => createHash('sha256').update(value).digest('hex');
@@ -83,7 +85,9 @@ export async function startServer({
           const file = path.join(directory, source.replace(/\.tsx$/, '.motion.json'));
           const { ino, size, ctimeNs } = await stat(file, { bigint: true });
           const key = JSON.stringify([1, project.root, source, String(ino), String(size), String(ctimeNs)]);
-          const saved = reopening && await summaries.get(key);
+          // Pattern-backed edges also depend on the pattern file and token sheet.
+          const usesPatterns = (await readFile(file, 'utf8')).includes('"pattern"');
+          const saved = reopening && !usesPatterns && await summaries.get(key);
           if (Array.isArray(saved) && saved.every(name => typeof name === 'string')) {
             motionOwners.set(source, { frames: saved });
             continue;
@@ -335,10 +339,12 @@ export async function startServer({
         next = await collectProject(base,project,nextSources,nextCode,sidecars),
         nextGroups = await readGroups(base, nextSources);
       const tokensChanged = observed.includes(tokenFile);
+      const patternsChanged = observed.includes(motionPatternFile);
       const hasTokens = tokensChanged ? (await readdir(base)).includes(tokenFile) : !!tokenSource;
       const nextTokenSource = hasTokens ? tokenSourcePath(base, project) : null;
       if (root !== base) return;
       const changedMotion = new Set([...motionSources,...[...new Set([...sidecars,...motionOwners.keys()])].filter(name=>sidecars.has(name)!==motionOwners.has(name))]);
+      if (patternsChanged || tokensChanged) for (const source of sidecars) changedMotion.add(source);
       if(changedMotion.size) {
         await indexMotion(project,base,changedMotion,sidecars);
         revision++;
@@ -354,7 +360,7 @@ export async function startServer({
       for(const name of failedSources)affected.add(name);
       for(const name of stamps)if(/\.(tsx|mmd)$/.test(name)&&next.has(name))affected.add(name);
       const legacyDirty=[...legacyDependencies.values()].some(dependencies=>dependencies.some(name=>observedPaths.includes(name)));
-      if(!stamps.length&&!affected.size&&!grouping&&!legacyDirty&&!configChanged&&!tokensChanged&&nextTokenSource===tokenSource)return;
+      if(!stamps.length&&!affected.size&&!grouping&&!legacyDirty&&!configChanged&&!tokensChanged&&!patternsChanged&&nextTokenSource===tokenSource)return;
       const changed=[...new Set([...stamps,...affected])];
       for (const name of affected) {
         if (knownBuilds.delete(name)) dirtyBuilds.add(name);
@@ -435,7 +441,20 @@ export async function startServer({
 :where([data-theme="dark"]) #board-chrome, #board-chrome[data-theme="dark"]{${declarations(dark)}}`;
         if (desired === 'tokens' || desired === 'all') {
           data.tokens = [...light].map(([name, value]) => [name, value, dark.get(name) ?? null]);
-          data.tokenBoard = tokenBoard(data.tokenSource, css, { projectName: data.label });
+          let patterns, inventory;
+          if (desired === 'tokens') try {
+            const config = { ...activeProject, design: data.directory };
+            patterns = loadMotionPatterns(config, { light, dark });
+            inventory = scanMotion(config, patterns, undefined, { mappedOnly: true });
+            data.motionPatternCount = patterns.patterns.size;
+          } catch (error) {
+            patterns = null;
+            data.motionPatternError = error.message;
+            diagnostic(error);
+          }
+          const prefix = data.sourcePrefix;
+          data.tokenBoard = tokenBoard(data.tokenSource, css, { projectName: data.label, patterns, inventory, prefix, patternError: data.motionPatternError,
+            patternSource: prefix ? prefix + '/' + motionPatternFile : motionPatternFile });
         }
       } catch (error) {
         data.tokenError = error.code ? `Cannot read ${data.tokenSource}.` : error.message;
@@ -631,6 +650,13 @@ export async function startServer({
           if (!response.destroyed) response.end(JSON.stringify({error:error.message}));
         } finally { clearInterval(heartbeat); recentJobs.delete(controller); }
         return;
+      }
+      if (url.pathname === '/api/motion-code' && request.method === 'GET') {
+        if (!activeProject) return json(response, 404, { error: 'No project is open.' });
+        const config = { ...activeProject, design: root };
+        const line = Number(url.searchParams.get('line'));
+        const lines = motionCodeExcerpt(config, loadMotionPatterns(config), url.searchParams.get('source'), line);
+        return lines ? json(response, 200, { line, lines }) : json(response, 404, { error: 'Unknown motion consumer.' });
       }
       if (url.pathname === '/api/play' && request.method === 'GET') {
         const source = url.searchParams.get('source'), frame = url.searchParams.get('frame');

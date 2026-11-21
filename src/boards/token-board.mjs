@@ -1,4 +1,5 @@
 import { parseTokens, themeCss } from '../toolkit/tokens.mjs';
+import { motionBoardCss, motionCards } from './motion-board.mjs';
 import { escape } from '../toolkit/html.mjs';
 import { boardCss, boardHeader, sectionMarkup, boardWidth, specimenWidth } from './board.mjs';
 
@@ -110,7 +111,7 @@ function easingCurve(value) {
   return `<svg data-adg-easing viewBox="0 0 128 128" role="img" aria-label="${escape(value)}"><path d="M16 16 V112 H112" fill="none" stroke="currentColor" opacity=".18"/><path d="${curve}" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>`;
 }
 
-export function tokenBoard(source, css, { projectName = 'Design library' } = {}) {
+export function tokenBoard(source, css, { projectName = 'Design library', patterns, inventory, patternError, prefix = '', patternSource = source } = {}) {
   const tokens = parseTokens(css);
   const darkValues = new Map([...tokens.light, ...tokens.dark]);
   const themes = themeCss(tokens);
@@ -173,10 +174,12 @@ export function tokenBoard(source, css, { projectName = 'Design library' } = {})
     }).join('');
     sections.push(section('Sizing', `<div data-adg-token-groups>${sizeGroups}</div>`));
   }
-  if (categories.has('easing') || categories.has('duration')) {
+  const cards = patterns ? motionCards(patterns, inventory, patternSource, prefix) :
+    patternError ? `<p role="status">${escape(patternError)}</p>` : '';
+  if (cards || categories.has('easing') || categories.has('duration')) {
     const milliseconds = name => parseFloat(light(name)) * (light(name).endsWith('ms') ? 1 : 1000);
     const names = [...tokens.light.keys()].filter(name => categories.get('easing')?.includes(name) || categories.get('duration')?.includes(name));
-    sections.push(section('Motion', groups(names, group => {
+    sections.push(section('Motion', cards + groups(names, group => {
       const maximum = Math.max(1, ...group.filter(name => categories.get('duration')?.includes(name)).map(milliseconds));
       return `<div data-adg-motion-grid>${group.map(name => article(name, categories.get('easing')?.includes(name)
         ? easingCurve(light(name)) + label(name)
@@ -191,6 +194,6 @@ export function tokenBoard(source, css, { projectName = 'Design library' } = {})
   return {
     key: source, source, name: 'Tokens', layer: 'Tokens', kind: 'board',
     width: boardWidth, height: null, sourceCount: 1, frameCount: tokens.light.size,
-    body, css: `${scopedTokens}\n${boardCss}\n${tokenStyles}`,
+    body, css: `${scopedTokens}\n${boardCss}\n${tokenStyles}\n${motionBoardCss}`,
   };
 }

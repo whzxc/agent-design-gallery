@@ -361,6 +361,10 @@
       "design": [{ "source": "design/modules/tokens.tsx", "part": "TokenBoardPreview" }]
     },
     {
+      "implementation": { "file": "src/boards/motion-board.mjs", "symbol": "motionCards" },
+      "design": [{ "source": "design/modules/tokens.tsx", "part": "MotionPatternCards" }, { "source": "design/surfaces/tokens.tsx" }]
+    },
+    {
       "implementation": { "file": "public/boards.js", "symbol": "tokens", "anchor": "tokens(board, onMeasure)" },
       "design": [{ "source": "design/modules/tokens.tsx", "part": "TokenBoardPreview" }]
     },

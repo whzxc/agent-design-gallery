@@ -251,3 +251,12 @@ kbd { display:inline-flex; align-items:center; height:var(--keycap-size); paddin
 #filter-rows button[aria-expanded=true], #filter-rows section button[aria-pressed=true] { color:var(--accent) }
 #filter-rows .recent-removed::after { content:""; float:right; width:6px; height:6px; margin:4px; border:solid currentColor; border-width:0 1px 1px 0; transform:rotate(-45deg) }
 #filter-rows .recent-removed[aria-expanded=true]::after { transform:rotate(45deg) }
+
+.motion-consumer-dialog { max-width:min(720px,calc(100vw - 32px)); max-height:75vh; padding:24px; border:1px solid var(--border); border-radius:var(--radius-card); background:var(--surface); color:var(--text); }
+.motion-consumer-dialog h2 { font-size:var(--text-title,18px); margin:0 0 16px; }
+.motion-consumer-dialog ul { padding-left:24px; overflow-wrap:anywhere; }
+.motion-consumer-dialog li + li { margin-top:8px; }
+.motion-consumer-dialog a { color:inherit; }
+.motion-consumer-dialog pre { overflow:auto; }
+.motion-consumer-dialog button, [data-motion-pattern] button { padding:5px 9px; border:1px solid var(--border); border-radius:var(--radius-row,6px); background:var(--surface); color:var(--text); }
+body:has(#comment-tool[aria-pressed="true"]) [data-effect=follow] { pointer-events:none; }

@@ -17,11 +17,11 @@ export function compareReport(asset, frame, fixture, design, implementation) {
     offBy2px: rows.filter(row => row.off > 2).sort((a, b) => b.off - a.off), missing: missing.map(m => m.text), extra: extra.map(e => e.text) };
 }
 const cell = value => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-export function reportHtml(report) {
+export function reportHtml(report, screenshots = true) {
   const fmt = value => (value > 0 ? '+' : '') + value.toFixed(1);
   return `<!doctype html><meta charset="utf-8"><title>${cell(report.asset)} ${cell(report.frame)}</title><style>body{font:13px system-ui;margin:24px;background:#f4f4f4}.row{display:flex;gap:16px;align-items:flex-start;overflow:auto}figure{margin:0}img{display:block;max-width:none;border:1px solid #ccc}table{border-collapse:collapse;margin-top:24px}td,th{padding:4px 10px;border-bottom:1px solid #ddd;text-align:left}td.n{font-family:ui-monospace,monospace;text-align:right}</style>
 <h1>${cell(report.asset)} · ${cell(report.frame)} vs ${cell(report.fixture)}</h1><p>Matched ${report.matched} texts. ${report.offBy2px.length} differ by more than 2px. ${report.missing.length} missing in implementation. ${report.extra.length} extra in implementation.</p>
-<div class="row">${['design', 'implementation', 'overlay'].map(name => `<figure><figcaption>${name}</figcaption><img src="${name}.png"></figure>`).join('')}</div>
+${screenshots ? `<div class="row">${['design', 'implementation', 'overlay'].map(name => `<figure><figcaption>${name}</figcaption><img src="${name}.png"></figure>`).join('')}</div>` : ''}
 <table><tr><th>Text</th><th>dx</th><th>dy</th><th>dw</th></tr>${report.offBy2px.map(row => `<tr><td>${cell(row.text)}</td><td class="n">${fmt(row.dx)}</td><td class="n">${fmt(row.dy)}</td><td class="n">${fmt(row.dw)}</td></tr>`).join('')}</table>
 <h2>Missing in implementation</h2><p>${report.missing.map(cell).join(' · ') || 'None'}</p><h2>Extra in implementation</h2><p>${report.extra.map(cell).join(' · ') || 'None'}</p>`;
 }
@@ -110,7 +110,8 @@ async function compareFrame(config, file, definition, options, data, { launchBro
     design = await sheet.locator('[data-adg-frame] > :first-child').evaluate(implementationTexts);
     const target = path.join(config.output, 'compare', `${path.relative(config.design,file).replace(/\.tsx$/, '').split(path.sep).join('-')}-${safeName(frame)}-${safeName(fixtureName)}`);
     mkdirSync(target, { recursive: true });
-    await sheet.screenshot({ path: path.join(target, 'design.png'), clip: frameBox });
+    const screenshots = !options['no-screenshots'];
+    if (screenshots) await sheet.screenshot({ path: path.join(target, 'design.png'), clip: frameBox });
     const app = await browser.newPage({ viewport: size, colorScheme: fixture.theme, reducedMotion: 'reduce', locale: fixture.locale, timezoneId: fixture.timezone });
     for (const pattern of adapter.block ?? []) await app.route(pattern, route => route.abort());
     await app.addInitScript(({ clock, theme }) => {
@@ -158,15 +159,16 @@ async function compareFrame(config, file, definition, options, data, { launchBro
       }
       return result;
     }, clock);
-    const screenshot = { path: path.join(target, 'implementation.png') };
-    if (capture) await app.screenshot({ ...screenshot, clip: capture });
-    else await panel.screenshot(screenshot);
-    const canvasPage = await browser.newPage();
-    await overlay(canvasPage, target);
+    if (screenshots) {
+      const screenshot = { path: path.join(target, 'implementation.png') };
+      if (capture) await app.screenshot({ ...screenshot, clip: capture });
+      else await panel.screenshot(screenshot);
+      await overlay(await browser.newPage(), target);
+    }
     const report = { ...compareReport(relative(config, file), frame, fixtureName, {...design,box:frameBox}, implementation), settled };
     writeFileSync(path.join(target, 'report.json'), JSON.stringify(report, null, 2) + '\n');
-    writeFileSync(path.join(target, 'index.html'), reportHtml(report));
-    const paths = { design: path.join(target,'design.png'), implementation: path.join(target,'implementation.png'), overlay: path.join(target,'overlay.png'), report: path.join(target,'report.json'), html: path.join(target,'index.html') };
+    writeFileSync(path.join(target, 'index.html'), reportHtml(report, screenshots));
+    const paths = { ...(screenshots ? { design: path.join(target,'design.png'), implementation: path.join(target,'implementation.png'), overlay: path.join(target,'overlay.png') } : {}), report: path.join(target,'report.json'), html: path.join(target,'index.html') };
     const {asset, ...measured} = report;
     data.comparisons.push({source:asset, ...measured, theme:fixture.theme, paths});
     data.summary.frames++;
@@ -203,7 +205,7 @@ export async function compare(config, args = [], options = {}, { launchBrowser =
           if (!warnings.length) warnings.push({code:'COMPARE_FRAMES_SKIPPED',message:'Frames without fixtures were skipped.',next:[]});
           continue;
         }
-        reports.push(await compareFrame(config,file,frame,options.all ? {frame:frame.name} : options,data,{launchBrowser,clock,log}));
+        reports.push(await compareFrame(config,file,frame,options.all ? {frame:frame.name, 'no-screenshots':options['no-screenshots']} : options,data,{launchBrowser,clock,log}));
         if (!data.comparisons.at(-1).settled) throw new CliError('COMPARE_UNSETTLED', 'Comparison text boxes did not settle within 5 seconds.', {humanReported:true});
       }
     }
