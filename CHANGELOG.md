@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.0
+
+- Add declarative frame transitions (`<stem>.motion.json`) with check/inspect/owner/impact CLI support (`--transitions`), interactive board playback and prototype stage, and offline transition playback and filmstrips in `adg review`.
+- Add `adg motion --css` and `--json` for Motion tokens, spring curves, and project patterns.
+- Add Playable and Recently Updated board views/filters (Git-period frame history) alongside viewer cache and cold/warm board performance fixes.
+- Add `adg review --format=png` for compact 2× static summary sheets and `adg review --format=embed` for compact interactive review widgets with stacked frame cards, live light/dark switching, Before/After curtain slider, and click-to-enlarge zoom inspection.
+
 ## 0.15.0
 
 - **Breaking:** Move Git design reviews out of the viewer. Generate a self-contained HTML file with `adg review --base=<rev>`. The `--base` viewer parameter still supports architecture overlays.
