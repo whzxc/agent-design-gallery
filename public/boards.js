@@ -103,6 +103,7 @@ export function createBoardLayer(viewport, onSource, { onSelectFrame, onFocusFra
       };
       measurement = requestAnimationFrame(measure);
       node.querySelector('[data-motion-unadopted]')?.addEventListener('toggle', measure);
+      node.addEventListener('motion-layout-change', measure);
     },
     tokenSection(slug) {
       if (!tokenNode?.isConnected) return null;

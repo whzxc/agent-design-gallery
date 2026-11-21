@@ -2143,7 +2143,8 @@ function applyTokenManifest(data) {
     tokenHeight=boardHeight;
     world={x:0,y:0,width:data.tokenBoard.width,height:boardHeight};
     if (entering && firstMeasurement) {
-      const section = data.fixture?.section ?? new URLSearchParams(location.search).get('section');
+      const query = new URLSearchParams(location.search);
+      const section = data.fixture?.section ?? (query.has('pattern') ? 'motion' : query.get('section'));
       const box = section === 'motion' && boardLayer.tokenSection(section);
       if (box) commit(fitView({ ...box, height: Math.min(box.height, 650) }, fitArea(width, height, sidebar, false), 24));
       else frame(world);

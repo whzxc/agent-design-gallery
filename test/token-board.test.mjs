@@ -120,3 +120,94 @@ test('token and all manifests expose reusable board data and retain token rows a
   assert.ok(diagnostics.length > 0);
 });
 
+test('contract: Motion board cards keep their height and disclose details in both themes', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-motion-cards-'));
+  t.after(() => rm(root, {recursive: true, force: true}));
+  const design = path.join(root, 'design');
+  await mkdir(design);
+  await writeFile(path.join(root, 'adg.config.mjs'), 'export default {}');
+  await writeFile(path.join(design, 'tokens.css'), css.replace('  --canvas: #141414;', '  --canvas: #141414;\n  --motion-fast: 150ms;'));
+  await writeFile(path.join(root, 'motion.css'), '@keyframes appear { from {opacity:0} }\n@keyframes spin { to {transform:rotate(1turn)} }');
+  await writeFile(path.join(design, 'motion-patterns.json'), JSON.stringify({
+    version: 1,
+    roles: {'duration-base':'--motion-fast','easing-enter':'--ease-enter'},
+    patterns: {
+      appear: {extends:'fade', parameters:{fromOpacity:.2}, consumers:[{file:'motion.css', match:'keyframes:appear'}]},
+      spinner: {kind:'ambient', action:'loop', effect:'spin', properties:['transform'],
+        parameters:{duration:'--motion-slow', easing:'--ease-enter'}, interrupt:'cancel', reduced:'static',
+        consumers:[{file:'motion.css', match:'keyframes:spin'}]},
+    },
+  }));
+  const server = await startServer({directory: design, stateDirectory: path.join(root, 'state'), readOnly:true});
+  t.after(() => server.close());
+  const browser = await launch();
+  try {
+    for (const [colorScheme, time, background] of [['light', 120, 'rgb(255, 255, 255)'], ['dark', 150, 'rgb(32, 32, 32)']]) {
+      const page = await browser.newPage({viewport:{width:1440,height:900}, colorScheme, reducedMotion:'no-preference'});
+      await page.goto(new URL('?scope=tokens&section=motion', server.url).href);
+      const cards = page.locator('[data-motion-patterns] > [data-motion-pattern]:visible');
+      const fade = cards.filter({has:page.getByRole('button',{name:'Fade',exact:true})});
+      const toggle = fade.getByRole('button',{name:'Fade',exact:true});
+      await toggle.waitFor();
+      assert.equal(await page.locator('html').getAttribute('data-theme'), colorScheme);
+      assert.equal(await cards.count(), 2);
+      assert.deepEqual(await cards.evaluateAll(nodes => [...new Set(nodes.map(node => node.offsetHeight))]), [192]);
+      assert.equal(await fade.evaluate(node => getComputedStyle(node).backgroundColor), background);
+      assert.match(await fade.innerText(), new RegExp(time + ' ms · ease-enter'));
+      assert.match(await fade.innerText(), /Used in 1 place\s+1 variant/);
+      assert.equal(await page.locator('[data-motion-detail]').count(), 0);
+      const unused = page.locator('[data-motion-unadopted]');
+      assert.equal(await unused.evaluate(node => node.open), false);
+      assert.equal(await unused.locator('[data-motion-pattern]:visible').count(), 0);
+      const disclosure = unused.locator('summary');
+      await disclosure.click();
+      assert.deepEqual(await cards.evaluateAll(nodes => [...new Set(nodes.map(node => node.offsetHeight))]), [192]);
+      assert.ok(await unused.locator('[data-motion-pattern]:visible').count() > 0);
+      await disclosure.press('Enter');
+      assert.equal(await unused.evaluate(node => node.open), false);
+
+      const specimen = fade.locator('[data-motion-stage]');
+      await specimen.click();
+      const details = page.getByRole('region', {name:'Fade',exact:true});
+      await details.waitFor();
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+      assert.equal(await details.evaluate(node => node.offsetWidth), await fade.evaluate(node => node.parentElement.clientWidth));
+      assert.ok(await details.locator('[data-motion-stage]').evaluate(node => node.offsetHeight) > await specimen.evaluate(node => node.offsetHeight));
+      await toggle.click();
+      assert.equal(await details.count(), 0);
+
+      await toggle.press('Enter');
+      await details.waitFor();
+      await page.keyboard.press('Escape');
+      assert.equal(await details.count(), 0);
+      assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+      assert.equal(await toggle.evaluate(node => node === document.activeElement), true);
+
+      await toggle.press('Enter');
+      await details.getByRole('link',{name:'Open detail view'}).click();
+      assert.equal(new URL(page.url()).searchParams.get('pattern'), 'fade');
+      const dialog = page.getByRole('dialog',{name:'Fade',exact:true});
+      await dialog.waitFor();
+      const shape = dialog.locator('[data-motion-shape]');
+      await page.waitForFunction(() => document.querySelector('[data-motion-page] [data-motion-shape]').getAnimations().length > 0);
+      const animation = await shape.evaluateHandle(node => node.getAnimations()[0]);
+      await dialog.getByRole('button',{name:'Replay'}).click();
+      assert.equal(await animation.evaluate(previous => previous.playState), 'idle');
+      await animation.dispose();
+      await dialog.getByRole('button',{name:'Appear · Used in 1 place'}).click();
+      await page.getByRole('dialog',{name:'Appear consumers'}).getByRole('link',{name:'motion.css:1'}).click();
+      await page.getByRole('dialog',{name:'motion.css:1'}).locator('mark').filter({hasText:'@keyframes appear'}).waitFor();
+      await page.keyboard.press('Escape');
+      await page.keyboard.press('Escape');
+      assert.equal(await dialog.isVisible(), true);
+      await page.goto(new URL('?pattern=fade', server.url).href);
+      await dialog.waitFor();
+      await dialog.getByRole('button',{name:'Close Fade details'}).click();
+      await page.waitForFunction(() => !new URL(location.href).searchParams.has('pattern'));
+      await dialog.waitFor({state:'detached'});
+      await page.close();
+    }
+  } finally {
+    await browser.close();
+  }
+});

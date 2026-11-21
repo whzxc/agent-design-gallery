@@ -201,7 +201,7 @@ export default {
           const hub = await startFixtureHub(port, temporary);
           return async () => { try { await hub.close(); } finally { await rm(temporary, { recursive: true, force: true }); } };
         }
-        const directory = path.join(root, selectedFixture === 'viewer-motion-patterns' ? 'design' : 'fixtures/arc-sample/design');
+        const directory = path.join(root, selectedFixture.startsWith('viewer-motion-') ? 'design' : 'fixtures/arc-sample/design');
         fixtureStore = await commentFile((await loadConfig(directory)).root, temporary);
         const server = await startServer({ directory, port, stateDirectory: temporary,
           fixtures: { states: fixtureStates, recent, assetModifiedAt } });
@@ -234,6 +234,13 @@ export default {
       const error = await page.evaluate(() => document.documentElement.dataset.fixtureError);
       if (error) throw new Error(`ADG fixture ${name}: ${error}`);
       const state = fixtureStates[name];
+      if (state.motionDetail) {
+        await page.getByRole('button', { name: 'Busy spinner', exact: true }).click();
+        if (state.motionDetail === 'separate') {
+          await page.getByRole('link', { name: 'Open detail view', exact: true }).click();
+          await page.getByRole('dialog', { name: 'Busy spinner', exact: true }).waitFor();
+        }
+      }
       if (name === comments.commentCanvas.fixture) await prepareCommentThread(page, state);
       if (name === 'viewer-board-comments') await prepareBoardComments(page, state);
       if (name === 'viewer-tokens-list') {

@@ -114,6 +114,71 @@ export function installMotionSpecimens(board) {
   const points = new WeakMap();
   const running = new WeakMap();
   const manualAvoid = new WeakSet();
+  let inline, page;
+  const triggerFor = card => card.querySelector('[data-motion-toggle]');
+  const detailFor = card => card.querySelector('[data-motion-template]').content.firstElementChild.cloneNode(true);
+  const layoutChanged = node => node.dispatchEvent(new Event('motion-layout-change', {bubbles: true}));
+
+  function closeInline({ focus = true } = {}) {
+    if (!inline) return;
+    const { card, panel } = inline;
+    inline = null;
+    panel.remove();
+    const trigger = triggerFor(card);
+    card.removeAttribute('data-expanded');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.removeAttribute('aria-controls');
+    if (focus && card.isConnected) trigger.focus({preventScroll: true});
+    layoutChanged(card);
+    mount();
+  }
+  function toggleInline(card) {
+    if (inline?.card === card) {
+      closeInline();
+      return;
+    }
+    closeInline({focus: false});
+    const grid = card.parentElement;
+    const cards = [...grid.children];
+    const columns = Number(getComputedStyle(grid).getPropertyValue('--motion-columns'));
+    const rowEnd = Math.min(cards.length, (Math.floor(cards.indexOf(card) / columns) + 1) * columns);
+    const panel = detailFor(card);
+    cards[rowEnd - 1].after(panel);
+    inline = {card, panel};
+    card.setAttribute('data-expanded', '');
+    const trigger = triggerFor(card);
+    trigger.setAttribute('aria-expanded', 'true');
+    trigger.setAttribute('aria-controls', panel.id);
+    trigger.focus({preventScroll: true});
+    layoutChanged(card);
+    mount();
+  }
+  function openPage() {
+    const id = new URLSearchParams(location.search).get('pattern');
+    if (!id || page?.isConnected) return;
+    const card = board.querySelector(`[data-motion-pattern="${CSS.escape(id)}"]`);
+    if (!card) return;
+    const dialog = document.createElement('dialog');
+    const detail = detailFor(card);
+    dialog.dataset.motionPage = id;
+    dialog.setAttribute('aria-labelledby', detail.getAttribute('aria-labelledby'));
+    dialog.append(detail);
+    dialog.addEventListener('wheel', event => event.stopPropagation(), {passive: true});
+    dialog.addEventListener('close', () => {
+      if (!dialog.isConnected) return;
+      dialog.remove();
+      page = null;
+      const url = new URL(location.href);
+      url.searchParams.delete('pattern');
+      history.replaceState(history.state, '', url);
+      const focus = card.closest('details:not([open])')?.querySelector('summary') ?? triggerFor(card);
+      focus.focus({preventScroll: true});
+      mount();
+    }, {once: true});
+    card.closest('[data-adg-board]').append(dialog);
+    page = dialog;
+    dialog.showModal();
+  }
   function sync(stage) {
     for (const animation of mounted.get(stage) ?? []) animation.cancel();
     mounted.set(stage, visible.has(stage) && !manualAvoid.has(stage) ? animateStage(stage) : []);
@@ -126,7 +191,9 @@ export function installMotionSpecimens(board) {
       sync(target);
     }
   });
-  const mount = () => {
+  function mount() {
+    if (inline && !inline.panel.isConnected) inline = null;
+    openPage();
     for (const [stage, animations] of mounted) if (!board.contains(stage)) {
       for (const animation of animations) animation.cancel();
       intersection.unobserve(stage);
@@ -137,7 +204,7 @@ export function installMotionSpecimens(board) {
       mounted.set(stage, []);
       intersection.observe(stage);
     }
-  };
+  }
   // Token markup is replaced as a unit. Camera updates never recreate specimens.
   new MutationObserver(mount).observe(board, { childList: true });
   const reset = () => {
@@ -167,7 +234,17 @@ export function installMotionSpecimens(board) {
     }
   }
   board.addEventListener('pointerdown', event => {
-    if (event.target.closest('[data-motion-pattern] button, [data-effect=follow], [data-motion-unadopted] summary')) event.stopPropagation();
+    if (event.target.closest('[data-motion-pattern], [data-motion-detail], [data-motion-unadopted] summary'))
+      event.stopPropagation();
+  });
+  board.addEventListener('toggle', event => {
+    if (inline?.card.closest('[data-motion-unadopted]') === event.target && !event.target.open) closeInline({focus: false});
+  }, true);
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || event.defaultPrevented || !inline?.panel.isConnected ||
+        document.querySelector('dialog[open], :popover-open')) return;
+    event.preventDefault();
+    closeInline();
   });
   board.addEventListener('pointermove', event => {
     const stage = event.target.closest('[data-effect=follow]');
@@ -191,11 +268,39 @@ export function installMotionSpecimens(board) {
   });
   board.addEventListener('click', event => {
     const card = event.target.closest('[data-motion-pattern]');
-    if (!card) return;
+    if (card) {
+      event.stopPropagation();
+      toggleInline(card);
+      return;
+    }
+    const detail = event.target.closest('[data-motion-detail]');
+    if (!detail) return;
+    const stage = detail.querySelector('[data-motion-stage]');
+    if (event.target.closest('[data-motion-close]')) {
+      const dialog = detail.closest('[data-motion-page]');
+      if (dialog) dialog.close();
+      else closeInline();
+      return;
+    }
+    if (event.target.closest('[data-motion-replay]')) {
+      for (const node of shapes(stage)) {
+        running.get(node)?.cancel();
+        node.style.removeProperty('transform');
+      }
+      points.delete(stage);
+      manualAvoid.delete(stage);
+      const sibling = stage.querySelector('[data-motion-sibling]');
+      if (sibling) {
+        sibling.hidden = true;
+        const control = detail.querySelector('[data-motion-avoid]');
+        control.setAttribute('aria-pressed', 'false');
+        control.textContent = 'Insert sibling';
+      }
+      sync(stage);
+      return;
+    }
     const avoid = event.target.closest('[data-motion-avoid]');
     if (avoid) {
-      event.stopPropagation();
-      const stage = card.querySelector('[data-motion-stage]');
       const [sibling, ...others] = shapes(stage);
       const first = others.map(node => {
         const transform = getComputedStyle(node).transform;

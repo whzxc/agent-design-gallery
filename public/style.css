@@ -233,5 +233,5 @@ kbd { display:inline-flex; align-items:center; height:var(--keycap-size); paddin
 .motion-consumer-dialog li + li { margin-top:8px; }
 .motion-consumer-dialog a { color:inherit; }
 .motion-consumer-dialog pre { overflow:auto; }
-.motion-consumer-dialog button, [data-motion-pattern] button { padding:5px 9px; border:1px solid var(--border); border-radius:var(--radius-row,6px); background:var(--surface); color:var(--text); }
+.motion-consumer-dialog button { padding:5px 9px; border:1px solid var(--border); border-radius:var(--radius-row,6px); background:var(--surface); color:var(--text); }
 body:has(#comment-tool[aria-pressed="true"]) [data-effect=follow] { pointer-events:none; }

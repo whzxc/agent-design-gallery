@@ -25,6 +25,8 @@ export const states = {
   'viewer-board-comments': { ...topBars, camera: 'origin', origin: [236, 84], scale: 0.48 },
   'viewer-top-bars-tokens': { theme: 'light', themeChoice: 'system', sidebar: false, scope: 'tokens' },
   'viewer-motion-patterns': { theme: 'light', sidebar: false, scope: 'tokens', section: 'motion' },
+  'viewer-motion-expanded': { theme: 'light', sidebar: false, scope: 'tokens', section: 'motion', motionDetail: 'inline' },
+  'viewer-motion-detail': { theme: 'dark', sidebar: false, scope: 'tokens', section: 'motion', motionDetail: 'separate' },
   'viewer-tokens-list': { theme: 'light', themeChoice: 'system', sidebar: true, scope: 'tokens' },
   'viewer-top-bars-more': { ...topBars, themeChoice: 'system', menu: 'more-menu' },
   'scope-group-action': { ...layerScope, camera: 'group', hoverScope: 'Render only this group: Essentials' },

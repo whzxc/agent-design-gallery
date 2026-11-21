@@ -326,26 +326,57 @@ export default () => [
   </Frame>,
 ];
 
-export function MotionPatternCards() {
+function SpinnerWell({ height, compact = false }: { height?: number; compact?: boolean }) {
   return (
-    <div class="flex flex-col gap-8">
-      <div class="grid grid-cols-3 items-start gap-6">
-        <article class="flex flex-col gap-3 rounded-panel border border-border p-5">
-          <h3 class="text-[17px] font-bold">Busy spinner</h3>
-          <p class="text-body text-text-tertiary">ambient · loop</p>
-          <div class="grid h-[116px] place-items-center rounded-row bg-canvas" aria-hidden="true">
-            <span class="size-8 rounded-full border-[3px] border-border border-t-[var(--text)]" />
-          </div>
-          <p class="text-body text-text-tertiary">Reduced motion · static</p>
-          <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-body text-text-tertiary">
-            <dt>Properties</dt><dd>transform</dd>
-            <dt>Parameters</dt>
-            <dd>duration <code>--motion-spinner</code> · 900ms<br />easing <code>--adg-motion-linear</code> · linear <span class="text-caption text-text">ADG default</span></dd>
-            <dt>Interrupt</dt><dd>cancel</dd>
-            <dt>Reduced motion</dt><dd>static</dd>
-          </dl>
-          <button type="button" class="self-start rounded-row border border-border px-2 py-1 text-body">Used in 4 places</button>
+    <div class="relative grid w-full place-items-center rounded-row bg-canvas" style={{ height }}>
+      <span aria-hidden="true" class="size-8 rounded-full border-[3px] border-border border-t-[var(--text)]" />
+      {compact && <span class="absolute right-1.5 bottom-1 text-caption text-text-tertiary">Reduced motion · static</span>}
+    </div>
+  );
+}
+
+export function MotionPatternDetails({ standalone = false }: { standalone?: boolean }) {
+  return (
+    <section class="grid gap-5 rounded-panel border border-border bg-surface p-5" aria-label="Busy spinner" role={standalone ? 'dialog' : undefined}>
+      <header class="flex items-center justify-between gap-3">
+        <div><h3 class="text-[20px] font-bold">Busy spinner</h3><p class="text-body text-text-tertiary">ambient · loop</p></div>
+        <div class="flex items-center gap-3 text-body">
+          {!standalone && <a href="?scope=tokens&amp;section=motion&amp;pattern=busy-spinner" class="underline underline-offset-3">Open detail view</a>}
+          <button type="button" class="rounded-row border border-border px-2 py-1" aria-label="Close Busy spinner details">Close</button>
+        </div>
+      </header>
+      <div class="grid grid-cols-2 items-start gap-5">
+        <div class="grid justify-items-start gap-2 text-body">
+          <SpinnerWell height={standalone ? 220 : 168} />
+          <button type="button" class="rounded-row border border-border px-2 py-1">Replay</button>
+          <p class="text-text-tertiary">Reduced motion · static</p>
+        </div>
+        <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-body text-text-tertiary">
+          <dt>Properties</dt><dd>transform</dd>
+          <dt>Parameters</dt><dd>duration <code>--motion-spinner</code> · 900ms<br />easing <code>--adg-motion-linear</code> · linear <span class="text-caption text-text">ADG default</span></dd>
+          <dt>Interrupt</dt><dd>cancel</dd>
+          <dt>Reduced motion</dt><dd>static</dd>
+        </dl>
+      </div>
+      <button type="button" class="justify-self-start rounded-row border border-border px-2 py-1 text-body">Used in 4 places</button>
+    </section>
+  );
+}
+
+export function MotionPatternCards({ expanded = false }: { expanded?: boolean }) {
+  return (
+    <div class="flex flex-col gap-6">
+      <div class="grid grid-cols-3 items-start gap-4">
+        <article class="grid h-48 grid-rows-[34px_minmax(0,1fr)_18px_22px] gap-2 rounded-panel border border-border bg-surface px-3.5 py-3">
+          <header>
+            <h3 class="text-[15px] leading-[19px] font-bold"><button type="button" aria-expanded={expanded}>Busy spinner</button></h3>
+            <p class="text-meta leading-[15px] text-text-tertiary">ambient · loop</p>
+          </header>
+          <SpinnerWell compact />
+          <div class="truncate font-mono text-meta leading-[18px]">900 ms · adg-motion-linear · <span class="font-ui text-caption">ADG default</span></div>
+          <p class="self-center text-meta text-text-tertiary">Used in 4 places</p>
         </article>
+        {expanded && <div class="col-span-full"><MotionPatternDetails /></div>}
       </div>
       <details class="border-t border-border py-4 text-[14px] font-semibold">
         <summary>Not adopted <span class="ml-2 font-normal text-text-tertiary">10</span></summary>

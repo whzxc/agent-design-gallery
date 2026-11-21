@@ -260,11 +260,15 @@ role mappings and direct base overrides. A variant can override timing with
 a spring, or a spring with a duration and easing. Layers merge per parameter,
 with direction-specific entries taking precedence.
 
-The board shows one specimen per base family. Each variant lists the
-parameters that differ and links its own consumers. A base is adopted when
-it or any variant has consumers. Unadopted built-ins appear in a collapsed
-**Not adopted** group at the end. Standalone project patterns have their own
-specimens. The interruption policy is
+The Motion grid shows a compact live specimen, timing summary and usage
+for each base family and standalone pattern. Select a card or press Enter
+to open its row-wide detail. Select the same card or press Escape to close.
+The detail lists full parameters, consumers, and each variant's overrides and
+consumers. **Open detail view** opens an addressable view with a larger
+specimen and Replay. Interactive specimens return to their starting state on
+replay. Use `?pattern=<id>` on the project viewer to open the view directly.
+A base is adopted when it or a variant has consumers. Unadopted built-ins
+appear in a collapsed **Not adopted** group at the end. The interruption policy is
 `finish` (settle), `retarget` (start from the current value) or `cancel`
 (stop). Reduced motion is `instant` (apply the result without interpolation)
 or `static` (show a resting state).

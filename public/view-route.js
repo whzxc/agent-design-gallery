@@ -12,7 +12,7 @@ export function readViewRoute(url) {
   const query = url.searchParams;
   const base=query.has('base')?{base:query.get('base')}:{};
   const path = url.pathname.slice(viewerBase(url.pathname).length);
-  const explicitScope = query.get('scope');
+  const explicitScope = query.get('scope') ?? (path === '' && query.has('pattern') ? 'tokens' : null);
   const asset = query.get('asset'), group = query.get('group');
   if (explicitScope || asset || group) {
     return {

@@ -5,7 +5,7 @@ import { tokenGroups, tokenSource } from '../fixtures/tokens';
 import { viewerBarProject, viewerBarScopes, viewerTokenContents } from '../fixtures/viewer-bars';
 import { Contents, ScopeTabs } from '../modules/navigation';
 import { ProjectPicker } from '../modules/project-switcher';
-import { MotionPatternCards, TokenBoardPreview, TokenCatalog } from '../modules/tokens';
+import { MotionPatternCards, MotionPatternDetails, TokenBoardPreview, TokenCatalog } from '../modules/tokens';
 import { ViewerBars, ZoomBar } from '../modules/view-controls';
 
 function TokensHeader({ tokenView, contentsOpen = false }: { tokenView: string; contentsOpen?: boolean }) {
@@ -21,20 +21,37 @@ function TokensHeader({ tokenView, contentsOpen = false }: { tokenView: string; 
   );
 }
 
-export default () => [
-  <Frame name="motion" width={1440} height={900} fixture="viewer-motion-patterns" capture={{ page: true, viewport: '1440x900' }}>
+function MotionBoardSurface({ detail }: { detail?: 'inline' | 'separate' }) {
+  return (
     <Canvas width={1440} height={900}>
       <div data-free class="absolute inset-0">
-        <div class="absolute left-6 top-20 w-[1680px] origin-top-left scale-[.82] bg-surface px-20 py-12">
+        <div class="absolute left-[44px] top-[197px] w-[1680px] origin-top-left scale-[.802] bg-surface px-20 py-12">
           <div class="grid w-[1520px] grid-cols-[280px_1fr] gap-14">
             <div><h2 class="text-[22px] font-semibold">Motion</h2><p class="mt-5 font-mono text-caption text-text-tertiary">design/tokens.css</p></div>
-            <MotionPatternCards />
+            <MotionPatternCards expanded={detail === 'inline'} />
           </div>
         </div>
         <div class="absolute inset-x-3 top-3 z-10"><TokensHeader tokenView="List view" /></div>
-        <div class="absolute inset-x-0 bottom-4 flex justify-center"><ZoomBar label="82%" backDisabled commentDisabled /></div>
+        <div class="absolute inset-x-0 bottom-4 flex justify-center"><ZoomBar label="80%" backDisabled commentDisabled /></div>
+        {detail === 'separate' && <div class="absolute inset-0 z-20 grid place-items-center bg-black/40">
+          <div class="w-[860px]"><MotionPatternDetails standalone /></div>
+        </div>}
       </div>
     </Canvas>
+  );
+}
+
+const motionCapture = { page: true as const, viewport: '1440x900' };
+
+export default () => [
+  <Frame name="motion" width={1440} height={900} fixture="viewer-motion-patterns" capture={motionCapture}>
+    <MotionBoardSurface />
+  </Frame>,
+  <Frame name="motion-expanded" width={1440} height={900} fixture="viewer-motion-expanded" capture={motionCapture}>
+    <MotionBoardSurface detail="inline" />
+  </Frame>,
+  <Frame name="motion-detail" width={1440} height={900} fixture="viewer-motion-detail" capture={motionCapture}>
+    <MotionBoardSurface detail="separate" />
   </Frame>,
   <Frame
     name="board"
