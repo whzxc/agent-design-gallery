@@ -7,7 +7,7 @@ import { IconButton } from '../components/icon-button';
 import { Separator, Toolbar } from '../components/toolbar';
 import { Tooltip } from '../components/tooltip';
 import { instances, projects, switcherFrames } from '../fixtures/hub';
-import { nextActions, playbackScope, playerMoments, type PlayerMoment } from '../fixtures/board-playback';
+import { boardFilters, nextActions, playableNames, playbackScope, playerMoments, recentGroups, type FrameFilter, type PlayerMoment } from '../fixtures/board-playback';
 import commentFixtures from '../fixtures/comments.json';
 import { viewerBarContents, viewerBarDetails, viewerBarProject, viewerBarScopes } from '../fixtures/viewer-bars';
 import { BoardChapter, BoardSection, SpecimenWell } from '../modules/canvas';
@@ -97,7 +97,85 @@ function EssentialsBoard({ selectedSource = false }: { selectedSource?: boolean 
 const screen = { width: 1440, height: 900 };
 const smallHeading = 'text-meta font-semibold text-text-secondary';
 
-function PlayableBoard({ filtered }: { filtered: boolean }) {
+function FilterPicker({ filter, expanded }: { filter: FrameFilter; expanded: boolean }) {
+  const active = filter !== 'All frames';
+  return <div class="relative">
+    <button type="button" aria-label={`Filter frames: ${filter}`} aria-expanded={expanded}
+      class={`flex h-(--control-size) items-center gap-2 rounded-field border px-3 text-body font-semibold
+        ${active ? 'border-accent bg-accent text-on-accent' : 'border-border text-text'}`}>
+      <Icon name="list-filter" size={15} />{active ? filter : 'Filter frames'}<Icon name="chevron-down" size={12} />
+    </button>
+    {expanded && <div class="absolute top-full left-0 mt-3 w-52 rounded-menu border border-border bg-surface p-1 shadow-menu">
+      {(['All frames', 'Playable', 'Recently updated'] as const).map((item, i) =>
+        <button type="button" key={item} aria-pressed={item === filter}
+          class="flex h-9 w-full items-center gap-2 rounded-row px-2 text-left text-body text-text">
+          <Icon name={['layout-grid', 'play', 'history'][i]} size={15} />
+          <span class="flex-1">{item}</span>{item === filter && <Icon name="check" size={14} />}
+        </button>)}
+    </div>}
+  </div>;
+}
+
+function ResultRow({ name, change, selected = false }: { name: string; change?: string; selected?: boolean }) {
+  const removed = change === 'Removed';
+  const content = <>
+    <Icon name={removed ? 'minus' : 'frame'} size={13} class="shrink-0 text-text-tertiary" />
+    <span class={`min-w-0 flex-1 truncate ${removed ? 'line-through' : ''}`}>{name}
+      {change === 'Moved' && <small class="block truncate font-ui text-caption text-text-tertiary">From modules/instance-picker.tsx</small>}
+    </span>
+    {change && <span class="font-ui text-caption text-text-secondary">{change}</span>}
+  </>;
+  const classes = `flex min-h-8 w-full items-center gap-2 rounded-row px-2 text-left font-mono text-meta
+    ${selected ? 'bg-surface-sunken font-semibold text-text' : 'text-text-secondary'}`;
+  return removed ? <div class={classes}>{content}</div> :
+    <button type="button" aria-label={`Locate ${name} on board`} aria-current={selected} class={classes}>{content}</button>;
+}
+
+function FilterResults({ filter, sinceVisit }: { filter: FrameFilter; sinceVisit: boolean }) {
+  const recent = filter === 'Recently updated';
+  return <aside aria-label={`${filter} results`}
+    class="absolute top-[72px] left-3 w-[332px] rounded-panel border border-border bg-surface p-4 text-text shadow-float">
+    <header class="flex items-center justify-between">
+      <h2 class="flex items-center gap-2 text-title font-semibold"><Icon name={recent ? 'history' : 'play'} size={16} />{filter}</h2>
+      <Button form="ghost" label="Clear filter" />
+    </header>
+    {recent ? <>
+      <div class="mt-2 flex rounded-field bg-surface-sunken p-1">
+        {['This week', 'Since my last visit'].map((range, i) =>
+          <button type="button" key={range} aria-pressed={sinceVisit === Boolean(i)}
+            class={`flex-1 rounded-row px-2 py-[6px] text-meta font-semibold
+              ${sinceVisit === Boolean(i) ? 'bg-surface text-text shadow-float' : 'text-text-secondary'}`}>{range}</button>)}
+      </div>
+      {recentGroups.filter(group => !sinceVisit || group.period !== 'Earlier this week').map(group =>
+        <section key={group.period} class="mt-3 border-t border-border pt-3">
+          <h3 class="text-section font-semibold">{group.period}</h3>
+          {group.period !== 'Uncommitted' && <ul class="my-2 space-y-1">
+            {group.changes.map(commit => <li key={commit.subject} class="flex items-center gap-2 text-meta text-text-secondary">
+              <Icon name="git-commit-horizontal" size={13} />{commit.subject}
+            </li>)}
+          </ul>}
+          <p class="mt-2 px-2 text-caption text-text-tertiary">modules/project-switcher.tsx</p>
+          {group.changes.flatMap(commit => commit.frames).map(([name, change]) =>
+            <ResultRow key={name} name={name} change={change} selected={sinceVisit && name === 'switcher-open'} />)}
+          {group.changes.filter(commit => commit.cause).map(commit => <div class="mt-2" key={commit.cause}>
+            <p class="mb-1 px-2 text-caption text-text-tertiary">Inherited changes</p>
+            <button type="button" aria-expanded="false"
+              class="flex h-9 w-full items-center gap-2 rounded-row bg-surface-sunken px-2 text-body">
+              <Icon name="chevron-right" size={14} /><code>{commit.cause}</code><Icon name="arrow-right" size={12} />
+              <span>{commit.affected} frames</span>
+            </button>
+          </div>)}
+        </section>)}
+    </> : <section class="mt-3 border-t border-border pt-3">
+      <h3 class={smallHeading}>Project switcher</h3>
+      <div class="mt-1">{playableNames.map(name => <ResultRow key={name} name={name} />)}</div>
+    </section>}
+  </aside>;
+}
+
+function FilteredBoard({ filter, menuOpen, sinceVisit }: { filter: FrameFilter; menuOpen: boolean; sinceVisit: boolean }) {
+  const recent = recentGroups.filter(group => !sinceVisit || group.period !== 'Earlier this week')
+    .flatMap(group => group.changes.flatMap(commit => commit.frames.map(([name]) => name)));
   return <Canvas {...screen}>
     <div class="absolute inset-x-0 top-0 z-10 p-3">
       <ViewerBars
@@ -105,12 +183,7 @@ function PlayableBoard({ filtered }: { filtered: boolean }) {
         scopes={<>
           <ScopeTabs options={viewerBarScopes} selected="Modules" />
           <Separator />
-          <button type="button" aria-pressed={filtered}
-            class={`flex h-(--control-size) items-center gap-2 rounded-field border px-3 text-body font-semibold
-              ${filtered ? 'border-accent bg-accent text-on-accent' : 'border-border text-text'}`}>
-            <Icon name={filtered ? 'list-filter-plus' : 'list-filter'} size={15} />Playable
-            {filtered && <Icon name="check" size={14} />}
-          </button>
+          <FilterPicker filter={filter} expanded={menuOpen} />
         </>}
         search={<Field form="search" label="Find assets…" width={204} />}
       />
@@ -119,12 +192,13 @@ function PlayableBoard({ filtered }: { filtered: boolean }) {
       <BoardChapter number={2} layer="Modules" title="Project access" sourceCount={3} frameCount={16}>
         <BoardSection title="project-switcher" path="modules/project-switcher.tsx">
           {switcherFrames.map(({name, current, kind, open, search, empty}) => {
-            const playable = ['project-picker', 'switcher-open', 'switcher-empty'].includes(name);
+            const playable = playableNames.includes(name);
+            const match = filter === 'All frames' || (filter === 'Playable' ? playable : recent.includes(name));
             const play = playable && <button type="button" aria-label={`Play from ${name}`}
               class="flex h-10 items-center gap-[6px] rounded-field bg-accent px-3 font-ui text-title font-semibold text-on-accent">
               <Icon name="play" size={14} />Play
             </button>;
-            return <SpecimenWell key={name} name={name} span={open ? 6 : 3} dimmed={filtered && !playable} captionAction={play}>
+            return <SpecimenWell key={name} name={name} span={open ? 6 : 3} selected={sinceVisit && name === 'switcher-open'} dimmed={!match} captionAction={play}>
               {open ? <Switcher current={current} kind={kind} open search={search} empty={empty} /> :
                 <ProjectPicker current={current} kind={kind} />}
             </SpecimenWell>;
@@ -132,6 +206,7 @@ function PlayableBoard({ filtered }: { filtered: boolean }) {
         </BoardSection>
       </BoardChapter>
     </div>
+    {filter !== 'All frames' && <FilterResults filter={filter} sinceVisit={sinceVisit} />}
     <div class="absolute inset-x-0 bottom-4 flex justify-center"><ZoomBar label="63%" backDisabled /></div>
   </Canvas>;
 }
@@ -363,10 +438,9 @@ export default () => [
       </div>
     </Canvas>
   </Frame>,
-  ...[false, true].map(filtered => (
-    <Frame name={filtered ? 'board-playable-filter' : 'board-play-affordance'} {...screen} proposed={playbackScope}
-      note={filtered ? 'Playable is on. Other specimens dim in their original positions.' : 'Play in a specimen caption starts at that frame.'}>
-      <PlayableBoard filtered={filtered} />
+  ...boardFilters.map(([name, filter, note]) => (
+    <Frame name={name} {...screen} proposed={playbackScope} note={note}>
+      <FilteredBoard filter={filter} menuOpen={name === 'board-frame-filters'} sinceVisit={name === 'recent-updates-on-board'} />
     </Frame>
   )),
   ...playerMoments.map(([moment, note]) => (
