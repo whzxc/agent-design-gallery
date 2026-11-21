@@ -82,7 +82,7 @@ test('ordinary and impacted diff retain healthy artifacts with failures on oppos
       assert.equal(data.impact.coverage.proofComplete, false);
     }
   }
-  for (const format of ['html', 'png']) {
+  for (const format of ['html', 'png', 'embed']) {
     let stdout = '';
     const code = await main(['review', '--base=HEAD', '--theme=light', '--exact', `--format=${format}`, '--json'], project,
       { stdout: value => { stdout += value; }, stderr: () => {}, exit: () => {} });
@@ -95,7 +95,7 @@ test('ordinary and impacted diff retain healthy artifacts with failures on oppos
     assertFailures(report.failures);
     assert.equal(report.counts.changed, 1);
     const artifact = await readFile(report.path);
-    if (format === 'html') assert.match(artifact.toString(), /Some sources could not be built/);
+    if (format !== 'png') assert.match(artifact.toString(), /Some sources could not be built/);
     else assert.equal(artifact.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
   }
 });

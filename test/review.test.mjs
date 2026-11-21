@@ -4,9 +4,11 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, access } from 'node:f
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { loadConfig } from '../src/toolkit/config.mjs';
 import { starterTokens } from '../src/toolkit/project.mjs';
 import { diff } from '../src/toolkit/diff.mjs';
+import { launch } from '../src/toolkit/browser.mjs';
 import { main } from '../src/cli.mjs';
 
 test('diff overwrites artifacts and retains exact comparisons across both themes', { timeout: 60000 }, async t => {
@@ -162,6 +164,62 @@ export default () => [
   const image = await readFile(png.path);
   assert.equal(image.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
   assert.equal(image.length, png.bytes);
+
+  stdout = '';
+  const embedCode = await main(['review', `--base=${baseSha}`, '--theme=dark', '--format=embed', '--json'], project,
+    { stdout: chunk => { stdout += chunk; }, stderr: () => {}, exit: () => {} });
+  assert.equal(embedCode, 0, stdout);
+  const { data: embed } = JSON.parse(stdout);
+  assert.equal(embed.path, path.join(config.output, 'review-embed.html'));
+  assert.equal(embed.format, 'embed');
+  assert.equal(embed.theme, report.theme);
+  assert.equal(embed.complete, true);
+  assert.deepEqual(embed.counts, report.counts);
+  assert.deepEqual(embed.groups, report.groups);
+  const embedHtml = await readFile(embed.path, 'utf8');
+  assert.doesNotMatch(embedHtml, /(?:src|href)=["'](?:https?:|\/)/i);
+  assert.doesNotMatch(embedHtml, /Content-Security-Policy/i);
+
+  stdout = '';
+  const badOutCode = await main(['review', `--base=${baseSha}`, '--format=embed', '--out=bad.png', '--json'], project,
+    { stdout: chunk => { stdout += chunk; }, stderr: () => {}, exit: () => {} });
+  assert.equal(badOutCode, 2);
+  assert.equal(JSON.parse(stdout).error.code, 'USAGE_INVALID');
+
+  const browser = await launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 640, height: 720 }, offline: true });
+    const errors = [], network = [];
+    page.on('pageerror', err => errors.push(err.message));
+    page.on('request', req => { if (/^https?:/.test(req.url())) network.push(req.url()); });
+    await page.goto(pathToFileURL(embed.path).href);
+    const embedHeight = await page.evaluate(() => document.getElementById('embed-root').getBoundingClientRect().height);
+    assert.ok(embedHeight > 0 && embedHeight <= 450, `Expected compact embed height <= 450, got ${embedHeight}`);
+    assert.equal(await page.locator('#embed-root').getAttribute('data-preview-theme'), 'dark');
+    assert.equal(await page.locator('[role="tab"]').count(), 2);
+    await page.getByRole('tab', { name: /themed/i }).click();
+    assert.equal(await page.locator('#foot-index').textContent(), '2 / 2');
+    const darkBg = await page.evaluate(() => {
+      const spec = document.querySelector('[data-side="after"] .specimen');
+      return getComputedStyle(spec.shadowRoot.querySelector('[data-adg-frame] > div')).backgroundColor;
+    });
+    assert.equal(darkBg, 'rgb(40, 24, 56)');
+    await page.getByRole('button', { name: 'Light' }).click();
+    assert.equal(await page.locator('#embed-root').getAttribute('data-preview-theme'), 'light');
+    const lightBg = await page.evaluate(() => {
+      const spec = document.querySelector('[data-side="after"] .specimen');
+      const theme = spec.shadowRoot.querySelector('.review-root').getAttribute('data-theme');
+      return { theme, bg: getComputedStyle(spec.shadowRoot.querySelector('[data-adg-frame] > div')).backgroundColor };
+    });
+    assert.equal(lightBg.theme, 'light');
+    assert.notEqual(lightBg.bg, darkBg);
+    await page.getByRole('button', { name: /^Diff/ }).click();
+    assert.match(await page.locator('.stage-body img').getAttribute('src'), /^data:image\/png;base64,/);
+    assert.deepEqual(errors, []);
+    assert.deepEqual(network, []);
+  } finally {
+    await browser.close();
+  }
 
   // Commit changes and run diff against HEAD to verify output directory overwrite removes old frames/.
   git('add', '.');

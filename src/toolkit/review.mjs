@@ -14,6 +14,7 @@ import { impactRowKey, withImpacted } from './impact-selection.mjs';
 import { readGroups, relative } from './project.mjs';
 import { reviewEdgeCandidates, reviewMotion } from './review-motion.mjs';
 import { reviewDocument } from './review-document.mjs';
+import { reviewEmbedDocument } from './review-embed-document.mjs';
 import { observeFrame } from './review-observation.mjs';
 import { renderReviewSheet } from './review-sheet.mjs';
 import { compileSpecimens } from './review-specimens.mjs';
@@ -85,32 +86,48 @@ async function observeUnchanged(session, theme) {
   }
 }
 
-function buildHtmlReview(model, data, built, theme, locate) {
+function buildHtmlReview(model, data, built, theme, locate, format = 'html') {
   const { compileFrame, assets } = compileSpecimens({ built, theme });
   const comparisons = new Map(data.comparisons.filter(row => row.theme === theme).map(row => [identity(row), row]));
-  const cards = [...model.sections.added, ...model.sections.changed].map((entry, index) => {
+  const allEntries = [...model.sections.added, ...model.sections.changed];
+  let selected = allEntries;
+  if (format === 'embed') {
+    const featured = new Set([
+      ...model.sections.added.map(identity),
+      ...model.sections.changed.filter(entry => entry.change?.kind !== 'inherited').map(identity),
+    ]);
+    for (const group of data.review.groups ?? []) {
+      if (group.representative) featured.add(identity(group.representative));
+      for (const outlier of group.outliers ?? []) featured.add(identity(outlier));
+    }
+    selected = allEntries.filter(entry => featured.has(identity(entry)));
+  }
+  const omittedInherited = allEntries.length - selected.length;
+  const cards = selected.map((entry, index) => {
     const row = comparisons.get(identity(entry));
     const changed = entry.status === 'changed';
     const before = changed ? compileFrame(row.before, row.beforeSize, 'before') : null;
     const after = compileFrame(row.after, row.afterSize, 'after');
     const difference = changed ? entry.themes.find(item => item.theme === theme)?.images.difference : null;
     return { index, source: entry.source, frame: entry.frame, status: entry.status, change: entry.change, origin: locate(entry),
-      previousOrigin: entry.previousSource && locate(row.before), before, after, difference, differentPixels: row.pixels?.differentPixels };
+      previousOrigin: entry.previousSource && locate(row.before), before, after, difference, differentPixels: row.pixels?.differentPixels,
+      proposed: row?.proposed ?? null, note: row?.note?.after ?? row?.note?.before ?? null };
   });
-  const report = { title: model.label, theme, base: model.base.sha, head: model.current.head, counts: model.counts, cards,
+  const report = { title: model.label, theme, base: model.base.sha, head: model.current.head, counts: model.counts, cards, omittedInherited,
     groups: data.review.groups, removed: model.sections.removed.map(entry => ({ ...entry, origin: locate(entry, true) })),
     motion: model.motion, moved: model.movePairs.map(({ before, after }) => ({ before: locate(before, true), after: locate(after) })), failures: model.failures };
-  return reviewDocument(report, assets());
+  return format === 'embed' ? reviewEmbedDocument(report, assets()) : reviewDocument(report, assets());
 }
 
 /** Generate a standalone, single-theme review without starting a viewer. */
 export async function review(config, values, { log = console.log } = {}) {
   const started = performance.now();
   const format = values.format ?? 'html';
+  const htmlLike = format === 'html' || format === 'embed';
   const [theme] = resolveThemes(values.theme ?? 'system');
-  const destination = path.resolve(config.root, values.out ?? path.join(config.output, `review.${format}`));
+  const destination = path.resolve(config.root, values.out ?? path.join(config.output, format === 'embed' ? 'review-embed.html' : `review.${format}`));
   let locate;
-  if (format === 'html') {
+  if (htmlLike) {
     const projectURL = values['viewer-url'] ?? await hubProjectURL(config.root);
     const viewer = projectURL ? previewURL(projectURL, previewTarget({})) : null;
     if (viewer) viewer.search = '';
@@ -122,7 +139,7 @@ export async function review(config, values, { log = console.log } = {}) {
     const candidates = reviewEdgeCandidates(session, theme);
     skipped = values.exact ? new Set() : await observeUnchanged(session, theme);
     const scheduled = session.scheduled;
-    if (format === 'html') {
+    if (htmlLike) {
       const buildFrames = session.diffInputs.buildFrames;
       session.diffInputs.buildFrames = async options => (built = await buildFrames(options));
     }
@@ -156,7 +173,7 @@ export async function review(config, values, { log = console.log } = {}) {
         await browser.close();
       }
     } else {
-      await writeFile(temporary, buildHtmlReview(model, data, built, theme, locate));
+      await writeFile(temporary, buildHtmlReview(model, data, built, theme, locate, format));
     }
     ({ size: bytes } = await stat(temporary));
     await rename(temporary, destination);
