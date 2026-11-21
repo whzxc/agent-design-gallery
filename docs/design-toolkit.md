@@ -156,7 +156,7 @@ The toolkit validates authored edges and exposes them to agent queries. A select
 
 A source can own a sibling `<stem>.motion.json` (including `index.motion.json` for a feature folder). Version 1 contains an ordered `edges` array. Each edge has a stable project-unique kebab-case `id`. Its owner is the adjacent configured TSX frame source. The edge list is declarative JSON with no expression evaluation. Both endpoints are exact `{source,frame}` references with project-root-relative POSIX paths including the extension, under the same project and Git revision. The `from` source must be the owner. A UX flow is the directed graph of these references. A reverse action needs its own edge, trigger, timing and focus. Layer admission and retirement follow the [asset rules](asset-rules.md#transition-ownership-and-lifecycle).
 
-This example specifies an ARC-style same-slot replacement. It assumes the indicated anchors and keyed shell in both endpoint specimens. This two-sided recipe is proposed in ARC; its implemented panel fades incoming content only.
+This example specifies the two-sided center-slot replacement adopted by ARC. It assumes the indicated anchors and keyed shell in both endpoint specimens. The edge retains its `proposed` scope while ARC implements the recipe.
 
 ```json
 {
@@ -210,12 +210,12 @@ An edge with `unsupported:[{"effect":"topology-spring","reason":"Velocity and sp
 | --- | --- |
 | Dialog or panel opens | Enter the layer with opacity only, at its final geometry throughout entry. Dialog uses `--motion-base` (160 ms), panel `--motion-panel` (180 ms), both with `--ease-enter`. Focus the new content and remember its trigger. |
 | Layer closes | Exit with `--motion-fast` (120 ms), within the entry duration. ARC's dialog uses `--ease-exit`, its panel exit uses `--ease-enter`. Restore the latest trigger with the exposed-layer fallback. |
-| Current center-slot replacement | Keep the center shell keyed by slot. Use an enter opacity track for incoming content from 0.25 to its authored opacity (optional numeric `fromOpacity` on an enter track), over `--motion-fast` with `--ease-enter`. Height and y share `--motion-base` and `--ease-enter` around the fixed center. |
-| Proposed two-sided replacement | Key the shared shell by slot. Width stays fixed. In one phase crossfade old/new header and body over `--motion-fast` (120 ms) while `height` and `y` share `--motion-base` and `--ease-enter`. With equal endpoint centers, identical easing keeps `y + height/2` constant at every sample. Focus the incoming content. |
-| Proposed switch between different slots | Use distinct slot keys. Exit the old shell and enter the new shell in the same phase, each with its own opacity tokens. No geometry path between slots or intermediate empty frame. Narrow or portrait endpoint forms use the same-slot recipe. |
+| Center-slot replacement in the referenced ARC implementation | Keep the center shell keyed by slot. Use an enter opacity track for incoming content from 0.25 to its authored opacity (optional numeric `fromOpacity` on an enter track), over `--motion-fast` with `--ease-enter`. Height and y share `--motion-base` and `--ease-enter` around the fixed center. |
+| Two-sided center-slot replacement (adopted by ARC, implementation in progress) | Key the shared shell by slot. Width stays fixed. In one phase crossfade old/new header and body over `--motion-fast` (120 ms) while `height` and `y` share `--motion-base` and `--ease-enter`. With equal endpoint centers, identical easing keeps `y + height/2` constant at every sample. Focus the incoming content. |
+| Cross-slot switch (unused) | ARC keeps a single desktop center slot. |
 | Reduced preference | All layer families settle geometry and opacity together and commit focus once. Dirty, busy and confirmation states, where authored, are distinct frames with their own eligible actions. |
 
-The pilot follows ARC's [layer guide](https://github.com/whzxc/agent-remote-control/blob/e5d22546a9350aed83edecdb595ab9d1b23df978/docs/dev/ui.md#motion). Retained-panel timing specializes the general content-swap rule. At that revision the panel provider serves a single center slot and the shell fades incoming content. Declare cross-slot concurrency and two-sided content fades as proposed edges until ARC implements them. Track implementation parity separately. Settled endpoint geometry carries retained height and viewport constraints. Live remeasurement and topology springs belong to the implementation.
+The pilot follows ARC's [layer guide](https://github.com/whzxc/agent-remote-control/blob/e5d22546a9350aed83edecdb595ab9d1b23df978/docs/dev/ui.md#motion). Retained-panel timing specializes the general content-swap rule. At that revision the panel provider serves a single center slot and the shell fades incoming content. Settled endpoint geometry carries retained height and viewport constraints. Live remeasurement and topology springs belong to the implementation.
 
 **Later:** stagger, scoped `within` targets, automatic triggers (`trigger.delay`, `MOTION_AUTO_CYCLE`), and `interrupt:"ignore"`. These fields and values are schema errors in v1.
 
