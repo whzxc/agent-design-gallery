@@ -79,11 +79,13 @@
   border-left: 1px solid var(--border);
 }
 .play-stage {
+  background: var(--canvas);
   min-height: 0;
   min-width: 0;
 }
 .play-stage iframe {
   display: block;
+  visibility: hidden;
   width: 100%;
   height: 100%;
   border: 0;
@@ -212,6 +214,7 @@
 .play-settings button {
   flex: 1;
 }
+#motion-player [data-control='hotspots'][aria-pressed='true'],
 #motion-player .play-settings [aria-pressed='true'] {
   background: var(--accent);
   color: var(--on-accent);

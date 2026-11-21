@@ -1,6 +1,7 @@
 // Captured moments on the project switcher route.
 export const playerMoments = [
-  ['at-rest', 'The picker is ready for playback. A click on the stage background briefly reveals its hotspot.'],
+  ['at-rest', 'The picker is ready for playback with Hotspots off.'],
+  ['hotspots', 'Hotspots stays on across transitions. Labels sit outside their targets.'],
   ['playing', 'Opening the switcher, 64 ms into its 160 ms transition.'],
   ['paused', 'The reviewer paused at 64 ms. Focus and history still belong to the source frame.'],
   ['completed', 'The committed frame offers the next actions and retains the last transition.'],

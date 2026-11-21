@@ -360,7 +360,8 @@ function TransitionInspector({ moment, from, to, title }: { moment: PlayerMoment
 }
 
 function FlowPlayer({ moment }: { moment: PlayerMoment }) {
-  const rest = moment === 'at-rest';
+  const hotspots = moment === 'hotspots';
+  const rest = moment === 'at-rest' || hotspots;
   const underway = moment === 'playing' || moment === 'paused';
   const terminal = moment === 'terminal';
   const instant = moment === 'reduced-motion';
@@ -386,6 +387,11 @@ function FlowPlayer({ moment }: { moment: PlayerMoment }) {
           </button>
         </Toolbar>
         <Toolbar wide>
+          <button type="button" aria-pressed={hotspots}
+            class={`flex h-(--control-size) items-center gap-2 rounded-row px-3 text-body font-semibold ${hotspots ? 'bg-accent text-on-accent' : 'bg-surface-sunken'}`}>
+            <Icon name="scan" size={14} />Hotspots
+          </button>
+          <Button form="secondary" icon="map" label="Flow map" />
           <Button form="secondary" icon="route" label="Flow" />
           <div class={rest ? 'opacity-50' : ''}>
             <Button form="secondary" icon="panel-right" label="Transition inspector" />
@@ -397,6 +403,9 @@ function FlowPlayer({ moment }: { moment: PlayerMoment }) {
         <Switcher current={terminal ? instances[0] : projects[0]} kind={terminal ? 'instance' : 'project'}
           open={!rest && !terminal} empty={instant} />
       </div>
+      {hotspots && <div aria-hidden="true" class="absolute left-[563px] top-[209px] h-8 w-60 outline-2 outline-dashed outline-accent">
+        <span class="absolute bottom-full left-0 mb-1 whitespace-nowrap bg-surface px-1 py-0.5 text-[11px]">Open project switcher</span>
+      </div>}
       {flowOpen && <aside class="absolute top-[68px] right-5 w-[350px] rounded-panel border border-border bg-surface shadow-float">
         <div class="p-5">
           <p class={smallHeading}>Current frame</p>

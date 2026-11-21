@@ -71,6 +71,11 @@ async function readyPlayback(page, name) {
   const scene = player.frameLocator('iframe');
   const picker = scene.locator('[data-adg-id=picker]');
   await picker.waitFor();
+  if (name === 'flow-hotspots') {
+    await player.getByRole('button', { name: 'Hotspots', exact: true }).click();
+    await scene.locator('[data-player-hints]').getByText('Open project switcher', { exact: true }).waitFor();
+    return;
+  }
   if (name === 'flow-at-rest') return;
   if (['flow-playing', 'flow-paused'].includes(name)) {
     const time = new Date('2025-01-01T00:00:00Z');
@@ -205,7 +210,7 @@ export default {
     },
     fixture(name) {
       selectedFixture = name;
-      if (playbackFixture(name)) return {url:playbackURL(name),theme:'light',locale:'en-US',timezone:'UTC',clock};
+      if (playbackFixture(name)) return {url:playbackURL(name),theme:name === 'flow-hotspots' ? 'dark' : 'light',locale:'en-US',timezone:'UTC',clock};
       if (reviewFixtures.has(name)) return { url: '/', theme: 'dark', locale: 'en-US', timezone: 'UTC', clock };
       if (Object.hasOwn(hubFixtures, name)) return { url: hubFixtures[name], theme: 'light', locale: 'en-US', timezone: 'UTC', clock };
       const state = fixtureStates[name];

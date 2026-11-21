@@ -102,58 +102,122 @@ test('contract: player entry and Escape restore focus one layer at a time', asyn
   assert.ok(await invoker.evaluate(b => b === document.activeElement));
 });
 
-test('contract: hotspot hints follow interaction and keep labels outside the target and inside the stage', async t => {
+test('contract: hotspots are controlled only by a persistent toggle and keep labels outside targets', async t => {
   const { page, url } = await viewer(t);
   await page.goto(url);
   const invoker = page.getByRole('button', { name: 'Play from project-picker', exact: true });
-  await invoker.focus();
-  await page.keyboard.press('Enter');
   const player = page.getByRole('dialog', { name: 'Play transitions' });
+  const toggle = player.getByRole('button', { name: 'Hotspots', exact: true });
   const iframe = player.locator('iframe');
   const scene = iframe.contentFrame();
   const picker = scene.locator('[data-adg-id=picker]');
   const hints = scene.locator('[data-player-hints]');
   const label = hints.getByText('Open project switcher', { exact: true });
+  await invoker.focus();
+  await page.keyboard.press('Enter');
   await picker.waitFor();
   assert.ok(await picker.evaluate(el => el === el.ownerDocument.activeElement));
+  assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
   assert.ok(await hints.isHidden());
 
   const stage = await iframe.boundingBox();
-  const empty = { x: stage.x + 8, y: stage.y + 8 };
   await picker.hover();
-  await label.waitFor();
-  const above = await label.boundingBox();
-  const target = await picker.boundingBox();
-  assert.ok(above.y + above.height <= target.y);
-  assert.equal(above.x, target.x);
-  await page.mouse.move(empty.x, empty.y);
-  await hints.waitFor({ state: 'hidden' });
-
+  assert.ok(await hints.isHidden());
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Tab');
-  await label.waitFor();
+  assert.ok(await hints.isHidden());
+  await page.mouse.click(stage.x + 8, stage.y + 8);
+  assert.ok(await hints.isHidden());
   const flow = player.getByRole('button', { name: 'Flow', exact: true });
   await flow.click();
   const action = player.getByRole('button', { name: 'Open project switcher · Click “Atlas”', exact: true });
   await action.hover();
-  await label.waitFor();
-  await page.mouse.move(empty.x, empty.y);
-  await hints.waitFor({ state: 'hidden' });
   await action.focus();
-  await label.waitFor();
+  assert.ok(await hints.isHidden());
   await flow.click();
+
+  await toggle.click();
+  await label.waitFor();
+  assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
+  const above = await label.boundingBox(), target = await picker.boundingBox();
+  assert.ok(above.y + above.height <= target.y);
+  assert.equal(above.x, target.x);
+  await page.mouse.click(stage.x + 8, stage.y + 8);
+  assert.ok(await label.isVisible());
+  await page.keyboard.press('h');
+  await hints.waitFor({ state: 'hidden' });
 
   // A target at the upper-right stage edge has room for a label only below it.
   await picker.evaluate(el => Object.assign(el.style, { position: 'fixed', top: '0', left: 'calc(100vw - 36px)' }));
   const edge = await picker.boundingBox();
-  await page.mouse.move(edge.x + 10, edge.y + 10);
+  await toggle.click();
   await label.waitFor();
   const below = await label.boundingBox();
   assert.ok(below.y >= edge.y + edge.height);
   assert.ok(below.x >= stage.x && below.x + below.width <= stage.x + stage.width);
-  await page.mouse.click(empty.x, empty.y);
+  await player.getByRole('button', { name: 'Exit to board' }).click();
+  await invoker.click();
   await label.waitFor();
+  assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
+  await player.getByRole('button', { name: 'Exit to board' }).click();
+  await page.reload();
+  await invoker.click();
+  await label.waitFor();
+  assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
+
+  await picker.click();
+  await scene.locator('[data-adg-frame=switcher-open]').waitFor();
+  for (const name of ['Close project switcher', 'Search for “Nova”', 'Open live instance'])
+    await hints.getByText(name, { exact: true }).first().waitFor();
+  await page.keyboard.press('h');
   await hints.waitFor({ state: 'hidden' });
+  await player.getByRole('button', { name: 'Exit to board' }).click();
+  await invoker.click();
+  await picker.waitFor();
+  assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
+  assert.ok(await hints.isHidden());
+});
+
+test('contract: the player stage follows the board theme and Flow map focuses the full flow from an isolated frame', async t => {
+  const { page, url } = await viewer(t);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.goto(url);
+  await page.getByRole('button', { name: 'Play from project-picker', exact: true }).click();
+  const player = page.getByRole('dialog', { name: 'Play transitions' });
+  const scene = player.frameLocator('iframe');
+  const picker = scene.locator('[data-adg-id=picker]');
+  await picker.waitFor();
+
+  async function canvas(theme) {
+    await page.waitForFunction(theme => {
+      const root = document.documentElement;
+      const stage = document.querySelector('.play-stage');
+      const child = stage.querySelector('iframe').contentDocument.documentElement;
+      const canonical = document.createElement('canvas').getContext('2d');
+      canonical.fillStyle = getComputedStyle(root).getPropertyValue('--canvas').trim();
+      const background = canonical.fillStyle;
+      const matches = node => {
+        canonical.fillStyle = node.ownerDocument.defaultView.getComputedStyle(node).backgroundColor;
+        return canonical.fillStyle === background;
+      };
+      return root.dataset.theme === theme && child.dataset.theme === theme &&
+        matches(stage) && matches(child) && child.style.colorScheme === theme;
+    }, theme);
+  }
+  await canvas('light');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await canvas('dark');
+  assert.ok(await picker.evaluate(el => el === el.ownerDocument.activeElement));
+  await page.emulateMedia({ colorScheme: 'light' });
+  await canvas('light');
+
+  await player.getByRole('button', { name: 'Flow map', exact: true }).click();
+  await page.waitForURL(url => url.searchParams.get('view') === 'playable' &&
+    url.searchParams.get('flow') === JSON.stringify(['modules/project-switcher.tsx', 'project-picker']));
+  const board = page.getByRole('main', { name: 'Playable' });
+  await board.getByRole('heading', { name: 'project-picker-instance', exact: true }).waitFor();
+  await board.locator('button:focus').filter({ hasText: 'Play flow' }).waitFor();
+  assert.equal(await board.locator('button:focus').getAttribute('aria-label'), 'Play flow from project-picker');
 });
 
 test('contract: playable board routes and restores camera, grouped gestures dispatch individually, and text matches committed input only',async t=>{

@@ -128,7 +128,7 @@ export function prototypeFlows(edges, frames, relative) {
       ranks.set(id, 0);
       traverse(id);
     }
-    flows.push({ start, ranks, links: [], id: flow?.id, label: flow?.label });
+    flows.push({ start, ranks, links: [], id: flow?.id, key: flow?.id ?? projectedStart ?? start, label: flow?.label });
   }
   const byNode = new Map(flows.flatMap(flow => [...flow.ranks.keys()].map(id => [id, flow])));
   for (const link of links) byNode.get(link.from).links.push(link);
@@ -184,6 +184,7 @@ export function renderPrototype(container, flows, frames, { card, play, title })
     const section = boardElement('section', 'view-board-section');
     const header = boardElement('header', 'view-section-heading');
     if (flow.id) section.dataset.flowId = flow.id;
+    section.dataset.flowKey = flow.key;
     const name = flow.label || title(start.asset.path);
     const heading = boardElement('h2', '', name);
     const launch = boardElement('button', 'view-board-action', 'Play flow');

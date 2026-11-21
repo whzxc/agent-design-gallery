@@ -782,7 +782,9 @@ function renderRelationships(source) {
 const playableFrames = new Map();
 let motionProjection;
 const frameViews = { recent: 'Recently updated', playable: 'Playable' };
-const requestedFrameView = new URL(location.href).searchParams.get('view');
+const frameViewParams = new URLSearchParams(location.search);
+const requestedFrameView = frameViewParams.get('view');
+let pendingFlow = requestedFrameView === 'playable' ? frameViewParams.get('flow') : null;
 let frameFilter = Object.hasOwn(frameViews, requestedFrameView) && scopeRequest !== 'tokens' ? requestedFrameView : 'all';
 let viewGeneration = 0, historyDirectory, lastIndexedAssets, references, sourcePaths;
 const derivedBoard = $('#view-board'), viewContent = $('#view-board-content');
@@ -870,7 +872,11 @@ function renderFrameView() {
     return;
   }
   const focus = viewContent.contains(document.activeElement)
-    ? { label: document.activeElement.getAttribute('aria-label'), frame: document.activeElement.closest('.view-frame')?.dataset }
+    ? {
+      label: document.activeElement.getAttribute('aria-label'),
+      frame: document.activeElement.closest('.view-frame')?.dataset,
+      flow: document.activeElement.closest('[data-flow-key]')?.dataset.flowKey,
+    }
     : null;
   const frames = frameReferences();
   if (frameFilter === 'recent') {
@@ -881,7 +887,16 @@ function renderFrameView() {
     recentFilter.render(viewContent, { relative: designSource, frames, inScope, card: cards.card });
   } else {
     const flows = prototypeFlows(manifest?.motionEdges ?? [], frames, designSource);
-    if (flows.length) renderPrototype(viewContent, flows, frames, { card: cards.card, play: startFramePlayer, title: assetTitle });
+    if (flows.length) {
+      renderPrototype(viewContent, flows, frames, { card: cards.card, play: startFramePlayer, title: assetTitle });
+      const target = pendingFlow && viewContent.querySelector('[data-flow-key="' + CSS.escape(pendingFlow) + '"]');
+      if (target) requestAnimationFrame(() => {
+        if (!pendingFlow || frameFilter !== 'playable' || !target.isConnected) return;
+        pendingFlow = null;
+        target.scrollIntoView({ block: 'start', inline: 'nearest' });
+        target.querySelector('.view-board-action').focus({ preventScroll: true });
+      });
+    }
     else {
       const status = boardElement('p', 'view-board-status', manifest?.loading ? 'Loading frames…' : 'No playable frames in this scope.');
       status.setAttribute('role', 'status');
@@ -891,7 +906,8 @@ function renderFrameView() {
   if (focus?.label && document.activeElement === document.body) {
     const replacement = [...viewContent.querySelectorAll('button[aria-label="' + CSS.escape(focus.label) + '"]')].find(button => {
       const frame = button.closest('.view-frame')?.dataset;
-      return frame?.frameName === focus.frame?.frameName && frame?.frameSource === focus.frame?.frameSource;
+      return frame?.frameName === focus.frame?.frameName && frame?.frameSource === focus.frame?.frameSource &&
+        button.closest('[data-flow-key]')?.dataset.flowKey === focus.flow;
     });
     (replacement ?? derivedBoard).focus({ preventScroll: true });
   }
@@ -909,6 +925,10 @@ function setFrameFilter(value, focus = true, loadCanvas = true) {
     });
     frameFilter = value;
     const url = new URL(location.href);
+    if (value !== 'playable') {
+      pendingFlow = null;
+      url.searchParams.delete('flow');
+    }
     if (value === 'all') url.searchParams.delete('view');
     else url.searchParams.set('view', value);
     window.history.replaceState(window.history.state, '', url);

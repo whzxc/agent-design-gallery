@@ -1,11 +1,14 @@
 import { icon } from './icons.js';
 import { dataFetch } from './auth.js';
+import { viewURL } from './view-route.js';
 import { candidates } from './motion-identity.js';
 import { createStage, mountScene, observeScene } from './motion-scene.js';
 import { flowLayout } from './motion-flow.js';
 import { preparePaint, playTimeline } from './motion-paint.js';
 
-let preference = sessionStorage.getItem('adg-player-reduced') ?? 'system';
+let preference = 'system', hotspots = false;
+try { preference = sessionStorage.getItem('adg-player-reduced') ?? preference; } catch {}
+try { hotspots = localStorage.getItem('adg-player-hotspots') === 'true'; } catch {}
 const exact = (rows, target) => {
   const found = target && candidates(rows, target);
   return found?.length === 1 ? found[0].el : null;
@@ -22,6 +25,8 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   dialog.innerHTML = `<header class="play-header"><div><span class="play-project">${icon('route', 17)}<b data-control="source"></b></span>
     <button data-control="settings" aria-controls="play-settings" aria-expanded="false">${icon('settings-2', 15)}Playback settings <span data-control="mode"></span></button></div>
     <nav aria-label="Player controls">
+    <button data-control="hotspots" aria-keyshortcuts="H" aria-pressed="false">${icon('scan', 14)}Hotspots</button>
+    <button data-control="flow-map" disabled>${icon('map', 14)}Flow map</button>
     <button data-control="flow" aria-controls="play-flow" aria-expanded="false">${icon('route', 14)}Flow</button>
     <button data-control="inspector" aria-controls="play-inspector" aria-expanded="false" disabled>${icon('panel-right', 14)}Transition inspector</button>
     <button data-control="exit">${icon('log-out', 14)}Exit to board</button></nav></header>
@@ -72,9 +77,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     run = false,
     progress = 0,
     speed = 1,
-    flashTimer,
-    keyboardHints = false,
-    hovered = null,
+    mounted,
     committing = false,
     overlay;
   const reduced = () => preference === 'on' || (preference === 'system' && media.matches);
@@ -84,7 +87,6 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   }
   function exit() {
     stop();
-    clearFlash();
     controller.abort();
     active?.paint?.dispose();
     dialog.close();
@@ -114,20 +116,15 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   dialog.addEventListener('keydown', (e) => {
     e.stopPropagation();
     if (e.key === 'Escape' && !panels.length && dispatch(e, 'key', stage?.firstElementChild)) return;
-    historyKey(e);
-    revealKeyboardHints();
+    playerKey(e);
   });
   dialog.addEventListener('keyup', (e) => e.stopPropagation());
-  dialog.addEventListener('pointerdown', hideKeyboardHints, true);
   control('source').textContent = source
     .split('/')
     .at(-1)
     .replace(/\.tsx$/, '')
     .replace(/-/g, ' ')
     .replace(/^./, (c) => c.toUpperCase());
-  stageHost.addEventListener('click', (event) => {
-    if (event.target === stageHost) flashHints();
-  });
   function fail(err) {
     if (signal.aborted) return;
     busy = false;
@@ -135,6 +132,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     status.textContent = err.message;
     update();
   }
+  const currentTheme = () => document.documentElement.dataset.theme || theme;
   async function fetchScene(ref) {
     const key = sceneKey(ref);
     if (!cache.has(key)) {
@@ -156,7 +154,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     const frames = [];
     for (const { value: endpoint } of endpoints) {
       if (!endpoint || signal.aborted) continue;
-      const specimen = await mountScene(doc, endpoint, theme);
+      const specimen = await mountScene(doc, endpoint, currentTheme());
       const { x, y, width, height } = specimen.getBoundingClientRect();
       frames.push({ endpoint, box: [x, y, width, height], rows: observeScene(specimen, endpoint.design) });
     }
@@ -178,10 +176,11 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     overlay?.remove();
     composing = null;
     const offset = offsets.get(sceneKey(endpoint)) ?? [0, 0];
-    stage = await mountScene(doc, endpoint, theme, { parent: prototype, offset });
+    stage = await mountScene(doc, endpoint, currentTheme(), { parent: prototype, offset });
     if (signal.aborted) throw new DOMException('Player closed', 'AbortError');
     rows = observeScene(stage, endpoint.design);
-    hovered = null;
+    mounted = endpoint;
+    hints();
     for (const edge of endpoint.edges) {
       if (edge.trigger.on !== 'input') continue;
       const el = exact(rows, edge.trigger.target);
@@ -189,48 +188,37 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       if (el?.dataset.playerTextEntry === 'editable') el.contentEditable = 'plaintext-only';
     }
   }
-  function clearFlash() {
-    clearTimeout(flashTimer);
-    flashTimer = undefined;
-  }
-  function flashHints() {
-    clearFlash();
-    flashTimer = setTimeout(() => {
-      clearFlash();
-      hints();
-    }, 1000);
+  const hotspotButton = control('hotspots');
+  hotspotButton.setAttribute('aria-pressed', String(hotspots));
+  hotspotButton.onclick = () => {
+    hotspots = !hotspots;
+    try { localStorage.setItem('adg-player-hotspots', String(hotspots)); } catch {}
+    hotspotButton.setAttribute('aria-pressed', String(hotspots));
     hints();
-  }
-  function revealKeyboardHints() {
-    keyboardHints = true;
-    hints();
-  }
-  function hideKeyboardHints() {
-    keyboardHints = false;
-    hints();
-  }
+  };
+  const flowMap = control('flow-map');
+  flowMap.onclick = () => {
+    const flow = scene?.flow;
+    if (!flow) return;
+    const url = viewURL(location.href, 'all');
+    url.searchParams.set('view', 'playable');
+    url.searchParams.set('flow', flow.id ?? sceneKey(localRef(flow.start, scene.design)));
+    location.assign(url);
+  };
   function hints() {
     overlay?.remove();
     overlay = null;
-    if (!rows.length || busy) return;
-    const chips = new Set([...actions.querySelectorAll('button:hover,button:focus')].map((b) => b.dataset.edge));
-    const focused = keyboardHints && doc.hasFocus() && doc.activeElement?.matches(':focus-visible')
-      ? doc.activeElement
-      : null;
+    if (!hotspots || !rows.length) return;
     const outlined = new Map();
-    for (const edge of (active?.to ?? scene)?.edges ?? []) {
+    for (const edge of mounted?.edges ?? []) {
       const el = exact(rows, edge.trigger.target);
       if (!el) continue;
-      const targetActive = edge.trigger.target.frame
-        ? hovered === el || focused === el
-        : el.contains(hovered) || el.contains(focused);
-      const railActive = chips.has(edge.id);
-      if ((flashTimer !== undefined || targetActive || railActive) && (!outlined.has(el) || railActive))
-        outlined.set(el, edge.label);
+      if (!outlined.has(el)) outlined.set(el, new Set());
+      outlined.get(el).add(edge.label);
     }
     if (!outlined.size) return;
     const { clientWidth: width, clientHeight: height } = doc.documentElement;
-    for (const [el, label] of outlined) {
+    for (const [el, labels] of outlined) {
       const b = el.getBoundingClientRect();
       if (!b.width || !b.height || b.right <= 0 || b.bottom <= 0 || b.left >= width || b.top >= height) continue;
       if (!overlay) {
@@ -266,7 +254,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
         color: 'var(--text)',
         font: '11px system-ui'
       });
-      tag.textContent = label;
+      tag.textContent = [...labels].join(' · ');
       box.append(tag);
       overlay.append(box);
       const measured = tag.getBoundingClientRect();
@@ -339,6 +327,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       button.lastElementChild.textContent = (id === 'back' ? 'Back to ' : 'Forward to ') + (entry?.scene.frame ?? '');
     }
     control('restart').disabled = busy;
+    flowMap.disabled = busy || !scene?.flow;
     control('next').textContent = dest && !dest.edges.length ? 'End of flow' : 'Next actions';
     control('next-context').textContent = active
       ? 'Continue from ' + dest.frame
@@ -391,7 +380,6 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     const el = exact(rows, target) ?? stage.firstElementChild;
     if (el.tabIndex < 0 && !el.hasAttribute('tabindex')) el.tabIndex = -1;
     committing = true;
-    keyboardHints = false;
     try {
       el.focus({ preventScroll: true });
     } finally {
@@ -444,9 +432,6 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   }
   async function begin(edge, seek = null, restore = null) {
     busy = true;
-    clearFlash();
-    hovered = null;
-    overlay?.remove();
     status.textContent = '';
     update();
     const from = scene,
@@ -517,7 +502,6 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     active = null;
     last = null;
     progress = 0;
-    clearFlash();
     busy = true;
     status.textContent = '';
     scene = entry.scene;
@@ -547,12 +531,13 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   control('back').onclick = () => step(history, future);
   control('forward').onclick = () => step(future, history);
   control('restart').onclick = restart;
-  function historyKey(e) {
+  function playerKey(e) {
     if (e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.isComposing || composing ||
         e.target.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])')) return;
     if (e.key === 'ArrowLeft') step(history, future);
     else if (e.key === 'ArrowRight') step(future, history);
     else if (e.key.toLowerCase() === 'r') restart();
+    else if (e.key.toLowerCase() === 'h') hotspotButton.click();
     else return;
     e.preventDefault();
   }
@@ -614,7 +599,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
         button.textContent = value[0].toUpperCase() + value.slice(1);
         button.onclick = () => {
           preference = value;
-          sessionStorage.setItem('adg-player-reduced', value);
+          try { sessionStorage.setItem('adg-player-reduced', value); } catch {}
           preferenceChanged();
         };
       }
@@ -661,16 +646,22 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     iframe = await createStage(stageHost);
     if (signal.aborted) return;
     doc = iframe.contentDocument;
-    doc.documentElement.style.background = 'transparent';
+    const boardRoot = document.documentElement, stageRoot = doc.documentElement;
+    stageRoot.style.background = 'radial-gradient(var(--player-dot) 1px, transparent 1px) 0 0/20px 20px var(--player-canvas)';
     Object.assign(doc.body.style, { background: 'transparent', margin: '0', minHeight: '100vh' });
-    iframe.style.visibility = 'hidden';
-    for (const kind of ['pointerover', 'pointerout', 'focusin', 'focusout'])
-      actions.addEventListener(kind, hints);
-    for (const kind of ['pointerover', 'pointerout', 'focusin', 'focusout'])
-      doc.addEventListener(kind, (e) => {
-        if (kind.startsWith('pointer')) hovered = kind.endsWith('out') ? e.relatedTarget : e.target;
-        hints();
-      });
+    const applyStageTheme = () => {
+      const board = getComputedStyle(boardRoot);
+      stageRoot.style.setProperty('--player-canvas', board.getPropertyValue('--canvas'));
+      stageRoot.style.setProperty('--player-dot', board.getPropertyValue('--dot'));
+      const next = currentTheme(), changed = stageRoot.dataset.theme !== next;
+      stageRoot.dataset.theme = stageRoot.style.colorScheme = next;
+      if (changed && active) commit(); // Frozen transition paint belongs to the previous palette.
+      hints();
+    };
+    applyStageTheme();
+    const themeObserver = new MutationObserver(applyStageTheme);
+    themeObserver.observe(boardRoot, { attributes: true, attributeFilter: ['data-theme'] });
+    signal.addEventListener('abort', () => themeObserver.disconnect(), { once: true });
     doc.addEventListener('compositionstart', (e) => {
       composing = { el: e.target, value: editingValue(e.target) };
     });
@@ -688,8 +679,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
         const hits = edges.filter(
           (x) => exact(rows, x.trigger.target)?.contains(e.target) && !x.trigger.target.frame
         );
-        if (!hits.length) flashHints();
-        else if (!hits.some((x) => x.trigger.on === 'input'))
+        if (hits.length && !hits.some((x) => x.trigger.on === 'input'))
           (actions.closest('[hidden]') ? control('flow') : actions.querySelector('[data-edge="' + CSS.escape(hits[0].id) + '"]'))?.focus();
       }
     });
@@ -720,8 +710,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
             const button = e.target.closest?.('[role="button"], a[tabindex]');
             if (button && !e.repeat && !e.isComposing && !composing &&
                 ['Enter', ' '].includes(e.key) && dispatch(e, 'click', button)) return;
-            historyKey(e);
-            revealKeyboardHints();
+            playerKey(e);
           }
           if (
             !busy &&
@@ -743,7 +732,6 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     doc.addEventListener(
       'pointerdown',
       (e) => {
-        hideKeyboardHints();
         if (active) e.preventDefault();
       },
       true
@@ -752,7 +740,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     await prepareStage(scene);
     doc.body.style.display = 'flex';
     await show(scene);
-    iframe.style.visibility = '';
+    iframe.style.visibility = 'visible';
     busy = false;
     update();
     focus(initialFocus(scene));

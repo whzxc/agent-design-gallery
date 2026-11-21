@@ -33,7 +33,7 @@ test('implementation captures map to isolated fixture environments', async () =>
     const fixture=config.compare.fixture(name);
     const state = name === comments.commentCanvas.fixture ? states['scope-layer'] : states[name];
     assert.equal(fixture.url, playbackFixture(name) ? playbackURL(name) : reviewFixtures.has(name) ? '/' : hubFixtures[name] ?? `/?fixture=${name}`);
-    assert.equal(fixture.theme, reviewFixtures.has(name) ? 'dark' : (playbackFixture(name) || Object.hasOwn(hubFixtures, name)) ? 'light' : state.theme);
+    assert.equal(fixture.theme, reviewFixtures.has(name) || name === 'flow-hotspots' ? 'dark' : (playbackFixture(name) || Object.hasOwn(hubFixtures, name)) ? 'light' : state.theme);
     assert.equal(fixture.locale,'en-US'); assert.ok(Number.isFinite(Date.parse(fixture.clock)));
   }
   assert.throws(()=>config.compare.fixture('unknown'), /Unknown ADG fixture/);

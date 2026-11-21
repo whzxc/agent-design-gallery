@@ -47,11 +47,11 @@
     },
     {
       "implementation": {"file":"public/player.js","symbol":"openPlayer"},
-      "design": [{"source":"design/surfaces/canvas.tsx","frames":["flow-at-rest","flow-playing","flow-paused","flow-completed","flow-terminal","flow-reduced-motion","flow-settings"]}]
+      "design": [{"source":"design/surfaces/canvas.tsx","frames":["flow-at-rest","flow-hotspots","flow-playing","flow-paused","flow-completed","flow-terminal","flow-reduced-motion","flow-settings"]}]
     },
     {
       "implementation":{"file":"public/player.css"},
-      "design":[{"source":"design/surfaces/canvas.tsx","frames":["flow-at-rest","flow-playing","flow-paused","flow-completed","flow-terminal","flow-reduced-motion","flow-settings"]}]
+      "design":[{"source":"design/surfaces/canvas.tsx","frames":["flow-at-rest","flow-hotspots","flow-playing","flow-paused","flow-completed","flow-terminal","flow-reduced-motion","flow-settings"]}]
     },
     {
       "implementation": { "file": "public/style.css", "symbol": "button", "anchor": "button { border:0;" },
