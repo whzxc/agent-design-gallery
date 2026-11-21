@@ -19,11 +19,11 @@ export function BoardChapter({
   const sourcesText = `${sourceCount} ${sourceCount === 1 ? 'source' : 'sources'}`;
   return (
     <article class="bg-surface px-20 pt-16 pb-20 text-text" style={{ width }}>
-      <header class="flex items-end justify-between gap-16 pb-14">
+      <header class="grid grid-cols-[1fr_440px] items-end gap-16 pb-14">
         <div>
-          <p style={{ letterSpacing: eyebrowTracking }} class="flex items-center gap-3 text-caption font-semibold tracking-[2px] text-text-tertiary uppercase">
+          <p style={{ letterSpacing: eyebrowTracking }} class="flex items-center gap-3 text-caption font-semibold tracking-[.16em] text-text-tertiary uppercase">
             <span
-              class="grid h-7 min-w-7 place-items-center rounded-pill bg-text px-[6px]
+              class="grid h-(--row-height) min-w-(--row-height) place-items-center rounded-pill bg-text px-[6px]
                 font-mono text-caption tracking-normal text-surface"
             >
               {String(number).padStart(2, '0')}
@@ -32,9 +32,9 @@ export function BoardChapter({
               {project} · {layer}
             </span>
           </p>
-          <h1 style={{ letterSpacing: titleTracking }} class="mt-4 text-[48px] leading-[56px] font-semibold">{title}</h1>
+          <h1 style={{ letterSpacing: titleTracking }} class="mt-4 text-[48px] leading-[56px] font-semibold tracking-[-.02em]">{title}</h1>
         </div>
-        <p class="shrink-0 text-right text-body text-text-secondary">
+        <p class="text-body leading-[1.6] text-text-secondary">
           {sourcesText} · {frameCount} {countLabel}
         </p>
       </header>

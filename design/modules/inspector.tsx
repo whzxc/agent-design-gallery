@@ -58,7 +58,7 @@ export function Inspector({
                 <button
                   type="button"
                   aria-current={selected ? 'true' : 'false'}
-                  class={`flex min-h-(--row-height) w-full items-center gap-[6px] rounded-row px-2 py-[6px]
+                  class={`flex min-h-[31px] w-full items-center gap-[6px] rounded-row px-2 py-[6px]
                     text-left leading-[1.2] ${selected ? 'bg-surface-sunken text-text' : 'text-text-secondary'}`}
                 >
                   <Icon

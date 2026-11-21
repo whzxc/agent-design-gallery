@@ -126,6 +126,7 @@ export function Switcher({
   search = false,
   empty = false,
   narrow = false,
+  menuClass = '',
 }: any) {
   return (
     <div class="flex flex-col items-start gap-[6px]">
@@ -134,7 +135,7 @@ export function Switcher({
         <ProjectPicker current={current} kind={kind} open={open} width={narrow ? 220 : 240} />
       </Toolbar>
       {open && (
-        <div data-adg-id="menu" class={narrow ? '' : 'ml-[46px]'}>
+        <div data-adg-id="menu" class={`${narrow ? '' : 'ml-[46px]'} ${menuClass}`}>
           <SwitcherMenu current={current} search={search} empty={empty} width={narrow ? 366 : 360} />
         </div>
       )}

@@ -30,7 +30,7 @@ export function ViewerTools({
       >
         <Icon name="messages-square" />
         {commentCount > 0 && (
-          <span
+          <span aria-hidden="true"
             class={`inline-grid min-h-4 min-w-4 place-items-center rounded-pill bg-surface-sunken px-1
               text-caption leading-none font-[650] text-text-secondary tabular-nums
               ${pinsHidden ? 'opacity-[0.65]' : ''}`}

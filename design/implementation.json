@@ -14,6 +14,14 @@
       "design":[{"source":"design/surfaces/canvas.tsx","frames":["board-play-affordance"]}]
     },
     {
+      "implementation":{"file":"public/app.js","symbol":"canvasPlayPosition","anchor":"function canvasPlayPosition(asset, part, toolbars) {"},
+      "design":[{"source":"design/surfaces/canvas.tsx","frames":["board-play-affordance"]}]
+    },
+    {
+      "implementation":{"file":"public/view-boards.js","symbol":"renderPrototype"},
+      "design":[{"source":"design/surfaces/canvas.tsx","frames":["board-playable-filter"]}]
+    },
+    {
       "implementation":{"file":"public/app.js","symbol":"renderFrameView","anchor":"function renderFrameView() {"},
       "design":[{"source":"design/surfaces/canvas.tsx","frames":["board-playable-filter","board-frame-filters"]}]
     },

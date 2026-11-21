@@ -274,7 +274,9 @@ export function CommentsPanel({
                       {detail && <span class="truncate text-meta text-text-tertiary">{detail}</span>}
                       <span class="line-clamp-2 break-words whitespace-pre-wrap">{thread.messages[0]?.text}</span>
                       <span class="flex min-w-0 items-baseline gap-[7px] text-meta text-text-secondary">
-                        <span class="truncate">{last ? `${last.author} · ${last.time}` : ''}</span>
+                        {last && <span class="flex min-w-0 items-baseline gap-[7px]">
+                          <span class="truncate">{last.author}</span><span>{last.time}</span>
+                        </span>}
                         <span class="ml-auto shrink-0 whitespace-nowrap">
                           {replies} {replies === 1 ? 'reply' : 'replies'}
                         </span>

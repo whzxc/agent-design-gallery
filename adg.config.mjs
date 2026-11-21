@@ -80,7 +80,16 @@ async function readyPlayback(page, name) {
     }
     if (name === 'board-playable-filter') await page.locator('[data-filter=playable]').click();
     if (name !== 'board-frame-filters') {
-      await page.waitForFunction(() => [...document.querySelectorAll('#view-board canvas')].some(canvas => canvas.dataset.preview === 'ready'));
+      await page.waitForFunction(() => {
+        const board = document.querySelector('#view-board');
+        const viewport = board.getBoundingClientRect();
+        const visible = [...board.querySelectorAll('.view-frame-well')].filter(well => {
+          const rect = well.getBoundingClientRect();
+          return rect.left < viewport.right && rect.right > viewport.left &&
+            rect.top < viewport.bottom && rect.bottom > viewport.top;
+        });
+        return visible.length > 0 && visible.every(well => well.querySelector('canvas')?.dataset.preview === 'ready');
+      });
     }
     return;
   }
