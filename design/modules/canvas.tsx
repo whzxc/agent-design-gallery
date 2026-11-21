@@ -12,6 +12,8 @@ export function BoardChapter({
   frameCount,
   countLabel = 'frames',
   width = 1680,
+  titleTracking,
+  eyebrowTracking,
   children,
 }: any) {
   const sourcesText = `${sourceCount} ${sourceCount === 1 ? 'source' : 'sources'}`;
@@ -19,7 +21,7 @@ export function BoardChapter({
     <article class="bg-surface px-20 pt-16 pb-20 text-text" style={{ width }}>
       <header class="flex items-end justify-between gap-16 pb-14">
         <div>
-          <p class="flex items-center gap-3 text-caption font-semibold tracking-[2px] text-text-tertiary uppercase">
+          <p style={{ letterSpacing: eyebrowTracking }} class="flex items-center gap-3 text-caption font-semibold tracking-[2px] text-text-tertiary uppercase">
             <span
               class="grid h-7 min-w-7 place-items-center rounded-pill bg-text px-[6px]
                 font-mono text-caption tracking-normal text-surface"
@@ -30,7 +32,7 @@ export function BoardChapter({
               {project} · {layer}
             </span>
           </p>
-          <h1 class="mt-4 text-[48px] leading-[56px] font-semibold">{title}</h1>
+          <h1 style={{ letterSpacing: titleTracking }} class="mt-4 text-[48px] leading-[56px] font-semibold">{title}</h1>
         </div>
         <p class="shrink-0 text-right text-body text-text-secondary">
           {sourcesText} · {frameCount} {countLabel}
@@ -41,7 +43,7 @@ export function BoardChapter({
   );
 }
 
-export function BoardSection({ title, path, modified, selected = false, copied = false, children }: any) {
+export function BoardSection({ title, path, modified, selected = false, copied = false, wide = false, children }: any) {
   return (
     <section class="grid grid-cols-[280px_minmax(0,1fr)] gap-14 border-t border-border py-12">
       <div class="w-[280px]">
@@ -57,12 +59,12 @@ export function BoardSection({ title, path, modified, selected = false, copied =
         </p>
         {modified && <p class="mt-2 text-caption text-text-tertiary">{modified}</p>}
       </div>
-      <div class="grid min-w-0 grid-cols-12 items-start gap-x-6 gap-y-8">{children}</div>
+      <div class={`grid min-w-0 items-start gap-x-6 gap-y-8 ${wide ? 'grid-cols-24' : 'grid-cols-12'}`}>{children}</div>
     </section>
   );
 }
 
-export function SpecimenWell({ name, note, proposed, span = 6, surface = false, selected = false, captionAction, dimmed = false, children }: any) {
+export function SpecimenWell({ name, note, proposed, span = 6, surface = false, selected = false, captionAction, overlayAction = false, dimmed = false, children }: any) {
   const colSpan =
     span === 12
       ? 'col-span-12'
@@ -81,7 +83,7 @@ export function SpecimenWell({ name, note, proposed, span = 6, surface = false, 
       <div class={`flex min-h-24 items-center justify-center rounded-card bg-canvas px-6 py-8 ${ring}`}>
         {surface ? <div class="border border-border">{children}</div> : children}
       </div>
-      <figcaption class="flex flex-col gap-[2px] font-mono text-meta leading-[17px]">
+      <figcaption class={`flex flex-col font-mono text-meta leading-[17px] ${overlayAction ? 'relative' : 'gap-[2px]'}`}>
         {captionAction ? <div class="flex items-center justify-between gap-2"><span>{name}</span>{captionAction}</div> : <span>{name}</span>}
         {detail && <small class="font-ui text-meta leading-[17px] text-text-tertiary">{detail}</small>}
       </figcaption>

@@ -6,6 +6,7 @@ import { startServer } from './src/server.mjs';
 import { states, recent, assetModifiedAt } from './fixtures/viewer.mjs';
 import { commentFile } from './src/comments.mjs';
 import { loadConfig } from './src/toolkit/config.mjs';
+import recentPeriods from './design/fixtures/recent-updates.json' with { type: 'json' };
 import comments from './design/fixtures/comments.json' with { type: 'json' };
 import { hubFixtures, readyFixtureHub, startFixtureHub } from './fixtures/hub-compare.mjs';
 import { readyReviewFixture, reviewFixtureTexts, reviewFixtures, startReviewFixture } from './fixtures/review-compare.mjs';
@@ -33,20 +34,16 @@ async function readyPlayback(page, name) {
         const directory = document.querySelector('#app-directory').title;
         localStorage.setItem('adg-visit:'+JSON.stringify([directory,'fixture']),JSON.stringify({started:0,head:'2'.repeat(40)}));
       });
+      const globalFrames = await page.locator('.board-caption').evaluateAll(captions => {
+        const sources = {};
+        for (const { dataset } of captions)
+          (sources['design/' + dataset.frameSource] ??= []).push(dataset.frameName);
+        return sources;
+      });
       await page.route('**/api/recent-updates?*',route=>{
-        const row=(frame,status,extra={})=>({source:'design/modules/project-switcher.tsx',frame,status,...extra});
-        const periods=[
-          {title:'Uncommitted',subjects:[],rows:[row('switcher-open','changed'),row('legacy-picker','removed')]},
-          {title:'Today',globalCauses:['adg.config.mjs','bun.lock'],subjects:['Add an empty search state','Adjust menu elevation'],rows:[
-            row('switcher-empty','added'),...Object.entries({
-              'project-switcher':['project-picker'], menus:['more','more-tokens','zoom','context-element','context-frame'],
-              navigation:['scope-tabs','contents-layer','contents-search','contents-search-empty','contents-tokens'],tokens:['token-board']
-            }).flatMap(([module,frames])=>frames.map(frame=>row(frame,'changed',{source:'design/modules/'+module+'.tsx',causes:['design/tokens.css']})))]},
-          {title:'Earlier this week',subjects:['Move the live instance picker'],rows:[row('project-picker-instance','moved',
-            {former:{source:'design/modules/instance-picker.tsx',frame:'project-picker-instance'}})]}
-        ];
-        if (new URL(route.request().url()).searchParams.has('since')) periods.pop();
-        return route.fulfill({json:{available:true,complete:true,head,branch,generation:'fixture',periods:periods.map(p=>({...p,complete:true}))}});
+        const since = new URL(route.request().url()).searchParams.has('since');
+        const periods = recentPeriods.filter(period => !since || period.title !== 'Earlier this week');
+        return route.fulfill({json:{available:true,complete:true,head,branch,generation:'fixture',periods:periods.map(p=>({...p,complete:true,...(p.globalCauses && {globalFrames})}))}});
       });
       await page.locator('[data-filter=recent]').click();
       if (name.endsWith('on-board')) {

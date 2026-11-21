@@ -1,0 +1,37 @@
+[
+  {
+    "title": "Uncommitted",
+    "subjects": [],
+    "rows": [
+      {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open", "status": "changed"},
+      {"source": "design/modules/project-switcher.tsx", "frame": "legacy-picker", "status": "removed"}
+    ]
+  },
+  {
+    "title": "Today",
+    "subjects": ["Add an empty search state", "Adjust menu elevation"],
+    "globalCauses": ["adg.config.mjs", "bun.lock"],
+    "rows": [
+      {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty", "status": "added"},
+      {"source": "design/modules/project-switcher.tsx", "frame": "project-picker", "status": "changed", "causes": ["design/tokens.css"]},
+      {"source": "design/modules/menus.tsx", "frame": "more", "status": "changed", "causes": ["design/tokens.css"]},
+      {"source": "design/modules/menus.tsx", "frame": "more-tokens", "status": "changed", "causes": ["design/tokens.css"]},
+      {"source": "design/modules/menus.tsx", "frame": "zoom", "status": "changed", "causes": ["design/tokens.css"]},
+      {"source": "design/modules/menus.tsx", "frame": "context-element", "status": "changed", "causes": ["design/tokens.css"]},
+      {"source": "design/modules/menus.tsx", "frame": "context-frame", "status": "changed", "causes": ["design/tokens.css"]},
+      {"source": "design/modules/navigation.tsx", "frame": "scope-tabs", "status": "changed", "causes": ["design/tokens.css"]},
+      {"source": "design/modules/navigation.tsx", "frame": "contents-layer", "status": "changed", "causes": ["design/tokens.css"]},
+      {"source": "design/modules/navigation.tsx", "frame": "contents-search", "status": "changed", "causes": ["design/tokens.css"]},
+      {"source": "design/modules/navigation.tsx", "frame": "contents-search-empty", "status": "changed", "causes": ["design/tokens.css"]},
+      {"source": "design/modules/navigation.tsx", "frame": "contents-tokens", "status": "changed", "causes": ["design/tokens.css"]},
+      {"source": "design/modules/tokens.tsx", "frame": "token-board", "status": "changed", "causes": ["design/tokens.css"]}
+    ]
+  },
+  {
+    "title": "Earlier this week",
+    "subjects": ["Move the live instance picker"],
+    "rows": [
+      {"source": "design/modules/project-switcher.tsx", "frame": "project-picker-instance", "status": "moved", "former": {"source": "design/modules/instance-picker.tsx", "frame": "project-picker-instance"}}
+    ]
+  }
+]

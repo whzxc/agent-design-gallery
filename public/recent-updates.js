@@ -56,6 +56,7 @@ export function createHistoryFilter(update) {
   let request, timer, invalidation, directory, result, message, baseline, range, stamp;
   let activeGroup, query, verifying;
   const visualStates = new Map();
+  const expandedRemovals = new Set();
   function cancelVisual() {
     verifying?.controller.abort();
     verifying = null;
@@ -64,6 +65,7 @@ export function createHistoryFilter(update) {
     cancelVisual();
     activeGroup = null;
     visualStates.clear();
+    expandedRemovals.clear();
     request?.abort();
     request = null;
     clearTimeout(timer);
@@ -244,13 +246,18 @@ export function createHistoryFilter(update) {
           section.append(visual.output);
         }
         for (const subject of period.subjects) section.append(element('small', subject));
-        const inherited = new Map(),
-          direct = [];
+        const inherited = new Map();
+        const direct = { changed: [], added: [], moved: [], removed: [] };
+        let removedCount = 0;
         for (const row of period.rows) {
           const locator = redirects.has(key(row)) ? redirects.get(key(row)) : row;
           const source = context.relative(locator?.source ?? row.source);
           const live = row.status !== 'removed' && locator && context.visible.get(source)?.has(locator.frame);
           if (!live && !context.inScope(context.relative(row.source), row.frame, row.chapter)) continue;
+          if (row.status === 'removed') {
+            removedCount++;
+            if (!expandedRemovals.has(period)) continue;
+          }
           const group = row.causes && JSON.stringify([period.title, ...row.causes]);
           if (live && (activeGroup ? activeGroup === group : !group)) {
             if (!matches.has(source)) matches.set(source, new Set());
@@ -295,9 +302,22 @@ export function createHistoryFilter(update) {
             button.onclick = () => context.locate(source, locator.frame);
           }
           if (group) inherited.get(group).rows.push(button);
-          else direct.push(button);
+          else direct[row.status].push(button);
         }
-        section.append(...direct);
+        section.append(...direct.changed, ...direct.added, ...direct.moved);
+        if (removedCount) {
+          const expanded = expandedRemovals.has(period);
+          const toggle = element('button', 'Removed (' + removedCount + ')');
+          toggle.className = 'recent-removed';
+          toggle.dataset.recentFocus = JSON.stringify(['removed', period.base, period.head]);
+          toggle.setAttribute('aria-expanded', String(expanded));
+          toggle.onclick = () => {
+            if (expanded) expandedRemovals.delete(period);
+            else expandedRemovals.add(period);
+            update();
+          };
+          section.append(toggle, ...direct.removed);
+        }
         const select = (id) => {
           activeGroup = activeGroup === id ? null : id;
           update();
@@ -335,7 +355,8 @@ export function createHistoryFilter(update) {
               }
           }
         }
-        if (!direct.length && !inherited.size && !period.globalCauses?.length && period.complete)
+        if (!removedCount && !direct.changed.length && !direct.added.length && !direct.moved.length &&
+            !inherited.size && !period.globalCauses?.length && period.complete)
           section.append(element('p', 'No matching changes in this scope.'));
         for (const failure of period.failures ?? []) section.append(element('small', failure.message));
         nodes.push(section);
