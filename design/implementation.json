@@ -6,6 +6,10 @@
       "design":[{"source":"design/surfaces/canvas.tsx","frames":["board-play-affordance","board-playable-filter","board-frame-filters"]}]
     },
     {
+      "implementation":{"file":"public/app.js","symbol":"renderFilter","anchor":"function renderFilter() {"},
+      "design":[{"source":"design/surfaces/canvas.tsx","frames":["board-playable-filter","board-frame-filters"]}]
+    },
+    {
       "implementation": {"file":"public/switcher.js","anchor":"else row.href = item.url","symbol":"destination link"},
       "design":[{"source":"design/modules/project-switcher.tsx","transition":"open-live-instance"}]
     },
@@ -36,6 +40,10 @@
     {
       "implementation": {"file":"public/player.js","symbol":"openPlayer"},
       "design": [{"source":"design/surfaces/canvas.tsx","frames":["flow-at-rest","flow-playing","flow-paused","flow-completed","flow-terminal","flow-reduced-motion","flow-settings"]}]
+    },
+    {
+      "implementation":{"file":"public/player.css"},
+      "design":[{"source":"design/surfaces/canvas.tsx","frames":["flow-at-rest","flow-playing","flow-paused","flow-completed","flow-terminal","flow-reduced-motion","flow-settings"]}]
     },
     {
       "implementation": { "file": "public/style.css", "symbol": "button", "anchor": "button { border:0;" },
