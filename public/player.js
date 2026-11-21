@@ -19,9 +19,9 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   link.rel = 'stylesheet';
   link.href = new URL('player.css', document.baseURI);
   dialog.innerHTML = `<header class="play-header"><div><span class="play-project">${icon('route', 17)}<b data-control="source"></b></span>
-    <button data-control="settings" aria-expanded="false">${icon('settings-2', 15)}Playback settings <span data-control="mode"></span></button></div>
+    <button data-control="settings" aria-controls="play-settings" aria-expanded="false">${icon('settings-2', 15)}Playback settings <span data-control="mode"></span></button></div>
     <button data-control="exit">${icon('log-out', 14)}Exit to board</button></header>
-    <section class="play-settings" aria-label="Playback settings" hidden></section>
+    <section id="play-settings" class="play-settings" aria-label="Playback settings" hidden></section>
     <section class="play-stage" aria-label="Frame preview"></section>
     <aside class="play-rail"><section><small>Current frame</small><h1 data-control="current" aria-live="polite"></h1>
     <small>Path taken</small><p data-control="path"></p><button data-control="back">${icon('arrow-left', 14)}<span></span></button></section>
@@ -85,9 +85,17 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     )?.focus({ preventScroll: true });
   }
   control('exit').onclick = exit;
+  function dismissPopover() {
+    const open = dialog.querySelectorAll('[aria-controls][aria-expanded="true"]');
+    const button = open[open.length - 1];
+    if (!button) return false;
+    button.click();
+    button.focus();
+    return true;
+  }
   dialog.addEventListener('cancel', (e) => {
     e.preventDefault();
-    exit();
+    if (!dismissPopover()) exit();
   });
   // Modal keyboard commands never reach board camera or navigation handlers.
   dialog.addEventListener('keydown', (e) => e.stopPropagation());
@@ -569,6 +577,10 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       doc.addEventListener(
         name,
         (e) => {
+          if (name === 'keydown' && e.key === 'Escape' && !e.isComposing && !composing && dismissPopover()) {
+            e.preventDefault();
+            return;
+          }
           if (
             !dispatch(e, input) &&
             !busy &&
@@ -598,7 +610,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     await show(scene);
     busy = false;
     update();
-    control('exit').focus();
+    (actions.querySelector('button') ?? control('exit')).focus();
   } catch (err) {
     fail(err);
   }

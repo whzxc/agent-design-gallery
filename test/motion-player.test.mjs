@@ -61,12 +61,38 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
   assert.deepEqual(await board(),before);assert.ok(await invoker.evaluate(el=>el===document.activeElement));
 });
 
+test('contract: player entry and Escape restore focus one layer at a time', async t => {
+  const { page, url } = await viewer(t);
+  await page.goto(url);
+  const invoker = page.getByRole('button', { name: 'Play', exact: true });
+  await invoker.click();
+  const player = page.getByRole('dialog', { name: 'Play transitions' });
+  const first = player.locator('[data-edge]').first();
+  await first.waitFor();
+  assert.ok(await first.evaluate(b => b === document.activeElement));
+  await page.keyboard.press('Enter');
+  await player.locator('[data-control=current]').filter({hasText:/^switcher-open$/}).waitFor();
+  const settings = player.getByRole('button', { name: /Playback settings/ });
+  for (const target of [player.locator('[data-speed="1"]'), player.frameLocator('iframe').getByRole('searchbox')]) {
+    await settings.click();
+    await target.focus();
+    await page.keyboard.press('Escape');
+    assert.equal(await settings.getAttribute('aria-expanded'), 'false');
+    assert.ok(await settings.evaluate(b => b === document.activeElement));
+    assert.equal(await player.locator('[data-control=current]').textContent(), 'switcher-open');
+  }
+  await page.keyboard.press('Escape');
+  await player.waitFor({state:'detached'});
+  assert.ok(await invoker.evaluate(b => b === document.activeElement));
+});
+
 test('contract: board filter preserves placement, grouped gestures dispatch individually, and text matches committed input only',async t=>{
   const {page,url}=await viewer(t);
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.goto(new URL('/view/layer/modules/asset/modules%2Fproject-switcher.tsx/frame/project-picker',url).href);
   const caption=page.getByRole('button',{name:'Play from project-picker',exact:true});
   await caption.waitFor();
+  await page.waitForFunction(() => window.__adg.ready && window.__adg.metadataComplete);
   const camera=()=>page.evaluate(()=>window.__adg.view);
   const before=await camera();
   await page.locator('#filter-toggle').click();await page.locator('[data-filter=playable]').click();
