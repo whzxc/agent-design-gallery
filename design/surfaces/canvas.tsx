@@ -253,7 +253,10 @@ function RecentBoard({ sinceVisit }: { sinceVisit: boolean }) {
     <div class="flex flex-wrap gap-1">
       {['Latest', 'This week', 'Since my last visit'].map(range =>
         <button key={range} type="button" aria-pressed={selected === range}
-          class={boardAction + (selected === range ? ' bg-surface shadow-float' : '')}>{range}</button>)}
+          disabled={!sinceVisit && range === 'Since my last visit'}
+          class={'h-(--control-size) shrink-0 rounded-row px-3 text-body font-[550] whitespace-nowrap ' +
+            (selected === range ? 'bg-surface-sunken text-text' : 'text-text-secondary') +
+            (!sinceVisit && range === 'Since my last visit' ? ' opacity-45' : '')}>{range}</button>)}
     </div>
     <section class={sectionStyle}>
       <h2 class="mb-3 text-title font-semibold">Direct changes</h2>

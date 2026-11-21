@@ -38,8 +38,8 @@ h3 { font-size:var(--text-meta); color:var(--text-tertiary); font-weight:550; li
 .picker>[data-icon]:first-child { color:var(--text-secondary); }
 .picker>[data-icon]:last-child { color:var(--text-tertiary); }
 #scope-tabs { display:flex; gap:2px; align-items:center; min-width:0; overflow:auto; scrollbar-width:none; }
-#scope-tabs button { height:var(--control-size); flex:none; padding:0 12px; color:var(--text-secondary); font-weight:550; }
-#scope-tabs button[aria-selected="true"], .icon-button[aria-expanded="true"] { background:var(--surface-sunken); color:var(--text); }
+:is(#scope-tabs, .recent-ranges) > button { height:var(--control-size); flex:none; padding:0 12px; color:var(--text-secondary); font-weight:550; }
+:is(#scope-tabs, .recent-ranges) > button:is([aria-selected="true"], [aria-pressed="true"]), .icon-button[aria-expanded="true"] { background:var(--surface-sunken); color:var(--text); }
 .isolation-pill, .view-pill { display:inline-flex; align-items:center; gap:6px; height:var(--control-size); flex:none; padding:0 10px; border-radius:var(--radius-row); background:var(--surface-sunken); color:var(--text); font-size:var(--text-body); font-weight:550; max-width:220px; }
 .isolation-pill>span:not([data-icon]), .view-pill>span:not([data-icon]) { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .isolation-pill .icon, .view-pill .icon { color:var(--text-secondary); }

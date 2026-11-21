@@ -52,12 +52,12 @@ async function readyPlayback(page, name) {
       const head = '1'.repeat(40), branch = 'fixture';
       await page.route('**/api/recent-visit',route=>route.fulfill({json:{head,branch}}));
       await page.route('**/api/recent-state',route=>route.fulfill({json:{head,branch,generation:'fixture'}}));
-      await page.evaluate(async branch => {
+      await page.evaluate(async ({ branch, sinceVisit }) => {
         const directory = document.querySelector('#app-directory').title;
-        localStorage.setItem('adg-visit:'+JSON.stringify([directory,branch]),JSON.stringify({started:0,head:'2'.repeat(40)}));
+        if (sinceVisit) localStorage.setItem('adg-visit:'+JSON.stringify([directory,branch]),JSON.stringify({started:0,head:'2'.repeat(40)}));
         const { recordVisit } = await import('/recent-updates.js');
         await recordVisit(directory, true, false);
-      }, branch);
+      }, { branch, sinceVisit: name.endsWith('on-board') });
       await page.route('**/api/recent-frames?*', route => {
         const since = new URL(route.request().url()).searchParams.has('since');
         const periods = recentPeriods.filter(period => !since || period.title !== 'Earlier this week');
