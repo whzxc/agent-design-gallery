@@ -1,3 +1,4 @@
+import { recordVisit, createHistoryFilter } from './recent-updates.js';
 import { createContextMenu } from './context-menu.js';
 import { createComments } from './comments.js';
 import { attachComment, commentElement, commentLabel, placeComment } from './comment-anchors.js';
@@ -240,6 +241,7 @@ function back() {
 function changeScope(next, entry = null, record = true) {
   const nextFrame = entry?.onlyFrame ?? null;
   if (next === scopeRequest && nextFrame === onlyFrame) return;
+  if (frameFilter === 'recent') setFrameFilter('all');
   const wasOverlay = scopeRequest === 'tokens' || !!tokenManifest;
   const nextOverlay = next === 'tokens';
   const preserveSearch = !fixtureState && !wasOverlay && !nextOverlay && ['all', 'layer'].includes(scopeKind(next)) && !!$("#search").value.trim();
@@ -752,14 +754,21 @@ function renderRelationships(source) {
 const playableFrames = new Map();
 let motionProjection;
 const frameFilters = {
+  recent: {title:'Recently updated'},
   playable: { title: 'Playable', matches: playableFrames, empty: 'No playable frames in this scope.' }
 };
 let frameFilter = 'all';
 let filterMatches = null;
 
+const recentFilter = createHistoryFilter(() => { if (frameFilter === 'recent') { renderFilter(); requestDraw(); } });
+window.addEventListener('pagehide', () => recentFilter.close());
 async function startFramePlayer(source, frame, invoker) {
   const { openPlayer } = await import('./player.js');
+  if (frameFilter === 'recent') recentFilter.close();
   await openPlayer({ source, frame, theme: effectiveTheme, invoker });
+  document.querySelector('#motion-player')?.addEventListener('close', () => {
+    if (frameFilter === 'recent') void recentFilter.open(manifest.directory);
+  }, {once:true});
 }
 function offerPlay(host, part) {
   const button = $('#play-frame');
@@ -773,6 +782,22 @@ function renderFilter() {
   $('#filter-toggle').classList.toggle('active', !!filter);
   $('#filter-results').hidden = !filter;
   if (filter) {
+    $('#filter-results strong').textContent = filter.title;
+    $('#filter-results').setAttribute('aria-label',filter.title+' results');
+  }
+  if (filter && frameFilter === 'recent') {
+    const visible = new Map();
+    for (const asset of assets) {
+      if (!visible.has(asset.path)) visible.set(asset.path,new Set());
+      for (const part of asset.shown ?? []) visible.get(asset.path).add(part.name);
+    }
+    const scope = manifest?.scope;
+    const inScope = (source,frame,chapter) => (!onlyFrame || onlyFrame === frame) && (scope === 'all' ||
+      visible.has(source) || scopeKind(scope) === 'group' && (chapter ?? source.split('/').slice(0,-1).join('/')) === scopeTarget(scope) ||
+      scopeKind(scope) === 'layer' && source.split('/')[0] === scopeTarget(scope));
+    filterMatches = recentFilter.render($('#filter-rows'),{relative:designSource,visible,inScope,
+      locate:(source,name)=>navigate(()=>locateFrame(source,name))});
+  } else if (filter) {
     const rows = [];
     for (const [source, names] of filter.matches) {
       const items = assets.filter((a) => a.path === source);
@@ -795,7 +820,9 @@ function renderFilter() {
   boardLayer.emphasize(playableFrames, filterMatches);
 }
 function setFrameFilter(value) {
+  recentFilter.close();
   frameFilter = value;
+  if (value === 'recent') void recentFilter.open(manifest.directory);
   $('#filter-options').hidden = true;
   $('#filter-toggle').setAttribute('aria-expanded', 'false');
   renderFilter();
@@ -1345,6 +1372,7 @@ function draw() {
   if (zoomValue.textContent !== percentage) zoomValue.textContent = percentage;
   if (zoomOutput.value !== percentage) zoomOutput.value = percentage;
   window.__adg.ready = !!manifest && !manifest.loading && manifest.renderTheme === effectiveTheme && drawingReady === drawingCount && !moving && !arranger.pending;
+  if (window.__adg.ready && manifest?.directory) void recordVisit(manifest.directory);
   if(fixtureState && fixtureApplied && window.__adg.ready) document.documentElement.dataset.fixtureReady=fixtureState.name;
   window.__adg.revision = manifest?.revision;
   window.__adg.visibleReady = drawingReady; window.__adg.visibleCount = drawingCount;
@@ -2226,6 +2254,7 @@ if ((tokenManifest || manifest) && !isUnauthorized()) {
   window.addEventListener('adg-unauthorized', () => events.close(), { once: true });
   events.onmessage = async (e) => {
     const data = JSON.parse(e.data);
+    if (frameFilter === 'recent' && (data.changed || data.motionSources)) recentFilter.invalidate();
     if(data.motionSources){
       if (manifest) {
         manifest.motionFrames = data.motionFrames;

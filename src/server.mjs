@@ -65,6 +65,7 @@ export async function startServer({
     revision = 0,
     closing = false,
     buildStore, viewerCache, codePaths=new Set();
+  const recentJobs = new Map();
   const motionOwners = new Map();
   let motionFrames;
   // Project discovery and its watcher own this projection. Drawing and selection only read it.
@@ -290,6 +291,7 @@ export async function startServer({
     );
     watcher?.close();
     watcher = nextWatcher;
+    for (const controller of recentJobs.keys()) controller.abort();
     activeProject=project;watchArch(project,next);
     root = next;
     motionOwners.clear(); motionFrames=undefined; await indexMotion(project, next, sidecars, sidecars, true);
@@ -582,6 +584,43 @@ export async function startServer({
       const file = ['GET', 'HEAD'].includes(request.method) && viewerFile(url.pathname);
       if (file) return await shell(request, response, file, request.headers['x-adg-viewer-base']);
       if (!directLocal(request)) return json(response, 401, { error: 'Unauthorized' });
+      if (request.method === 'GET' && ['/api/recent-visit','/api/recent-updates','/api/recent-state'].includes(url.pathname)) {
+        if (!activeProject) return json(response,404,{error:'No project is open.'});
+        const { visitRevision, dirtyGeneration } = await import('./recent-history.mjs');
+        if (url.pathname !== '/api/recent-updates') {
+          const visit = await visitRevision(activeProject.root);
+          if (visit.branch && url.pathname === '/api/recent-state')
+            visit.generation = (await dirtyGeneration(activeProject.root,visit.head,activeProject.output)).generation;
+          return json(response,200,visit);
+        }
+        const day=Number(url.searchParams.get('day')), week=Number(url.searchParams.get('week'));
+        if (!Number.isSafeInteger(day) || !Number.isSafeInteger(week) || week<=0 || week>day || day-week>7*86400000)
+          return json(response,400,{error:'Invalid local period boundaries.'});
+        const {runRecentJob} = await import('./recent-job.mjs');
+        const controller = new AbortController();
+        response.once('close',()=>controller.abort());
+        const job = runRecentJob({root:activeProject.root, directory:path.join(stateDirectory,'cache',digest(root),'recent'),
+          day,week,since:url.searchParams.get('since')},controller.signal);
+        recentJobs.set(controller,job);
+        // Keep streaming proxies alive during long cold comparisons. Whitespace is valid JSON.
+        const heartbeat = setInterval(() => {
+          if (!response.destroyed) {
+            if (!response.headersSent) response.writeHead(200, {'Content-Type':'application/json','Cache-Control':'no-store'});
+            response.write('\n');
+          }
+        },10000);
+        try {
+          const result = await job;
+          if (!response.destroyed) {
+            if (response.headersSent) response.end(JSON.stringify(result));
+            else json(response,200,result);
+          }
+        } catch (error) {
+          if (!response.headersSent) throw error;
+          if (!response.destroyed) response.end(JSON.stringify({error:error.message}));
+        } finally { clearInterval(heartbeat); recentJobs.delete(controller); }
+        return;
+      }
       if (url.pathname === '/api/play' && request.method === 'GET') {
         const source = url.searchParams.get('source'), frame = url.searchParams.get('frame');
         if (!activeProject || !codePaths.has(source) || !source.endsWith('.tsx')) return json(response,404,{error:'Unknown playback source.'});
@@ -738,6 +777,8 @@ export async function startServer({
   let closePromise;
   const close = () => closePromise ??= (async () => {
     closing = true;
+    for (const controller of recentJobs.keys()) controller.abort();
+    await Promise.allSettled(recentJobs.values());
     clearTimeout(refreshTimer);
     clearInterval(commentTimer);
     let primary;

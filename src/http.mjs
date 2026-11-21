@@ -16,7 +16,7 @@ export const viewerFiles = {
   '/comments.js': 'comments.js', '/comments.css': 'comments.css', '/comment-anchors.js': 'comment-anchors.js', '/context-menu.js': 'context-menu.js',
   '/player.js': 'player.js', '/player.css': 'player.css', '/motion-identity.js': 'motion-identity.js',
   '/motion-scene.js': 'motion-scene.js', '/motion-paint.js': 'motion-paint.js',
-  '/view-route.js': 'view-route.js',
+  '/recent-updates.js': 'recent-updates.js', '/view-route.js': 'view-route.js',
 };
 export const viewerFile = pathname => isViewPath(pathname) ? 'index.html' : viewerFiles[pathname];
 const designFiles = { 'tokens.css': 'tokens.css', 'favicon.svg': 'art/adg-mark.svg' };

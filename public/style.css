@@ -234,3 +234,13 @@ kbd { display:inline-flex; align-items:center; height:var(--keycap-size); paddin
 #filter-rows button {font-family:var(--font-mono)}
 
 @media(max-width:700px){#filter-results{width:min(42vw,240px)}#filter-rows button{overflow-wrap:anywhere}}
+
+.recent-ranges { display:flex; margin:10px 0; padding:3px; border-radius:var(--radius-field); background:var(--surface-sunken) }
+#filter-rows .recent-ranges button { text-align:center; font-family:inherit }
+.recent-ranges [aria-pressed=true] { background:var(--surface); box-shadow:var(--shadow-float) }
+#filter-rows section { border-top:1px solid var(--border); margin-top:12px }
+#filter-rows small { display:block; color:var(--text-secondary); overflow-wrap:anywhere; margin:3px 0 }
+#filter-rows .recent-row { display:grid; grid-template-columns:1fr auto; gap:2px 8px; padding:6px 8px; text-align:left; overflow-wrap:anywhere }
+.recent-row small { grid-column:1 / -1 }
+.recent-row span:last-of-type { color:var(--text-secondary); font-family:var(--font-ui) }
+#filter-rows summary { cursor:pointer; padding:8px; background:var(--surface-sunken); border-radius:var(--radius-row); overflow-wrap:anywhere }

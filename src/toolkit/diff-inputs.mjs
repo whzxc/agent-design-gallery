@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, realpath, rm, symlink } from 'node:fs/promises';
-import { resolveBase, materializeBase, sourceRenames, revisionValue, revisionError, revisionChanges } from './arch-git.mjs';
+import { resolveBase, materializeBase, revisionValue, revisionError, revisionChanges } from './arch-git.mjs';
 import { configInputFiles } from './input-generation.mjs';
 import { loadConfig, legacyConfigFile } from './config.mjs';
 import { selectSources, relative } from './project.mjs';
@@ -142,11 +142,8 @@ function groupFrames(rows, field) {
   return groups;
 }
 
-/** Prepare revision inputs. The caller closes the session and owns any supplied browser. */
-export async function prepareDiffInputs(config, args = [], options = {}) {
-  const base = await resolveBase(config, options.base);
-  const root = await realpath(config.root);
-  const tree = await materializeBase(base);
+export async function openDiffRevision(base, root, temporaryDirectory) {
+  const tree = await materializeBase(base, temporaryDirectory);
   const warnings = [];
   try {
     const configDependencies = await reuseEnvironment(base, tree, root);
@@ -155,6 +152,7 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
       message: `Base config uses current node_modules; environment files differ: ${configDependencies.changedFiles.join(', ')}.`, next: [],
     });
     const beforeRoot = path.join(tree.directory, path.relative(base.root, root));
+    await mkdir(beforeRoot,{recursive:true});
     const baseMigration = { applied: false, changes: [] };
     const translate = value => revisionValue(value, tree.directory, base.root);
     let beforeConfig;
@@ -172,23 +170,39 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
         }
         return loadConfig(beforeRoot, { discover: false });
       }, translate);
-    } catch (error) { throw revisionError(historicalFailure(error), tree.directory, base); }
-    const before = { config: beforeConfig, sources: inventory(beforeConfig, tree.directory) };
+    } catch (error) { throw historicalFailure(error); }
+    return { config: beforeConfig, sources: inventory(beforeConfig, tree.directory), revision: base,
+      warnings, translate, environment: { configDependencies, baseMigration }, close: tree.close };
+  } catch (cause) {
+    const failure = revisionError(cause, tree.directory, base);
+    await cleanup(tree.close, failure);
+    throw failure;
+  }
+}
+
+/** Prepare both endpoints before selecting sources, hints or parent support frames. */
+export async function prepareDiffInputs(config, args = [], options = {}) {
+  const root = await realpath(config.root);
+  const open = options.openRevision ?? (async rev => openDiffRevision(await resolveBase(config, rev), root));
+  const before = await open(options.base);
+  const { revision: base, translate, environment: { configDependencies, baseMigration } } = before;
+  const warnings = [...before.warnings];
+  let target;
+  const close = async () => { try { await target?.close(); } finally { await before.close(); } };
+  try {
+    if (options.head) { target = await open(options.head); warnings.push(...target.warnings); }
     // Resolve symlinked project roots consistently with the Git base identity.
     const currentConfig = { ...config, root };
     for (const key of ['design', 'arch', 'archDirectory', 'output']) {
       if (config[key]) currentConfig[key] = path.resolve(root, path.relative(config.root, config[key]));
     }
-    const after = { config: currentConfig, sources: inventory(currentConfig, base.root) };
+    const after = target ?? { config: currentConfig, sources: inventory(currentConfig, base.root) };
     const union = new Set([...before.sources.keys(), ...after.sources.keys()]);
-    const sources = await selectedSources(currentConfig, beforeConfig, root, union, args);
-    const renames = (await sourceRenames(base)).flatMap(rename => {
-      const old = path.relative(root, path.join(base.root, rename.before));
-      const current = path.relative(root, path.join(base.root, rename.after));
-      return outside(old) || outside(current) ? [] : [{ before: slash(old), after: slash(current) }];
-    });
-    const changes = (await revisionChanges(base)).map(change => Object.fromEntries(['before', 'after'].map(side => [side,
-      change[side] === null ? null : slash(path.relative(root, path.join(base.root, change[side])))])));
+    const sources = await selectedSources(currentConfig, before.config, root, union, args);
+    const inputs = await revisionChanges(base, target?.revision);
+    const projectPath = name => name === null ? null : slash(path.relative(root, path.join(base.root, name)));
+    const changes = inputs.map(change => ({...change, before:projectPath(change.before), after:projectPath(change.after)}));
+    const renames = changes.filter(c => c.status === 'renamed' && !outside(c.before) && !outside(c.after));
     const changed = new Set(changes.flatMap(change => [change.before, change.after]).filter(Boolean));
     const configFiles = await Promise.all([before, after].map(async side =>
       (await configInputFiles(side.config)).map(file => relative(side.config, file))));
@@ -196,7 +210,7 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
       slash(path.relative(root, path.join(base.root, name))))])].filter(name => changed.has(name));
     let closed = false;
     return {
-      base, before, after, sources, renames, changes, globalChanges, warnings, translateDiagnostic: translate, environment: { configDependencies, baseMigration },
+      base, before, after, sources, renames, changes, globalChanges, warnings, translateDiagnostic: value => translate(target ? target.translate(value) : value), environment: { configDependencies, baseMigration },
       async buildFrames({ browser, materialized, failures: previousFailures = [], sources: requestedSources = sources, frame: requestedFrame = options.frame, deferParts = false } = {}) {
         if (closed) throw new CliError('SOURCE_BUILD_FAILED', 'Diff inputs are closed; prepare a new comparison.');
         const built = materialized ? materialized.map(values => new Map(values)) : [new Map(), new Map()], snapshots = [new Map(), new Map()];
@@ -261,15 +275,10 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
         else await prepareParts();
         return result;
       },
-      async close() { closed = true; await tree.close(); },
+      async close() { closed = true; await close(); },
     };
   } catch (error) {
-    const failure = error instanceof CliError ? error : revisionError(error, tree.directory, base);
-    failure.message = revisionValue(failure.message, tree.directory, base.root);
-    failure.context = revisionValue(failure.context, tree.directory, base.root);
-    failure.warnings.push(...warnings);
-    await cleanup(tree.close, failure);
-    failure.warnings = revisionValue(failure.warnings, tree.directory, base.root);
-    throw failure;
+    await cleanup(close, error);
+    throw error;
   }
 }

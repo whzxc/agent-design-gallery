@@ -25,7 +25,7 @@ export async function withImpacted(config, args, options, command, work) {
     if (outcome?.data && 'verdict' in outcome.data) outcome.data.verdict = null;
   }
   try {
-    const plan = await impact(config, { base: options.base, json: true, 'state-dir': options['state-dir'], 'out-dir': options['out-dir'], explain: options.explain }, {
+    const plan = await impact(config, { base: options.base, head: options.head, openRevision: options.openRevision, json: true, 'state-dir': options['state-dir'], 'out-dir': options['out-dir'], explain: options.explain }, {
       consume: async session => {
         const { rows, views, assessments, inputs, data } = session;
         const sources = await selectedSources(views[1].config, views[0].config, views[1].config.root,

@@ -1,5 +1,4 @@
 // Captured moments on the project switcher route.
-export const playbackScope = 'Board playback redesign';
 export const playerMoments = [
   ['at-rest', 'A click on the stage background reveals the available hotspot.'],
   ['playing', 'Opening the switcher, 64 ms into its 160 ms transition.'],

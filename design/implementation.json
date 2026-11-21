@@ -2,6 +2,10 @@
   "version": 2,
   "mappings": [
     {
+      "implementation":{"file":"public/recent-updates.js","symbol":"createHistoryFilter"},
+      "design":[{"source":"design/surfaces/canvas.tsx","frames":["recent-updates-list","recent-updates-on-board"]}]
+    },
+    {
       "implementation":{"file":"public/boards.js","symbol":"createBoardLayer"},
       "design":[{"source":"design/surfaces/canvas.tsx","frames":["board-play-affordance","board-playable-filter","board-frame-filters"]}]
     },

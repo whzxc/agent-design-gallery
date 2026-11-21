@@ -16,7 +16,7 @@ const fixtureStates = {
   [comments.commentCanvas.fixture]: { ...states['scope-layer'], sidebar: false, camera: 'origin', origin: [48, 100], scale: 2 },
 };
 export const playerFixtureURL='/?asset=modules%2Fproject-switcher.tsx&frame=project-picker';
-export const playbackFixture = (name) => /^(?:flow-|board-play-|board-playable-|board-frame-filters$)/.test(name);
+export const playbackFixture = (name) => /^(?:recent-updates-|flow-|board-play-|board-playable-|board-frame-filters$)/.test(name);
 export const playbackURL = (name) =>
   name.startsWith('flow-') ? playerFixtureURL : '/?fixture=' + encodeURIComponent(name);
 async function readyPlayback(page, name) {
@@ -25,6 +25,36 @@ async function readyPlayback(page, name) {
     await page.waitForFunction((n) => document.documentElement.dataset.fixtureReady === n, name);
     await page.getByRole('button', { name: 'Play from project-picker', exact: true }).waitFor();
     if (name !== 'board-play-affordance') await page.locator('#filter-toggle').click();
+    if (name.startsWith('recent-updates-')) {
+      const head = '1'.repeat(40), branch = 'fixture';
+      await page.route('**/api/recent-visit',route=>route.fulfill({json:{head,branch}}));
+      await page.route('**/api/recent-state',route=>route.fulfill({json:{head,branch,generation:'fixture'}}));
+      await page.evaluate(() => {
+        const directory = document.querySelector('#app-directory').title;
+        localStorage.setItem('adg-visit:'+JSON.stringify([directory,'fixture']),JSON.stringify({started:0,head:'2'.repeat(40)}));
+      });
+      await page.route('**/api/recent-updates?*',route=>{
+        const row=(frame,status,extra={})=>({source:'design/modules/project-switcher.tsx',frame,status,...extra});
+        const periods=[
+          {title:'Uncommitted',subjects:[],rows:[row('switcher-open','changed'),row('legacy-picker','removed')]},
+          {title:'Today',subjects:['Add an empty search state','Adjust menu elevation'],rows:[
+            row('switcher-empty','added'),...Object.entries({
+              'project-switcher':['project-picker'], menus:['more','more-tokens','zoom','context-element','context-frame'],
+              navigation:['scope-tabs','contents-layer','contents-search','contents-search-empty','contents-tokens'],tokens:['token-board']
+            }).flatMap(([module,frames])=>frames.map(frame=>row(frame,'changed',{source:'design/modules/'+module+'.tsx',causes:['design/tokens.css']})))]},
+          {title:'Earlier this week',subjects:['Move the live instance picker'],rows:[row('project-picker-instance','moved',
+            {former:{source:'design/modules/instance-picker.tsx',frame:'project-picker-instance'}})]}
+        ];
+        if (new URL(route.request().url()).searchParams.has('since')) periods.pop();
+        return route.fulfill({json:{available:true,complete:true,head,branch,generation:'fixture',periods:periods.map(p=>({...p,complete:true}))}});
+      });
+      await page.locator('[data-filter=recent]').click();
+      if (name.endsWith('on-board')) {
+        await page.getByRole('button',{name:'Since my last visit'}).click();
+        await page.getByRole('button',{name:'Locate switcher-open on board'}).click();
+      }
+      await page.getByText('Uncommitted',{exact:true}).waitFor();
+    }
     if (name === 'board-playable-filter') await page.locator('[data-filter=playable]').click();
     return;
   }

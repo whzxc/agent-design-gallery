@@ -206,7 +206,7 @@ async function writePair(output, pair, thresholds, reviewImages, reviewFormat) {
   const shownInSummary = row.status === 'added' ||
     (row.status !== 'removed' && (row.previousSource || comparison.verdict === 'changed'));
   const embedCaptures = output || pngSummary;
-  if (!row.support && row.status !== 'moved' && (!pngSummary || shownInSummary)) {
+  if (reviewFormat !== 'rows' && !row.support && row.status !== 'moved' && (!pngSummary || shownInSummary)) {
     reviewImages.set(comparison.id, {
       before: embedCaptures && pair.before ? `data:image/png;base64,${pair.before.png.toString('base64')}` : null,
       after: embedCaptures && pair.after ? `data:image/png;base64,${pair.after.png.toString('base64')}` : null,
@@ -256,12 +256,12 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
   try {
     const head = await timed('prepareMs', async () => {
       inputs = session ? session.diffInputs : await prepareInputs(config, args, options);
-      return currentHead(inputs.base);
+      return inputs.after?.revision?.sha ?? currentHead(inputs.base);
     });
     warnings.push(...inputs.warnings);
     data = {
       project: config.root, outputDirectory: output, complete: false,
-      base: { rev: inputs.base.rev, sha: inputs.base.sha }, current: { kind: 'working_tree', head },
+      base: { rev: inputs.base.rev, sha: inputs.base.sha }, current: { kind: inputs.after?.revision ? 'revision' : 'working_tree', head },
       selection: { sources: inputs.sources, frame: options.frame ?? null, themes, scale,
         existingCoverage: !inputs.sources.length ? 'empty' : args.length || options.frame !== undefined || themes.length !== 2 ? 'partial' : 'full' },
       environment: { adg: metadata.version, node: process.version, platform: process.platform, arch: process.arch, chromium: null,

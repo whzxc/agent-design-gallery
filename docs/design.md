@@ -34,7 +34,7 @@ Sources follow strict downward layer order (`components` → `modules` → `surf
 
 ## Open proposals
 
-The two `recent-updates-*` surfaces retain their proposal scope until the approved Recently updated filter ships in turn B.
+There are no open proposals.
 
 ## Exceptions
 

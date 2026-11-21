@@ -7,7 +7,7 @@ import { IconButton } from '../components/icon-button';
 import { Separator, Toolbar } from '../components/toolbar';
 import { Tooltip } from '../components/tooltip';
 import { instances, projects, switcherFrames } from '../fixtures/hub';
-import { boardFilters, nextActions, playableNames, playbackScope, playerMoments, recentGroups, type FrameFilter, type PlayerMoment } from '../fixtures/board-playback';
+import { boardFilters, nextActions, playableNames, playerMoments, recentGroups, type FrameFilter, type PlayerMoment } from '../fixtures/board-playback';
 import commentFixtures from '../fixtures/comments.json';
 import { viewerBarContents, viewerBarDetails, viewerBarProject, viewerBarScopes } from '../fixtures/viewer-bars';
 import { BoardChapter, BoardSection, SpecimenWell } from '../modules/canvas';
@@ -106,7 +106,7 @@ function FilterPicker({ filter, expanded }: { filter: FrameFilter; expanded: boo
       <Icon name="list-filter" size={15} />{active ? filter : 'Filter frames'}<Icon name="chevron-down" size={12} />
     </button>
     {expanded && <div class="absolute top-full left-0 mt-3 w-52 rounded-menu border border-border bg-surface p-1 shadow-menu">
-      {(['All frames', 'Playable'] as const).map((item, i) =>
+      {(['All frames', 'Playable', 'Recently updated'] as const).map((item, i) =>
         <button type="button" key={item} aria-pressed={item === filter}
           class="flex h-9 w-full items-center gap-2 rounded-row px-2 text-left text-body text-text">
           <Icon name={['layout-grid', 'play', 'history'][i]} size={15} />
@@ -439,7 +439,7 @@ export default () => [
     </Canvas>
   </Frame>,
   ...boardFilters.map(([name, filter, note]) => (
-    <Frame name={name} {...screen} {...(name.startsWith('recent-') ? {proposed:playbackScope} : {fixture:name,capture:{page:true as const,viewport:'1440x900'}})} note={note}>
+    <Frame name={name} {...screen} fixture={name} capture={{page:true,viewport:'1440x900'}} note={note}>
       <FilteredBoard filter={filter} menuOpen={name === 'board-frame-filters'} sinceVisit={name === 'recent-updates-on-board'} />
     </Frame>
   )),

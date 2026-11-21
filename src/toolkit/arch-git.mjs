@@ -114,8 +114,8 @@ async function writeBaseBlobs(base, directory, entries) {
 }
 
 /** Materialize tracked bytes without export attributes or a Git worktree. */
-export async function materializeBase(base) {
-  const directory = await realpath(await mkdtemp(path.join(tmpdir(), 'adg-diff-')));
+export async function materializeBase(base, temporaryDirectory = tmpdir()) {
+  const directory = await realpath(await mkdtemp(path.join(temporaryDirectory, 'adg-diff-')));
   const close = async () => {
     try { await cleanup(() => rm(directory, { recursive: true, force: true })); }
     catch (error) { throw revisionError(error, directory, base); }
@@ -139,16 +139,6 @@ export async function materializeBase(base) {
 export async function currentHead(base) {
   try { return (await git(base.root, ['rev-parse', '--verify', 'HEAD'])).trim(); }
   catch (error) { if (error.code === 'GIT_UNAVAILABLE') throw error; return null; }
-}
-
-/** Rename hints include staged and unstaged tracked changes against the base. */
-export async function sourceRenames(base) {
-  const fields = (await git(base.root, ['diff', '--name-status', '-z', '--find-renames', '--diff-filter=R', base.sha, '--'])).split('\0');
-  const renames = [];
-  for (let index = 0; index < fields.length - 1; index += 3) {
-    renames.push({ before: fields[index + 1], after: fields[index + 2] });
-  }
-  return renames;
 }
 
 /** Actual endpoint changes; working-tree mode includes staged, unstaged and untracked paths. */
