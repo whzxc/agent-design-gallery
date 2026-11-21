@@ -1,4 +1,5 @@
 import { dataFetch } from './auth.js';
+import { boardElement as node, frameKey } from './view-boards.js';
 
 async function read(path, signal) {
   const response = await dataFetch(path, { signal });
@@ -54,36 +55,59 @@ function boundaries() {
 
 export function createHistoryFilter(update) {
   let request, timer, invalidation, directory, result, message, baseline, range, stamp;
-  let activeGroup, query, verifying;
+  let query, verifying;
+  let cached;
   const visualStates = new Map();
-  const expandedRemovals = new Set();
+  const expanded = new Set();
   function cancelVisual() {
     verifying?.controller.abort();
     verifying = null;
   }
   function close() {
+    if (verifying) visualStates.delete(verifying.period);
     cancelVisual();
-    activeGroup = null;
-    visualStates.clear();
-    expandedRemovals.clear();
     request?.abort();
     request = null;
     clearTimeout(timer);
     clearTimeout(invalidation);
   }
-  async function open(nextDirectory, nextRange = 'week') {
+  async function open(nextDirectory, nextRange, force = false) {
     close();
+    if (nextDirectory !== directory) expanded.clear();
+    range = nextRange ?? (nextDirectory === directory ? range : null) ?? 'week';
     directory = nextDirectory;
-    range = nextRange;
     const controller = (request = new AbortController());
     const { signal } = controller;
-    result = null;
-    message = 'Finding changed sources and inputs…';
+    const dates = boundaries();
+    const cacheKey = JSON.stringify([directory, range, dates]);
+    const reuse = !force && cached?.key === cacheKey;
+    if (!reuse) {
+      result = null;
+      cached = null;
+      visualStates.clear();
+      message = 'Finding changed sources and inputs…';
+    }
     update();
+    const validate = async () => {
+      try {
+        const state = await read('api/recent-state', signal);
+        signal.throwIfAborted();
+        if (stamp !== JSON.stringify([state.head, state.branch, state.generation, boundaries()])) {
+          void open(directory, range, true);
+          return;
+        }
+      } catch {
+        // Try again after the viewer connection returns.
+      }
+      if (!signal.aborted) timer = setTimeout(validate, 5000);
+    };
+    if (reuse) {
+      void validate();
+      return;
+    }
     try {
       ({ baseline } = await recordVisit(directory, true, false));
       signal.throwIfAborted();
-      const dates = boundaries();
       query = new URLSearchParams(dates);
       if (range === 'visit' && baseline) query.set('since', baseline);
       const response = await read('api/recent-updates?' + query, signal);
@@ -94,29 +118,12 @@ export function createHistoryFilter(update) {
         : result.notice || (!baseline ? 'Your next visit will have a revision to compare.' : '');
       if (!baseline || result.notice) range = 'week';
       stamp = JSON.stringify([result.head, result.branch, result.generation, dates]);
+      cached = result.available && result.complete && !result.stale
+        ? { key: JSON.stringify([directory, range, dates]) }
+        : null;
       update();
-      if (result.stale) {
-        timer = setTimeout(() => void open(directory, range), 200);
-        return;
-      }
-      const validate = async () => {
-        try {
-          const state = await read('api/recent-state', signal);
-          if (signal.aborted) return;
-          if (
-            (result.available &&
-              stamp !== JSON.stringify([state.head, state.branch, state.generation, boundaries()])) ||
-            (!result.available && state.branch)
-          ) {
-            void open(directory, range);
-            return;
-          }
-        } catch {
-          /* Recheck when the viewer connection returns. */
-        }
-        if (!signal.aborted) timer = setTimeout(validate, 5000);
-      };
-      timer = setTimeout(validate, 5000);
+      if (result.stale) timer = setTimeout(() => void open(directory, range, true), 200);
+      else if (result.available) timer = setTimeout(validate, 5000);
     } catch (error) {
       if (!signal.aborted) {
         message = 'Incomplete coverage. ' + error.message;
@@ -205,196 +212,153 @@ export function createHistoryFilter(update) {
     open,
     close,
     invalidate() {
+      cached = null;
       if (!request) return;
       clearTimeout(invalidation);
-      invalidation = setTimeout(() => void open(directory, range), 200);
+      invalidation = setTimeout(() => void open(directory, range, true), 200);
     },
-    render(container, context) {
-      const controls = element('div');
-      controls.className = 'recent-ranges';
-      for (const [id, title] of [
-        ['week', 'This week'],
-        ['visit', 'Since my last visit']
-      ]) {
-        const button = element('button', title);
+    render(container, { relative, frames, inScope, card }) {
+      const controls = node('div', 'recent-ranges');
+      controls.setAttribute('role', 'group');
+      controls.setAttribute('aria-label', 'History range');
+      for (const [id, title] of [['week', 'This week'], ['visit', 'Since my last visit']]) {
+        const button = node('button', '', title);
+        button.dataset.recentFocus = id;
         button.setAttribute('aria-pressed', String(id === range));
         button.disabled = id === 'visit' && !baseline;
         button.onclick = () => void open(directory, id);
         controls.append(button);
       }
-      const nodes = [controls, element('p', 'Frames whose sources or inputs changed.')];
-      if (message) nodes.push(element('p', message));
+      const children = [controls];
+      container.dataset.historyReady = String(!!result || !!message?.startsWith('Incomplete coverage'));
+      if (message) {
+        const status = node('p', 'view-board-status', message);
+        status.setAttribute('role', 'status');
+        children.push(status);
+      }
       if (result?.available && !result.complete)
-        nodes.push(element('p', 'Incomplete coverage. Unclassified frames keep their normal emphasis.'));
-      const matches = new Map(),
-        redirects = new Map();
-      const key = identity;
+        children.push(node('p', 'view-board-status', 'Incomplete history coverage.'));
+      const redirects = new Map();
       for (const period of result?.periods ?? []) {
-        const section = element('section');
-        const header = element('header');
+        const periodKey = JSON.stringify([period.title, period.base, period.head]);
+        const section = node('section', 'view-board-section recent-period');
+        const header = node('header', 'view-section-heading');
+        const heading = node('div');
+        heading.append(node('h2', '', period.title));
+        if (period.globalCauses?.length)
+          heading.append(node('p', 'recent-global view-board-status', 'Global inputs changed · ' + period.globalCauses.join(', ')));
         const visual = visualStates.get(period);
-        const action = element('button', verifying?.period === period ? 'Cancel comparison' : 'Visual changes');
+        const action = node('button', 'view-board-action', verifying?.period === period ? 'Cancel comparison' : 'Visual changes');
         action.setAttribute('aria-label', action.textContent + ' · ' + period.title);
-        action.dataset.recentFocus = JSON.stringify(['visual', period.base, period.head]);
+        action.dataset.recentFocus = periodKey;
         action.onclick = () => void visualChanges(period);
-        header.append(element('h3', period.title), action);
+        header.append(heading, action);
         section.append(header);
         if (visual) {
           visual.labels = new Map();
-          visual.output = element('small', visual.message);
+          visual.output = node('small', 'recent-visual', visual.message);
           visual.output.setAttribute('role', 'status');
           section.append(visual.output);
         }
-        for (const subject of period.subjects) section.append(element('small', subject));
-        const inherited = new Map();
-        const direct = { changed: [], added: [], moved: [], removed: [] };
-        let removedCount = 0;
+
+        const sources = new Map();
+        const removed = [];
         for (const row of period.rows) {
-          const locator = redirects.has(key(row)) ? redirects.get(key(row)) : row;
-          const source = context.relative(locator?.source ?? row.source);
-          const live = row.status !== 'removed' && locator && context.visible.get(source)?.has(locator.frame);
-          if (!live && !context.inScope(context.relative(row.source), row.frame, row.chapter)) continue;
-          if (row.status === 'removed') {
-            removedCount++;
-            if (!expandedRemovals.has(period)) continue;
+          const id = identity(row);
+          const locator = redirects.has(id) ? redirects.get(id) : row;
+          const source = relative(locator?.source ?? row.source);
+          const ref = locator && frames.get(frameKey(source, locator.frame));
+          if (!ref && !inScope(relative(row.source), row.frame, row.chapter)) continue;
+          if (row.status === 'removed' || !locator) {
+            removed.push(row);
+            continue;
           }
-          const group = row.causes && JSON.stringify([period.title, ...row.causes]);
-          if (live && (activeGroup ? activeGroup === group : !group)) {
-            if (!matches.has(source)) matches.set(source, new Set());
-            matches.get(source).add(locator.frame);
-          }
-          if (group) {
-            if (!inherited.has(group)) inherited.set(group, { causes: row.causes, rows: [], count: 0 });
-            inherited.get(group).count++;
-            if (activeGroup !== group) continue;
-          }
-          const button = element(live ? 'button' : 'div');
-          button.className = 'recent-row';
-          button.append(
-            element('span', row.frame),
-            element('span', row.status[0].toUpperCase() + row.status.slice(1))
-          );
-          button.title = row.source;
-          button.append(element('small', context.relative(row.source)));
-          if (row.former)
-            button.append(
-              element('small', 'From ' + context.relative(row.former.source) + ' · ' + row.former.frame)
-            );
-          if (visual?.verdicts) {
-            const status = visual.verdicts.get(key(row)) ?? (row.former && visual.verdicts.get(key(row.former)));
-            const annotation = element(
-              'small',
-              status
-                ? 'Visual comparison · ' + status
-                : visual.complete
-                  ? 'Visually unchanged'
-                  : verifying?.period === period
-                    ? ''
-                    : 'Visual result unknown'
-            );
-            visual.labels.set(key(row), annotation);
-            if (row.former) visual.labels.set(key(row.former), annotation);
-            button.append(annotation);
-          }
-          if (live) {
-            button.setAttribute('aria-label', 'Locate ' + row.frame + ' on board');
-            button.dataset.recentFocus = JSON.stringify([period.base, period.head, row.source, row.frame]);
-            button.onclick = () => context.locate(source, locator.frame);
-          }
-          if (group) inherited.get(group).rows.push(button);
-          else direct[row.status].push(button);
+          if (!ref) continue;
+          if (!sources.has(source)) sources.set(source, { direct: [], shared: new Map() });
+          const { direct, shared } = sources.get(source);
+          if (row.causes?.length) {
+            const key = JSON.stringify(row.causes);
+            if (!shared.has(key)) shared.set(key, { causes: row.causes, frames: [] });
+            shared.get(key).frames.push({ row, ref });
+          } else direct.push({ row, ref });
         }
-        section.append(...direct.changed, ...direct.added, ...direct.moved);
-        if (removedCount) {
-          const expanded = expandedRemovals.has(period);
-          const toggle = element('button', 'Removed (' + removedCount + ')');
-          toggle.className = 'recent-removed';
-          toggle.dataset.recentFocus = JSON.stringify(['removed', period.base, period.head]);
-          toggle.setAttribute('aria-expanded', String(expanded));
-          toggle.onclick = () => {
-            if (expanded) expandedRemovals.delete(period);
-            else expandedRemovals.add(period);
-            update();
-          };
-          section.append(toggle, ...direct.removed);
-        }
-        const select = (id) => {
-          activeGroup = activeGroup === id ? null : id;
-          update();
-        };
-        if (inherited.size) section.append(element('small', 'Shared inputs'));
-        for (const [id, { causes, rows, count }] of inherited) {
-          const button = element(
-            'button',
-            causeLabel(causes) + ' → ' + count + (count === 1 ? ' frame' : ' frames')
-          );
-          button.title = causes.join(', ');
-          button.setAttribute('aria-label', button.title + ' → ' + count + ' frames');
-          button.setAttribute('aria-expanded', String(activeGroup === id));
-          button.onclick = () => select(id);
-          section.append(button, ...rows);
-        }
-        if (period.globalCauses?.length) {
-          const id = JSON.stringify([period.title, 'global']);
-          const button = element('button', causeLabel(period.globalCauses) + ' → all frames');
-          button.title = period.globalCauses.join(', ');
-          button.setAttribute('aria-label', button.title + ' → all frames');
-          button.setAttribute('aria-pressed', String(activeGroup === id));
-          button.onclick = () => select(id);
-          section.append(element('small', 'Global inputs'), button);
-          if (activeGroup === id) {
-            for (const [source, frames] of Object.entries(period.globalFrames ?? {}))
-              for (const frame of frames) {
-                const ref = { source, frame },
-                  target = redirects.has(key(ref)) ? redirects.get(key(ref)) : ref;
-                if (!target) continue;
-                const file = context.relative(target.source);
-                if (!context.visible.get(file)?.has(target.frame)) continue;
-                if (!matches.has(file)) matches.set(file, new Set());
-                matches.get(file).add(target.frame);
+        for (const [source, { direct, shared }] of sources) {
+          const group = node('section', 'recent-source');
+          group.append(node('h3', 'recent-source-heading view-source-name', source));
+          function grid(items, sharedInput = false) {
+            const gallery = node('div', 'recent-frame-grid');
+            for (const { row, ref } of items) {
+              const badge = sharedInput ? 'Affected by shared input' : row.status === 'added' ? 'New' : 'Edited';
+              const frame = card(ref, { badge, source: false });
+              frame.querySelector('.view-show-in-board').dataset.recentFocus = JSON.stringify([periodKey, identity(row)]);
+              if (row.former) {
+                const former = node('small', 'view-source-name', 'From ' + relative(row.former.source) + ' · ' + row.former.frame);
+                former.title = former.textContent;
+                frame.querySelector('.view-frame-caption').append(former);
               }
+              if (visual) {
+                const id = identity(row), oldId = row.former && identity(row.former);
+                const status = visual.verdicts.get(id) ?? visual.verdicts.get(oldId);
+                const annotation = node('small', 'recent-visual', status
+                  ? 'Visual comparison · ' + status
+                  : visual.complete ? 'Visually unchanged' : verifying?.period === period ? '' : 'Visual result unknown');
+                visual.labels.set(id, annotation);
+                if (oldId) visual.labels.set(oldId, annotation);
+                frame.querySelector('.view-frame-caption').append(annotation);
+              }
+              gallery.append(frame);
+            }
+            return gallery;
           }
+          if (direct.length) group.append(grid(direct));
+          for (const [key, entry] of shared) {
+            const id = JSON.stringify([periodKey, source, key]);
+            const details = node('details', 'recent-shared');
+            const summary = node('summary', '', entry.causes.join(', ') + ' · ' + entry.frames.length +
+              (entry.frames.length === 1 ? ' affected frame' : ' affected frames'));
+            summary.dataset.recentFocus = id;
+            details.open = expanded.has(id);
+            details.append(summary);
+            const mount = () => {
+              if (details.open) {
+                expanded.add(id);
+                if (details.children.length === 1) details.append(grid(entry.frames, true));
+              } else {
+                expanded.delete(id);
+              }
+            };
+            mount();
+            details.ontoggle = mount;
+            group.append(details);
+          }
+          section.append(group);
         }
-        if (!removedCount && !direct.changed.length && !direct.added.length && !direct.moved.length &&
-            !inherited.size && !period.globalCauses?.length && period.complete)
-          section.append(element('p', 'No matching changes in this scope.'));
-        for (const failure of period.failures ?? []) section.append(element('small', failure.message));
-        nodes.push(section);
-        // Traverse periods newest first. A removal breaks identity, including when
-        // a later period added a different frame at the same path.
+        if (removed.length) {
+          const list = node('ul', 'recent-removed');
+          for (const row of removed) list.append(node('li', '', relative(row.source) + ' · ' + row.frame));
+          const group = node('section', 'recent-source');
+          group.append(node('h3', 'recent-source-heading', 'Removed frames'), list);
+          section.append(group);
+        }
+        if (!removed.length && !sources.size && !period.globalCauses?.length && period.complete)
+          section.append(node('p', 'recent-visual view-board-status', 'No matching changes in this scope.'));
+        for (const failure of period.failures ?? []) section.append(node('small', 'recent-visual', failure.message));
+        children.push(section);
+        // Traverse newest first to resolve historical names forward to the current frame.
         const prior = new Map(redirects);
         for (const row of period.rows) {
-          if (row.former) prior.set(key(row.former), redirects.has(key(row)) ? redirects.get(key(row)) : row);
-          if (row.status === 'added' || row.status === 'removed' || row.former) prior.set(key(row), null);
+          if (row.former) prior.set(identity(row.former), redirects.has(identity(row)) ? redirects.get(identity(row)) : row);
+          if (row.status === 'added' || row.status === 'removed' || row.former) prior.set(identity(row), null);
         }
         for (const [id, target] of prior) redirects.set(id, target);
       }
-      const focus = container.contains(document.activeElement) ? document.activeElement : null;
-      container.replaceChildren(...nodes);
-      if (focus) {
-        const same = [...container.querySelectorAll('button, summary')].find((node) =>
-          focus.dataset.recentFocus
-            ? node.dataset.recentFocus === focus.dataset.recentFocus
-            : node.textContent === focus.textContent &&
-              node.getAttribute('aria-label') === focus.getAttribute('aria-label')
-        );
-        same?.focus({ preventScroll: true });
-      }
-      return result?.complete && result.available ? matches : null;
+      const focus = container.contains(document.activeElement) ? document.activeElement.dataset.recentFocus : null;
+      container.replaceChildren(...children);
+      if (focus) container.querySelector('[data-recent-focus="' + CSS.escape(focus) + '"]')?.focus({ preventScroll: true });
     }
   };
 }
-function element(tag, text) {
-  const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
 function identity({ source, frame }) {
-  return JSON.stringify([source, frame]);
-}
-function causeLabel(causes) {
-  return causes.length <= 2
-    ? causes.join(', ')
-    : causes.slice(0, 2).join(', ') + ' + ' + (causes.length - 2) + ' more';
+  return frameKey(source, frame);
 }

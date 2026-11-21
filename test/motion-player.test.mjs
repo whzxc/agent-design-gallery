@@ -27,7 +27,7 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
     await route.fulfill({json:data});
   });
   await page.goto(url);
-  const invoker=page.getByRole('button',{name:'Play',exact:true});
+  const invoker=page.getByRole('button',{name:'Play from project-picker',exact:true});
   await invoker.waitFor();
   const board=()=>page.evaluate(()=>[location.href,window.__adg.selection,window.__adg.view]);
   const before=await board();
@@ -77,7 +77,7 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
 test('contract: player entry and Escape restore focus one layer at a time', async t => {
   const { page, url } = await viewer(t);
   await page.goto(url);
-  const invoker = page.getByRole('button', { name: 'Play', exact: true });
+  const invoker = page.getByRole('button', { name: 'Play from project-picker', exact: true });
   await invoker.click();
   const player = page.getByRole('dialog', { name: 'Play transitions' });
   const first = player.frameLocator('iframe').locator('[data-adg-id=picker]');
@@ -102,21 +102,36 @@ test('contract: player entry and Escape restore focus one layer at a time', asyn
   assert.ok(await invoker.evaluate(b => b === document.activeElement));
 });
 
-test('contract: board filter preserves placement, grouped gestures dispatch individually, and text matches committed input only',async t=>{
+test('contract: playable board routes and restores camera, grouped gestures dispatch individually, and text matches committed input only',async t=>{
   const {page,url}=await viewer(t);
   await page.emulateMedia({reducedMotion:'reduce'});
   await page.goto(new URL('/view/layer/modules/asset/modules%2Fproject-switcher.tsx/frame/project-picker',url).href);
-  const caption=page.getByRole('button',{name:'Play from project-picker',exact:true});
-  await caption.waitFor();
   await page.waitForFunction(() => window.__adg.ready && window.__adg.metadataComplete);
   const camera=()=>page.evaluate(()=>window.__adg.view);
   const before=await camera();
-  await page.locator('#filter-toggle').click();await page.locator('[data-filter=playable]').click();
+  await page.locator('#filter-toggle').click();
+  await page.getByRole('button', { name: 'Playable', exact: true }).click();
   assert.deepEqual(await camera(),before);
-  assert.equal(await page.locator('#filter-rows button').count(),3);
-  const row=page.locator('#filter-rows button').filter({hasText:/^project-picker$/});
-  await row.click();
-  await caption.focus();await page.keyboard.press('Enter');
+  const map = page.getByRole('main', { name: 'Playable' });
+  await map.getByRole('heading', { name: 'project-picker-instance' }).waitFor();
+  assert.match(page.url(), /[?&]view=playable/);
+  assert.equal(await map.locator('.view-frame').count(), 4);
+  assert.match(await map.locator('.prototype-map').textContent(), /Type Nova/);
+  await page.getByRole('button', { name: 'All frames', exact: true }).click();
+  assert.deepEqual(await camera(), before);
+  assert.equal(new URL(page.url()).searchParams.has('view'), false);
+  await page.locator('#filter-toggle').click();
+  await page.getByRole('button', { name: 'Playable', exact: true }).click();
+  const loaded = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith('/asset/')) loaded.push(decodeURIComponent(path.slice('/asset/'.length)));
+  });
+  await page.reload();
+  await map.locator('canvas[data-preview=ready]').first().waitFor();
+  assert.ok(loaded.every(source => source === 'modules/project-switcher.tsx'));
+  const launch = map.getByRole('button', { name: 'Play flow from project-picker' });
+  await launch.click();
   const player=page.locator('#motion-player'), stage=player.frameLocator('iframe');
   await player.locator('[data-control=flow]').click();
   assert.equal(await player.locator('.play-actions strong').first().innerText(),'Open project switcher');
@@ -132,7 +147,15 @@ test('contract: board filter preserves placement, grouped gestures dispatch indi
   assert.equal(await player.locator('[data-control=current]').innerText(),'switcher-open');
   await input.evaluate(el=>el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertFromPaste'})));
   await player.locator('[data-control=current]').filter({hasText:'switcher-empty'}).waitFor();
-  await player.locator('[data-control=exit]').click();assert.ok(await caption.evaluate(b=>b===document.activeElement));
+  await player.locator('[data-control=exit]').click();assert.ok(await launch.evaluate(b=>b===document.activeElement));
+  await map.getByRole('button', { name: 'Show switcher-open in board' }).click();
+  await page.waitForFunction(() => window.__adg.selection.frame === 'switcher-open');
+  assert.equal(new URL(page.url()).searchParams.has('view'), false);
+  await page.keyboard.press('p');
+  await player.frameLocator('iframe').getByRole('searchbox').waitFor();
+  await player.locator('[data-control=current]').filter({hasText:/^switcher-open$/}).waitFor({state:'attached'});
+  await player.getByRole('button', { name: 'Exit to board' }).click();
+  assert.ok(await page.locator('.gallery-viewport').evaluate(el => el === document.activeElement));
 });
 
 test('contract: one inert sandbox, deterministic seek and nested frame-coordinate FLIP',async t=>{

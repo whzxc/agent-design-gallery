@@ -217,13 +217,9 @@ export async function structuralChanges(config, options) {
           if (!direct && !causes.size) continue;
           result.push({ ...entry, status: 'changed', ...(!direct ? { causes: [...causes].sort() } : {}) });
         }
-        const globalFrames = globalCauses.length
-          ? Object.fromEntries([...views[1].facts].map(([file, facts]) => [file, facts.frames.map((f) => f.name)]))
-          : undefined;
         projection = {
           rows: result,
           globalCauses,
-          globalFrames,
           complete: !data.failures.length,
           failures: data.failures,
           dependencies: await liveDependencies(views, options.temporaryDirectory)

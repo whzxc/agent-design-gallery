@@ -4,7 +4,7 @@ import { createComments } from './comments.js';
 import { attachComment, commentElement, commentLabel, placeComment } from './comment-anchors.js';
 import { initSwitcher, updateSwitcherLabels } from './switcher.js';
 import { dataFetch, keyURL, isUnauthorized } from './auth.js';
-import { fitArea, fitView } from "./layout.js";
+import { blockForAsset, fitArea, fitView, specimenPaintCrop } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
 import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext, measuredMetadata, previewAddress, compactPreparedSource, scopeKind, scopeTarget } from "./assets.js";
@@ -14,6 +14,7 @@ import { groupTokens, renderTokenTable, tokenBoardSection } from './token-catalo
 import { readViewRoute, viewURL } from './view-route.js';
 import { createBoardLayer } from './boards.js';
 import { installMotionSpecimens } from './motion-specimens.js';
+import { boardElement, createFrameCards, frameKey, playButton, prototypeFlows, renderPrototype } from './view-boards.js';
 import { createArranger } from './arrangement.js';
 const arranger = createArranger();
 window.addEventListener('pagehide',()=>arranger.close());
@@ -51,7 +52,6 @@ const boardLayer = createBoardLayer(viewport, (path, title, button) => {
     else if (item) selectSource(item);
   },
   onFocusFrame: locateFrame,
-  onPlay: startFramePlayer,
   onCopyError(failure) {
     if (failure) error(`Cannot copy token name: ${failure.message}`);
     else if ($('#error').textContent.startsWith('Cannot copy token name:')) error('');
@@ -65,6 +65,7 @@ function locateFrame(source, frameName) {
 }
 let manifest,
   catalog = null,
+  derivedLanding = false,
   tokenManifest = null,
   tokenCategory = null,
   tokenList = false,
@@ -147,6 +148,14 @@ function decorateMetadata(asset,metadata) {
     entry.modified={text:modifiedDate.format(date),timestamp:date.toISOString(),title:date.toLocaleString(undefined,{dateStyle:'full',timeStyle:'long'})};
   }
   return entry;
+}
+async function readSourceMetadata(asset, theme, signal) {
+  if (!asset.hash || !asset.metadataRefs?.[theme]) return;
+  const query = new URLSearchParams({ theme, context: metadataContext() });
+  const response = await dataFetch(`metadata/${asset.hash}?${query}`, { signal });
+  if (!response.ok) return;
+  const { metadata, previewIds } = await response.json();
+  return decorateMetadata({ ...asset, previewIds: { ...asset.previewIds, [theme]: previewIds } }, metadata);
 }
 function persistSource(entry,theme) {
   if(!entry.hash || entry.onlyFrame)return Promise.resolve(false);
@@ -243,7 +252,7 @@ function back() {
 function changeScope(next, entry = null, record = true) {
   const nextFrame = entry?.onlyFrame ?? null;
   if (next === scopeRequest && nextFrame === onlyFrame) return;
-  if (frameFilter === 'recent') setFrameFilter('all');
+  if (frameFilter !== 'all') setFrameFilter('all', false, false);
   const wasOverlay = scopeRequest === 'tokens' || !!tokenManifest;
   const nextOverlay = next === 'tokens';
   const preserveSearch = !fixtureState && !wasOverlay && !nextOverlay && ['all', 'layer'].includes(scopeKind(next)) && !!$("#search").value.trim();
@@ -289,8 +298,11 @@ function updateChrome() {
   updateSwitcherLabels();
   const data = tokenManifest ?? catalog ?? manifest;
   const opened = !!data?.directory;
+  $('#app-bar').hidden = !opened;
   $('#frame-filter').hidden=!!tokenManifest || !opened;
-  $('#filter-results').hidden=!!tokenManifest || frameFilter==='all';
+  const derived = !tokenManifest && frameFilter !== 'all';
+  $('#view-board').hidden = !opened || !derived;
+  $('.gallery').classList.toggle('derived-mode', derived);
   const showTokens = !!tokenManifest && tokenList;
   $('#token-list-toggle').hidden = !tokenManifest;
   $('#token-list-toggle').disabled = !tokenManifest?.tokenBoard;
@@ -317,13 +329,18 @@ function updateChrome() {
       isolation.dataset.tooltip = 'Show full layer';
     }
   }
-  const canInspect = opened && !showTokens && !!selected;
+  const canInspect = opened && !showTokens && !derived && !!selected;
   $('.gallery').classList.toggle('tokens-mode', showTokens);
   $('#token-catalog').hidden = !showTokens;
-  viewport.inert = showTokens;
-  $('#sidebar').hidden = !opened || !sidebar || (!tokenManifest && frameFilter!=='all');
+  viewport.inert = showTokens || derived;
+  viewport.setAttribute('aria-hidden', String(derived));
+  $('#sidebar').hidden = !opened || !sidebar || derived;
+  $('#sidebar-toggle').hidden = derived;
+  $('.search-field').hidden = derived;
+  $('.search-divider').hidden = derived;
+  $('#scope-isolation').hidden ||= derived;
   const allArch = assets.length > 0 && assets.every(a => a.path.endsWith('.mmd'));
-  const canComment = opened && !tokenManifest && scopeRequest !== 'layer:arch' && !allArch;
+  const canComment = opened && !tokenManifest && !derived && scopeRequest !== 'layer:arch' && !allArch;
   const unavailableReason = canComment ? ''
     : tokenManifest ? 'Tokens take no comments.'
     : scopeRequest === 'layer:arch' || assets.some(a => a.path.endsWith('.mmd')) ? 'Architecture diagrams take no comments.'
@@ -332,20 +349,26 @@ function updateChrome() {
   $('#comment-tool').disabled = !canComment;
   $('#comment-tool').dataset.tooltip = canComment || !unavailableReason ? 'Comment (C)' : unavailableReason;
   commentUI?.setAvailable?.(canComment, unavailableReason);
-  $('#app-bar').hidden = !opened;
   if (fixtureState) $('#app-directory .switcher-chevron').hidden = false;
   $('#tools').hidden = !opened;
-  $('.zoom').hidden = !opened || showTokens;
+  $('#comments-toggle').hidden = derived;
+  $('#inspect').hidden = derived;
+  $('.zoom').hidden = !opened || showTokens || derived;
   $('#source').hidden = !canInspect || !inspector;
   $('#inspect').disabled = !canInspect;
   $('#inspect').setAttribute('aria-expanded', String(canInspect && inspector));
-  $('#arrange').hidden = !!tokenManifest;
+  $('#arrange').hidden = !!tokenManifest || derived;
   $('#zoom-fit-group').disabled = !!tokenManifest || active === null || !groups[active];
   $('#zoom-fit-selection').disabled = !!tokenManifest || !selected;
   if (!opened) $('#minimap').hidden = true;
   $('#sidebar-toggle').setAttribute('aria-expanded', String(!$('#sidebar').hidden));
+  if (derived) positionViewBoard();
   positionZoomMenu();
 }
+function positionViewBoard() {
+  $('.gallery').style.setProperty('--view-board-top', ($('#app-bar').getBoundingClientRect().bottom + 10) + 'px');
+}
+new ResizeObserver(() => { if (!$('#view-board').hidden) positionViewBoard(); }).observe($('#app-bar'));
 function positionZoomMenu() {
   const r = $("#zoom-options").getBoundingClientRect();
   $("#zoom-menu").style.left = `${r.x + r.width / 2}px`;
@@ -356,7 +379,7 @@ const media = matchMedia("(prefers-color-scheme: dark)");
 const modifiedDate = new Intl.DateTimeFormat('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 window.__adg = {
   ready: false,
-  get metadataComplete() {return !!tokenManifest || (!!manifest && !manifest.loading);},
+  get metadataComplete() {return !!tokenManifest || (!!manifest && !manifest.loading && !derivedLanding);},
   get scope() {return tokenManifest?.scope ?? initializedScope;},
   get cachePending() {return cacheWrites+loading+queued.length;},
   get cacheFlush() {return flushCache();},
@@ -490,7 +513,7 @@ function layout(data, preserve = false, options = {}) {
   }
   if(motionProjection!==data.motionFrames)setMotionProjection(data.motionFrames);
   boardLayer.update(groups, assets, data);
-  if(frameFilter!=='all'||playableFrames.size)renderFilter();
+  if (frameFilter !== 'all') renderFrameView();
   boardLayer.tokens(data.scope === 'all' ? data.tokenBoard : null, h => {
     if (Math.abs(tokenHeight-h)>1) {
       const firstMeasurement = !tokenHeight;
@@ -757,82 +780,158 @@ function renderRelationships(source) {
 }
 const playableFrames = new Map();
 let motionProjection;
-const frameFilters = {
-  recent: {title:'Recently updated'},
-  playable: { title: 'Playable', matches: playableFrames, empty: 'No playable frames in this scope.' }
-};
-let frameFilter = 'all';
-let filterMatches = null;
-
-const recentFilter = createHistoryFilter(() => { if (frameFilter === 'recent') { renderFilter(); requestDraw(); } });
+const frameViews = { recent: 'Recently updated', playable: 'Playable' };
+const requestedFrameView = new URL(location.href).searchParams.get('view');
+let frameFilter = Object.hasOwn(frameViews, requestedFrameView) && scopeRequest !== 'tokens' ? requestedFrameView : 'all';
+let viewGeneration = 0, historyDirectory, lastIndexedAssets, references, sourcePaths;
+const derivedBoard = $('#view-board'), viewContent = $('#view-board-content');
+const cards = createFrameCards(derivedBoard, {
+  preview: drawCardPreview,
+  show(source, frame) {
+    setFrameFilter('all', false);
+    navigate(() => {
+      locateFrame(source, frame);
+      viewport.focus({ preventScroll: true });
+    });
+  },
+  play: startFramePlayer,
+  playable: (source, frame) => playableFrames.get(source)?.has(frame),
+});
+const recentFilter = createHistoryFilter(() => { if (frameFilter === 'recent') renderFrameView(); });
 window.addEventListener('pagehide', () => recentFilter.close());
+let playerInvoker, deferredView;
 async function startFramePlayer(source, frame, invoker) {
-  const { openPlayer } = await import('./player.js');
-  if (frameFilter === 'recent') recentFilter.close();
-  await openPlayer({ source, frame, theme: effectiveTheme, invoker });
-  document.querySelector('#motion-player')?.addEventListener('close', () => {
-    if (frameFilter === 'recent') void recentFilter.open(manifest.directory);
-  }, {once:true});
-}
-function offerPlay(host, part) {
-  const button = $('#play-frame');
-  button.hidden = !playableFrames.get(host?.path)?.has(part?.name);
-  button.onclick = button.hidden ? null : () => startFramePlayer(host.path, part.name, button);
-}
-function renderFilter() {
-  const filter = !tokenManifest && frameFilters[frameFilter];
-  filterMatches = filter?.matches ?? null;
-  $('#filter-label').textContent = filter?.title ?? 'Filter frames';
-  $('#filter-toggle').classList.toggle('active', !!filter);
-  $('#filter-results').hidden = !filter;
-  if (filter) {
-    $('#filter-results strong').textContent = filter.title;
-    $('#filter-results').setAttribute('aria-label',filter.title+' results');
-  }
-  if (filter && frameFilter === 'recent') {
-    const visible = new Map();
-    for (const asset of assets) {
-      if (!visible.has(asset.path)) visible.set(asset.path,new Set());
-      for (const part of asset.shown ?? []) visible.get(asset.path).add(part.name);
+  if (playerInvoker) return;
+  playerInvoker = invoker;
+  updateFramePlay();
+  try {
+    const { openPlayer } = await import('./player.js');
+    const opening = openPlayer({ source, frame, theme: effectiveTheme, invoker });
+    const dialog = $('#motion-player');
+    if (dialog) {
+      dialog.addEventListener('close', () => {
+        playerInvoker = null;
+        if (deferredView) renderFrameView();
+        updateFramePlay();
+      }, { once: true });
     }
-    const scope = manifest?.scope;
-    const inScope = (source,frame,chapter) => (!onlyFrame || onlyFrame === frame) && (scope === 'all' ||
-      visible.has(source) || scopeKind(scope) === 'group' && (chapter ?? source.split('/').slice(0,-1).join('/')) === scopeTarget(scope) ||
-      scopeKind(scope) === 'layer' && source.split('/')[0] === scopeTarget(scope));
-    filterMatches = recentFilter.render($('#filter-rows'),{relative:designSource,visible,inScope,
-      locate:(source,name)=>navigate(()=>locateFrame(source,name))});
-  } else if (filter) {
-    const rows = [];
-    for (const [source, names] of filter.matches) {
-      const items = assets.filter((a) => a.path === source);
-      const visibleNames = [...names].filter((name) => items.some((a) => a.shown?.some((p) => p.name === name)));
-      if (!visibleNames.length) continue;
-      const heading = document.createElement('h3');
-      heading.textContent = source;
-      rows.push(heading);
-      for (const name of visibleNames) {
-        const button = document.createElement('button');
-        button.textContent = name;
-        button.onclick = () => navigate(() => locateFrame(source, name));
-        rows.push(button);
+    await opening;
+  } catch (failure) {
+    error(failure.message);
+  } finally {
+    if (!$('#motion-player')) {
+      playerInvoker = null;
+      updateFramePlay();
+    }
+  }
+}
+
+function frameReferences() {
+  const inventory = derivedLanding ? catalog.assets : assets;
+  if (inventory !== lastIndexedAssets) {
+    lastIndexedAssets = inventory;
+    references = new Map();
+    sourcePaths = new Set();
+    if (derivedLanding) {
+      const byPath = new Map(inventory.map(asset => [asset.path, asset]));
+      sourcePaths = new Set(byPath.keys());
+      const get = key => {
+        const [source, name] = JSON.parse(key);
+        const asset = byPath.get(source);
+        if (!asset || (onlyFrame && name !== onlyFrame)) return;
+        return { asset, part: { name } };
+      };
+      references = { get, has: key => !!get(key) };
+    } else {
+      for (const asset of assets) {
+        sourcePaths.add(asset.path);
+        for (const part of asset.shown ?? []) references.set(frameKey(asset.path, part.name), { asset, part });
       }
     }
-    $('#filter-rows').replaceChildren(...rows);
-    if (!rows.length)
-      $('#filter-rows').textContent = manifest?.loading ? 'Loading frames…' : filter.empty;
   }
-  boardLayer.emphasize(playableFrames, filterMatches);
+  return references;
 }
-function setFrameFilter(value) {
-  recentFilter.close();
-  frameFilter = value;
-  if (value === 'recent') void recentFilter.open(manifest.directory);
+
+function renderFrameView() {
+  if (playerInvoker) {
+    deferredView = true;
+    return;
+  }
+  deferredView = false;
+  const title = frameViews[frameFilter];
+  $('#filter-label').textContent = title ?? 'Filter frames';
+  $('#filter-toggle').classList.toggle('active', !!title);
+  $('#view-board-title').textContent = title ?? '';
+  cards.reset();
+  delete viewContent.dataset.historyReady;
+  if (!title) {
+    viewContent.replaceChildren();
+    return;
+  }
+  const focus = viewContent.contains(document.activeElement)
+    ? { label: document.activeElement.getAttribute('aria-label'), frame: document.activeElement.closest('.view-frame')?.dataset }
+    : null;
+  const frames = frameReferences();
+  if (frameFilter === 'recent') {
+    const scope = manifest?.scope;
+    const inScope = (source, frame, chapter) => (!onlyFrame || onlyFrame === frame) && (scope === 'all' ||
+      sourcePaths.has(source) || scopeKind(scope) === 'group' && (chapter ?? source.split('/').slice(0, -1).join('/')) === scopeTarget(scope) ||
+      scopeKind(scope) === 'layer' && source.split('/')[0] === scopeTarget(scope));
+    recentFilter.render(viewContent, { relative: designSource, frames, inScope, card: cards.card });
+  } else {
+    const flows = prototypeFlows(manifest?.motionEdges ?? [], frames, designSource);
+    if (flows.length) renderPrototype(viewContent, flows, frames, { card: cards.card, play: startFramePlayer, title: assetTitle });
+    else {
+      const status = boardElement('p', 'view-board-status', manifest?.loading ? 'Loading frames…' : 'No playable frames in this scope.');
+      status.setAttribute('role', 'status');
+      viewContent.replaceChildren(status);
+    }
+  }
+  if (focus?.label && document.activeElement === document.body) {
+    const replacement = [...viewContent.querySelectorAll('button[aria-label="' + CSS.escape(focus.label) + '"]')].find(button => {
+      const frame = button.closest('.view-frame')?.dataset;
+      return frame?.frameName === focus.frame?.frameName && frame?.frameSource === focus.frame?.frameSource;
+    });
+    (replacement ?? derivedBoard).focus({ preventScroll: true });
+  }
+}
+function setFrameFilter(value, focus = true, loadCanvas = true) {
+  closeFilterMenu();
+  if (value !== frameFilter) {
+    viewGeneration++;
+    // Discard queued work belonging to cards on the outgoing derived board.
+    queued = queued.filter(entry => {
+      if (entry.derived === undefined) return true;
+      if (cache.get(entry.key) === entry) cache.delete(entry.key);
+      entry.finish();
+      return false;
+    });
+    frameFilter = value;
+    const url = new URL(location.href);
+    if (value === 'all') url.searchParams.delete('view');
+    else url.searchParams.set('view', value);
+    window.history.replaceState(window.history.state, '', url);
+    if (value === 'recent') {
+      historyDirectory = manifest?.directory;
+      if (historyDirectory) void recentFilter.open(historyDirectory);
+      else renderFrameView();
+    } else {
+      recentFilter.close();
+      historyDirectory = null;
+      renderFrameView();
+    }
+    derivedBoard.scrollTop = 0;
+    updateChrome();
+    if (value === 'all') {
+      requestDraw(false, false);
+      if (derivedLanding && loadCanvas) void refresh(true);
+    }
+  }
+  if (focus) (value === 'all' ? $('#filter-toggle') : derivedBoard).focus({ preventScroll: true });
+}
+function closeFilterMenu() {
   $('#filter-options').hidden = true;
   $('#filter-toggle').setAttribute('aria-expanded', 'false');
-  renderFilter();
-  updateChrome();
-  requestDraw();
-  $('#filter-toggle').focus();
 }
 $('#filter-toggle').onclick = () => {
   const menu = $('#filter-options');
@@ -840,29 +939,57 @@ $('#filter-toggle').onclick = () => {
   $('#filter-toggle').setAttribute('aria-expanded', String(!menu.hidden));
   for (const b of menu.children) b.setAttribute('aria-pressed', String(b.dataset.filter === frameFilter));
 };
-$('#filter-options').onclick = (e) => {
+$('#filter-options').onclick = e => {
   if (e.target.dataset.filter) setFrameFilter(e.target.dataset.filter);
 };
-$('#clear-filter').onclick = () => setFrameFilter('all');
-for (const panel of [$('#frame-filter'), $('#filter-results')])
-  panel.addEventListener('keydown', (e) => {
-    e.stopPropagation();
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      if (panel.id === 'filter-results') setFrameFilter('all');
-      else {
-        $('#filter-options').hidden = true;
-        $('#filter-toggle').setAttribute('aria-expanded', 'false');
-        $('#filter-toggle').focus();
-      }
-    }
-  });
-document.addEventListener('pointerdown', (e) => {
-  if (!e.target.closest('#frame-filter')) {
-    $('#filter-options').hidden = true;
-    $('#filter-toggle').setAttribute('aria-expanded', 'false');
-  }
+$('#all-frames').onclick = () => setFrameFilter('all');
+$('#frame-filter').addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || $('#filter-options').hidden) return;
+  e.stopPropagation();
+  e.preventDefault();
+  closeFilterMenu();
+  $('#filter-toggle').focus();
 });
+document.addEventListener('pointerdown', e => {
+  if (!e.target.closest('#frame-filter')) closeFilterMenu();
+});
+
+const floatingPlays = new Map();
+function updateFramePlay() {
+  const next = new Map();
+  function add(asset, part) {
+    if (!part || !playableFrames.get(asset?.path)?.has(part.name)) return;
+    const box = frameBox(asset, part), scale = view.scale;
+    if (scale < .18 || box.width * scale < 64 || box.height * scale < 40) return;
+    const x = view.x + (box.x + box.width) * scale - 6, y = view.y + box.y * scale + 6;
+    if (x < 24 || x > width || y < 0 || y > height - 20) return;
+    next.set(frameKey(asset.path, part.name), { asset, part, x, y });
+  }
+  if (frameFilter === 'all' && !tokenManifest && !inspection && !commentUI?.active()) {
+    add(hoveredElement?.asset, hoveredElement?.part);
+    const item = currentItem();
+    add(item, item?.parts.find(p => p.id === selectedForm));
+  }
+  for (const [key, button] of floatingPlays) {
+    if (next.has(key) || button === playerInvoker ||
+      (button === document.activeElement && frameFilter === 'all' && !tokenManifest && !moving)) continue;
+    button.remove();
+    floatingPlays.delete(key);
+  }
+  for (const [key, { asset, part, x, y }] of next) {
+    let button = floatingPlays.get(key);
+    if (!button) {
+      button = playButton(part.name, event => startFramePlayer(asset.path, part.name, event.currentTarget));
+      button.addEventListener('pointerdown', event => event.stopPropagation());
+      button.addEventListener('dblclick', event => event.stopPropagation());
+      button.addEventListener('blur', () => queueMicrotask(updateFramePlay));
+      viewport.append(button);
+      floatingPlays.set(key, button);
+    }
+    const size = Math.min(32, Math.max(20, 24 * Math.sqrt(view.scale)));
+    button.style.cssText = 'left:' + (x - size) + 'px;top:' + y + 'px;--frame-play-size:' + size + 'px';
+  }
+}
 function setMotionProjection(projection) {
   motionProjection = projection;
   playableFrames.clear();
@@ -875,7 +1002,6 @@ function selection() {
   renderNav(); updateChrome();
   $('#back').disabled = !history.length && !onlyFrame && !['group', 'asset'].includes(scopeKind(initializedScope));
   const host=currentItem(), part=host?.parts.find(p=>p.id===selectedForm);
-  offerPlay(host,part);
   const owner=selectedElement?.owner;
   const hasExport=!!owner?.export;
   const a=hasExport ? manifest?.assets.find(a=>a.path===owner.source) ?? manifest?.extraAssets?.find(a=>a.path===owner.source) ?? {path:owner.source,parts:[]} : host;
@@ -943,7 +1069,7 @@ function asScreen(box) {
   return { x: rect.left + view.x + box.x * view.scale, y: rect.top + view.y + box.y * view.scale,
     width: box.width * view.scale, height: box.height * view.scale };
 }
-const sourcePrefix = () => manifest?.sourcePrefix ?? '';
+const sourcePrefix = () => catalog?.sourcePrefix ?? manifest?.sourcePrefix ?? '';
 const projectSource = source => {
   const prefix = sourcePrefix();
   return !prefix || source.startsWith(prefix + '/') ? source : prefix + '/' + source;
@@ -1067,6 +1193,7 @@ $('#comments-toggle').addEventListener('click', () => {
 function updateOutlines() {
   viewport.dataset.hoverHit = String(!!hoveredElement && !commentUI.active());
   commentUI.reposition();
+  updateFramePlay();
   const hover=hoveredElement,origin=hover?.part?frameBox(hover.asset,hover.part):null;
   const hoverBox=hover?.element?{...hover.element,x:origin.x+hover.element.x,y:origin.y+hover.element.y}:origin;
   for (const [id,box] of [['selection-outline',selectedBox() ?? (selected ? currentItem() : null)],['hover-outline',hoverBox]]) {
@@ -1076,12 +1203,7 @@ function updateOutlines() {
 }
 
 function cameraArea() {
-  const area=fitArea(width,height,false,false);
-  if(frameFilter!=='all' && !tokenManifest){
-    const inset=$('#filter-results').getBoundingClientRect().right;
-    return {...area,x:area.x+inset,width:Math.max(1,area.width-inset)};
-  }
-  return area;
+  return fitArea(width,height,false,false);
 }
 function fitWorld(area, data) {
   if (scopeKind(data?.scope) !== 'asset' || !assets.length) return fitView(world,area);
@@ -1175,6 +1297,7 @@ function ensureImage(a, p) {
     return e;
   }
   e = { key, asset: a, part: p, theme:effectiveTheme, used: performance.now(), state: "queued" };
+  e.done = new Promise(resolve => { e.finish = resolve; });
   cache.set(key, e);
   queued.push(e);
   queueMicrotask(pump);
@@ -1184,12 +1307,14 @@ function pump() {
   // New vector parsing/decoding waits until the gesture settles. Existing exact
   // raster previews continue to move with the camera during interaction.
   if(moving)return;
-  queued.sort((a,b)=>Number(visible(b.asset))-Number(visible(a.asset))||
+  if (frameFilter === 'all') queued.sort((a,b)=>Number(visible(b.asset))-Number(visible(a.asset))||
     Math.hypot(view.x+(a.asset.x+a.asset.width/2)*view.scale-width/2,view.y+(a.asset.y+a.asset.height/2)*view.scale-height/2)-
     Math.hypot(view.x+(b.asset.x+b.asset.width/2)*view.scale-width/2,view.y+(b.asset.y+b.asset.height/2)*view.scale-height/2));
   while (loading < 3 && queued.length) {
-    const e = queued.shift();
-    if (!cache.has(e.key)) continue;
+    const next = frameFilter === 'all' ? 0 : queued.findIndex(entry => entry.derived === viewGeneration);
+    if (next === -1) break;
+    const [e] = queued.splice(next, 1);
+    if (cache.get(e.key) !== e) { e.finish(); continue; }
     loading++;e.state='loading';
     void loadPreview(e);
   }
@@ -1247,7 +1372,59 @@ async function loadPreview(e) {
   } finally {
     endPreview?.({state:e.state});
     if(local&&url)URL.revokeObjectURL(url);
-    loading--;requestDraw(false);pump();
+    e.finish();
+    loading--;
+    if (frameFilter === 'all') requestDraw(false);
+    pump();
+  }
+}
+
+async function drawCardPreview({ asset, part }, canvas) {
+  const unavailable = () => {
+    canvas.dataset.preview = 'unavailable';
+    canvas.after(boardElement('span', 'view-board-status', 'Preview unavailable'));
+  };
+  // A direct derived-board link initially has a source inventory. Measure only
+  // sources whose cards enter view until the user opens the full canvas.
+  const theme = effectiveTheme, generation = viewGeneration;
+  if (part.id === undefined) {
+    try {
+      const saved = asset.metadata?.[theme] ?? metadataCache.get(sourceKey(asset, theme));
+      const measured = saved ? decorateMetadata(asset, saved)
+        : await readSourceMetadata(asset, theme) ?? await sourceFor(asset, theme);
+      if (generation !== viewGeneration || !canvas.isConnected) return;
+      metadataCache.set(sourceKey(measured, theme), measuredMetadata(measured));
+      part = measured.parts.find(candidate => candidate.name === part.name);
+      if (!part) { unavailable(); return; }
+      asset = { ...measured, previewCrop: blockForAsset(measured).previewCrop ?? specimenPaintCrop(measured, part) };
+    } catch {
+      if (canvas.isConnected) unavailable();
+      return;
+    }
+  }
+  const crop = asset.previewCrop ?? part;
+  const entry = ensureImage(asset, crop);
+  entry.derived = viewGeneration;
+  queueMicrotask(pump);
+  await entry.done;
+  if (!canvas.isConnected) return;
+  if (entry.state !== 'ready') {
+    unavailable();
+    return;
+  }
+  const scale = Math.min(1, 205 / part.width, 124 / part.height);
+  canvas.width = Math.max(1, Math.round(part.width * scale * 2));
+  canvas.height = Math.max(1, Math.round(part.height * scale * 2));
+  canvas.style.width = canvas.width / 2 + 'px';
+  canvas.style.height = canvas.height / 2 + 'px';
+  canvas.style.aspectRatio = part.width + ' / ' + part.height;
+  const sx = entry.image.width / crop.width, sy = entry.image.height / crop.height;
+  canvas.getContext('2d').drawImage(entry.image, (part.x - crop.x) * sx, (part.y - crop.y) * sy,
+    part.width * sx, part.height * sy, 0, 0, canvas.width, canvas.height);
+  canvas.dataset.preview = 'ready';
+  if (cache.size > 100) {
+    const pending = new Set([...cache.values()].filter(e => e.state === 'queued' || e.state === 'loading').map(e => e.key));
+    evictPreviews(cache, pending);
   }
 }
 
@@ -1289,6 +1466,14 @@ function draw() {
   const endDrawing = globalThis.__adgTiming?.span('drawing');
   raf = 0;
   drawBackground();
+  if (frameFilter !== 'all' && !tokenManifest) {
+    window.__adg.ready = !!manifest && !manifest.loading && !arranger.pending;
+    window.__adg.revision = manifest?.revision;
+    if (window.__adg.ready && manifest?.directory) void recordVisit(manifest.directory);
+    if (!moving && queued.length) pump();
+    endDrawing?.();
+    return;
+  }
   if (tokenManifest && tokenList) {
     window.__adg.ready = true;
     window.__adg.revision = tokenManifest.revision;
@@ -1328,9 +1513,7 @@ function draw() {
       rounded(g.x, g.y, g.width, g.height, 0, boardPalette.surface || palette.surface);
       for (const section of g.blocks) for (const specimen of section.frames) {
         const well = specimen.well;
-        if(filterMatches && !filterMatches.get(section.asset)?.has(specimen.name))ctx.globalAlpha=.4;
         rounded(g.x+section.x+well.x, g.y+section.y+well.y, well.w, well.h, parseFloat(boardPalette["radius-card"]) || 12, boardPalette.canvas || palette.canvas);
-        if(filterMatches)ctx.globalAlpha=1;
       }
     }
     let ready = 0, count = 0;
@@ -1343,7 +1526,6 @@ function draw() {
       ctx.beginPath();
       ctx.roundRect(well.x, well.y, well.width, well.height, parseFloat(boardPalette['radius-card']) || 12);
       ctx.clip();
-      if(filterMatches && !inspection && !filterMatches.get(a.path)?.has(a.shown[0]?.name))ctx.globalAlpha=.4;
       const inViewport = visible(a);
       for (const pos of parts) {
         if (inViewport) count++;
@@ -1493,6 +1675,7 @@ viewport.addEventListener("pointermove", (e) => {
       updateOutlines();
       return;
     }
+    if (e.target.closest('.frame-play')) return;
     const rect=viewport.getBoundingClientRect();
     hoveredElement=hitSelection(inspection?[inspection]:assets,(e.clientX-rect.left-view.x)/view.scale,(e.clientY-rect.top-view.y)/view.scale);
     updateOutlines();return;
@@ -1638,7 +1821,7 @@ viewport.addEventListener('contextmenu', e => {
 });
 document.addEventListener('keydown', e => {
   if (!(e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) return;
-  if (tokenManifest || !manifest?.directory || document.querySelector('dialog[open]')) return;
+  if (frameFilter !== 'all' || tokenManifest || !manifest?.directory || document.querySelector('dialog[open]')) return;
   e.preventDefault();
   const activeEl = document.activeElement;
   const box = selectedBox();
@@ -1652,6 +1835,15 @@ document.addEventListener("keydown", (e) => {
       (tokenManifest && tokenList) ||
       e.target.matches("input,textarea,select,[contenteditable]") ||
       document.querySelector("dialog[open], :popover-open")) return;
+  if (frameFilter !== 'all') return;
+  if (!tokenManifest && !e.repeat && e.key.toLowerCase() === 'p') {
+    const item = currentItem(), part = item?.parts.find(p => p.id === selectedForm);
+    if (playableFrames.get(item?.path)?.has(part?.name)) {
+      e.preventDefault();
+      void startFramePlayer(item.path, part.name, document.activeElement);
+    }
+    return;
+  }
   const inPanel = !!e.target.closest('#sidebar, #source, #comments-panel, #scope-tabs, #token-catalog');
   const v = view;
   if (e.key === "Enter") {
@@ -1928,11 +2120,31 @@ async function applyManifest(data, force = false) {
   }
   if (changedRoot) {
     fixtureState=data.fixture ?? null;
-    theme = data.theme;
-    applyTheme();
+    if (!derivedLanding || catalog?.directory !== data.directory) {
+      theme = data.theme;
+      applyTheme();
+    }
     if (!leavingOverlayView) sidebar = !!fixtureState?.sidebar;
     inspector = !!fixtureState && data.inspector;
     history = [];
+  }
+  if (first && !fixtureState && frameFilter !== 'all' && !initializedDirectory && data.directory) {
+    const newDirectory = catalog?.directory !== data.directory;
+    catalog = manifest = data;
+    derivedLanding = true;
+    scopeRequest = data.scope;
+    setMotionProjection(data.motionFrames);
+    for (const element of document.querySelectorAll('.directory-name')) element.textContent = data.label;
+    $('#app-directory').title = data.directory;
+    document.title = `${data.label} — Agent Design Gallery`;
+    updateChrome();
+    renderScopeTabs(data);
+    if (frameFilter === 'recent' && (newDirectory || !historyDirectory)) {
+      historyDirectory = data.directory;
+      void recentFilter.open(historyDirectory);
+    } else renderFrameView();
+    requestDraw();
+    return;
   }
   if (first) {
     if (catalog?.directory !== data.directory || catalog?.scope !== data.scope) {
@@ -1990,12 +2202,7 @@ async function applyManifest(data, force = false) {
       signal?.throwIfAborted();
       const i=next++,a=data.assets[i];
       if(results[i])continue;
-      let entry;
-      if(a.hash&&a.metadataRefs?.[versionTheme]) {
-        const query=new URLSearchParams({theme:versionTheme,context:metadataContext()});
-        const response=await dataFetch(`metadata/${a.hash}?${query}`,{signal});
-        if(response.ok){const saved=await response.json();entry=decorateMetadata({...a,previewIds:{...a.previewIds,[versionTheme]:saved.previewIds}},saved.metadata);}
-      }
+      let entry = await readSourceMetadata(a, versionTheme, signal);
       if(!entry) {
         entry=await prepare(a,versionTheme,{signal});
         if (a.onlyFrame && !entry.parts.some(part => part.name === a.onlyFrame)) throw Error(`Frame ${a.onlyFrame} does not exist in ${a.path}.`);
@@ -2028,6 +2235,7 @@ async function applyManifest(data, force = false) {
   // raster intermediates so the completed world starts at its exact final scale.
   if(streaming&&publishedCount)for(const entry of cache.values()){delete entry.bitmap;delete entry.bitmapScale;}
   catalog = null;
+  derivedLanding = false;
   layout(
     manifest,
     !first && !!previous &&
@@ -2081,6 +2289,10 @@ async function applyManifest(data, force = false) {
   initialLink=null;
   scopeEntry=null;
   selection();
+  if (frameFilter === 'recent' && data.directory && historyDirectory !== data.directory) {
+    historyDirectory = data.directory;
+    void recentFilter.open(historyDirectory);
+  }
   if (pendingNavigation) {
     const action = pendingNavigation;
     pendingNavigation = null;
@@ -2227,8 +2439,9 @@ async function refresh(force = false) {
     const query=new URLSearchParams({context:metadataContext(),theme:effectiveTheme,scope:scopeRequest});
     if (strictRoute) query.set('strict', '1');
     if (onlyFrame) query.set('frame', onlyFrame);
-    if(!manifest){query.set('initial','1');query.set('metadata','1');}
-    else if(manifest.renderTheme!==effectiveTheme || scopeRequest!==initializedScope)query.set('metadata','1');
+    if (!manifest) query.set('initial', '1');
+    if (!(frameFilter !== 'all' && (!manifest || derivedLanding)) &&
+        (!manifest || manifest.renderTheme !== effectiveTheme || scopeRequest !== initializedScope)) query.set('metadata', '1');
     const signal=refreshController.signal, data=await api(`manifest?${query}`,null,false,signal);
     signal.throwIfAborted();
     data.scope ??= 'all';
@@ -2263,14 +2476,17 @@ if ((tokenManifest || manifest) && !isUnauthorized()) {
   window.addEventListener('adg-unauthorized', () => events.close(), { once: true });
   events.onmessage = async (e) => {
     const data = JSON.parse(e.data);
-    if (frameFilter === 'recent' && (data.changed || data.motionSources)) recentFilter.invalidate();
+    if (data.changed || data.motionSources) recentFilter.invalidate();
     if(data.motionSources){
       if (manifest) {
         manifest.motionFrames = data.motionFrames;
+        manifest.motionEdges = data.motionEdges;
         manifest.revision = data.revision;
       }
       setMotionProjection(data.motionFrames);
-      renderFilter();const host=currentItem();offerPlay(host,host?.parts.find(p=>p.id===selectedForm));requestDraw();
+      if (frameFilter === 'playable') renderFrameView();
+      updateFramePlay();
+      requestDraw();
       return;
     }
     if (data.error) error(data.error);
@@ -2298,12 +2514,17 @@ if ((tokenManifest || manifest) && !isUnauthorized()) {
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
     e.preventDefault();
-    $("#search").focus();
+    if (frameFilter === 'all') $("#search").focus();
     return;
   }
   if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
   if (document.querySelector(":popover-open")) return;
   if (e.defaultPrevented) return;
+  if (frameFilter !== 'all') {
+    e.preventDefault();
+    setFrameFilter('all');
+    return;
+  }
   if (tokenManifest) {
     if ($('#search').value) {
       e.preventDefault();

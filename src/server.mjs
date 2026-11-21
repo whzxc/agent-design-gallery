@@ -1,4 +1,5 @@
 // Adapted from ARC's MIT-licensed tooling/design-server.mjs.
+import { frameKey as motionFrameKey, motionFlows } from './toolkit/motion-flows.mjs';
 import { changeComment, commentFile, commentRevision, listComments, readComment } from './comments.mjs';
 import { randomUUID, createHash } from 'node:crypto';
 import { directLocal, viewerFile, shell, json } from './http.mjs';
@@ -69,10 +70,10 @@ export async function startServer({
     buildStore, viewerCache, codePaths=new Set();
   const recentJobs = new Map();
   const motionOwners = new Map();
-  let motionFrames, playGraph;
+  let motionFrames, playGraph, motionEdges;
   // Project discovery and its watcher own this projection. Drawing and selection only read it.
   async function indexMotion(project, directory, changed, inventory, reopening = false) {
-    playGraph = null;
+    playGraph = motionEdges = null;
     if (!changed.size) return;
     const summaries = await createIndexStore({
       directory: path.join(stateDirectory, 'cache', digest(directory), 'motion-frames'),
@@ -84,28 +85,50 @@ export async function startServer({
         try {
           const file = path.join(directory, source.replace(/\.tsx$/, '.motion.json'));
           const { ino, size, ctimeNs } = await stat(file, { bigint: true });
-          const key = JSON.stringify([1, project.root, source, String(ino), String(size), String(ctimeNs)]);
+          const key = JSON.stringify([3, project.root, source, String(ino), String(size), String(ctimeNs)]);
           // Pattern-backed edges also depend on the pattern file and token sheet.
           const usesPatterns = (await readFile(file, 'utf8')).includes('"pattern"');
           const saved = reopening && !usesPatterns && await summaries.get(key);
-          if (Array.isArray(saved) && saved.every(name => typeof name === 'string')) {
-            motionOwners.set(source, { frames: saved });
+          if (Array.isArray(saved?.frames) && Array.isArray(saved?.edges) && Array.isArray(saved?.declarations)) {
+            motionOwners.set(source, saved);
             continue;
           }
           const { sourceMotion } = await import('./toolkit/play-endpoint.mjs');
           const motion = sourceMotion(project, directory, source);
           const frames = [...new Set(motion.records.map(r => r.edge.from.frame))];
-          motionOwners.set(source, { motion, frames });
-          await summaries.put(key, frames);
+          const edges = motion.records.map(({ edge: { id, from, to, trigger, label } }) => ({ id, from, to, trigger, label }));
+          const entry = { frames, edges, declarations: motion.declarations };
+          motionOwners.set(source, { ...entry, motion });
+          if (!usesPatterns) await summaries.put(key, entry);
         } catch (error) {
           motionOwners.set(source, { error, frames: [] });
         }
       }
       motionFrames = Object.fromEntries([...motionOwners].map(([source, row]) => [source, row.frames]));
-      playGraph = null;
+      playGraph = motionEdges = null;
     } finally {
       await summaries.close();
     }
+  }
+  function boardMotionEdges(inventory = codePaths) {
+    if (motionEdges) return motionEdges;
+    const prefix = path.relative(activeProject.root, root).split(path.sep).join('/');
+    const base = prefix ? prefix + '/' : '';
+    const available = ref => ref.source.startsWith(base) && inventory.has(ref.source.slice(base.length));
+    const owners = [...motionOwners.keys()].sort().map(source => motionOwners.get(source));
+    const edges = owners.flatMap(row => row.edges ?? []);
+    const declarations = owners.flatMap(row => row.declarations ?? []);
+    const { byFrame } = motionFlows(edges.filter(edge => available(edge.from) && available(edge.to)).map(edge => ({ edge })), declarations);
+    motionEdges = edges.map(({ trigger, ...edge }) => {
+      const { on, key, value, target } = trigger;
+      const flow = byFrame.get(motionFrameKey(edge.from));
+      return {
+        ...edge,
+        trigger: { on, key, value, target: target.anchor ?? target.key ?? target.part },
+        ...(flow && { flow: { start: flow.start, id: flow.id, label: flow.label } }),
+      };
+    });
+    return motionEdges;
   }
   const overlayStores = new Map(), overlayHashes = new Set();
   let resettingOverlays = false;
@@ -300,7 +323,7 @@ export async function startServer({
     for (const controller of recentJobs.keys()) controller.abort();
     activeProject=project;watchArch(project,next);
     root = next;
-    motionOwners.clear(); motionFrames=undefined; await indexMotion(project, next, sidecars, sidecars, true);
+    motionOwners.clear(); motionFrames=motionEdges=undefined; await indexMotion(project, next, sidecars, sidecars, true);
     commentsFile = await commentFile(project.root, commentStateDirectory);
     commentStamp = await readCommentStamp(commentsFile);
     tokenSource = hasTokens ? tokenSourcePath(next, project) : null;
@@ -348,7 +371,7 @@ export async function startServer({
       if(changedMotion.size) {
         await indexMotion(project,base,changedMotion,sidecars);
         revision++;
-        emit({ revision, motionSources: [...changedMotion], motionFrames });
+        emit({ revision, motionSources: [...changedMotion], motionFrames, motionEdges: boardMotionEdges(nextCode) });
       }
       const stamps=[...new Set([...files.keys(),...next.keys()])].filter(name=>files.get(name)?.stamp!==next.get(name)?.stamp);
       const grouping=JSON.stringify(groups)!==JSON.stringify(nextGroups);
@@ -387,7 +410,7 @@ export async function startServer({
       files = next;
       tokenSource = nextTokenSource;
       codePaths=nextCode;
-      if (structural) playGraph = null;
+      if (structural) playGraph = motionEdges = null;
       sources = nextSources;
       groups = nextGroups;
       revision++;
@@ -409,7 +432,7 @@ export async function startServer({
       : "Agent Design Gallery",
     assets: [...files.values()].filter(asset => !isFeatureInternal(asset.path, sources)).sort((a, b) => a.path.localeCompare(b.path)),
     groups,
-    ...(motionOwners.size ? {motionFrames} : {}),
+    ...(motionOwners.size ? {motionFrames, motionEdges: boardMotionEdges()} : {}),
     revision,
     recent: state.recent,
     theme: state.theme,

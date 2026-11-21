@@ -15,11 +15,11 @@ export function ViewerTools({
   commentCount = 0,
   pinsHidden = false,
   hideInspector = false,
+  hideComments = false,
 }: any) {
   return (
     <Toolbar>
-      {play && <IconButton icon="play" label="Play" />}
-      <button
+      {!hideComments && <button
         type="button"
         aria-label={`Comments, ${commentCount} open`}
         aria-expanded={commentsOpen}
@@ -38,7 +38,7 @@ export function ViewerTools({
             {commentCount}
           </span>
         )}
-      </button>
+      </button>}
       <div class="relative">
         <IconButton icon="ellipsis" form={menu ? 'active' : 'default'} label="More" expanded={!!menu} />
         {menu && <div class="absolute top-full right-0 mt-[14px]">{menu}</div>}

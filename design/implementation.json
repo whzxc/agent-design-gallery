@@ -10,11 +10,11 @@
       "design":[{"source":"design/surfaces/canvas.tsx","frames":["recent-updates-list","recent-updates-on-board"]}]
     },
     {
-      "implementation":{"file":"public/boards.js","symbol":"createBoardLayer"},
-      "design":[{"source":"design/surfaces/canvas.tsx","frames":["board-play-affordance","board-playable-filter","board-frame-filters"]}]
+      "implementation":{"file":"public/view-boards.js","symbol":"playButton"},
+      "design":[{"source":"design/surfaces/canvas.tsx","frames":["board-play-affordance"]}]
     },
     {
-      "implementation":{"file":"public/app.js","symbol":"renderFilter","anchor":"function renderFilter() {"},
+      "implementation":{"file":"public/app.js","symbol":"renderFrameView","anchor":"function renderFrameView() {"},
       "design":[{"source":"design/surfaces/canvas.tsx","frames":["board-playable-filter","board-frame-filters"]}]
     },
     {

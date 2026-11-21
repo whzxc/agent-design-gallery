@@ -209,7 +209,11 @@ test('contract: rollout governs hidden and variant utilities, inline timings, sh
 
 
 test('contract: project reopen and sidecar-only edits refresh board availability without changing frame versions', async t => {
-  const { root, edges } = consumer(t);
+  const { root, edges, put } = consumer(t);
+  const reverse = { ...edge, id: 'return-settings', from: ref(last), to: ref(first) };
+  put(last.replace('.tsx', '.motion.json'), {
+    version: 1, edges: [reverse], flows: [{ start: ref(last), anchor: { anchor: 'open' } }]
+  });
   const open = () => startServer({directory:path.join(root,'design'),stateDirectory:path.join(root,'.state')});
   let server = await open();
   const read = async route => (await fetch(new URL(route,server.url))).json();
@@ -217,16 +221,20 @@ test('contract: project reopen and sidecar-only edits refresh board availability
   try {
     const original = await read('manifest');
     assert.deepEqual(original.motionFrames[source], ['ready']);
+    assert.deepEqual(original.motionEdges.map(({ id }) => id), [edge.id, reverse.id]);
+    assert.deepEqual(original.motionEdges.map(({ flow }) => flow.start), [ref(last), ref(last)]);
     await server.close();
     server = await open();
     const scene = await read('api/play?' + new URLSearchParams({source,frame:'ready',theme:'light',scene:'1'}));
     assert.equal(scene.edges[0].label, 'Click “Open”');
     const warm = await read('manifest');
+    assert.deepEqual(warm.motionEdges, original.motionEdges);
     edges([]);
     for (let attempt = 0; attempt < 100; attempt++) {
       const current = await read('manifest');
       if (current.revision > warm.revision) {
         assert.deepEqual(current.motionFrames[source], []);
+        assert.deepEqual(current.motionEdges.map(({ id }) => id), [reverse.id]);
         assert.deepEqual(current.assets.map(a => a.version), warm.assets.map(a => a.version));
         return;
       }

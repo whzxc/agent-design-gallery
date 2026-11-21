@@ -6,7 +6,7 @@ import { Field } from '../components/field';
 import { IconButton } from '../components/icon-button';
 import { Separator, Toolbar } from '../components/toolbar';
 import { hubNotes, instances, projects, switcherFrames } from '../fixtures/hub';
-import { boardFilters, nextActions, playableNames, playerMoments, type FrameFilter, type PlayerMoment } from '../fixtures/board-playback';
+import { boardFilters, nextActions, playerMoments, type FrameFilter, type PlayerMoment } from '../fixtures/board-playback';
 import recentPeriods from '../fixtures/recent-updates.json';
 import commentFixtures from '../fixtures/comments.json';
 import { viewerBarContents, viewerBarDetails, viewerBarProject, viewerBarScopes } from '../fixtures/viewer-bars';
@@ -100,138 +100,175 @@ const smallHeading = 'text-meta font-semibold text-text-secondary';
 function FilterPicker({ filter, expanded }: { filter: FrameFilter; expanded: boolean }) {
   const active = filter !== 'All frames';
   return <div class="relative">
-    <button type="button" aria-label={`Filter frames: ${filter}`} aria-expanded={expanded}
-      class={filter === 'Recently updated' ? 'flex h-(--control-size) items-center gap-[6px] rounded-row bg-accent px-[10px] text-body font-[550] text-on-accent' :
-        `flex h-(--control-size) items-center gap-2 rounded-field border px-3 text-body font-semibold
-        ${active ? 'border-accent bg-accent text-on-accent' : 'border-border text-text'}`}>
-      <Icon name="list-filter" size={filter === 'Recently updated' ? 16 : 15} />{active ? filter : 'Filter frames'}<Icon name="chevron-down" size={12} />
+    <button type="button" aria-expanded={expanded}
+      class={`flex h-(--control-size) items-center gap-[6px] rounded-row px-[10px] text-body font-[550] ${active ? 'bg-accent text-on-accent' : 'bg-surface-sunken text-text'}`}>
+      <Icon name="list-filter" size={16} />{active ? filter : 'Filter frames'}<Icon name="chevron-down" size={12} />
     </button>
-    {expanded && <div class="absolute top-full left-0 mt-3 w-52 rounded-menu border border-border bg-surface p-1 shadow-menu">
-      {(['All frames', 'Playable', 'Recently updated'] as const).map((item, i) =>
+    {expanded && <div class="absolute top-full left-0 mt-[10px] w-40 rounded-menu bg-surface p-[5px] shadow-menu">
+      {(['All frames', 'Playable', 'Recently updated'] as const).map(item =>
         <button type="button" key={item} aria-pressed={item === filter}
-          class="flex h-9 w-full items-center gap-2 rounded-row px-2 text-left text-body text-text">
-          <Icon name={['layout-grid', 'play', 'history'][i]} size={15} />
-          <span class="flex-1">{item}</span>{item === filter && <Icon name="check" size={14} />}
+          class={`block w-full rounded-row px-[10px] py-[7px] text-left text-body ${item === filter ? 'bg-surface-sunken' : ''}`}>
+          {item}
         </button>)}
     </div>}
   </div>;
 }
 
-function ResultRow({ name }: { name: string }) {
-  return <button type="button" aria-label={`Locate ${name} on board`}
-    class="flex min-h-8 w-full items-center gap-2 rounded-row px-2 text-left font-mono text-meta text-text-secondary">
-    <Icon name="frame" size={13} class="shrink-0 text-text-tertiary" /><span class="min-w-0 flex-1 truncate">{name}</span>
+function FramePlay({ name, zoom = 1 }: { name: string; zoom?: number }) {
+  const size = Math.min(32, Math.max(20, 24 * Math.sqrt(zoom))) / zoom;
+  return <button aria-label={`Play from ${name}`} type="button"
+    class="absolute grid place-items-center rounded-field bg-surface text-text shadow-float"
+    style={{ top: 6 / zoom, right: 6 / zoom, width: size, height: size }}>
+    <Icon name="play" size={size * .55} />
   </button>;
 }
 
-type RecentPeriod = {
-  title: string;
-  subjects: string[];
-  globalCauses?: string[];
-  rows: { source: string; frame: string; status: string; causes?: string[]; former?: { source: string; frame: string } }[];
-};
-const recentExample = (sinceVisit: boolean): RecentPeriod[] =>
-  recentPeriods.filter(period => !sinceVisit || period.title !== 'Earlier this week');
-
-function RecentResults({ sinceVisit }: { sinceVisit: boolean }) {
-  const groupButton = 'block w-full rounded-row bg-surface-sunken px-[10px] py-[7px] text-left font-mono';
-  const detail = 'my-[3px] block text-[smaller] text-text-secondary';
-  return <aside aria-label="Recently updated results"
-    class="absolute top-16 left-3 z-3 max-h-[70%] w-[332px] overflow-auto rounded-panel bg-surface p-[14px] text-body leading-[1.2] text-text shadow-float">
-    <header class="flex items-center justify-between"><strong>Recently updated</strong><button>Clear filter</button></header>
-    <div class="my-[10px] flex rounded-field bg-surface-sunken p-[3px]">
-      {['This week', 'Since my last visit'].map((range, i) =>
-        <button key={range} aria-pressed={sinceVisit === Boolean(i)}
-          class={`w-full rounded-row px-[10px] py-[7px] ${sinceVisit === Boolean(i) ? 'bg-surface shadow-float' : ''}`}>{range}</button>)}
-    </div>
-    <p>Frames whose sources or inputs changed.</p>
-    {recentExample(sinceVisit).map(period => {
-      const direct = period.rows.filter(row => !row.causes && row.status !== 'removed');
-      const removed = period.rows.filter(row => row.status === 'removed');
-      const shared = period.rows.filter(row => row.causes);
-      return <section key={period.title} class="mt-3 border-t border-border">
-        <header class="flex items-center justify-between">
-          <h3 class="text-meta leading-normal font-medium text-text-secondary">{period.title}</h3>
-          <button class="px-[10px] py-[7px] text-text-secondary">Visual changes</button>
-        </header>
-        {period.subjects.map(subject => <small key={subject} class={detail}>{subject}</small>)}
-        {direct.map(row => <button key={row.frame} aria-label={`Locate ${row.frame} on board`}
-          class="grid w-full grid-cols-[1fr_auto] gap-x-2 gap-y-[2px] px-2 py-[6px] text-left font-mono">
-          <span>{row.frame}</span><span class="font-ui text-text-secondary">{row.status[0].toUpperCase() + row.status.slice(1)}</span>
-          <small class={detail + ' col-span-2'}>{row.source.slice('design/'.length)}</small>
-          {row.former && <small class={detail + ' col-span-2'}>From {row.former.source.slice('design/'.length)} · {row.former.frame}</small>}
-        </button>)}
-        {!!removed.length && <button aria-expanded="false" class={groupButton}>Removed ({removed.length})<Icon name="chevron-right" size={12} class="float-right" /></button>}
-        {!!shared.length && <>
-          <small class={detail}>Shared inputs</small>
-          <button aria-expanded="false" class={groupButton}>{shared[0].causes?.join(', ')} → {shared.length} frames</button>
-        </>}
-        {period.globalCauses && <>
-          <small class={detail}>Global inputs</small>
-          <button aria-pressed="false" class={groupButton}>{period.globalCauses.join(', ')} → all frames</button>
-        </>}
-      </section>;
-    })}
-  </aside>;
+function SwitcherPreview({ name }: { name: string }) {
+  const { current, kind, open, search, empty } = switcherFrames.find(frame => frame.name === name) ?? switcherFrames[0];
+  return open ? <Switcher current={current} kind={kind} open search={search} empty={empty} /> :
+    <ProjectPicker current={current} kind={kind} />;
 }
 
-function FilterResults({ filter, sinceVisit }: { filter: FrameFilter; sinceVisit: boolean }) {
-  if (filter === 'Recently updated') return <RecentResults sinceVisit={sinceVisit} />;
-  return <aside aria-label="Playable results"
-    class="absolute top-[72px] left-3 w-[332px] rounded-panel border border-border bg-surface p-4 text-text shadow-float">
+function BoardFrameCard({ name, badge, source = false, hovered = false }: { name: string; badge?: string; source?: boolean; hovered?: boolean }) {
+  return <article class="overflow-hidden rounded-card border border-border bg-surface">
+    <div class="relative grid h-[148px] place-items-center bg-surface-sunken">
+      <div class="scale-[.68]"><SwitcherPreview name={name} /></div>
+      {hovered && <FramePlay name={name} />}
+    </div>
+    <div class="px-[10px] pt-2">
+      <h4 class="text-body leading-[18px] font-semibold">{name}</h4>
+      {source && <p class="mt-[3px] font-mono text-meta text-text-secondary">modules/project-switcher.tsx</p>}
+    </div>
+    <div class="flex items-center justify-between gap-1 pt-1 pr-2 pb-[7px] pl-[10px]">
+      {badge && <span class="rounded-pill bg-surface-sunken px-[7px] py-[3px] text-caption text-text-secondary">{badge}</span>}
+      <button type="button" class="ml-auto min-h-[25px] px-1 text-meta text-text-secondary">Show in board</button>
+    </div>
+  </article>;
+}
+
+const sectionStyle = 'min-w-0 rounded-panel border border-border bg-surface p-5';
+const boardAction = 'inline-flex h-(--control-size) items-center gap-[6px] rounded-row bg-surface-sunken px-[10px] text-body font-[550]';
+const sourceStyle = 'font-mono text-meta';
+
+function PlayableBoard() {
+  const cards = [['project-picker', 26, 86], ['switcher-open', 476, 86], ['switcher-empty', 926, 86], ['project-picker-instance', 926, 340]] as const;
+  return <section class={sectionStyle}>
     <header class="flex items-center justify-between">
-      <h2 class="flex items-center gap-2 text-title font-semibold"><Icon name="play" size={16} />Playable</h2>
-      <Button form="ghost" label="Clear filter" />
+      <h2 class="text-title font-semibold">project-switcher</h2>
+      <button type="button" class={boardAction}><Icon name="play" size={14} />Play flow</button>
     </header>
-    <section class="mt-3 border-t border-border pt-3">
-      <h3 class={smallHeading}>Project switcher</h3>
-      <div class="mt-1">{playableNames.map(name => <ResultRow key={name} name={name} />)}</div>
-    </section>
-  </aside>;
+    <div class="relative mt-3 h-[578px] overflow-hidden">
+      <svg aria-hidden="true" data-free class="absolute inset-0" width={1234} height={578}>
+        <defs><marker id="board-flow-arrow" viewBox="0 0 8 8" refX={7} refY={4} markerWidth={7} markerHeight={7} orient="auto">
+          <path d="M0 0L8 4L0 8Z" class="fill-text-tertiary" />
+        </marker></defs>
+        {['M274 168H476', 'M724 168H926', 'M724 168C825 168 825 422 926 422', 'M724 168H748V50H11V168H26', 'M1174 168H1198V14H457V168H476'].map(d =>
+          <path key={d} d={d} marker-end="url(#board-flow-arrow)" stroke-width={1.25} class="fill-none stroke-text-tertiary" />)}
+      </svg>
+      {cards.map(([name, x, y], i) => <div data-free key={name} class="absolute w-[248px]" style={{ left: x, top: y }}>
+        <BoardFrameCard name={name} badge={i === 0 ? 'Start' : undefined} source />
+      </div>)}
+      {[
+        { x: 375, y: 150, title: 'Click picker · Press ↓ · Press ↑' },
+        { x: 825, y: 150, title: 'Type Nova' },
+        { x: 825, y: 281, title: 'Click first instance' },
+        { x: 380, y: 46, title: 'Press Esc · Click picker' },
+        { x: 827, y: 29, title: 'Click clear search' },
+      ].map(({ x, y, title }) => <span data-free key={title}
+        class="absolute -translate-x-1/2 -translate-y-full rounded-field bg-surface-sunken px-[6px] py-[3px] text-caption"
+        style={{ left: x, top: y }}>{title}</span>)}
+    </div>
+  </section>;
+}
+
+type HistoryPeriod = {
+  title: string;
+  globalCauses?: string[];
+  rows: { source: string; frame: string; status: string; causes?: string[] }[];
+};
+
+function RecentBoard({ sinceVisit }: { sinceVisit: boolean }) {
+  const example: HistoryPeriod[] = recentPeriods.filter(period => !sinceVisit || period.title !== 'Earlier this week');
+  return <>
+    <div class="flex gap-1">
+      {['This week', 'Since my last visit'].map((range, i) =>
+        <button key={range} type="button" aria-pressed={sinceVisit === Boolean(i)}
+          class={boardAction + (sinceVisit === Boolean(i) ? ' bg-surface shadow-float' : '')}>{range}</button>)}
+    </div>
+    {example.map(period => {
+      const sources = [...new Set(period.rows.filter(row => row.status !== 'removed').map(row => row.source))];
+      const removed = period.rows.filter(row => row.status === 'removed');
+      return <section key={period.title} class={sectionStyle}>
+        <header class="flex items-center justify-between">
+          <div>
+            <h2 class="text-title font-semibold">{period.title}</h2>
+            {period.globalCauses && <p class="mt-[5px] text-body text-text-secondary">Global inputs changed · {period.globalCauses.join(', ')}</p>}
+          </div>
+          <button type="button" class={boardAction}>Visual changes</button>
+        </header>
+        {sources.map(source => {
+          const rows = period.rows.filter(row => row.source === source);
+          const direct = rows.filter(row => !row.causes && row.status !== 'removed');
+          const shared = rows.filter(row => row.causes);
+          const open = sinceVisit && period.title === 'Today' && source === 'design/modules/project-switcher.tsx';
+          return <section key={source} class="mt-4 border-t border-border pt-[14px]">
+            <h3 class={sourceStyle + ' mb-3 text-text'}>{source.slice('design/'.length)}</h3>
+            {direct.length > 0 && <div class="grid grid-cols-5 gap-3">
+              {direct.map(row => <BoardFrameCard key={row.frame} name={row.frame} badge={row.status === 'added' ? 'New' : 'Edited'} />)}
+            </div>}
+            {shared.length > 0 && <details open={open} class="mt-2 text-meta text-text-secondary">
+              <summary class="py-[7px]">{shared[0].causes?.join(', ')} · {shared.length} affected {shared.length === 1 ? 'frame' : 'frames'}</summary>
+              {open && <div class="grid grid-cols-5 gap-3 pt-[5px]">
+                {shared.map(row => <BoardFrameCard key={row.frame} name={row.frame} badge="Affected by shared input" />)}
+              </div>}
+            </details>}
+          </section>;
+        })}
+        {removed.length > 0 && <section class="mt-4 border-t border-border pt-[14px]">
+          <h3 class="text-meta font-semibold text-text">Removed frames</h3>
+          <ul class="mt-3 list-disc pl-5 font-mono text-meta text-text-secondary">
+            {removed.map(row => <li key={row.frame}>{row.source.slice('design/'.length)} · {row.frame}</li>)}
+          </ul>
+        </section>}
+      </section>;
+    })}
+  </>;
 }
 
 function FilteredBoard({ filter, menuOpen, sinceVisit }: { filter: FrameFilter; menuOpen: boolean; sinceVisit: boolean }) {
-  const history = filter === 'Recently updated';
-  // The located switcher fills the area beside the 332 px results panel.
-  const camera = sinceVisit ? { left: -766.4, top: -205.9, scale: 1.096 } : { left: 190, top: 70, scale: .63 };
-  const recent = recentExample(sinceVisit).flatMap(period => period.rows
-    .filter(row => !row.causes && row.status !== 'removed').map(row => row.frame));
+  const derived = filter !== 'All frames', scale = .63;
   return <Canvas {...screen}>
     <div class="absolute inset-x-0 top-0 z-10 p-3">
       <ViewerBars
         project={<ProjectPicker current={{name: 'agent-design-gallery'}} kind="project" />}
-        scopes={<>
-          <ScopeTabs options={viewerBarScopes} selected="Modules" />
-          {!history && <Separator />}
-          <FilterPicker filter={filter} expanded={menuOpen} />
-        </>}
-        search={<Field form="search" label="Find assets…" width={history ? 216 : 204} />}
+        scopes={<><ScopeTabs options={viewerBarScopes} selected="Modules" /><FilterPicker filter={filter} expanded={menuOpen} /></>}
+        hideContents={derived} hideComments={derived} hideInspector={derived}
+        search={<Field form="search" label="Find assets…" width={216} />}
       />
     </div>
-    <div data-free class="absolute origin-top-left" style={{ left: camera.left, top: camera.top, transform: `scale(${camera.scale})` }}>
-      <BoardChapter titleTracking={history ? '-.02em' : undefined} eyebrowTracking={history ? '.16em' : undefined}
-        width={history ? 2888 : 1680} number={2} layer={history ? 'modules' : 'Modules'} title="Project access" sourceCount={3} frameCount={16}>
-        <BoardSection wide={history} title="project-switcher" path="modules/project-switcher.tsx" modified={history ? 'Nov 7, 13:24' : undefined}>
-          {switcherFrames.map(({name, current, kind, open, search, empty}) => {
-            const playable = playableNames.includes(name);
-            const match = filter === 'All frames' || (filter === 'Playable' ? playable : recent.includes(name));
-            const play = playable && <button type="button" aria-label={`Play from ${name}`}
-              class={history ? 'absolute right-0 bottom-[calc(100%-17px)] flex h-[26px] origin-bottom-right items-center gap-1 rounded-field bg-accent px-2 font-ui text-meta leading-normal font-semibold text-on-accent' :
-                'flex h-10 items-center gap-[6px] rounded-field bg-accent px-3 font-ui text-title font-semibold text-on-accent'}
-              style={history ? { transform: `scale(${1 / camera.scale})` } : undefined}>
-              <Icon name="play" size={14} />Play
-            </button>;
-            const preview = open ? <Switcher current={current} kind={kind} open search={search} empty={empty} /> :
-              <ProjectPicker current={current} kind={kind} />;
-            return <SpecimenWell key={name} name={name} note={history ? hubNotes.switcher : undefined} span={open ? 6 : history ? 4 : 3} selected={sinceVisit && name === 'switcher-open'} dimmed={!match} captionAction={play} overlayAction={history}>
-              {history ? <div class="bg-canvas p-6">{preview}</div> : preview}
-            </SpecimenWell>;
-          })}
-        </BoardSection>
-      </BoardChapter>
-    </div>
-    {filter !== 'All frames' && <FilterResults filter={filter} sinceVisit={sinceVisit} />}
-    <div class="absolute inset-x-0 bottom-4 flex justify-center"><ZoomBar label={sinceVisit ? '110%' : '63%'} backDisabled /></div>
+    {derived ? <div class="absolute inset-x-0 top-16 px-[58px] pt-7">
+      <header class="mb-6 flex items-center gap-[18px]">
+        <button type="button" class={boardAction}><Icon name="arrow-left" size={14} />All frames</button>
+        <h1 class="text-[34px] leading-[1.2] font-[650] tracking-[-.025em]">{filter}</h1>
+      </header>
+      <div class="grid gap-4">{filter === 'Playable' ? <PlayableBoard /> : <RecentBoard sinceVisit={sinceVisit} />}</div>
+    </div> : <>
+      <div data-free class="absolute top-[70px] left-[190px] origin-top-left" style={{ transform: `scale(${scale})` }}>
+        <BoardChapter width={1680} number={2} layer="Modules" title="Project access" sourceCount={3} frameCount={16}>
+          <BoardSection title="project-switcher" path="modules/project-switcher.tsx" modified="Nov 7, 13:24">
+            {switcherFrames.map(({ name, open }) => (
+              <SpecimenWell key={name} name={name} note={hubNotes.switcher} span={open ? 6 : 3}>
+                <div class="relative">
+                  <SwitcherPreview name={name} />
+                  {!menuOpen && name === 'project-picker' && <FramePlay name={name} zoom={scale} />}
+                </div>
+              </SpecimenWell>
+            ))}
+          </BoardSection>
+        </BoardChapter>
+      </div>
+      <div class="absolute inset-x-0 bottom-4 flex justify-center"><ZoomBar label="63%" backDisabled /></div>
+    </>}
   </Canvas>;
 }
 

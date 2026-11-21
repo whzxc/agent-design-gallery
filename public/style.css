@@ -221,36 +221,11 @@ kbd { display:inline-flex; align-items:center; height:var(--keycap-size); paddin
 #board-chrome [data-adg-token] code[data-copied="true"] {color:var(--accent)}
 #board-chrome [data-adg-token] code[data-copied="true"]::after {content:" ✓"}
 
-.board-caption.dimmed {opacity:.4}
-.caption-play {position:absolute;right:0;top:0;transform-origin:top right;transform:scale(var(--caption-scale,1));display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 8px;border-radius:var(--radius-field);background:var(--accent);color:var(--on-accent);font:600 12px var(--font-ui)}
-/* Keep the screen-sized Play target clear of the note below its title. */
-.board-caption:has(small:not(:empty)) .caption-play { top:auto; bottom:calc(100% - 17px); transform-origin:bottom right }
 #frame-filter {position:relative}
 #filter-toggle.active {background:var(--accent);color:var(--on-accent)}
 #filter-options {position:absolute;top:calc(100% + 10px);left:0;min-width:160px;padding:5px;border-radius:var(--radius-menu);background:var(--surface);box-shadow:var(--shadow-menu);z-index:3}
-#filter-options button,#filter-rows button {display:block;text-align:left;width:100%;padding:7px 10px;border-radius:var(--radius-row)}
-#filter-options button[aria-pressed=true],#filter-options button:hover,#filter-rows button:hover {background:var(--surface-sunken)}
-#filter-results {top:var(--panel-top);left:12px;width:min(332px,90vw);padding:14px;max-height:70vh;overflow:auto;z-index:3}
-#filter-results header {display:flex;align-items:center;justify-content:space-between}
-#filter-results h3 {font:500 var(--text-meta) var(--font-ui);color:var(--text-secondary)}
-#filter-rows button {font-family:var(--font-mono)}
-
-@media(max-width:700px){#filter-results{width:min(42vw,240px)}#filter-rows button{overflow-wrap:anywhere}}
-
-.recent-ranges { display:flex; margin:10px 0; padding:3px; border-radius:var(--radius-field); background:var(--surface-sunken) }
-#filter-rows .recent-ranges button { text-align:center; font-family:inherit }
-.recent-ranges [aria-pressed=true] { background:var(--surface); box-shadow:var(--shadow-float) }
-#filter-rows section { border-top:1px solid var(--border); margin-top:12px }
-#filter-rows small { display:block; color:var(--text-secondary); overflow-wrap:anywhere; margin:3px 0 }
-#filter-rows .recent-row { display:grid; grid-template-columns:1fr auto; gap:2px 8px; padding:6px 8px; text-align:left; white-space:normal; overflow-wrap:anywhere }
-.recent-row small { grid-column:1 / -1 }
-.recent-row span:last-of-type { color:var(--text-secondary); font-family:var(--font-ui) }
-
-#filter-rows section header button { width:auto; font:inherit; color:var(--text-secondary) }
-#filter-rows button[aria-expanded], #filter-rows section button[aria-pressed] { background:var(--surface-sunken); white-space:normal; overflow-wrap:anywhere }
-#filter-rows button[aria-expanded=true], #filter-rows section button[aria-pressed=true] { color:var(--accent) }
-#filter-rows .recent-removed::after { content:""; float:right; width:6px; height:6px; margin:4px; border:solid currentColor; border-width:0 1px 1px 0; transform:rotate(-45deg) }
-#filter-rows .recent-removed[aria-expanded=true]::after { transform:rotate(45deg) }
+#filter-options button {display:block;text-align:left;width:100%;padding:7px 10px;border-radius:var(--radius-row)}
+#filter-options button[aria-pressed=true],#filter-options button:hover {background:var(--surface-sunken)}
 
 .motion-consumer-dialog { max-width:min(720px,calc(100vw - 32px)); max-height:75vh; padding:24px; border:1px solid var(--border); border-radius:var(--radius-card); background:var(--surface); color:var(--text); }
 .motion-consumer-dialog h2 { font-size:var(--text-title,18px); margin:0 0 16px; }

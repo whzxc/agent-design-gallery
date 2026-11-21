@@ -74,7 +74,7 @@ test('contract: period net changes, working-tree generations and visit ancestry 
   assert.deepEqual(changes(dirty),['added:extra','changed:home','removed:moving']);
   assert.deepEqual(changes(today),['changed:authored','changed:badge','changed:home','changed:notice','changed:screen','changed:using','moved:moving']);
   assert.deepEqual(today.globalCauses,['adg.config.mjs','bun.lock']);
-  assert.ok(today.globalFrames['design/modules/flags.tsx'].includes('other'));
+  assert.ok(!today.rows.some(row => row.frame === 'other'));
   assert.deepEqual(today.rows.find(r=>r.frame==='notice').causes,['design/tokens.css']);
   assert.equal(today.rows.find(r=>r.frame==='badge').causes,undefined);
   assert.deepEqual(today.rows.find(r=>r.frame==='screen').causes,['design/modules/feature/badge.tsx','design/tokens.css']);

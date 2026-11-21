@@ -26,11 +26,10 @@ export const nextActions = {
 };
 
 export const boardFilters = [
-  ['board-play-affordance', 'All frames', 'Play in a specimen caption starts at that frame.'],
-  ['board-playable-filter', 'Playable', 'The sidebar locates playable frames. Other specimens dim in place.'],
-  ['board-frame-filters', 'All frames', 'One board filter chooses which frames to locate.'],
-  ['recent-updates-list', 'Recently updated', 'Illustrative Git history. Expand an inherited cause to see its frames. Removed frames are grouped by period.'],
-  ['recent-updates-on-board', 'Recently updated', 'Since my last visit. Selecting switcher-open focuses the existing specimen.'],
+  ['board-play-affordance', 'All frames', 'The selected or hovered frame shows Play in its top-right corner.'],
+  ['board-playable-filter', 'Playable', 'A prototype map connects the switcher frames and marks the start.'],
+  ['board-frame-filters', 'All frames', 'The filter opens another board in the current scope.'],
+  ['recent-updates-list', 'Recently updated', 'Git periods group frames by source, with shared inputs collapsed.'],
+  ['recent-updates-on-board', 'Recently updated', 'Since my last visit, with one shared-input group expanded.'],
 ] as const;
 export type FrameFilter = typeof boardFilters[number][1];
-export const playableNames = ['project-picker', 'switcher-open', 'switcher-empty'];

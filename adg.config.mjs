@@ -24,8 +24,17 @@ async function readyPlayback(page, name) {
   await page.emulateMedia({ reducedMotion: name === 'flow-reduced-motion' ? 'reduce' : 'no-preference' });
   if (!name.startsWith('flow-')) {
     await page.waitForFunction((n) => document.documentElement.dataset.fixtureReady === n, name);
-    await page.getByRole('button', { name: 'Play from project-picker', exact: true }).waitFor();
-    if (name !== 'board-play-affordance') await page.locator('#filter-toggle').click();
+    if (name === 'board-play-affordance') {
+      const point = await page.evaluate(() => {
+        const frame = window.__adg.items.find(item => item.path === 'modules/project-switcher.tsx');
+        const view = window.__adg.view;
+        return { x: view.x + (frame.x + frame.width / 2) * view.scale, y: view.y + (frame.y + frame.height / 2) * view.scale };
+      });
+      await page.mouse.move(point.x, point.y);
+      await page.getByRole('button', { name: 'Play from project-picker', exact: true }).waitFor();
+      return;
+    }
+    await page.locator('#filter-toggle').click();
     if (name.startsWith('recent-updates-')) {
       const head = '1'.repeat(40), branch = 'fixture';
       await page.route('**/api/recent-visit',route=>route.fulfill({json:{head,branch}}));
@@ -34,28 +43,28 @@ async function readyPlayback(page, name) {
         const directory = document.querySelector('#app-directory').title;
         localStorage.setItem('adg-visit:'+JSON.stringify([directory,'fixture']),JSON.stringify({started:0,head:'2'.repeat(40)}));
       });
-      const globalFrames = await page.locator('.board-caption').evaluateAll(captions => {
-        const sources = {};
-        for (const { dataset } of captions)
-          (sources['design/' + dataset.frameSource] ??= []).push(dataset.frameName);
-        return sources;
-      });
       await page.route('**/api/recent-updates?*',route=>{
         const since = new URL(route.request().url()).searchParams.has('since');
         const periods = recentPeriods.filter(period => !since || period.title !== 'Earlier this week');
-        return route.fulfill({json:{available:true,complete:true,head,branch,generation:'fixture',periods:periods.map(p=>({...p,complete:true,...(p.globalCauses && {globalFrames})}))}});
+        return route.fulfill({json:{available:true,complete:true,head,branch,generation:'fixture',periods:periods.map(p=>({...p,complete:true}))}});
       });
       await page.locator('[data-filter=recent]').click();
+      await page.getByRole('heading', { name: 'Uncommitted' }).waitFor();
       if (name.endsWith('on-board')) {
         await page.getByRole('button',{name:'Since my last visit'}).click();
-        await page.getByRole('button',{name:'Locate switcher-open on board'}).click();
+        await page.getByRole('heading', { name: 'Today', exact: true }).waitFor();
+        await page.locator('.recent-source').filter({ has: page.getByRole('heading', { name: 'modules/project-switcher.tsx' }) })
+          .locator('summary').evaluate(summary => summary.click());
+        await page.getByText('Affected by shared input', { exact: true }).waitFor();
       }
-      await page.getByText('Uncommitted',{exact:true}).waitFor();
     }
     if (name === 'board-playable-filter') await page.locator('[data-filter=playable]').click();
+    if (name !== 'board-frame-filters') {
+      await page.waitForFunction(() => [...document.querySelectorAll('#view-board canvas')].some(canvas => canvas.dataset.preview === 'ready'));
+    }
     return;
   }
-  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await page.getByRole('button', { name: 'Play from project-picker', exact: true }).click();
   const player = page.locator('#motion-player');
   const scene = player.frameLocator('iframe');
   const picker = scene.locator('[data-adg-id=picker]');
