@@ -92,17 +92,18 @@ export async function buildSource(config, file, options = {}) {
     throw new CliError(code === 'INTERNAL_ERROR' ? 'SOURCE_BUILD_FAILED' : code, error.message, { cause: error });
   }
 }
-async function buildDesignSource(config, file, { write = true, allowLegacy = true, snapshot, browser } = {}) {
+async function buildDesignSource(config, file, { write = true, allowLegacy = true, snapshot, browser, files, framesOnly = false } = {}) {
   if (file.endsWith('.mmd')) return (await import('./arch.mjs')).buildArch(config,file,{snapshot,browser});
   if (write) refreshTypes(config);
   const read = (name, encoding) => {
+    if (files) return files.read(name, encoding);
     if (!snapshot) return readFileSync(name, encoding);
     if (!snapshot.has(name)) snapshot.set(name, readFileSync(name));
     const value = snapshot.get(name);
     return encoding ? value.toString(encoding) : value;
   };
-  file = realpathSync(file);
-  const base = realpathSync(config.design), dependencies = new Set();
+  file = files ? path.resolve(file) : realpathSync(file);
+  const base = files ? path.resolve(config.design) : realpathSync(config.design), dependencies = new Set();
   const imports = new Set(), sources = sourceDirectories(config);
   const result = await build({ entryPoints: [file], bundle: true, write: false, format: 'esm', platform: 'node', jsx: 'automatic', jsxImportSource: 'adg', jsxDev: true, metafile: true, logLevel: 'silent', plugins: [{ name: 'adg-sources', setup(api) {
     api.onResolve({ filter: /.*/ }, args => {
@@ -113,9 +114,9 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
       const url = args.path.endsWith('?url');
       const requested = url ? args.path.slice(0,-4) : args.path;
       let resolved = args.kind === 'entry-point' ? path.resolve(requested) : path.resolve(args.resolveDir, requested);
-      resolved = [resolved, ...['.tsx','.ts','.js','/index.tsx','/index.ts','/index.js'].map(ext => resolved + ext)].find(candidate => statSync(candidate, { throwIfNoEntry: false })?.isFile());
+      resolved = [resolved, ...['.tsx','.ts','.js','/index.tsx','/index.ts','/index.js'].map(ext => resolved + ext)].find(candidate => files ? files.has(candidate) : statSync(candidate, { throwIfNoEntry: false })?.isFile());
       if (!resolved) return { errors: [{ text: `Cannot resolve ${args.path}` }] };
-      resolved = realpathSync(resolved);
+      if (!files) resolved = realpathSync(resolved);
       if (!resolved.startsWith(base + path.sep)) return { errors: [{ text: `Import ${args.path} leaves design/; move it inside design/` }] };
       if (!allowLegacy) rejectLegacy(config, [path.join(config.design, path.relative(base, resolved))]);
       dependencies.add(resolved);
@@ -124,7 +125,7 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
       if (url && !resolved.startsWith(path.join(base,'art')+path.sep)) return {errors:[{text:'?url imports must be under design/art/'}]};
       return { path: resolved, ...(url ? {namespace:'art-url'} : {}) };
     });
-    api.onLoad({filter:/.*/,namespace:'art-bytes'}, args => ({contents:read(args.path),loader:'dataurl'}));
+    api.onLoad({filter:/.*/,namespace:'art-bytes'}, async args => ({contents:await read(args.path),loader:'dataurl'}));
     const artModule = file => {
       const source=path.relative(base,file).split(path.sep).join('/');
       return {contents:`import data from ${JSON.stringify('adg:art-bytes:'+file)};import {registerArtwork} from 'adg';export default registerArtwork(data,${JSON.stringify(source)});`,loader:'js'};
@@ -132,14 +133,14 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     api.onLoad({filter:/.*/,namespace:'art-url'}, args => artModule(args.path));
     api.onLoad({filter:/\.tsx$/}, async args => {
       const sourcePath = path.relative(base, args.path).split(path.sep).join('/');
-      if (!isSourcePath(sourcePath, sources)) return snapshot ? {contents:read(args.path,'utf8'),loader:'tsx'} : undefined;
-      const original=read(args.path,'utf8');
+      if (!isSourcePath(sourcePath, sources)) return files || snapshot ? {contents:await read(args.path,'utf8'),loader:'tsx'} : undefined;
+      const original=await read(args.path,'utf8');
       return registeredSource(args.path, sourcePath, original);
     });
-    if (snapshot) api.onLoad({filter:/\.(?:[cm]?js|jsx|ts|json)$/}, args => ({contents:read(args.path,'utf8'),loader:args.path.endsWith('.ts')?'ts':args.path.endsWith('.jsx')?'jsx':args.path.endsWith('.json')?'json':'js'}));
+    if (snapshot || files) api.onLoad({filter:/\.(?:[cm]?js|jsx|ts|json)$/}, async args => ({contents:await read(args.path,'utf8'),loader:args.path.endsWith('.ts')?'ts':args.path.endsWith('.jsx')?'jsx':args.path.endsWith('.json')?'json':'js'}));
     api.onLoad({ filter: /\.(png|jpe?g|webp)$/i }, args => artModule(args.path));
-    api.onLoad({ filter: /\.svg$/i }, args => {
-      const source = read(args.path,'utf8');
+    api.onLoad({ filter: /\.svg$/i }, async args => {
+      const source = await read(args.path,'utf8');
       const forbidden = /<(?:style|script)\b|\s(?:on[\w-]+|className)\s*=/i.exec(source);
       if (forbidden) { const before=source.slice(0,forbidden.index); return {errors:[{text:'Forbidden SVG markup; remove styles, scripts and event attributes',location:{file:args.path,line:before.split('\n').length,column:before.length-before.lastIndexOf('\n')-1}}]}; }
       return { contents: `import { artwork } from 'adg'; export default props => artwork(${JSON.stringify(source)}, props, ${JSON.stringify(path.relative(base,args.path).split(path.sep).join('/'))});`, loader:'js' };
@@ -161,7 +162,7 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
   }).sort();
   const internal = isFeatureInternal(sourceName, sources);
   if (internal) {
-    const original = read(file, 'utf8');
+    const original = await read(file, 'utf8');
     if (/export\s+default[\s\S]*<Frame\b/.test(original)) throw Error(`${relative(config,file)}: feature-internal source must not export Frame defaults; move frames to index.tsx`);
     return { frames: [], parts, dependencies: [...dependencies], imports: [...imports].sort(), css: '', tokenCss: '', cssWithoutTokens: '', cssBeforeTokens: '', cssAfterTokens: '' };
   }
@@ -173,9 +174,10 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     try { validateFrame(frame); if (names.has(frame.name)) throw Error(`Duplicate frame name ${frame.name}`); names.add(frame.name); }
     catch(error) { throw Error(`${relative(config,file)}: ${frame?.name ?? '-'}: ${error.message}`); }
   }
+  if (framesOnly) return { frames };
   const tokenFile = path.join(base, 'tokens.css');
   dependencies.add(tokenFile);
-  const tokenSource = read(tokenFile,'utf8'), tokens = snapshot ? parseTokens(tokenSource) : loadTokens(config);
+  const tokenSource = await read(tokenFile,'utf8'), tokens = snapshot ? parseTokens(tokenSource) : loadTokens(config);
   const compiler = await compile(`${readFileSync(path.join(tailwind,'theme.css'),'utf8')}\n${themeCss(tokens)}\n${readFileSync(path.join(tailwind,'preflight.css'),'utf8')}\n@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));\n@tailwind utilities;`);
   const classes = [...new Set(frames.flatMap(f => [...f.html.matchAll(/\bclass="([^"]*)"/g)].flatMap(m => m[1].split(/\s+/))))];
   const utilities = compiler.build(classes);

@@ -117,3 +117,12 @@
 .derived-mode #comment-layer,
 .derived-mode #comments-panel { visibility: hidden; }
 .derived-mode #app-bar { right: auto; max-width: calc(100% - 66px); }
+.recent-feed > h2, .recent-impacts > h2 { margin-bottom: 12px; }
+.recent-more, .recent-removed-heading { margin-top: 16px; }
+.recent-change {
+  display: grid;
+  gap: 2px;
+  color: var(--text-secondary);
+  font-size: var(--text-meta);
+}
+.recent-change span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

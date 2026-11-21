@@ -129,7 +129,19 @@ function SwitcherPreview({ name }: { name: string }) {
     <ProjectPicker current={current} kind={kind} />;
 }
 
-function BoardFrameCard({ name, badge, source = false, hovered = false }: { name: string; badge?: string; source?: boolean; hovered?: boolean }) {
+type BoardChange = { time: number; subject: string };
+
+function ChangeStamp({ time, subject }: BoardChange) {
+  const date = new Date(time);
+  return <small class="grid gap-[2px] text-meta text-text-secondary">
+    <time datetime={date.toISOString()}>{new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date)}</time>
+    <span class="truncate" title={subject}>{subject}</span>
+  </small>;
+}
+
+function BoardFrameCard({ name, badge, source = false, hovered = false, change }: {
+  name: string; badge?: string; source?: boolean; hovered?: boolean; change?: BoardChange;
+}) {
   return <article class="overflow-hidden rounded-card border border-border bg-surface">
     <div class="relative grid h-[148px] place-items-center bg-surface-sunken">
       <div class="scale-[.68]"><SwitcherPreview name={name} /></div>
@@ -138,6 +150,7 @@ function BoardFrameCard({ name, badge, source = false, hovered = false }: { name
     <div class="px-[10px] pt-2">
       <h4 class="text-body leading-[18px] font-semibold">{name}</h4>
       {source && <p class="mt-[3px] font-mono text-meta text-text-secondary">modules/project-switcher.tsx</p>}
+      {change && <ChangeStamp {...change} />}
     </div>
     <div class="flex items-center justify-between gap-1 pt-1 pr-2 pb-[7px] pl-[10px]">
       {badge && <span class="rounded-pill bg-surface-sunken px-[7px] py-[3px] text-caption text-text-secondary">{badge}</span>}
@@ -195,10 +208,12 @@ function PlayableBoard() {
   </section>;
 }
 
+type HistoryRow = { source: string; frame: string; status: string; causes?: string[]; time?: number; subject?: string };
+
 type HistoryPeriod = {
   title: string;
   globalCauses?: string[];
-  rows: { source: string; frame: string; status: string; causes?: string[] }[];
+  rows: HistoryRow[];
 };
 
 function GlobalInputs({ files, open }: { files: string[]; open: boolean }) {
@@ -231,47 +246,54 @@ function GlobalInputs({ files, open }: { files: string[]; open: boolean }) {
 
 function RecentBoard({ sinceVisit }: { sinceVisit: boolean }) {
   const example: HistoryPeriod[] = recentPeriods.filter(period => !sinceVisit || period.title !== 'Earlier this week');
+  const direct = example.flatMap(period => period.rows).filter(row => !row.causes);
+  const removed = direct.filter(row => row.status === 'removed');
+  const selected = sinceVisit ? 'Since my last visit' : 'Latest';
   return <>
-    <div class="flex gap-1">
-      {['This week', 'Since my last visit'].map((range, i) =>
-        <button key={range} type="button" aria-pressed={sinceVisit === Boolean(i)}
-          class={boardAction + (sinceVisit === Boolean(i) ? ' bg-surface shadow-float' : '')}>{range}</button>)}
+    <div class="flex flex-wrap gap-1">
+      {['Latest', 'This week', 'Since my last visit'].map(range =>
+        <button key={range} type="button" aria-pressed={selected === range}
+          class={boardAction + (selected === range ? ' bg-surface shadow-float' : '')}>{range}</button>)}
     </div>
-    {example.map(period => {
-      const sources = [...new Set(period.rows.filter(row => row.status !== 'removed').map(row => row.source))];
-      const removed = period.rows.filter(row => row.status === 'removed');
+    <section class={sectionStyle}>
+      <h2 class="mb-3 text-title font-semibold">Direct changes</h2>
+      <div class="grid grid-cols-5 gap-3">
+        {direct.filter(row => row.status !== 'removed').map(row =>
+          <BoardFrameCard key={row.frame} name={row.frame} source
+            badge={row.status === 'added' ? 'New' : row.status === 'moved' ? 'Moved' : 'Edited'}
+            change={{ time: row.time!, subject: row.subject! }} />)}
+      </div>
+      <h3 class="mt-4 text-meta font-semibold">Removed frames</h3>
+      <ul class="mt-3 list-disc pl-5 font-mono text-meta text-text-secondary">
+        {removed.map(row => <li key={row.frame}>{row.source.slice('design/'.length)} · {row.frame}
+          <ChangeStamp time={row.time!} subject={row.subject!} />
+        </li>)}
+      </ul>
+      <button type="button" class={boardAction + ' mt-4'}>Load more</button>
+    </section>
+    <section class={sectionStyle}>
+      <h2 class="mb-3 text-title font-semibold">{sinceVisit ? 'Shared and global impact' : 'Shared and global impact this week'}</h2>
+      {!sinceVisit && <button type="button" class={boardAction}>Show impact</button>}
+    </section>
+    {sinceVisit && example.filter(period => period.globalCauses).map(period => {
+      const sources = [...new Set(period.rows.filter(row => row.causes).map(row => row.source))];
       return <section key={period.title} class={sectionStyle}>
         <header class="flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
             <h2 class="text-title font-semibold">{period.title}</h2>
-            {period.globalCauses && <GlobalInputs files={period.globalCauses} open={sinceVisit} />}
+            {period.globalCauses && <GlobalInputs files={period.globalCauses} open />}
           </div>
           <button type="button" class={boardAction}>Visual changes</button>
         </header>
         {sources.map(source => {
-          const rows = period.rows.filter(row => row.source === source);
-          const direct = rows.filter(row => !row.causes && row.status !== 'removed');
-          const shared = rows.filter(row => row.causes);
-          const open = sinceVisit && period.title === 'Today' && source === 'design/modules/project-switcher.tsx';
+          const shared = period.rows.filter(row => row.source === source && row.causes);
           return <section key={source} class="mt-4 border-t border-border pt-[14px]">
             <h3 class={sourceStyle + ' mb-3 text-text'}>{source.slice('design/'.length)}</h3>
-            {direct.length > 0 && <div class="grid grid-cols-5 gap-3">
-              {direct.map(row => <BoardFrameCard key={row.frame} name={row.frame} badge={row.status === 'added' ? 'New' : 'Edited'} />)}
-            </div>}
-            {shared.length > 0 && <details open={open} class="mt-2 text-meta text-text-secondary">
+            <details class="mt-2 text-meta text-text-secondary">
               <summary class="py-[7px]">{shared[0].causes?.join(', ')} · {shared.length} affected {shared.length === 1 ? 'frame' : 'frames'}</summary>
-              {open && <div class="grid grid-cols-5 gap-3 pt-[5px]">
-                {shared.map(row => <BoardFrameCard key={row.frame} name={row.frame} badge="Affected by shared input" />)}
-              </div>}
-            </details>}
+            </details>
           </section>;
         })}
-        {removed.length > 0 && <section class="mt-4 border-t border-border pt-[14px]">
-          <h3 class="text-meta font-semibold text-text">Removed frames</h3>
-          <ul class="mt-3 list-disc pl-5 font-mono text-meta text-text-secondary">
-            {removed.map(row => <li key={row.frame}>{row.source.slice('design/'.length)} · {row.frame}</li>)}
-          </ul>
-        </section>}
       </section>;
     })}
   </>;

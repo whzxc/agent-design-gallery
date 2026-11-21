@@ -29,11 +29,14 @@ export async function endPlayerFixtureAtInstance(page) {
 
 export const playbackFixture = (name) => /^(?:recent-updates-|flow-|board-play-|board-playable-|board-frame-filters$)/.test(name);
 export const playbackURL = (name) =>
-  name.startsWith('flow-') ? playerFixtureURL : '/?fixture=' + encodeURIComponent(name);
+  name.startsWith('flow-') ? playerFixtureURL :
+    name.startsWith('recent-updates-') ? '/view/layer/modules?view=playable' : '/?fixture=' + encodeURIComponent(name);
 async function readyPlayback(page, name) {
   await page.emulateMedia({ reducedMotion: name === 'flow-reduced-motion' ? 'reduce' : 'no-preference' });
   if (!name.startsWith('flow-')) {
-    await page.waitForFunction((n) => document.documentElement.dataset.fixtureReady === n, name);
+    if (name.startsWith('recent-updates-'))
+      await page.getByRole('main', { name: 'Playable', exact: true }).waitFor();
+    else await page.waitForFunction((n) => document.documentElement.dataset.fixtureReady === n, name);
     if (name === 'board-play-affordance') {
       const point = await page.evaluate(() => {
         const frame = window.__adg.items.find(item => item.path === 'modules/project-switcher.tsx');
@@ -49,25 +52,30 @@ async function readyPlayback(page, name) {
       const head = '1'.repeat(40), branch = 'fixture';
       await page.route('**/api/recent-visit',route=>route.fulfill({json:{head,branch}}));
       await page.route('**/api/recent-state',route=>route.fulfill({json:{head,branch,generation:'fixture'}}));
-      await page.evaluate(() => {
+      await page.evaluate(async branch => {
         const directory = document.querySelector('#app-directory').title;
-        localStorage.setItem('adg-visit:'+JSON.stringify([directory,'fixture']),JSON.stringify({started:0,head:'2'.repeat(40)}));
-      });
-      await page.route('**/api/recent-updates?*',route=>{
+        localStorage.setItem('adg-visit:'+JSON.stringify([directory,branch]),JSON.stringify({started:0,head:'2'.repeat(40)}));
+        const { recordVisit } = await import('/recent-updates.js');
+        await recordVisit(directory, true, false);
+      }, branch);
+      await page.route('**/api/recent-frames?*', route => {
         const since = new URL(route.request().url()).searchParams.has('since');
         const periods = recentPeriods.filter(period => !since || period.title !== 'Earlier this week');
-        return route.fulfill({json:{available:true,complete:true,head,branch,generation:'fixture',periods:periods.map(p=>({...p,complete:true}))}});
+        const rows = periods.flatMap(period => period.rows).filter(row => !row.causes);
+        return route.fulfill({json:{available:true,head,branch,generation:'fixture',rows,hasMore:true}});
+      });
+      await page.route('**/api/recent-updates?*', route => {
+        const periods = recentPeriods.filter(period => period.globalCauses).map(p => ({...p,complete:true}));
+        return route.fulfill({json:{available:true,complete:true,head,branch,generation:'fixture',periods}});
       });
       await page.locator('[data-filter=recent]').click();
-      await page.getByRole('heading', { name: 'Uncommitted' }).waitFor();
+      await page.getByRole('heading', { name: 'Direct changes' }).waitFor();
       if (name.endsWith('on-board')) {
         await page.getByRole('button',{name:'Since my last visit'}).click();
+        await page.getByRole('button',{name:'Show impact'}).click();
         await page.getByRole('heading', { name: 'Today', exact: true }).waitFor();
         await page.locator('.recent-global summary').evaluate(summary => summary.click());
         await page.getByRole('heading', { name: 'Project root', exact: true }).waitFor();
-        await page.locator('.recent-source').filter({ has: page.getByRole('heading', { name: 'modules/project-switcher.tsx' }) })
-          .locator('summary').evaluate(summary => summary.click());
-        await page.getByText('Affected by shared input', { exact: true }).waitFor();
       }
     }
     if (name === 'board-playable-filter') await page.locator('[data-filter=playable]').click();

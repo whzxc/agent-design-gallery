@@ -3,8 +3,8 @@
     "title": "Uncommitted",
     "subjects": [],
     "rows": [
-      {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open", "status": "changed"},
-      {"source": "design/modules/project-switcher.tsx", "frame": "legacy-picker", "status": "removed"}
+      {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open", "status": "changed", "time": 1767265200000, "subject": "Uncommitted changes"},
+      {"source": "design/modules/project-switcher.tsx", "frame": "legacy-picker", "status": "removed", "time": 1767265200000, "subject": "Uncommitted changes"}
     ]
   },
   {
@@ -19,7 +19,7 @@
       "src/toolkit/recent-structure.mjs"
     ],
     "rows": [
-      {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty", "status": "added"},
+      {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty", "status": "added", "time": 1767258000000, "subject": "Add an empty search state"},
       {"source": "design/modules/project-switcher.tsx", "frame": "project-picker", "status": "changed", "causes": ["design/tokens.css"]},
       {"source": "design/modules/menus.tsx", "frame": "more", "status": "changed", "causes": ["design/tokens.css"]},
       {"source": "design/modules/menus.tsx", "frame": "more-tokens", "status": "changed", "causes": ["design/tokens.css"]},
@@ -38,7 +38,7 @@
     "title": "Earlier this week",
     "subjects": ["Move the live instance picker"],
     "rows": [
-      {"source": "design/modules/project-switcher.tsx", "frame": "project-picker-instance", "status": "moved", "former": {"source": "design/modules/instance-picker.tsx", "frame": "project-picker-instance"}}
+      {"source": "design/modules/project-switcher.tsx", "frame": "project-picker-instance", "status": "moved", "former": {"source": "design/modules/instance-picker.tsx", "frame": "project-picker-instance"}, "time": 1767171600000, "subject": "Move the live instance picker"}
     ]
   }
 ]

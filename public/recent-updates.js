@@ -54,11 +54,12 @@ function boundaries() {
 }
 
 export function createHistoryFilter(update) {
-  let request, timer, invalidation, directory, result, message, baseline, range, stamp;
-  let query, verifying;
-  let cached;
+  let request, timer, invalidation, directory, result, message, baseline, range, scope, frame;
+  let query, verifying, pendingPage, pageMessage, impact, impactLoading, impactError;
+  let cacheKey;
   const visualStates = new Map();
   const expanded = new Set();
+  const timestamp = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   function cancelVisual() {
     verifying?.controller.abort();
     verifying = null;
@@ -68,65 +69,134 @@ export function createHistoryFilter(update) {
     cancelVisual();
     request?.abort();
     request = null;
+    pendingPage = impactLoading = false;
     clearTimeout(timer);
     clearTimeout(invalidation);
   }
-  async function open(nextDirectory, nextRange, force = false) {
+  async function open(nextDirectory, nextScope, nextFrame, nextRange, force = false) {
     close();
-    if (nextDirectory !== directory) expanded.clear();
-    range = nextRange ?? (nextDirectory === directory ? range : null) ?? 'week';
+    if (nextDirectory !== directory) {
+      expanded.clear();
+      baseline = null;
+    }
+    range = nextRange ?? (nextDirectory === directory ? range : null) ?? 'latest';
     directory = nextDirectory;
+    scope = nextScope;
+    frame = nextFrame;
     const controller = (request = new AbortController());
     const { signal } = controller;
     const dates = boundaries();
-    const cacheKey = JSON.stringify([directory, range, dates]);
-    const reuse = !force && cached?.key === cacheKey;
+    const nextKey = JSON.stringify([directory, scope, frame, range, dates]);
+    const reuse = !force && cacheKey === nextKey && result?.available;
     if (!reuse) {
-      result = null;
-      cached = null;
+      cacheKey = null;
+      result = impact = null;
+      message = 'Finding recently changed frames…';
+      pageMessage = impactError = null;
       visualStates.clear();
-      message = 'Finding changed sources and inputs…';
     }
     update();
-    const validate = async () => {
-      try {
-        const state = await read('api/recent-state', signal);
-        signal.throwIfAborted();
-        if (stamp !== JSON.stringify([state.head, state.branch, state.generation, boundaries()])) {
-          void open(directory, range, true);
-          return;
-        }
-      } catch {
-        // Try again after the viewer connection returns.
-      }
-      if (!signal.aborted) timer = setTimeout(validate, 5000);
-    };
-    if (reuse) {
-      void validate();
-      return;
-    }
     try {
-      ({ baseline } = await recordVisit(directory, true, false));
+      // The previous visit is needed only when filtering by its checkpoint.
+      const visit = recordVisit(directory, false, false);
+      if (range === 'visit') ({ baseline } = await visit);
+      else void visit.then(value => {
+        if (signal.aborted || baseline === value.baseline) return;
+        baseline = value.baseline;
+        update();
+      });
       signal.throwIfAborted();
-      query = new URLSearchParams(dates);
-      if (range === 'visit' && baseline) query.set('since', baseline);
+      const params = new URLSearchParams(dates);
+      if (range === 'visit' && baseline) params.set('since', baseline);
+      query = params;
+      if (scope) params.set('scope', scope);
+      if (frame) params.set('frame', frame);
+      if (range === 'latest') params.set('latest', '1');
+      const validate = async () => {
+        try {
+          const state = await read('api/recent-state', signal);
+          if (!signal.aborted && (state.head !== result.head || state.branch !== result.branch ||
+            state.generation !== result.generation || JSON.stringify(boundaries()) !== JSON.stringify(dates))) {
+            void open(directory, scope, frame, range, true);
+            return;
+          }
+        } catch {
+          // Retry after the viewer connection returns.
+        }
+        if (!signal.aborted) timer = setTimeout(validate, 5000);
+      };
+      if (reuse) {
+        void validate();
+        return;
+      }
+      const response = await read('api/recent-frames?' + params, signal);
+      signal.throwIfAborted();
+      if (response.stale) {
+        invalidation = setTimeout(() => void open(directory, scope, frame, range, true), 200);
+        return;
+      }
+      result = response;
+      message = result.available ? result.notice : 'Recently updated is unavailable outside a Git project.';
+      if (result.notice) {
+        range = 'week';
+      }
+      if (result.available) void recordVisit(directory);
+      if (result.available) timer = setTimeout(validate, 5000);
+      if (!result.failures?.length && !result.notice) cacheKey = JSON.stringify([directory, scope, frame, range, dates]);
+      update();
+    } catch (error) {
+      if (!signal.aborted && !reuse) {
+        message = 'Incomplete coverage. ' + error.message;
+        update();
+      }
+    }
+  }
+  async function loadMore() {
+    if (pendingPage || !result?.hasMore || !request) return;
+    const { signal } = request;
+    pendingPage = true;
+    pageMessage = null;
+    update();
+    try {
+      const params = new URLSearchParams(query);
+      params.set('offset', result.rows.length);
+      params.set('snapshot', result.snapshot);
+      const next = await read('api/recent-frames?' + params, signal);
+      signal.throwIfAborted();
+      if (next.stale) {
+        void open(directory, scope, frame, range, true);
+        return;
+      }
+      result = { ...next, rows: [...result.rows, ...next.rows],
+        failures: [...new Set([...(result.failures ?? []), ...(next.failures ?? [])])] };
+    } catch (error) {
+      if (!signal.aborted) pageMessage = error.message;
+    } finally {
+      if (!signal.aborted) {
+        pendingPage = false;
+        update();
+      }
+    }
+  }
+  async function loadImpact() {
+    if (!request || impactLoading) return;
+    const { signal } = request;
+    impactLoading = true;
+    impactError = null;
+    update();
+    try {
       const response = await read('api/recent-updates?' + query, signal);
       signal.throwIfAborted();
-      result = response;
-      message = !result.available
-        ? 'Recently updated is unavailable outside a Git project.'
-        : result.notice || (!baseline ? 'Your next visit will have a revision to compare.' : '');
-      if (!baseline || result.notice) range = 'week';
-      stamp = JSON.stringify([result.head, result.branch, result.generation, dates]);
-      cached = result.available && result.complete && !result.stale
-        ? { key: JSON.stringify([directory, range, dates]) }
-        : null;
-      update();
-      if (result.stale) timer = setTimeout(() => void open(directory, range, true), 200);
-      else if (result.available) timer = setTimeout(validate, 5000);
+      if (response.stale || response.head !== result.head || response.generation !== result.generation) {
+        void open(directory, scope, frame, range, true);
+        return;
+      }
+      impact = response;
     } catch (error) {
+      if (!signal.aborted) impactError = error.message;
+    } finally {
       if (!signal.aborted) {
-        message = 'Incomplete coverage. ' + error.message;
+        impactLoading = false;
         update();
       }
     }
@@ -149,7 +219,7 @@ export function createHistoryFilter(update) {
       const params = new URLSearchParams(query);
       params.set('from', period.base ?? '');
       params.set('to', period.head ?? '');
-      params.set('generation', result.generation);
+      params.set('generation', impact.generation);
       const response = await dataFetch('api/recent-visual?' + params, { signal: controller.signal });
       if (!response.ok) throw Error('Visual comparison unavailable.');
       const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -212,21 +282,21 @@ export function createHistoryFilter(update) {
     open,
     close,
     invalidate() {
-      cached = null;
+      cacheKey = null;
       if (!request) return;
       clearTimeout(invalidation);
-      invalidation = setTimeout(() => void open(directory, range, true), 200);
+      invalidation = setTimeout(() => void open(directory, scope, frame, range, true), 200);
     },
     render(container, { relative, frames, inScope, card }) {
       const controls = node('div', 'recent-ranges');
       controls.setAttribute('role', 'group');
       controls.setAttribute('aria-label', 'History range');
-      for (const [id, title] of [['week', 'This week'], ['visit', 'Since my last visit']]) {
+      for (const [id, title] of [['latest', 'Latest'], ['week', 'This week'], ['visit', 'Since my last visit']]) {
         const button = node('button', '', title);
         button.dataset.recentFocus = id;
         button.setAttribute('aria-pressed', String(id === range));
         button.disabled = id === 'visit' && !baseline;
-        button.onclick = () => void open(directory, id);
+        button.onclick = () => void open(directory, scope, frame, id);
         controls.append(button);
       }
       const children = [controls];
@@ -236,10 +306,75 @@ export function createHistoryFilter(update) {
         status.setAttribute('role', 'status');
         children.push(status);
       }
-      if (result?.available && !result.complete)
-        children.push(node('p', 'view-board-status', 'Incomplete history coverage.'));
+      if (result?.available) {
+        const feed = node('section', 'view-board-section recent-feed');
+        feed.append(node('h2', '', 'Direct changes'));
+        const gallery = node('div', 'recent-frame-grid');
+        const removed = node('ul', 'recent-removed');
+        for (const row of result.rows) {
+          const source = relative(row.source);
+          const changeTime = new Date(row.time);
+          const time = node('time', '', timestamp.format(changeTime));
+          time.dateTime = changeTime.toISOString();
+          const subject = node('span', '', row.subject);
+          subject.title = row.subject;
+          const metadata = node('small', 'recent-change');
+          metadata.append(time, subject);
+          if (row.status === 'removed') {
+            if (!inScope(source, row.frame, row.chapter)) continue;
+            const item = node('li', '', source + ' · ' + row.frame);
+            item.append(metadata);
+            removed.append(item);
+            continue;
+          }
+          const ref = frames.get(frameKey(source, row.frame));
+          if (!ref) continue;
+          const badge = row.status === 'added' ? 'New' : row.status === 'moved' ? 'Moved' : 'Edited';
+          for (const period of impact?.periods ?? []) {
+            const visual = visualStates.get(period);
+            if (!visual || (row.commit
+              ? row.time > (period.lastTime ?? Infinity) || row.time < (period.firstTime ?? -Infinity) || !period.head
+              : period.head)) continue;
+            const label = visual.verdicts.get(identity(row));
+            if (label || visual.complete)
+              metadata.append(node('span', '', label ? 'Visual comparison · ' + label : 'Visually unchanged'));
+          }
+          const entry = card(ref, { badge, source: true });
+          entry.querySelector('.view-show-in-board').dataset.recentFocus = identity(row);
+          const caption = entry.querySelector('.view-frame-caption');
+          if (row.former) caption.append(node('small', 'view-source-name', 'From ' + relative(row.former.source) + ' · ' + row.former.frame));
+          caption.append(metadata);
+          gallery.append(entry);
+        }
+        if (gallery.childElementCount) feed.append(gallery);
+        if (removed.childElementCount)
+          feed.append(node('h3', 'recent-source-heading recent-removed-heading', 'Removed frames'), removed);
+        if (!gallery.childElementCount && !removed.childElementCount)
+          feed.append(node('p', 'view-board-status', 'No direct frame changes in this scope.'));
+        if (result.failures?.length)
+          feed.append(node('p', 'view-board-status', 'Incomplete history coverage. ' + result.failures[0]));
+        if (pageMessage) feed.append(node('p', 'view-board-status', pageMessage));
+        if (result.hasMore) {
+          const more = node('button', 'view-board-action recent-more', pendingPage ? 'Loading…' : 'Load more');
+          more.dataset.recentFocus = 'load-more';
+          more.setAttribute('aria-disabled', String(pendingPage));
+          more.onclick = () => void loadMore();
+          feed.append(more);
+        }
+        const impacts = node('section', 'view-board-section recent-impacts');
+        impacts.append(node('h2', '', range === 'latest' ? 'Shared and global impact this week' : 'Shared and global impact'));
+        if (!impact) {
+          const show = node('button', 'view-board-action', impactLoading ? 'Checking inputs…' : 'Show impact');
+          show.dataset.recentFocus = 'show-impact';
+          show.setAttribute('aria-disabled', String(impactLoading));
+          show.onclick = () => void loadImpact();
+          impacts.append(show);
+          if (impactError) impacts.append(node('p', 'view-board-status', impactError));
+        }
+        children.push(feed, impacts);
+      }
       const redirects = new Map();
-      for (const period of result?.periods ?? []) {
+      for (const period of impact?.periods ?? []) {
         const periodKey = JSON.stringify([period.title, period.base, period.head]);
         const section = node('section', 'view-board-section recent-period');
         const header = node('header', 'view-section-heading');
@@ -262,33 +397,25 @@ export function createHistoryFilter(update) {
         }
 
         const sources = new Map();
-        const removed = [];
         for (const row of period.rows) {
           const id = identity(row);
           const locator = redirects.has(id) ? redirects.get(id) : row;
           const source = relative(locator?.source ?? row.source);
           const ref = locator && frames.get(frameKey(source, locator.frame));
-          if (!ref && !inScope(relative(row.source), row.frame, row.chapter)) continue;
-          if (row.status === 'removed' || !locator) {
-            removed.push(row);
-            continue;
-          }
-          if (!ref) continue;
-          if (!sources.has(source)) sources.set(source, { direct: [], shared: new Map() });
-          const { direct, shared } = sources.get(source);
-          if (row.causes?.length) {
-            const key = JSON.stringify(row.causes);
-            if (!shared.has(key)) shared.set(key, { causes: row.causes, frames: [] });
-            shared.get(key).frames.push({ row, ref });
-          } else direct.push({ row, ref });
+          if (!ref || !locator || !row.causes?.length || row.status === 'removed') continue;
+          if (!sources.has(source)) sources.set(source, new Map());
+          const shared = sources.get(source);
+          const key = JSON.stringify(row.causes);
+          if (!shared.has(key)) shared.set(key, { causes: row.causes, frames: [] });
+          shared.get(key).frames.push({ row, ref });
         }
-        for (const [source, { direct, shared }] of sources) {
+        for (const [source, shared] of sources) {
           const group = node('section', 'recent-source');
           group.append(node('h3', 'recent-source-heading view-source-name', source));
-          function grid(items, sharedInput = false) {
+          function grid(items) {
             const gallery = node('div', 'recent-frame-grid');
             for (const { row, ref } of items) {
-              const badge = sharedInput ? 'Affected by shared input' : row.status === 'added' ? 'New' : 'Edited';
+              const badge = 'Affected by shared input';
               const frame = card(ref, { badge, source: false });
               frame.querySelector('.view-show-in-board').dataset.recentFocus = JSON.stringify([periodKey, identity(row)]);
               if (row.former) {
@@ -310,7 +437,6 @@ export function createHistoryFilter(update) {
             }
             return gallery;
           }
-          if (direct.length) group.append(grid(direct));
           for (const [key, entry] of shared) {
             const id = JSON.stringify([periodKey, source, key]);
             const details = node('details', 'recent-shared');
@@ -322,7 +448,7 @@ export function createHistoryFilter(update) {
             const mount = () => {
               if (details.open) {
                 expanded.add(id);
-                if (details.children.length === 1) details.append(grid(entry.frames, true));
+                if (details.children.length === 1) details.append(grid(entry.frames));
               } else {
                 expanded.delete(id);
               }
@@ -333,14 +459,7 @@ export function createHistoryFilter(update) {
           }
           section.append(group);
         }
-        if (removed.length) {
-          const list = node('ul', 'recent-removed');
-          for (const row of removed) list.append(node('li', '', relative(row.source) + ' · ' + row.frame));
-          const group = node('section', 'recent-source');
-          group.append(node('h3', 'recent-source-heading', 'Removed frames'), list);
-          section.append(group);
-        }
-        if (!removed.length && !sources.size && !period.globalCauses?.length && period.complete)
+        if (!sources.size && !period.globalCauses?.length && period.complete)
           section.append(node('p', 'recent-visual view-board-status', 'No matching changes in this scope.'));
         for (const failure of period.failures ?? []) section.append(node('small', 'recent-visual', failure.message));
         children.push(section);

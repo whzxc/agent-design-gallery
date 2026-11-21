@@ -786,7 +786,7 @@ const frameViewParams = new URLSearchParams(location.search);
 const requestedFrameView = frameViewParams.get('view');
 let pendingFlow = requestedFrameView === 'playable' ? frameViewParams.get('flow') : null;
 let frameFilter = Object.hasOwn(frameViews, requestedFrameView) && scopeRequest !== 'tokens' ? requestedFrameView : 'all';
-let viewGeneration = 0, historyDirectory, lastIndexedAssets, references, sourcePaths;
+let viewGeneration = 0, historyContext, lastIndexedAssets, references, sourcePaths;
 const derivedBoard = $('#view-board'), viewContent = $('#view-board-content');
 const cards = createFrameCards(derivedBoard, {
   preview: drawCardPreview,
@@ -801,6 +801,14 @@ const cards = createFrameCards(derivedBoard, {
   playable: (source, frame) => playableFrames.get(source)?.has(frame),
 });
 const recentFilter = createHistoryFilter(() => { if (frameFilter === 'recent') renderFrameView(); });
+function openRecentHistory(data) {
+  if (!data?.directory) return false;
+  const identity = JSON.stringify([data.directory, data.scope, onlyFrame]);
+  if (identity === historyContext) return false;
+  historyContext = identity;
+  void recentFilter.open(data.directory, data.scope, onlyFrame);
+  return true;
+}
 window.addEventListener('pagehide', () => recentFilter.close());
 let playerInvoker, deferredView;
 async function startFramePlayer(source, frame, invoker) {
@@ -933,12 +941,10 @@ function setFrameFilter(value, focus = true, loadCanvas = true) {
     else url.searchParams.set('view', value);
     window.history.replaceState(window.history.state, '', url);
     if (value === 'recent') {
-      historyDirectory = manifest?.directory;
-      if (historyDirectory) void recentFilter.open(historyDirectory);
-      else renderFrameView();
+      if (!openRecentHistory(manifest)) renderFrameView();
     } else {
       recentFilter.close();
-      historyDirectory = null;
+      historyContext = null;
       renderFrameView();
     }
     derivedBoard.scrollTop = 0;
@@ -2202,7 +2208,6 @@ async function applyManifest(data, force = false) {
     history = [];
   }
   if (first && !fixtureState && frameFilter !== 'all' && !initializedDirectory && data.directory) {
-    const newDirectory = catalog?.directory !== data.directory;
     catalog = manifest = data;
     derivedLanding = true;
     scopeRequest = data.scope;
@@ -2212,10 +2217,7 @@ async function applyManifest(data, force = false) {
     document.title = `${data.label} — Agent Design Gallery`;
     updateChrome();
     renderScopeTabs(data);
-    if (frameFilter === 'recent' && (newDirectory || !historyDirectory)) {
-      historyDirectory = data.directory;
-      void recentFilter.open(historyDirectory);
-    } else renderFrameView();
+    if (frameFilter !== 'recent' || !openRecentHistory(data)) renderFrameView();
     requestDraw();
     return;
   }
@@ -2362,10 +2364,7 @@ async function applyManifest(data, force = false) {
   initialLink=null;
   scopeEntry=null;
   selection();
-  if (frameFilter === 'recent' && data.directory && historyDirectory !== data.directory) {
-    historyDirectory = data.directory;
-    void recentFilter.open(historyDirectory);
-  }
+  if (frameFilter === 'recent') openRecentHistory(data);
   if (pendingNavigation) {
     const action = pendingNavigation;
     pendingNavigation = null;

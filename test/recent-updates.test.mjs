@@ -61,11 +61,41 @@ test('contract: period net changes, working-tree generations and visit ancestry 
   await put('untracked',frame('extra','Extra'));
   await rm(path.join(modules,'new.tsx'));
   const baseline = git('status','--porcelain'), tree = git('write-tree');
+  // Include enough generated frames for a second page without testing incidental markup.
+  await put('batch', ...Array.from({ length: 24 }, (_, i) => frame('batch-' + i, 'Batch')));
   const server = await startServer({directory:design,stateDirectory,port:0,readOnly:true});
   t.after(async()=>{await server.close();await rm(dir,{recursive:true,force:true});});
   const url = new URL('api/recent-updates',server.url);
   url.search = new URLSearchParams({day:+new Date('2026-11-21'),week:+new Date('2026-11-16')});
   const get = async () => (await fetch(url)).json();
+  const feed = new URL('/api/recent-frames', url);
+  feed.search = url.search;
+  const frames = async () => (await fetch(feed)).json();
+  const direct = await frames();
+  assert.deepEqual(direct.failures, []);
+  assert.equal(direct.rows.length, 20);
+  assert.ok(direct.hasMore);
+  assert.equal(direct.rows[0].subject, 'Uncommitted changes');
+  assert.ok(direct.rows.every(row => Number.isSafeInteger(row.time)));
+  feed.searchParams.set('offset', '20');
+  feed.searchParams.set('snapshot', direct.snapshot);
+  const next = await frames();
+  const all = [...direct.rows, ...next.rows];
+  assert.equal(new Set(all.map(row => JSON.stringify([row.source, row.frame]))).size, all.length);
+  assert.ok(all.every((row, i) => !i || row.time <= all[i - 1].time));
+  assert.ok(all.some(row => row.frame === 'badge' && row.subject === 'Move and change'));
+  assert.ok(all.some(row => row.frame === 'home' && row.subject === 'Uncommitted changes'));
+  assert.ok(!all.some(row => ['screen', 'notice', 'sibling', 'other'].includes(row.frame)));
+  await rm(path.join(modules, 'batch.tsx'));
+  assert.equal((await frames()).stale, true);
+  feed.searchParams.delete('offset');
+  feed.searchParams.set('since', git('rev-parse', 'HEAD'));
+  assert.ok((await frames()).rows.every(row => row.commit === null));
+  feed.searchParams.set('since', 'f'.repeat(40));
+  assert.match((await frames()).notice, /History changed/);
+  feed.searchParams.delete('since');
+  feed.searchParams.set('latest', '1');
+  assert.ok((await frames()).rows.some(row => row.frame === 'notice' && row.commit === initial));
   const first = await get();
   assert.equal(first.complete,true,JSON.stringify(first));
   assert.deepEqual(first.periods.map(p=>p.title),['Uncommitted','Today','Earlier this week']);
@@ -149,7 +179,16 @@ test('contract: both history ranges bound the global input summary and disclose 
   }, { directory, branch, baseline });
   await page.route('**/api/recent-visit', route => route.fulfill({ json: { head, branch } }));
   await page.route('**/api/recent-state', route => route.fulfill({ json: { head, branch, generation: 'fixture' } }));
-  const requests = [];
+  const requests = [], rangeRequests = [];
+  await page.route('**/api/recent-frames?*', route => {
+    const params = new URL(route.request().url()).searchParams;
+    rangeRequests.push(params.get('since') ?? (params.has('latest') ? 'latest' : 'week'));
+    const rows = [{
+      source: 'design/modules/example.tsx', frame: 'retired', status: 'removed',
+      subject: 'Remove the example frame', time: Date.UTC(2026, 10, 20, 10)
+    }];
+    return route.fulfill({ json: { head, branch, available: true, generation: 'fixture', rows, hasMore: false } });
+  });
   await page.route('**/api/recent-updates?*', route => {
     requests.push(new URL(route.request().url()).searchParams.get('since'));
     const periods = [{ title: 'Today', head, base: baseline, complete: true, rows: [], globalCauses }];
@@ -159,8 +198,12 @@ test('contract: both history ranges bound the global input summary and disclose 
   await page.goto(new URL('view/all?view=recent', server.url).href);
   const details = page.locator('.recent-global');
   const summary = details.locator('summary');
+  await page.getByText('Remove the example frame', { exact: true }).waitFor();
+  assert.deepEqual(requests, []);
+  assert.deepEqual(rangeRequests, ['latest']);
   for (const since of [null, baseline]) {
-    if (since) await page.getByRole('button', { name: 'Since my last visit' }).click();
+    await page.getByRole('button', { name: since ? 'Since my last visit' : 'This week', exact: true }).click();
+    await page.getByRole('button', { name: 'Show impact' }).click();
     await summary.waitFor();
     assert.equal(requests.at(-1), since);
     assert.equal(await details.getAttribute('open'), null);

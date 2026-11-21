@@ -143,7 +143,11 @@ export async function currentHead(base) {
 
 /** Actual endpoint changes; working-tree mode includes staged, unstaged and untracked paths. */
 export async function revisionChanges(base, head = null) {
-  const fields = (await git(base.root, ['diff', '--name-status', '-z', '--find-renames', base.sha, ...(head ? [head.sha] : []), '--'])).split('\0');
+  const [tracked, untracked] = await Promise.all([
+    git(base.root, ['diff', '--name-status', '-z', '--find-renames', base.sha, ...(head ? [head.sha] : []), '--']),
+    head ? '' : git(base.root, ['ls-files', '--others', '--exclude-standard', '-z'])
+  ]);
+  const fields = tracked.split('\0');
   const changes = [];
   for (let i = 0; i < fields.length - 1;) {
     const code = fields[i++], first = fields[i++];
@@ -154,7 +158,7 @@ export async function revisionChanges(base, head = null) {
       status: code === 'A' ? 'added' : code === 'D' ? 'deleted' : code === 'T' ? 'type_changed' : 'modified' });
   }
   if (!head) {
-    const names = (await git(base.root, ['ls-files', '--others', '--exclude-standard', '-z'])).split('\0').filter(Boolean);
+    const names = untracked.split('\0').filter(Boolean);
     for (const name of names) if (!changes.some(change => change.after === name)) changes.push({ before: null, after: name, status: 'added' });
   }
   return changes.sort((a, b) => (a.after ?? a.before) < (b.after ?? b.before) ? -1 : (a.after ?? a.before) > (b.after ?? b.before) ? 1 : 0);

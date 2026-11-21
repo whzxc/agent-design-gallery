@@ -1,3 +1,8 @@
+if (process.argv.includes('--recent')) {
+  const { recentBenchmark } = await import('./perf-recent.mjs');
+  await recentBenchmark(process.argv[2], process.argv[3], { navigate: process.argv.includes('--navigate') });
+  process.exit(0);
+}
 // --phases records navigation only, with opt-in runtime timing hooks.
 if (process.argv.includes('--phases')) {
   const { phaseBenchmark } = await import('./perf-browser.mjs');

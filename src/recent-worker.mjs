@@ -1,18 +1,5 @@
-import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
-import { release } from 'node:os';
-import { loadConfig } from './toolkit/config.mjs';
-import { openDiffRevision } from './toolkit/diff-inputs.mjs';
-import { createIndexStore } from './toolkit/index-store.mjs';
-import { trackedHash, inputBytes } from './toolkit/input-generation.mjs';
-import { structuralChanges } from './toolkit/recent-structure.mjs';
-import { dirtyGeneration, emptyTree, historyPeriods, visitRevision } from './recent-history.mjs';
-
-async function validDependencies(entries) {
-  for (const [file, hash] of entries) if (trackedHash(await inputBytes(file)) !== hash) return false;
-  return true;
-}
 
 export async function recentHistory({
   root,
@@ -25,6 +12,17 @@ export async function recentHistory({
   visual,
   onProgress
 }) {
+  const [
+    { createHash }, { release }, { loadConfig }, { openDiffRevision }, { createIndexStore },
+    { trackedHash, inputBytes }, { dirtyGeneration, emptyTree, historyPeriods, visitRevision }
+  ] = await Promise.all([
+    import('node:crypto'), import('node:os'), import('./toolkit/config.mjs'), import('./toolkit/diff-inputs.mjs'),
+    import('./toolkit/index-store.mjs'), import('./toolkit/input-generation.mjs'), import('./recent-history.mjs')
+  ]);
+  async function validDependencies(entries) {
+    for (const [file, hash] of entries) if (trackedHash(await inputBytes(file)) !== hash) return false;
+    return true;
+  }
   const config = await loadConfig(root);
   const { head, branch } = await visitRevision(root);
   if (!branch) return { available: false, complete: false, periods: [] };
@@ -103,7 +101,7 @@ export async function recentHistory({
       const cached = !!result && (await validDependencies(result.dependencies));
       if (!cached) {
         try {
-          const compare = visual ? (await import('./toolkit/review.mjs')).reviewFrameChanges : structuralChanges;
+          const compare = visual ? (await import('./toolkit/review.mjs')).reviewFrameChanges : (await import('./toolkit/recent-structure.mjs')).structuralChanges;
           result = await compare(config, {
             onProgress,
             base: period.base,
@@ -158,7 +156,7 @@ if (process.send)
     let reply;
     try {
       reply = {
-        result: await recentHistory({
+        result: args.feed ? await (await import('./recent-frames.mjs')).recentFrames(args) : await recentHistory({
           ...args,
           onProgress: args.visual ? (progress) => process.send({ progress }) : undefined
         })

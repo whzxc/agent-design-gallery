@@ -7,23 +7,20 @@ import { createReadStream } from 'node:fs';
 import { revisionChanges } from './toolkit/arch-git.mjs';
 
 const exec = promisify(execFile);
-const git = async (root, ...args) =>
+export const git = async (root, ...args) =>
   (await exec('git', ['--no-optional-locks', '-C', root, ...args], { maxBuffer: 64 * 1024 * 1024 })).stdout;
 export async function visitRevision(root) {
-  let head;
   try {
-    head = (await git(root, 'rev-parse', '--verify', 'HEAD')).trim();
+    const [head, branch] = (await git(root, 'rev-parse', 'HEAD', '--abbrev-ref', 'HEAD')).trim().split('\n');
+    return { head, branch };
   } catch (error) {
     if (error.code !== 128) throw error;
     try {
-      await git(root, 'rev-parse', '--show-toplevel');
       return { head: null, branch: (await git(root, 'symbolic-ref', '--short', 'HEAD')).trim() };
     } catch {
       return { head: null, branch: null };
     }
   }
-  const branch = (await git(root, 'rev-parse', '--abbrev-ref', 'HEAD')).trim();
-  return { head, branch };
 }
 
 export async function emptyTree(root) {
@@ -33,8 +30,8 @@ export async function emptyTree(root) {
   return (await child).stdout.trim();
 }
 
-export async function dirtyGeneration(root, head, output) {
-  const repository = await realpath((await git(root, 'rev-parse', '--show-toplevel')).trim());
+export async function dirtyGeneration(root, head, output, { includeChanges = false, repository } = {}) {
+  repository ??= await realpath((await git(root, 'rev-parse', '--show-toplevel')).trim());
   const changes = (await revisionChanges({ root: repository, sha: head ?? (await emptyTree(root)) })).filter((c) =>
     [c.before, c.after].filter(Boolean).some((n) => {
       const file = path.resolve(repository, n);
@@ -53,10 +50,10 @@ export async function dirtyGeneration(root, head, output) {
       hash.update(content.digest());
     } else hash.update(String(stat.mtimeMs));
   }
-  return { repository, count: changes.length, generation: hash.digest('hex') };
+  return { repository, count: changes.length, generation: hash.digest('hex'), ...(includeChanges && { changes }) };
 }
 
-export async function historyPeriods(root, head, { day, week, since }) {
+export async function visitRange(root, head, since) {
   let notice = null;
   if (since) {
     if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(since)) throw Error('Invalid visit revision.');
@@ -67,6 +64,12 @@ export async function historyPeriods(root, head, { day, week, since }) {
       since = null;
     }
   }
+  return { since, notice };
+}
+
+export async function historyPeriods(root, head, { day, week, since }) {
+  const range = await visitRange(root, head, since);
+  ({ since } = range);
   const raw = await git(
     root,
     'log',
@@ -84,12 +87,14 @@ export async function historyPeriods(root, head, { day, week, since }) {
     const title = ms >= day ? 'Today' : ms >= week ? 'Earlier this week' : 'Earlier';
     let period = periods.at(-1);
     if (period?.title !== title) {
-      period = { title, head: sha, subjects: [] };
+      period = { title, head: sha, firstTime: ms, lastTime: ms, subjects: [] };
       periods.push(period);
     }
+    period.firstTime = Math.min(period.firstTime, ms);
+    period.lastTime = Math.max(period.lastTime, ms);
     period.base = parents.split(' ')[0] || null;
     period.subjects.push(subject);
   }
   if (since && periods.length) periods.at(-1).base = since;
-  return { periods, notice };
+  return { periods, notice: range.notice };
 }

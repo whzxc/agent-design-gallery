@@ -69,6 +69,8 @@ export async function startServer({
     closing = false,
     buildStore, viewerCache, codePaths=new Set();
   const recentJobs = new Map();
+  const recentPages = new Map();
+  let historyRepository;
   const motionOwners = new Map();
   let motionFrames, playGraph, motionEdges;
   // Project discovery and its watcher own this projection. Drawing and selection only read it.
@@ -321,6 +323,8 @@ export async function startServer({
     watcher?.close();
     watcher = nextWatcher;
     for (const controller of recentJobs.keys()) controller.abort();
+    recentPages.clear();
+    historyRepository = null;
     activeProject=project;watchArch(project,next);
     root = next;
     motionOwners.clear(); motionFrames=motionEdges=undefined; await indexMotion(project, next, sidecars, sidecars, true);
@@ -629,11 +633,12 @@ export async function startServer({
       const file = ['GET', 'HEAD'].includes(request.method) && viewerFile(url.pathname);
       if (file) return await shell(request, response, file, request.headers['x-adg-viewer-base']);
       if (!directLocal(request)) return json(response, 401, { error: 'Unauthorized' });
-      if (request.method === 'GET' && ['/api/recent-visit','/api/recent-updates','/api/recent-state','/api/recent-visual'].includes(url.pathname)) {
+      if (request.method === 'GET' && ['/api/recent-visit','/api/recent-updates','/api/recent-state','/api/recent-visual','/api/recent-frames'].includes(url.pathname)) {
         if (!activeProject) return json(response,404,{error:'No project is open.'});
         const { visitRevision, dirtyGeneration } = await import('./recent-history.mjs');
         const visual = url.pathname === '/api/recent-visual';
-        if (!visual && url.pathname !== '/api/recent-updates') {
+        const feed = url.pathname === '/api/recent-frames';
+        if (!feed && !visual && url.pathname !== '/api/recent-updates') {
           const visit = await visitRevision(activeProject.root);
           if (visit.branch && url.pathname === '/api/recent-state')
             visit.generation = (await dirtyGeneration(activeProject.root,visit.head,activeProject.output)).generation;
@@ -642,6 +647,9 @@ export async function startServer({
         const day=Number(url.searchParams.get('day')), week=Number(url.searchParams.get('week'));
         if (!Number.isSafeInteger(day) || !Number.isSafeInteger(week) || week<=0 || week>day || day-week>7*86400000)
           return json(response,400,{error:'Invalid local period boundaries.'});
+        const offset = Number(url.searchParams.get('offset'));
+        if (feed && (!Number.isSafeInteger(offset) || offset < 0 || offset % 20 || offset > Number.MAX_SAFE_INTEGER - 20))
+          return json(response,400,{error:'Invalid recent frame offset.'});
         const {runRecentJob} = await import('./recent-job.mjs');
         const controller = new AbortController();
         response.once('close',()=>controller.abort());
@@ -650,8 +658,29 @@ export async function startServer({
           response.writeHead(200, {'Content-Type':'application/x-ndjson','Cache-Control':'no-store'});
           sendEvent({phase:'Preparing visual comparison'});
         }
-        const job = runRecentJob({root:activeProject.root, directory:path.join(stateDirectory,'cache',digest(root),'recent'),
-          day,week,since:url.searchParams.get('since'), visual:visual && {base:url.searchParams.get('from'),
+        const scoped = feed && resolveScope(baseManifest(), sources, url.searchParams.get('scope') ?? 'all');
+        const since = url.searchParams.get('since');
+        let direct, cacheKey;
+        if (feed) {
+          const directory = root, started = performance.now();
+          const { root: projectRoot, archDirectory, output } = activeProject;
+          const config = { root: projectRoot, design: directory, sources, archDirectory, output };
+          const params = { day, week, since, latest: url.searchParams.get('latest') === '1', scope: scoped.scope,
+            visible: scoped.scope === 'all' ? [] : scoped.assets.map(asset => asset.path).sort(), frame: url.searchParams.get('frame') };
+          const { recentFrameState } = await import('./recent-frames.mjs');
+          const state = await recentFrameState(config, params, historyRepository);
+          if (controller.signal.aborted) return;
+          if (directory !== root) return json(response, 200, { stale: true });
+          if (!state.available) return json(response, 200, state);
+          historyRepository = state.dirty.repository;
+          if (offset && url.searchParams.get('snapshot') !== state.snapshot) return json(response, 200, { stale: true });
+          cacheKey = JSON.stringify([directory, state.snapshot, offset]);
+          const cached = recentPages.get(cacheKey), preparationMs = performance.now() - started;
+          if (cached) return json(response, 200, { ...cached, timings: { gitScanMs: preparationMs, frameDiffMs: 0, cached: true } });
+          direct = { feed, config, state, offset, preparationMs, ...params };
+        }
+        const job = runRecentJob({root:activeProject.root, directory:path.join(stateDirectory,'cache',digest(root),feed ? 'recent-frames' : 'recent'),
+          ...direct, day,week,since, visual:visual && {base:url.searchParams.get('from'),
             head:url.searchParams.get('to'),generation:url.searchParams.get('generation')}},controller.signal,visual ? sendEvent : null);
         recentJobs.set(controller,job);
         // Keep streaming proxies alive during long cold comparisons. Whitespace is valid JSON.
@@ -663,6 +692,10 @@ export async function startServer({
         },10000);
         try {
           const result = await job;
+          if (feed && !result.stale && !result.failures?.length) {
+            recentPages.set(cacheKey, result);
+            if (recentPages.size > 32) recentPages.delete(recentPages.keys().next().value);
+          }
           if (!response.destroyed) {
             if (visual) {sendEvent({result});response.end();}
             else if (response.headersSent) response.end(JSON.stringify(result));
