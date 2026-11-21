@@ -47,6 +47,7 @@ function ViewerHeader({
   );
 }
 
+const hostedSpecimenNote = 'Compare the ADG chrome and board layout. Hosted-project specimen artwork and palettes are project data. These reference frames use neutral placeholders.';
 const componentFit = { left: 527.55, top: 100, scale: 716 / 3158 };
 const commentFit = { left: 236, top: 84, scale: .48 };
 const sampleButton = {
@@ -527,7 +528,14 @@ export default () => [
       </div>
     </div>
   </Frame>,
-  <Frame name="board" width={1440} height={900} fixture="viewer-top-bars" capture={{ page: true, viewport: '1440x900' }}>
+  <Frame
+    name="board"
+    width={1440}
+    height={900}
+    fixture="viewer-top-bars"
+    note={hostedSpecimenNote}
+    capture={{ page: true, viewport: '1440x900' }}
+  >
     <Canvas width={1440} height={900}>
       <div data-free class="absolute inset-0">
         <ComponentBoards camera={componentFit} />
@@ -545,6 +553,7 @@ export default () => [
     width={1440}
     height={900}
     fixture="viewer-top-bars-panels"
+    note={hostedSpecimenNote}
     capture={{ page: true, viewport: '1440x900' }}
   >
     <Canvas width={1440} height={900}>
@@ -568,6 +577,7 @@ export default () => [
     width={1440}
     height={900}
     fixture="viewer-board-comments"
+    note={hostedSpecimenNote}
     capture={{ page: true, viewport: '1440x900' }}
   >
     <Canvas width={1440} height={900}>
