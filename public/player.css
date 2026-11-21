@@ -89,7 +89,6 @@
 }
 .play-end[aria-hidden='true'] { visibility: hidden; }
 .play-header [data-control='mode'] {
-  inline-size: 9em;
   text-align: left;
   white-space: nowrap;
   margin-left: 6px;
@@ -256,6 +255,14 @@
   }
   .play-project { border: 0; }
   .play-settings { left: 8px; }
+}
+
+@media (max-width: 500px) {
+  .play-header > div {
+    display: grid;
+    justify-items: start;
+    max-inline-size: 100%;
+  }
 }
 
 #motion-player > [role='status']:empty {

@@ -417,7 +417,7 @@ function FlowPlayer({ moment }: { moment: PlayerMoment }) {
           <button type="button" aria-expanded={settings}
             class="flex h-(--control-size) items-center gap-2 rounded-row bg-surface-sunken px-3 text-body font-semibold">
             <Icon name="settings-2" size={15} />Playback settings
-            <span class="w-[9em] border-l border-border pl-2">{instant ? 'Reduced motion' : '1×'}</span>
+            <span class="whitespace-nowrap border-l border-border pl-2">{instant ? 'Reduced motion' : '1×'}</span>
           </button>
         </Toolbar>
         <Toolbar wide>
