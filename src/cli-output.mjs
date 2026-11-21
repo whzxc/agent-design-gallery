@@ -67,6 +67,7 @@ export const errorCatalog = {
   NETWORK_FAILED: [2, 'compare', 'Retry after restoring fixture connectivity.'],
   AUTH_REQUIRED: [2, 'compare', 'Retry after providing fixture access.'],
   IO_FAILED: [2, 'help', 'Repair access to the reported path before retrying.'],
+  MOTION_EDGE_NOT_FOUND: [2, 'motion-check', 'List motion edges with adg check --transitions --read-only --json.'],
   INTERNAL_ERROR: [2, 'version', 'Record the runtime version with the diagnostic.'],
 };
 
@@ -117,6 +118,7 @@ export function nextActions(code, context = {}) {
   const state = context.stateDirectory ? ['--state-dir', context.stateDirectory] : [];
   let argv;
   switch (recovery) {
+    case 'motion-check': argv = ['adg','check','--transitions','--read-only','--json']; break;
     case 'check': argv = ['adg', 'check', '--read-only', '--json', ...(context.positionals?.length && context.command === 'check' ? ['--', ...context.positionals] : [])]; break;
     case 'install': argv = ['npm', 'install', '-g', '@whzxc/agent-design-gallery']; break;
     case 'migrate': argv = context.project ? ['adg', 'migrate', context.project, '--json'] : helpArgv('migrate'); break;

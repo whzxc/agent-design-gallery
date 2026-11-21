@@ -79,8 +79,8 @@ async function prepareBoardComments(page, state) {
 }
 
 export default {
-  requires: '>=0.15.0',
-  check: { strictLayers: true, lifecycle: true },
+  requires: '>=0.16.0',
+  check: { strictLayers: true, strictMotion: true, lifecycle: true },
   compare: {
     port: 5188,
     viewport: '1440x900',

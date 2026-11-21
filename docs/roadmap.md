@@ -15,7 +15,7 @@ New visual directions start in the design sources; other UI changes are implemen
 - Segment B (done): proposal overlays against a Git base revision (`--base`) for render, open, link and the viewer. Added,
   changed and removed nodes and edges are marked; removed elements stay visible as ghosts.
 - ARC adoption (done): semantic classes and sidecars for ARC's diagrams, then ARC's rule that architecture changes update their
-  diagrams before implementation.
+  diagrams for round 1.
 
 ## 2. Rename to ADG (done, 0.6.0)
 
@@ -95,13 +95,13 @@ that loaded slowly.
   comments, public thread links and an agent command line, replacing annotations. The user accepted it. The
   [comments](comments.md) contract owns the details.
 
-## 7. Frame transitions and viewer play (next UI milestone, proposed)
+## 7. Frame transitions and viewer play (in progress)
 
-Review the [transition contract](design-toolkit.md#frame-transitions-proposed), [ownership](asset-rules.md#transition-ownership-and-lifecycle-proposed) and [agent queries](agent-interface.md#frame-transition-queries-proposed) before implementation. ARC's layer slots pilot the motion vocabulary. ADG's project switcher supplies the small, replayable viewer case.
+See the [transition contract](design-toolkit.md#frame-transitions), [ownership](asset-rules.md#transition-ownership-and-lifecycle) and [agent queries](agent-interface.md#frame-transition-queries) for round 1. ARC's layer slots pilot the motion vocabulary. ADG's project switcher supplies the small, replayable viewer case.
 
-1. **Author and check.** Read versioned sidecars, resolve the endpoint graph, identities and motion tokens, bind current edges and diagnose invalid or unsupported declarations. Deliver scoped check, inspect, owner and impact JSON and measure default responses on ARC.
+1. **Author and check (done).** Read versioned sidecars, resolve the endpoint graph, identities and motion tokens, bind current edges and diagnose invalid or unsupported declarations. Deliver scoped check, inspect, owner and impact JSON and measure default responses on ARC.
 2. **Play on a board.** Deliver the Float control bar, input routing, one sandboxed document, seekable FLIP and fades, interruption, focus, reduced motion and a keyboard-accessible route through every outgoing edge. Sync ADG's own switcher and player design sources under implement-first.
-3. **Review and adopt.** Play added, changed and removed edges offline, with deterministic seek samples and motion-only Git changes. Exercise dialog/panel entry and exit, centered same-slot replacement and simultaneous cross-slot fades on declared pilot frames; identify implementation gaps separately.
+3. **Review and adopt.** Play added, changed and removed edges offline, with deterministic seek samples and motion-only Git changes. Exercise current dialog/panel fades and centered replacement, then review proposed two-sided and cross-slot fades; identify implementation gaps separately.
 
 ## 8. Review and architecture
 

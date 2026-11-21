@@ -1,3 +1,5 @@
+import { motionFiles, readMotion, motionSummary } from './motion.mjs';
+import { impactedEdges } from './motion-impact.mjs';
 import path from 'node:path';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { CliError, nextActions } from '../cli-output.mjs';
@@ -51,7 +53,11 @@ export async function impact(config, values, { log = console.log, openIndex = op
   async function track(file) { if (!tracked.has(file)) tracked.set(file, trackedHash(await bytes(file))); }
   const warn = (code, message, next = []) => { if (!warnings.some(warning => warning.code === code)) warnings.push({ code, message, next }); };
   const checkNext = reason => [{ argv: ['adg', 'check', '--read-only', '--json'], reason }];
-  const verifyGeneration=()=>verifyInputGeneration({tracked,views,inputs});
+  const verifyGeneration=async()=>{
+    await verifyInputGeneration({tracked,views,inputs});
+    for(const v of views)if(v.motion && JSON.stringify(v.motion.files)!==JSON.stringify(motionFiles(v.config).map(f=>relative(v.config,f))))
+      throw new CliError('IMPACT_INPUT_CHANGED','Motion sidecar inventory changed during query.');
+  };
 
   try {
     let query, fileInput;
@@ -85,6 +91,10 @@ export async function impact(config, values, { log = console.log, openIndex = op
         views.push(view);
         for (const file of await configInputFiles(current)) { await track(file); view.configInputs.add(slash(path.relative(await realpath(current.root), file))); }
         for (const name of ['adg.config.mjs', 'adg.config.js', 'adg.config.ts']) await track(path.join(current.root, name));
+        const sidecars=motionFiles(current);
+        for(const file of sidecars)await track(file);
+        view.motion=readMotion(current,sidecars);
+        view.motionBindingHits=new Set();
         view.tokenFile = path.join(current.design, 'tokens.css');
         await track(view.tokenFile); view.tokenBytes = await bytes(view.tokenFile);
         if (inputs) for (const source of index.inventory.tsx) await track(path.join(current.root, source));
@@ -194,6 +204,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
         if (contents === null || indexDigest(contents) !== hash || tracked.has(name) && tracked.get(name) !== fingerprint) throw new CliError('IMPACT_INPUT_CHANGED', `Implementation input changed during query: ${name}.`);
         tracked.set(name, fingerprint);
       }
+      for(const binding of validated.transitionBindings??[])if(binding.active && (query.kind==='file' || pathIndexes.some(i=>data.changes[i].role==='implementation')))view.motionBindingHits.add(binding.design.transition);
       for (const binding of validated.bindings) {
         const target = binding.design, facts = view.facts.get(target.source);
         if (!facts) continue;
@@ -355,13 +366,16 @@ export async function impact(config, values, { log = console.log, openIndex = op
     timings.queryMs = Math.max(0, timings.queryMs - (timings.proofMs - proofBeforeQuery));
     data.coverage.inventory = data.failures.length ? 'incomplete' : 'complete';
     if (data.unresolvedInputs.length || data.mappingFindings.length) warn('IMPACT_MAPPING_INCOMPLETE', 'Some implementation mappings are absent, unmatched or stale; inspect the resolvable targets and findings.', checkNext('Repair implementation.json and its reported locators before repeating the query.'));
-    if (!data.frames.length) {
+    for(const view of views)view.motionTokenHits=seeds.filter(s=>s.view===view && s.fact.kind==='token').map(s=>s.fact);
+    const motion=impactedEdges(views,query,themes,assessments,values.explain);
+    motionSummary(data,motion,values.transitions);
+    if (!data.frames.length && !motion.length) {
       const observed = query.kind === 'token' ? { token: query.tokens[0], theme: values.theme } : query.kind === 'file' ? { file: query.input, theme: values.theme } : null;
       warn(query.kind === 'git' ? 'IMPACT_NO_CHANGES' : 'IMPACT_NO_MATCH', 'No frame candidates matched the changed design facts.',
         query.kind === 'git' ? [] : observed ? nextActions('OWNER_UNSETTLED', { command: 'owner', values: observed }) : checkNext('Inspect design inputs and emitted part coverage.'));
     }
 
-    if (consume) await consume({ views, rows, assessments, inputs, data });
+    if (consume) await consume({ views, rows, assessments, inputs, data, motionIds:new Set(motion.map(r=>r.id)) });
   } catch (cause) {
     if (inputs) { try { await verifyGeneration(); } catch (changed) { cause = changed; } }
     if (cause.code === 'OWNER_INDEX_CHANGED') cause = new CliError('IMPACT_INPUT_CHANGED', cause.message, { cause });

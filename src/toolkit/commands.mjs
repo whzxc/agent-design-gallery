@@ -1,6 +1,9 @@
 import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { availableParallelism } from 'node:os';
+import { motionSummary, motionRows, readMotion } from './motion.mjs';
+import { motionEvaluator } from './motion-check.mjs';
+import { sourceMotion } from './motion-css.mjs';
 import { buildSource } from './build.mjs';
 import { selectSources, relative, loadTokens, sourceDirectories, archFiles, featureFolderProblems, readGroups, listSources } from './project.mjs';
 import { importDirectionViolations, singleConsumerComponents, chapterWarnings } from './asset-rules.mjs';
@@ -221,6 +224,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
     else warnings.push(classifyError(failure).error);
   };
   try {
+    const motion = session?.views[1].motion ?? readMotion(config);
     const directories = sourceDirectories(config);
     const chapterFiles = listSources(config.design, directories).map(file => path.relative(config.design, file).split(path.sep).join('/'));
     const chapters = chapterWarnings(chapterFiles, readGroups(config.design, directories), directories);
@@ -231,6 +235,22 @@ export async function check(config, args = [], options = {}, log = console.log, 
     data.sources = files.map(file => relative(config, file));
     data.summary.sources = files.length;
     if (config.check?.strictLayers === true) for (const problem of featureFolderProblems(config.design, sourceDirectories(config))) add({ code: problem.code, message: problem.message, line: null, column: null }, problem.file);
+    const selectedRecord = r => (!args.length || [r.owner,r.edge?.to?.source].some(src=>data.sources.includes(src))) &&
+      (!options.frame || [r.edge?.from,r.edge?.to].some(ref=>ref?.frame===options.frame && data.sources.includes(ref.source))) &&
+      (!session || session.motionIds.has(r.edge?.id) || !r.valid);
+    const records = motion.records.filter(selectedRecord);
+    const cssFindings=new Map();
+    const scopeFiles = new Set(records.map(r=>r.source));
+    const inScope = sidecar => !args.length || scopeFiles.has(sidecar) || data.sources.includes(sidecar.replace(/\.motion\.json$/,'.tsx'));
+    const emit = ({source,frame,theme,warning,...problem}) => {
+      if (warning) {
+        warnings.push({code:problem.code,message:source+': '+(problem.transition??frame??'')+(theme?' ('+theme+')':'')+' '+problem.message,next:[]});
+        if (!options.json) log('WARNING '+warnings.at(-1).message);
+      } else add(problem,path.join(config.root,source),frame??null,theme??null);
+    };
+    for (const source of motion.files) if (inScope(source) && !chapterFiles.includes(path.relative(config.design,path.resolve(config.root,source)).replace(/\.motion\.json$/,'.tsx')))
+      emit({code:'MOTION_SCHEMA',source,pointer:'',message:'Motion sidecar has no owning TSX entry.',line:1,column:1});
+    for (const finding of motion.findings) if(inScope(finding.source)) emit(finding);
     const tokens = files.length ? loadTokens(config) : null;
     const arch = files.some(file => file.endsWith('.mmd')) ? await import('./arch.mjs') : null;
     let page;
@@ -267,6 +287,14 @@ export async function check(config, args = [], options = {}, log = console.log, 
       if (mapping.present && !architecture) builtSources.set(relative(config, file), mappingFacts(built));
       graph[path.relative(config.design, file).split(path.sep).join('/')] = { uses: built.imports };
       for (const frame of built.frames) for (const theme of session?.themes ?? ['light', 'dark']) {
+        if (session && options.frame && frame.name !== options.frame) continue;
+        const lintMotion = !session || session.assessments.get(JSON.stringify([relative(config,file),frame.name,theme]))?.candidate ||
+          session.views[0].config.check?.strictMotion !== config.check?.strictMotion || !session.views[0].tokenBytes.equals(session.views[1].tokenBytes);
+        if (!architecture && lintMotion) for (const message of sourceMotion(built,frame,tokens,theme)) {
+          const key=JSON.stringify([file,frame.name,message]);
+          if(cssFindings.has(key))cssFindings.get(key).theme=null;
+          else cssFindings.set(key,{code:'MOTION_SOURCE_CSS',source:relative(config,file),frame:frame.name,theme,message,line:null,column:null,warning:!config.check?.strictMotion});
+        }
         if (session && !session.scheduled({ source: relative(config, file), frame: frame.name }, theme)) continue;
         browser ??= await launchBrowser();
         try {
@@ -281,20 +309,35 @@ export async function check(config, args = [], options = {}, log = console.log, 
         }
       }
     }
+    for(const finding of cssFindings.values())emit(finding);
     let validatedMap = null;
     if (mapping.present) {
       const { listSources } = await import('./project.mjs');
       validatedMap = await validateImplementationMap(config, mapping, {
         sources: listSources(config.design, sourceDirectories(config)).map(file => relative(config, file)),
-        selected: args.length ? data.sources : undefined,
+        selected: args.length ? [...new Set([...data.sources,...records.map(r=>r.owner)])] : undefined,
         getBuild: source => {
           if (failedSources.has(source)) throw failedSources.get(source);
           if (!builtSources.has(source)) builtSources.set(source, session?.views[1].built.get(source) ?? buildSource(config, path.join(config.root, source), { write: false, allowLegacy: false }));
           return builtSources.get(source);
         },
-        onFinding: ({ code, message, line, column, frame }) => add({ code, message, line, column }, mapping.file, frame),
+        onFinding: ({ code, message, line, column, frame, pointer, target }) => add({ code, message, line, column, ...(code==='MOTION_BINDING'?{pointer,transition:target.transition}:{}) }, mapping.file, frame),
       });
     }
+    if (records.some(r=>r.valid)) {
+      const evaluate=motionEvaluator(config,{themes:session?.themes,bindings:validatedMap?.transitionBindings,hasMap:mapping.present,
+        getBuild:source=>allBuilt.get(source)??session?.views[1].built.get(source),
+        getPage:async()=>{browser??=await launchBrowser();return page??=await browser.newPage();}});
+      // Other edges on this origin can conflict even when a Git or destination filter selects only one edge.
+      const origins=new Set(records.filter(r=>r.valid).map(r=>JSON.stringify([r.edge.from.source,r.edge.from.frame])));
+      const peers=motion.records.filter(r=>r.valid && !records.includes(r) && origins.has(JSON.stringify([r.edge.from.source,r.edge.from.frame])));
+      for(const peer of peers)await evaluate(peer);
+      for (const record of records.filter(r=>r.valid)) {
+        try { for(const finding of (await evaluate(record)).findings)emit(finding); }
+        catch(cause){failed(cause);}
+      }
+    }
+    motionSummary(data,motionRows(records).map(({edge})=>({id:edge.id,...(edge.proposed?{proposed:edge.proposed}:{})})),options.transitions);
     await cleanup(() => browser?.close(), primary);
     browser = null;
     if (config.check?.importDirection !== false) for (const { source, target, from, to, sameLayer, featureBoundary } of importDirectionViolations(graph, sourceDirectories(config), { strictLayers: config.check?.strictLayers === true })) {

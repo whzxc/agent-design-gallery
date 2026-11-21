@@ -1,3 +1,6 @@
+import { instanceKeyMatches } from './motion-check.mjs';
+import { readMotion, motionFiles, motionSummary, motionRows } from './motion.mjs';
+import { transitionQuery, targetsFor } from './motion-queries.mjs';
 import path from 'node:path';
 import { CliError, nextActions } from '../cli-output.mjs';
 import { openProjectIndex } from './project-index.mjs';
@@ -22,6 +25,8 @@ export function inspectSelection(values) {
 }
 
 export async function inspect(config, args=[], values={}, {log=console.log, openIndex=openProjectIndex, launchBrowser=launch, environment=observationEnvironment}={}) {
+  if(values.transition || values.transitions)return transitionQuery(config,'inspect',args,values,log);
+  const motionIds=new Set();
   const resolvedConfig=canonicalBytes(config);
   const start=performance.now(),selection=inspectSelection(values),warnings=[],tracked=new Map();
   let data={inspectVersion:1,identityVersion:1,project:config.root,complete:false,mode:'catalog',encoding:'expanded',selection,catalog:[],frame:null,
@@ -35,7 +40,9 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
   const getPage=async()=>{browser??=await launchBrowser();page??=await browserTask(browser,()=>browser.newPage({locale:'en-US',timezoneId:'UTC',deviceScaleFactor:1}));return page;};
   try {
     const files=await configInputFiles(config),configInputs=new Set(files.map(f=>relative(config,f)));
-    for(const file of [...files,path.join(config.design,'tokens.css')])tracked.set(file,trackedHash(await inputBytes(file)));
+    const sidecars=motionFiles(config);
+    for(const file of [...files,...sidecars,path.join(config.design,'tokens.css')])tracked.set(file,trackedHash(await inputBytes(file)));
+    const graph=readMotion(config,sidecars);
     index=await openIndex(config,{stateDirectory:values['state-dir'],fresh:true});data.coverage.discoveredSources=index.inventory.tsx.length;
     let sources=index.inventory.tsx;
     await timed('prepareMs',async()=>{
@@ -53,6 +60,8 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
     const candidates=data.catalog.flatMap(s=>s.frames.filter(f=>!values.frame||f.name===values.frame).map(f=>({source:s.source,frame:f.name})));
     if(values.frame && !candidates.length)throw new CliError('FRAME_NOT_FOUND',`Unknown frame ${values.frame}.`);
     if(values.frame && candidates.length>1)throw new CliError('INSPECT_FRAME_AMBIGUOUS',`Frame ${values.frame} occurs in ${candidates.length} sources: ${candidates.map(c=>c.source).join(', ')}.`,{context:{inspectSources:candidates.map(c=>c.source)}});
+    const incident=motionRows(graph.records.filter(r=>r.valid && candidates.some(c=>[r.edge.from,r.edge.to].some(ref=>ref.source===c.source && ref.frame===c.frame))));
+    if(!selection.subtree)for(const r of incident)motionIds.add(r.edge.id);
     if(!values.frame && candidates.length!==1){
       if(['theme','part','element','text','contains','depth','fields','wrappers','expand'].some(k=>values[k]!==undefined))throw new CliError('USAGE_INVALID','Choose a unique frame before setting frame-only options.',{context:{inspectCatalog:true}});
       if(!candidates.length)warn('EMPTY_SELECTION','No TSX frames were discovered.');
@@ -83,6 +92,19 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
         data.coverage.cacheHits+=Number(result.hit);data.coverage.completedObservations++;
         observations.push({theme,palette:result.value.rich.palette});
         const projected=await timed('projectMs',()=>projectInspection(data,result.value,theme,config,intern,tokens));
+        if(projected.scopePaths && incident.length){
+          const nodes=result.value.identities, byPath=new Map(nodes.map(n=>[n.path,n]));
+          const root=nodes[0]?.path, scoped=nodes.filter(n=>projected.scopePaths.has(n.path));
+          const inScope=t=>scoped.some(n=>{
+            if(t.frame)return n.path===root;
+            if(t.anchor)return n.attributes?.['data-adg-id']===t.anchor;
+            if(!n.owners?.some(o=>path.posix.join(relative(config,config.design),o.source)+'#'+o.export===t.part))return false;
+            if(t.key===undefined)return true;
+            const ancestors=[];for(let p=n;p;p=byPath.get(p.parentPath))ancestors.push(p);
+            return instanceKeyMatches(ancestors,t.key);
+          });
+          for(const {edge} of incident)if(['from','to'].some(side=>edge[side].source===chosen.source && edge[side].frame===chosen.frame && targetsFor(edge,side).some(inScope)))motionIds.add(edge.id);
+        }
         if(data.baseline===null){data.baselineTheme=theme;data.baseline=projected.scene;}else data.additionalThemes[theme]=projected.scene;
         for(const match of projected.matches){const existing=data.matches.find(m=>m.element===match.element);if(existing)existing.themes.push(theme);else data.matches.push(match);}
         for(const row of projected.instanceRows)if(!data.partInstances.some(i=>i.id===row.id))data.partInstances.push(row);
@@ -103,10 +125,12 @@ export async function inspect(config, args=[], values={}, {log=console.log, open
 
     }
     await index.close();
+    if(JSON.stringify(sidecars)!==JSON.stringify(motionFiles(config)))throw new CliError('INSPECT_INPUT_CHANGED','Transition sidecar inventory changed during inspection.');
     await verifyInputGeneration({tracked,views:[{index,config,resolved:resolvedConfig,configInputs}],verifyConfig:true,code:'INSPECT_INPUT_CHANGED'});
   } catch(cause){if(cause.code==='OWNER_INDEX_CHANGED')cause=new CliError('INSPECT_INPUT_CHANGED',cause.message,{cause});primary=commandFailure(cause,data,warnings);}
   for(const close of [()=>page?.close(),()=>browser?.close(),()=>index?.close()])try{await cleanup(close,primary);}catch(cause){primary=commandFailure(cause,data,warnings);}
   data.timings.totalMs=performance.now()-start;
+  motionSummary(data,[...motionIds]);
   if(primary)throw primary;
   data.complete=true;
   const projectStart=performance.now();data=compactInspection(data);if(values.expand)data=expandInspection(data);

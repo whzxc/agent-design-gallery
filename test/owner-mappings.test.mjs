@@ -35,7 +35,7 @@ test('mapping v1 is strict, optional and portable, with no authored line ranges'
   const valid = [mapping(), mapping({ directory: 'ui/' }), mapping({ glob: 'ui/**/*.tsx' }), mapping({ file: 'native/control.rs', symbol: 'Control', anchor: 'fn Control(' })];
   assert.equal(parseImplementationMap(json(valid)).mappings.length, 4);
   const bad = [
-    '{', '{}', '{"version":2,"mappings":[]}', '{"version":1,"mappings":[],"extra":true}',
+    '{', '{}', '{"version":3,"mappings":[]}', '{"version":1,"mappings":[],"extra":true}',
     ...[
       { file: 'ui/a.ts', lines: [1, 2] }, { file: '../a.ts' }, { file: '/a.ts' }, { file: 'C:/a.ts' },
       { file: 'ui\\a.ts' }, { file: 'ui/a.ts#Button' }, { file: './ui/a.ts' }, { file: 'ui//a.ts' },

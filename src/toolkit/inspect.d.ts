@@ -42,7 +42,7 @@ export interface Resource {
 }
 export interface SVGNode {id:string;tag:string;attributes:Record<string,string>;children:string[]}
 export interface InspectCommon {
-  inspectVersion:1;identityVersion:1;project:string;complete:boolean;mode:'catalog'|'frame';
+  motion?:{count:number};inspectVersion:1;identityVersion:1;project:string;complete:boolean;mode:'catalog'|'frame';
   selection:{source:string|null;frame:string|null;themes:Theme[];subtree:null|{kind:'part'|'element'|'text';input:string;contains:boolean};depth:number|null;fields:FieldGroup[];wrappers:'semantic'|'all';expand:boolean};
   catalog:{source:string;frames:{name:string;locale:string|null;width:number|null;height:number|null}[]}[];
   frame:{source:string;name:string;locale:string|null;authored:{width:number|null;height:number|null};parent:{source:string;frame:string;selector:string}|null}|null;
@@ -114,5 +114,12 @@ export interface CompactInspectData extends Omit<InspectCommon,'matches'|'limita
   limitations:(Omit<InspectCommon['limitations'][number],'elements'>&{elements:number[]})[];
 }
 export type InspectData=ExpandedInspectData|CompactInspectData;
+export interface MotionInspection {
+  project:string; complete:boolean; motionVersion:1; mode:'transitions'|'transition';
+  motion?:{count:number;edges:{id:string;from:{source:string;frame:string};to:{source:string;frame:string};input:string;proposed?:string}[]};
+  edge?:Record<string,unknown>;bound?:boolean;findings?:Record<string,unknown>[];
+  themes?:Partial<Record<Theme,{sameAs:Theme}|{counts:{match:number;enter:number;exit:number;ambiguous:number};timings:Record<string,string|number|null>}>>;
+}
+export function inspect(config:object,args:string[],values:({transition:string}|{transitions:true;frame:string}) & {json?:boolean;explain?:boolean;theme?:Theme|'both'},options?:object):Promise<{data:MotionInspection;warnings:unknown[]}>;
 export function inspect(config:object,args?:string[],values?:Record<string,string|boolean>,options?:object):Promise<{data:InspectData;warnings:{code:string;message:string;next:{argv:string[];reason:string}[]}[]}>;
 export function inspectText(data:InspectData):string;

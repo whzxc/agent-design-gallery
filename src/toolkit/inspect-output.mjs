@@ -154,7 +154,7 @@ export function projectInspection(data, observation, theme, config, intern, defi
     }
   }
   const scene={roots,context:elements.filter(e=>context.has(e.id)).map(e=>({...e,children:e.children.filter(id=>context.has(id)||included.has(id))})),elements:emitted,instances:[],runs:emittedRuns,size:rich.size};
-  return {scene,matches,limitations,instanceRows:instanceRows.filter(i=>included.has(i.root)||[...context].some(id=>id===i.root)),counts:{raw:scope.size,retained:scope.size-collapsed,collapsed,logical:included.size-collapsed,cutOff:scope.size-included.size,runs:emittedRuns.length}};
+  return {scene,matches,scopePaths:query?new Set(idRows.filter(row=>scope.has(row.id)).map(row=>row.path)):null,limitations,instanceRows:instanceRows.filter(i=>included.has(i.root)||[...context].some(id=>id===i.root)),counts:{raw:scope.size,retained:scope.size-collapsed,collapsed,logical:included.size-collapsed,cutOff:scope.size-included.size,runs:emittedRuns.length}};
 }
 
 export function pruneTables(data) {

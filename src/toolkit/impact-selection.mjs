@@ -90,7 +90,7 @@ export async function withImpacted(config, args, options, command, work) {
         if (outcome?.data) {
           finalize(outcome.data);
           if (selection.coverage.scope === 'partial') warnings.push({ code: 'IMPACT_COVERAGE_PARTIAL', message: 'Impact selection has partial frame/theme coverage.', next });
-          if (!failure && !chosen.some(row => (command === 'diff' || row.after) && themes.some(theme => scheduled(row, theme)))) warnings.push({ code: 'IMPACT_NO_CHANGES', message: 'No capture or browser-evaluation jobs were scheduled.', next });
+          if (!failure && !outcome.data.motion?.count && !chosen.some(row => (command === 'diff' || row.after) && themes.some(theme => scheduled(row, theme)))) warnings.push({ code: 'IMPACT_NO_CHANGES', message: 'No capture or browser-evaluation jobs were scheduled.', next });
         }
         if (failure && !['CHECK_FAILED', 'DIFF_FAILED'].includes(failure.code) && !(command === 'diff' && failure.partialSourceFailures === true)) throw failure;
       },

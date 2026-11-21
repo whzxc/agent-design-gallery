@@ -1506,7 +1506,7 @@ The internal [live verification harness](../tooling/inspect-audit.mjs) compares 
 DOM/style/Range and AX reads. It is used by tests and acceptance, including box, inherited-style, token-scope and
 missing-theme corruption cases; its findings and counters are not part of inspect's public schema or exits.
 
-## Frame transition queries (proposed)
+## Frame transition queries
 
 Milestone 7 keeps the v2 envelope, required data and exits for each command. All four add optional `data.motion: {count: number}` only for a nonempty selection of unique edges. Count an ID once across causes, frames, instances and themes. No edge catalog, endpoint scene, occurrence evidence or timeline is appended to ordinary successful responses. Incomplete responses retain observed counts with `complete:false`. Existing frame and proof counts keep their units.
 
@@ -1517,18 +1517,18 @@ Milestone 7 keeps the v2 envelope, required data and exits for each command. All
 | `owner` | Count edges whose active behavior binding matches the requested implementation file or region. For a whole-source reverse lookup, count the bound edges owned by that source. For an exported part, count bound edges that target that exact defining part. A token lookup counts referencing edges, including aliases. Text/color evidence keeps its existing frame semantics. `owner --transition=<id>` is a new exclusive selector returning that edge's active implementation selectors/locations and mapping findings, even if neither endpoint has a changed pixel. `owner --file=<path> --transitions` or `owner --token=<name> --transitions` additionally lists matching IDs once. |
 | `impact` | Count edges touched by changed sidecars or behavior bindings, endpoint changes in either revision, involved part instances, and referenced timing tokens/aliases. `impact --base=<rev> --transitions` (also valid with existing hypothetical selectors) adds `edges:[{id,kind}]` to `data.motion`; `kind` is added, changed, removed or candidate. `--explain` adds direct or inherited reasons per edge. A motion-only change schedules edge review/check even when all static frame rows are proven identical. Edge candidates never confer pixel equality, timing parity or permission to skip a later operation. |
 
-Exact ID queries use one project-wide ID and return actionable unknown-ID errors (exit 2). List requests sort by ID, return an empty list on no match, and keep `count:0` in explicit motion detail. For the two new inspect modes use `mode:"transitions"|"transition"`, plus `motionVersion:1` under `data`; all new query flags require a supporting CLI. Default catalogs, frame identities, reverse bindings and theme compaction keep their existing representations. The review receipt adds optional `motion:{added,changed,removed}` under `data`; the artifact carries cards and samples.
+Exact ID queries use one project-wide ID and return actionable unknown-ID errors (exit 2). List requests sort by ID, return an empty list on no match, and keep `count:0` in explicit motion detail. For the two new inspect modes use `mode:"transitions"|"transition"`, plus `motionVersion:1` under `data`; all new query flags require a supporting CLI. Default catalogs, frame identities, reverse bindings and theme compaction keep their existing representations. Round 3 will add optional `motion:{added,changed,removed}` to the review receipt; the artifact will carry cards and samples.
 
-**Wire-size probe.** Current CLI at `e1083b5` on ARC `e5d2254`, default detail and themes, compact UTF-8 stdout including its newline. Each command completed successfully. The last column serializes its real envelope with one hypothetical in-scope edge (`"motion":{"count":1}`). It measures the proposed encoding, with no implementation or authored ARC edges implied.
+**Measured wire size.** Round 1 CLI on an isolated checkout of ARC `4335b8b`, before and after adding one center-layer edge and its v2 behavior binding. Each cell counts compact UTF-8 stdout, including the newline. The queries used default detail and both themes.
 
-| ARC query (all with `--json`) | Current bytes | One-edge model, bytes |
-| --- | ---: | ---: |
-| `check design/surfaces/layers.tsx --read-only` | 323 | 344 |
-| `inspect design/surfaces/layers.tsx --frame=workspace-fit` | 38,883 | 38,904 |
-| `owner --part=design/surfaces/layers.tsx` | 2,773 | 2,794 |
-| `impact --source=design/surfaces/layers.tsx` | 1,351 | 1,372 |
+| ARC query (all with `--json`) | No edge, bytes | One edge, bytes | Difference |
+| --- | ---: | ---: | ---: |
+| `check design/surfaces/layers.tsx --read-only` | 339 | 504 | +165 |
+| `inspect design/surfaces/layers.tsx --frame=workspace-fit` | 38,898 | 38,912 | +14 |
+| `owner --part=design/surfaces/layers.tsx` | 2,789 | 2,810 | +21 |
+| `impact --source=design/surfaces/layers.tsx` | 1,372 | 1,375 | +3 |
 
-The modeled default adds 21 bytes per command for a single-digit count and zero for no edges. More edges change only the digit count on success. Re-measure actual serialized envelopes on this consumer at implementation time, including a broad selection, a multi-theme finding and opt-in detail. Duplicating tracks per theme or endpoint would scale with the graph and repeat the CLI response-size problem.
+The isolated cost of `"motion":{"count":1}` with its separator is exactly the modeled 21 bytes in all four envelopes. Check also returned one 144-byte warning summarizing four ambiguous implicit groups across both themes. Inspect and impact serialize measured timings at variable lengths. Inspect cache counters changed without changing their encoded width. With no edges the field is absent. The one-edge catalog covered 91 sources and 336 frames in 34,490 bytes with zero browser observations; exact-ID `inspect --explain` took 2,049 bytes and included the per-group details.
 
 ## Comments
 

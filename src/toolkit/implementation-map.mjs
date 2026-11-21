@@ -4,6 +4,7 @@ import { CliError } from '../cli-output.mjs';
 import { portablePath, globPattern, resolveLocator, symbolRegions, selectorMatches } from './owner-locators.mjs';
 import { indexDigest } from './index-store.mjs';
 import { mappingFacts } from './source-facts.mjs';
+import { readMotion, edgeId } from './motion.mjs';
 import { jsonLocations } from './json-locations.mjs';
 
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -17,7 +18,7 @@ const invalid = message => { throw new CliError('OWNER_MAP_INVALID', message); }
 export function parseImplementationMap(text) {
   let value;
   try { value = JSON.parse(text); } catch { invalid('Invalid implementation.json JSON; repair the mapping file.'); }
-  if (!keys(value, ['version', 'mappings']) || value.version !== 1 || !Array.isArray(value.mappings)) invalid('implementation.json needs version 1 and a mappings array.');
+  if (!keys(value, ['version', 'mappings']) || ![1,2].includes(value.version) || !Array.isArray(value.mappings)) invalid('implementation.json needs version 1 or 2 and a mappings array.');
   value.mappings.forEach((mapping, index) => {
     const pointer = `/mappings/${index}`, fail = reason => invalid(`${pointer}: ${reason}`);
     if (!keys(mapping, ['implementation', 'design']) || !Array.isArray(mapping.design) || !mapping.design.length) fail('use an implementation selector and nonempty design bindings.');
@@ -29,6 +30,7 @@ export function parseImplementationMap(text) {
     if (s.anchor !== undefined && (!nonempty(s.anchor) || !s.symbol)) fail('a nonempty anchor requires a symbol.');
     if (s.symbol && !/\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(s.file) && s.anchor === undefined) fail('this file type requires an explicit symbol anchor.');
     for (const target of mapping.design) {
+      if (value.version===2 && keys(target,['source','transition']) && portablePath(target.source) && target.source.endsWith('.tsx') && edgeId(target.transition)) continue;
       if (!keys(target, ['source', 'part', 'frames']) || !portablePath(target.source) || !target.source.endsWith('.tsx') ||
         target.part !== undefined && !nonempty(target.part) || target.frames !== undefined && (!Array.isArray(target.frames) || !target.frames.length || target.frames.some(frame => !nonempty(frame)))) fail('use a TSX source, optional part and nonempty exact frame list.');
     }
@@ -81,7 +83,9 @@ export async function implementationFiles(config, selector) {
   return files.sort();
 }
 
-export async function validateImplementationMap(config, map, { sources, selected, getBuild, onFinding = () => {}, mappingIndices, implementationSelection }) {
+export async function validateImplementationMap(config, map, { sources, selected, getBuild, onFinding = () => {}, mappingIndices, implementationSelection, targetFilter }) {
+  let motion;
+  const transitionBindings = [];
   const findings = [], bindings = [], regions = {}, seen = new Set(), builds = new Map(), contents = new Map();
   const sourceSet = new Set(sources), scope = selected && new Set(selected);
   const report = (code, pointer, selector, target, message, candidates = [], frame = null) => {
@@ -91,7 +95,7 @@ export async function validateImplementationMap(config, map, { sources, selected
   };
   for (const [index, mapping] of map.mappings.entries()) {
     if (mappingIndices && !mappingIndices.has(index)) continue;
-    const targets = mapping.design.map((target, i) => ({ target, pointer: `/mappings/${index}/design/${i}` })).filter(({ target }) => !scope || scope.has(target.source));
+    const targets = mapping.design.map((target, i) => ({ target, pointer: `/mappings/${index}/design/${i}` })).filter(({ target }) => (!scope || scope.has(target.source)) && (!targetFilter || targetFilter(target)));
     if (!targets.length) continue;
     const selector = mapping.implementation, pointer = `/mappings/${index}/implementation`;
     const files = implementationSelection ? implementationSelection.filter(file => selectorMatches(selector, file)) : await implementationFiles(config, selector);
@@ -105,10 +109,17 @@ export async function validateImplementationMap(config, map, { sources, selected
     }
     for (const { target, pointer: targetPointer } of targets) {
       let valid = files.length > 0 && !locator.stale, frames = [];
-      const duplicate = JSON.stringify([Object.fromEntries(Object.entries(selector).sort()), { source: target.source, part: target.part ?? null, frames: target.frames ? [...target.frames].sort() : null }]);
+      const duplicate = JSON.stringify([Object.fromEntries(Object.entries(selector).sort()), { source: target.source, part: target.part ?? null, transition: target.transition ?? null, frames: target.frames ? [...target.frames].sort() : null }]);
       if (seen.has(duplicate)) { report('OWNER_MAPPING_DUPLICATE', targetPointer, selector, target, 'Duplicate implementation/design binding.'); continue; }
       seen.add(duplicate);
       if (!sourceSet.has(target.source)) { report('OWNER_SOURCE_MISSING', targetPointer, selector, target, `Undiscovered source ${target.source}.`); valid = false; }
+      else if (target.transition) {
+        motion ??= readMotion(config);
+        const matches = motion.ids.get(target.transition) ?? [];
+        if (matches.length !== 1 || matches[0].owner !== target.source || !matches[0].valid) {
+          report('MOTION_BINDING', targetPointer, selector, target, 'Binding needs a unique transition in its owning source.'); valid=false;
+        }
+      }
       else if (!implementationSelection || valid) {
         if (!builds.has(target.source)) builds.set(target.source, Promise.resolve(getBuild(target.source)).then(mappingFacts));
         const built = await builds.get(target.source);
@@ -121,9 +132,9 @@ export async function validateImplementationMap(config, map, { sources, selected
           frames = frames.filter(matches);
         }
       }
-      bindings.push({ pointer: targetPointer, implementation: selector, design: target, files, anchorLine: locator.line, frames: frames.map(frame => frame.name), active: valid });
+      (target.transition ? transitionBindings : bindings).push({ pointer: targetPointer, implementation: selector, design: target, files, anchorLine: locator.line, frames: frames.map(frame => frame.name), active: valid });
     }
   }
   for (const [file, text] of contents) regions[file] = symbolRegions(text, file, map.mappings.map(m => m.implementation).filter(s => s.file === file));
-  return { findings, bindings, regions, implementationHashes: Object.fromEntries([...contents].map(([file, text]) => [file, indexDigest(text)])) };
+  return { findings, bindings, transitionBindings, regions, implementationHashes: Object.fromEntries([...contents].map(([file, text]) => [file, indexDigest(text)])) };
 }

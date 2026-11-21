@@ -129,7 +129,7 @@ Tailwind's default colors, font sizes, font families, radii and shadows are remo
 
 Paint resolves through tokens. Opacity modifiers on token colors, such as `bg-warning/10`, are allowed. A literal color is allowed only inside an element with `data-brand`. The build defines both token blocks and the root's `data-theme` selects one, so every frame renders in both themes without extra frames. Text uses `font-ui` unless a class says otherwise.
 
-Author each frame at rest. Under the [proposed motion contract](#frame-transitions-proposed), the viewer plays timing between endpoints. Source-authored keyframes, active CSS transitions and pseudo-class state changes that play motion are check findings. Authored duration, delay and easing declarations, including utilities and shorthands, must reference project motion tokens even when dormant. Toolkit defaults and the definitions in `tokens.css` are outside this source lint. Static `check`, `render` and `compare` continue to observe settled frames with motion reduced.
+Author each frame at rest. Under the [motion contract](#frame-transitions), the viewer plays timing between endpoints. Source-authored keyframes, active CSS transitions and pseudo-class state changes that play motion are check findings. Authored duration, delay and easing declarations, including utilities and shorthands, must reference project motion tokens even when dormant. Toolkit defaults and the definitions in `tokens.css` are outside this source lint. Static `check`, `render` and `compare` continue to observe settled frames with motion reduced.
 
 ## Authoring
 
@@ -150,19 +150,20 @@ A source describes structure, not coordinates. Write it the way the UI is built.
 - Each source shows one representative language.
 - Frames show what the implementation renders. Explanatory diagrams belong in `arch/`; explorations belong in `studies/`.
 
-## Frame transitions (proposed)
+## Frame transitions
 
-Milestone 7 contract for review. The examples and player controls below describe proposed interfaces.
+Round 1 implements authoring, validation and agent queries. Board playback and motion review are scheduled for the following rounds.
 
-A source can own a sibling `<stem>.motion.json` (including `index.motion.json` for a feature folder). Version 1 contains an ordered `edges` array. Each edge has a stable project-unique kebab-case `id`. Its owner is the adjacent configured TSX frame source. The edge list is declarative JSON with no expression evaluation. Both endpoints are exact `{source,frame}` references with project-root-relative POSIX paths including the extension, under the same project and Git revision. The `from` source must be the owner. A UX flow is the directed graph of these references. A reverse action needs its own edge, trigger, timing and focus. Layer admission and retirement follow the [asset rules](asset-rules.md#transition-ownership-and-lifecycle-proposed).
+A source can own a sibling `<stem>.motion.json` (including `index.motion.json` for a feature folder). Version 1 contains an ordered `edges` array. Each edge has a stable project-unique kebab-case `id`. Its owner is the adjacent configured TSX frame source. The edge list is declarative JSON with no expression evaluation. Both endpoints are exact `{source,frame}` references with project-root-relative POSIX paths including the extension, under the same project and Git revision. The `from` source must be the owner. A UX flow is the directed graph of these references. A reverse action needs its own edge, trigger, timing and focus. Layer admission and retirement follow the [asset rules](asset-rules.md#transition-ownership-and-lifecycle).
 
-This example specifies an ARC-style same-slot replacement. It assumes the indicated anchors and keyed shell in both endpoint specimens. It illustrates the proposed grammar, independent of the current ARC stamps.
+This example specifies an ARC-style same-slot replacement. It assumes the indicated anchors and keyed shell in both endpoint specimens. This two-sided recipe is proposed in ARC; its implemented panel fades incoming content only.
 
 ```json
 {
   "version": 1,
   "edges": [{
     "id": "workspace-show-settings",
+    "proposed": "retained-panel-crossfade",
     "from": {"source": "design/surfaces/layers.tsx", "frame": "workspace-fit"},
     "to": {"source": "design/surfaces/layers.tsx", "frame": "workspace-cap"},
     "trigger": {"on": "click", "target": {"anchor": "settings-trigger"}},
@@ -181,14 +182,14 @@ This example specifies an ARC-style same-slot replacement. It assumes the indica
 }
 ```
 
-**Targets and inputs.** A target is either `{anchor}` (an authored `data-adg-id`) or `{part, key?}` (a defining source and named export, optionally qualified by its JSX instance key). An optional `within` target scopes either form to descendants of one resolved root. Targets resolve to exactly one element on each required side. `{frame:true}` addresses the root, including for Escape and automatic edges. Set `trigger.on` to `click`, `hover`, `focus`, `key` or `automatic`. Click and hover use activation and pointer entry respectively. Focus uses user focus entering the target. Key uses a non-repeated `keydown` on the target or its subtree and requires an exact `key` value from `KeyboardEvent.key` (unmodified apart from Shift implicit in the value). The deepest eligible target wins for the same input. Cancel any pending automatic dwell when leaving its frame. An automatic target must be present when the frame settles. Allow at most one automatic edge per frame. It fires once, optionally after `trigger.delay` (a duration token). Player-issued focus never recursively fires a focus edge. Conflicting triggers with equal precedence are findings. Cycles driven by people are valid. Reject all-automatic cycles, even with delays.
+**Targets and inputs.** A target is either `{anchor}` (an authored `data-adg-id`) or `{part, key?}` (a defining source and named export, optionally qualified by its JSX instance key). Targets resolve to exactly one element on each required side. `{frame:true}` addresses the root, including for a frame-wide Escape edge. Set `trigger.on` to `click`, `hover`, `focus` or `key`. Click and hover use activation and pointer entry respectively. Focus uses user focus entering the target. Key uses a non-repeated `keydown` on the target or its subtree and requires an exact `key` value from `KeyboardEvent.key` (unmodified apart from Shift implicit in the value). The deepest eligible target wins for the same input. Player-issued focus never recursively fires a focus edge. Conflicting triggers with equal precedence are findings. Cycles driven by people are valid.
 
-**Timeline.** Edge `duration` and `easing` are required project CSS custom-property names. Resolve aliases in both themes to a finite nonnegative CSS time or one valid monotone-time CSS easing function, respectively. Reject literals, unknown names, alias cycles, unresolved fallbacks and wrong kinds. Declarations of literal values belong in the token sheet. Phases run in array order. Tracks in a phase start together. A track may override duration and easing with tokens and give a duration token for `stagger`. Target number *i* starts at phase start plus *i* times stagger, in authored target order. The next phase starts after the latest track ends. Seeking samples that same clock, including zero-length phases.
+**Timeline.** Edge `duration` and `easing` are required project CSS custom-property names. Resolve aliases in both themes to a finite nonnegative CSS time or one valid monotone-time CSS easing function, respectively. Reject literals, unknown names, alias cycles, unresolved fallbacks and wrong kinds. Declarations of literal values belong in the token sheet. Phases run in array order. Tracks in a phase start together. A track may override duration and easing with tokens. The next phase starts after the latest track ends. Seeking samples that same clock, including zero-length phases.
 
 | Track mode | Endpoints and permitted properties |
 | --- | --- |
 | `match` | The same identity on both sides. Any nonempty subset of `x,y,width,height,opacity`. Interpolate only named components of the frame-relative box and computed opacity. |
-| `enter`, `exit` | The target on the destination or origin, respectively. Opacity fades between zero and its authored endpoint opacity. Geometry takes the corresponding endpoint box immediately. |
+| `enter`, `exit` | The target on the destination or origin, respectively. Opacity fades between zero and its authored endpoint opacity. Enter optionally takes `fromOpacity` in [0,1]. Enter on a replacement region removes its old paint at track start and fades only the incoming subtree. Geometry takes the corresponding endpoint box immediately. |
 | `crossfade` | Both endpoints have the target. Fade old content out and new content in concurrently, even for identical shell identities. The whole target subtree belongs to this track. Opacity only. |
 
 Each edge supplies `phases` (possibly empty). Each declared phase and track target list is nonempty. Unclaimed owner roots use smart matching with the edge tokens at time zero. Paired boxes FLIP from First to Last, unpaired roots enter or exit with opacity. Unstamped descendants travel with the nearest root. A track claims its target for the edge and defines all its motion, suppressing implicit animation there. Changed properties outside its list take the destination value at track start. An explicit opacity subtree track owns its descendant paint as one unit. Overlapping writers of the same property or independent tracks inside such a subtree are invalid. Hold the source before a delayed track and its destination after completion. Edge length includes implicit tracks that visibly change. An unchanged matched root contributes no duration. Easing is shared by the axes of a geometry track. Geometry for a retained shell follows the admitted endpoint sizes; an unexpected center shift in a same-slot pilot is a layout review finding.
@@ -197,7 +198,7 @@ Each edge supplies `phases` (possibly empty). Each declared phase and track targ
 
 Never guess between remaining candidates by text, position, DOM index, or a frame-local inspect ID. Fade ambiguous implicit candidates and expose their counts. An ambiguous explicit target invalidates that edge. Nested pairs measure in frame coordinates. Apply a child's residual transform after its parent's transform, or draw isolated, non-overlapping paint layers. A child inherits parent motion exactly once. A changed text run keeps a matched container's geometry and crossfades old and new text in place. Avoid glyph morphing, stretching text with the shell and announcing both copies to assistive technology. A zero-sized, clipped or non-invertible box falls back to an opacity transition with a limitation in edge detail.
 
-**Interruption, focus and coverage.** `interrupt:"ignore"` consumes transition input until completion. `"finish"` settles immediately at the destination and dispatches the latest eligible input there once. During a transition, only destination hotspots participate in this policy. Exiting play always cancels. `reduced:"instant"` is explicit and required in v1. It skips duration, fades, geometry interpolation and stagger and commits the same destination and focus outcome. Switching reduced motion on during playback settles immediately. The automatic trigger delay is a dwell time and survives reduced motion.
+**Interruption, focus and coverage.** The required `interrupt:"finish"` policy settles immediately at the destination and dispatches the latest eligible input there once. During a transition, only destination hotspots participate in this policy. Exiting play always cancels. `reduced:"instant"` is explicit and required in v1. It skips duration, fades and geometry interpolation and commits the same destination and focus outcome. Switching reduced motion on during playback settles immediately.
 
 `focus` is one of `{"target":Target}`, `"frame"`, `"preserve"` or `"restore-trigger"`. Apply at commit. Preserve resolves the previously focused identity in the destination. Restore uses the latest opening or switching trigger recorded on entry to the active layer, consuming that record on close. Edges that open or replace a layer declare `rememberTrigger:true`; nested openings push a record and replacements use `rememberTrigger:"replace"`. A missing historical target falls back to the exposed underlying frame root. An explicit focus target must resolve and accept focus (a heading may use `tabindex="-1"`). Playback owns history in memory.
 
@@ -209,11 +210,14 @@ An edge with `unsupported:[{"effect":"topology-spring","reason":"Velocity and sp
 | --- | --- |
 | Dialog or panel opens | Enter the layer with opacity only, at its final geometry throughout entry. Dialog uses `--motion-base` (160 ms), panel `--motion-panel` (180 ms), both with `--ease-enter`. Focus the new content and remember its trigger. |
 | Layer closes | Exit with `--motion-fast` (120 ms), within the entry duration. ARC's dialog uses `--ease-exit`, its panel exit uses `--ease-enter`. Restore the latest trigger with the exposed-layer fallback. |
-| Same physical slot | Key the shared shell by slot. Width stays fixed. In one phase crossfade old/new header and body over `--motion-fast` (120 ms) while `height` and `y` share `--motion-base` and `--ease-enter`. With equal endpoint centers, identical easing keeps `y + height/2` constant at every sample. Focus the incoming content. |
-| Different slots | Use distinct slot keys. Exit the old shell and enter the new shell in the same phase, each with its own opacity tokens. No geometry path between slots or intermediate empty frame. Narrow or portrait endpoint forms use the same-slot recipe. |
-| Reduced preference | All four families settle geometry and opacity together and commit focus once. Dirty, busy and confirmation states, where authored, are distinct frames with their own eligible actions. |
+| Current center-slot replacement | Keep the center shell keyed by slot. Use an enter opacity track for incoming content from 0.25 to its authored opacity (optional numeric `fromOpacity` on an enter track), over `--motion-fast` with `--ease-enter`. Height and y share `--motion-base` and `--ease-enter` around the fixed center. |
+| Proposed two-sided replacement | Key the shared shell by slot. Width stays fixed. In one phase crossfade old/new header and body over `--motion-fast` (120 ms) while `height` and `y` share `--motion-base` and `--ease-enter`. With equal endpoint centers, identical easing keeps `y + height/2` constant at every sample. Focus the incoming content. |
+| Proposed switch between different slots | Use distinct slot keys. Exit the old shell and enter the new shell in the same phase, each with its own opacity tokens. No geometry path between slots or intermediate empty frame. Narrow or portrait endpoint forms use the same-slot recipe. |
+| Reduced preference | All layer families settle geometry and opacity together and commit focus once. Dirty, busy and confirmation states, where authored, are distinct frames with their own eligible actions. |
 
-The pilot follows ARC's [layer guide](https://github.com/whzxc/agent-remote-control/blob/e5d22546a9350aed83edecdb595ab9d1b23df978/docs/dev/ui.md#motion). Retained-panel timing specializes the general content-swap rule. At that revision the panel provider serves a single center slot and the shell fades incoming content. Cross-slot concurrency and two-sided content fades are specification cases for ADG. Track implementation parity separately. Settled endpoint geometry carries retained height and viewport constraints. Live remeasurement and topology springs belong to the implementation.
+The pilot follows ARC's [layer guide](https://github.com/whzxc/agent-remote-control/blob/e5d22546a9350aed83edecdb595ab9d1b23df978/docs/dev/ui.md#motion). Retained-panel timing specializes the general content-swap rule. At that revision the panel provider serves a single center slot and the shell fades incoming content. Declare cross-slot concurrency and two-sided content fades as proposed edges until ARC implements them. Track implementation parity separately. Settled endpoint geometry carries retained height and viewport constraints. Live remeasurement and topology springs belong to the implementation.
+
+**Later:** stagger, scoped `within` targets, automatic triggers (`trigger.delay`, `MOTION_AUTO_CYCLE`), and `interrupt:"ignore"`. These fields and values are schema errors in v1.
 
 ### Board playback
 
@@ -221,7 +225,7 @@ A selected TSX specimen with outgoing edges offers **Play** in its Float toolbar
 
 The trusted viewer controls one live `sandbox="allow-same-origin"` frame without script permission. Use inert built HTML and its own theme stylesheet. Measure First, retain inert paint for exits, swap to Last in the same document, wait for fonts and image readiness, measure and animate. Isolate styles from the other endpoint when retaining paint. Suppress native link navigation, form submission and editing. Prevent child browsing contexts, network loads and navigation out of the built frame. The parent owns listeners, timeline, hit testing and focus. Ghosts are inert, hidden from accessibility and never receive input. Dispose of ghosts, listeners and animation handles on settle, cancel or exit. No camera work depends on player layout.
 
-Start at 1×, with 0.5× and 0.25× for inspection. Pause/resume and seek the selected edge on a 0–100% range with keyboard steps of 1% (Page Up/Down 10%). Back restores a visited frame directly. Replay restarts the selected edge. Seeking is silent and holds automatic triggers until playback resumes. Reaching 100% by seeking previews the final paint; only completing playback commits navigation and focus. Reduced motion defaults to system with an explicit on/off override for this session. Hotspot outlines appear on request or keyboard focus in viewer chrome, with input type, key if applicable and destination. Provide a keyboard-accessible outgoing-action list that can invoke every edge, including hover. An authored Escape edge on the specimen wins there; Exit is always reachable in chrome. Exit restores the invoking board control.
+Start at 1×, with 0.5× and 0.25× for inspection. Pause/resume and seek the selected edge on a 0–100% range with keyboard steps of 1% (Page Up/Down 10%). Back restores a visited frame directly. Replay restarts the selected edge. Seeking is silent. Reaching 100% by seeking previews the final paint; only completing playback commits navigation and focus. Reduced motion defaults to system with an explicit on/off override for this session. Hotspot outlines appear on request or keyboard focus in viewer chrome, with input type, key if applicable and destination. Provide a keyboard-accessible outgoing-action list that can invoke every edge, including hover. An authored Escape edge on the specimen wins there; Exit is always reachable in chrome. Exit restores the invoking board control.
 
 The Float toolbar keeps Play explicit so ordinary specimen selection still inspects. Always-visible hotspots would obscure review paint. Speed alone misses short phases, and a next-frame button cannot inspect the middle of an edge; the seek control serves both tasks. Separate player iframes per specimen would duplicate styles, inflate board cost and split focus history.
 
@@ -245,25 +249,25 @@ Each problem is one line, `<path>: <frame>: <problem>`. Completed rule findings 
 
 An import-direction problem is one line, `<path>: import <source> violates import direction (<lower> -> <higher>); ...`. Same-layer findings name the direction, for example `(modules -> modules)`. It names the resolved source rather than a manual dependency annotation. Named-source checks lint those sources' outgoing imports, including targets outside the selected subset. Other imported helpers and erased type-only imports are outside the graph; review their ownership in the [read-only audit](asset-rules.md#2-run-a-read-only-audit).
 
-### Motion findings (proposed)
+### Motion findings
 
-Validate the selected sources' incident edges, including the remote endpoint of a cross-source edge. A full check also detects orphan sidecars, duplicate project IDs and automatic cycles. Resolve target visibility, identities, token types and focusability in both themes. Read-only check writes no generated files.
+Validate the selected sources' incident edges, including the remote endpoint of a cross-source edge. A full check also detects orphan sidecars and duplicate project IDs. Resolve target visibility, identities, token types and focusability in both themes. Read-only check writes no generated files.
 
 | Finding | What to repair |
 | --- | --- |
 | `MOTION_SCHEMA`, `MOTION_ID_CONFLICT` | Unknown fields, orphan declaration, duplicate/invalid ID, invalid input/key, interruption or phase shape. Use the sidecar location and JSON pointer. |
 | `MOTION_FRAME_MISSING`, `MOTION_LAYER` | Restore or update the exact source/frame reference, or move the edge to its owning layer. |
-| `MOTION_TOKEN`, `MOTION_SOURCE_CSS` | Bind duration, delay, stagger and easing to a valid token of the expected kind in each theme. Remove autonomous source animation. Check authored references as well as resolution so a literal equal to a token is still found. |
-| `MOTION_TRIGGER_MISSING`, `MOTION_TRIGGER_CONFLICT`, `MOTION_AUTO_CYCLE` | Resolve the origin target, disambiguate overlapping dispatch or break the automatic cycle with user input. An input target must be exposed and able to receive its declared input. |
+| `MOTION_TOKEN`, `MOTION_SOURCE_CSS` | Bind duration, delay and easing to a valid token of the expected kind in each theme. Remove autonomous source animation. Check authored references as well as resolution so a literal equal to a token is still found. |
+| `MOTION_TRIGGER_MISSING`, `MOTION_TRIGGER_CONFLICT` | Resolve the origin target, disambiguate conflicting dispatch. An input target must be exposed and able to receive its declared input. |
 | `MOTION_IDENTITY_AMBIGUOUS`, `MOTION_TARGET_MISSING` | Qualify a required trigger, track or focus identity, repair duplicate authored keys in scope or supply the missing side. Identify the side, target and multiplicity. |
 | `MOTION_TRACK_CONFLICT`, `MOTION_REDUCED_MISSING`, `MOTION_FOCUS` | Correct property ownership or mode, supply the explicit instant fallback, or repair the focus outcome. |
-| `MOTION_STATUS`, `MOTION_BINDING` | Align proposal scopes or fix a missing/stale behavior counterpart under the [lifecycle rules](asset-rules.md#transition-ownership-and-lifecycle-proposed). |
+| `MOTION_STATUS`, `MOTION_BINDING` | Align proposal scopes or fix a missing/stale behavior counterpart under the [lifecycle rules](asset-rules.md#transition-ownership-and-lifecycle). |
 
-These are completed findings (exit 1). An unreadable file, malformed JSON, unsupported file version or inability to build/observe a required endpoint is incomplete execution (exit 2, preserve partial findings). An ambiguous *implicit* match emits `MOTION_IMPLICIT_FADE` as a warning and plays with fades. `MOTION_UNSUPPORTED` warns about each declared coverage gap. Keep warnings outside the problem count. A proposed marker exempts only a missing counterpart. Rejecting every ambiguous decorative repeat would make existing lists unplayable; silently choosing an occurrence for an authored trigger would route input to the wrong action. The distinction between implicit fade and required identity gives each case its own remedy. Reduced-motion capture alone cannot enforce timing tokens or detect animated CSS in a resting design.
+Source-only findings (`MOTION_SOURCE_CSS`), including dormant timing declarations, warn by default. Set `check.strictMotion: true` to make them errors. This setting is independent of sidecar validation. Invalid authored edges produce completed findings (exit 1) even with the default setting. An unreadable file, malformed JSON, unsupported file version or inability to build/observe a required endpoint is incomplete execution (exit 2, preserve partial findings). An ambiguous *implicit* match emits `MOTION_IMPLICIT_FADE` as a warning and plays with fades. `MOTION_UNSUPPORTED` warns about each declared coverage gap. Keep warnings outside the problem count. A proposed marker exempts only a missing counterpart. Rejecting every ambiguous decorative repeat would make existing lists unplayable; silently choosing an occurrence for an authored trigger would route input to the wrong action. The distinction between implicit fade and required identity gives each case its own remedy. Reduced-motion capture alone cannot enforce timing tokens or detect animated CSS in a resting design.
 
 ## Implementation mappings
 
-The proposed motion milestone extends this map with [exact edge targets](asset-rules.md#transition-ownership-and-lifecycle-proposed).
+Version 2 extends this map with [exact edge targets](asset-rules.md#transition-ownership-and-lifecycle).
 
 Since 0.9.0, the optional `design/implementation.json` is the machine-readable source
 of UI implementation counterparts. It lives under the configured design root when
@@ -298,7 +302,7 @@ metadata), gallery grouping and architecture sidecar `owners`.
 }
 ```
 
-The loader is strict: version must be 1; unknown keys are invalid. `mappings` may be
+The loader accepts versions 1 and 2 and rejects unknown keys. Version 2 additionally admits exact transition targets. `mappings` may be
 empty, but each mapping needs one selector and a nonempty `design` array. Bindings
 are many-to-many and overlapping selectors are allowed; duplicate identical bindings
 are findings. No `lines` field exists in version 1.

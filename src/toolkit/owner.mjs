@@ -1,3 +1,4 @@
+import { boundEdges, tokenEdges, transitionQuery } from './motion-queries.mjs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { CliError, nextActions } from '../cli-output.mjs';
@@ -49,15 +50,24 @@ async function ownerPart(config, values, { log = console.log } = {}) {
     for (const implementation of implementations) row.evidence.push({ matchKind: 'mapping_part', frame: null, theme: null, elementPath: null, boxes: [], owners: [], detail: { kind: 'mapping', file: map.source, pointer: binding.pointer, implementation: implementation.file, selector, symbol: selector.symbol ?? null, region: implementation.region } });
     data.owners.push(row);
   }
+  boundEdges(config,validated.transitionBindings,data);
   data.complete = true;
-  if (!data.owners.length) warnings.push({ code: 'OWNER_NO_MATCH', message: 'No implementation binding matched the requested design part.', next: [] });
+  if (!data.owners.length && !data.motion?.count) warnings.push({ code: 'OWNER_NO_MATCH', message: 'No implementation binding matched the requested design part.', next: [] });
   if (!values.json) for (const row of data.owners) log(`${row.source}${row.part ? `#${row.part}` : ''} [${row.matchKind}] ${row.evidence.map(e => e.detail.implementation).join(', ')}`);
   return { data, warnings };
 }
 
 export async function owner(config, values, { log = console.log, openIndex = openProjectIndex, launchBrowser = launch, environment = observationEnvironment } = {}) {
+  if (values.transition !== undefined) return transitionQuery(config,'owner',[],values,log);
   if (values.part !== undefined) return ownerPart(config, values, { log });
-  if (values.file === undefined) return (await import('./owner-search.mjs')).searchOwner(config, values, { log, openIndex, launchBrowser, environment });
+  if (values.file === undefined) {
+    const result=await (await import('./owner-search.mjs')).searchOwner(config, values, { log, openIndex, launchBrowser, environment });
+    if(values.token!==undefined){
+      tokenEdges(config,values,result.data);
+      if(result.data.motion?.count)result.warnings=result.warnings.filter(w=>w.code!=='OWNER_NO_MATCH');
+    }
+    return result;
+  }
   const { query, text } = await normalizeFileQuery(config, values);
   const data = { project: config.root, complete: false, query, region: null, owners: [], tokens: [], ambiguous: false, tokenAmbiguous: false, matchedImplementationFiles: [], mappingFindings: [],
     coverage: { discoveredSources: 0, builtSources: 0, requestedObservations: 0, completedObservations: 0, mappingState: 'absent', activeBindings: 0, excludedBindings: 0, domain: 'tsx' } };
@@ -79,11 +89,14 @@ export async function owner(config, values, { log = console.log, openIndex = ope
     const validated = await index.mappings({ map, mappingIndices, implementationSelection: files, onFinding: finding => { data.mappingFindings.push(finding); data.coverage.mappingState = 'stale'; } });
     data.mappingFindings = validated.findings;
     data.coverage.mappingState = !map.present ? 'absent' : validated.findings.length ? 'stale' : 'valid';
+    boundEdges(config,validated.transitionBindings,data,values.transitions);
     const active = validated.bindings.filter(binding => binding.active);
-    data.coverage.activeBindings = active.length; data.coverage.excludedBindings = validated.bindings.length - active.length;
+    const allBindings = [...validated.bindings, ...validated.transitionBindings];
+    const activeBindings = allBindings.filter(binding => binding.active);
+    data.coverage.activeBindings = activeBindings.length; data.coverage.excludedBindings = allBindings.length - activeBindings.length;
     if (!map.present) warn('OWNER_MAPPING_MISSING', 'Add implementation.json to declare implementation ownership, then validate it.');
     if (validated.findings.length) warn('OWNER_MAPPING_STALE', 'Repair the reported implementation mapping findings, then repeat the query.');
-    if ((query.line !== null || query.symbol !== null) && !active.some(binding => binding.implementation.symbol)) warn('OWNER_LOCATOR_UNMAPPED', 'Add or refine a symbol/anchor binding for this implementation region, then repeat the query.', true);
+    if ((query.line !== null || query.symbol !== null) && !activeBindings.some(binding => binding.implementation.symbol)) warn('OWNER_LOCATOR_UNMAPPED', 'Add or refine a symbol/anchor binding for this implementation region, then repeat the query.', true);
     const tasks = new Map();
     for (const binding of active) {
       const target = binding.design, key = JSON.stringify([target.source, target.part ?? null]), kind = bindingKind(binding.implementation, query), rank = fileRank(binding.implementation, kind);
@@ -175,11 +188,11 @@ export async function owner(config, values, { log = console.log, openIndex = ope
   data.tokens.sort((a, b) => compareNames(a.name, b.name));
   data.ambiguous = data.owners.length > 1 && compareRanks(data.owners[0].rank, data.owners[1].rank) === 0;
   if (data.ambiguous) warn('OWNER_AMBIGUOUS', 'Several owners share the best rank; narrow the file locator, text or theme before choosing an owner.', true);
-  if (!data.owners.length && !data.tokens.length) warn('OWNER_NO_MATCH', 'No ownership evidence matched. Validate current sources and add or refine an implementation mapping.');
+  if (!data.owners.length && !data.tokens.length && !data.motion?.count) warn('OWNER_NO_MATCH', 'No ownership evidence matched. Validate current sources and add or refine an implementation mapping.');
   if (!data.coverage.discoveredSources) warnings.push({ code: 'EMPTY_SELECTION', message: 'No TSX design sources were discovered.', next: [] });
   data.complete = true;
   if (!values.json) {
-    if (!data.owners.length) log('No ownership evidence matched.');
+    if (!data.owners.length && !data.motion?.count) log('No ownership evidence matched.');
     if (data.ambiguous) log('Multiple owners share the best rank.');
     for (const row of data.owners) log(`${row.source}${row.part ? `#${row.part}` : ''} [${row.matchKind}] ${[...new Set(row.frames.map(frame => frame.frame))].join(', ')}${row.tokens.length ? `; tokens: ${row.tokens.join(', ')}` : ''}`);
     for (const warning of warnings) log(`${warning.code}: ${warning.message}`);

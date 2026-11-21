@@ -15,13 +15,13 @@ const usage = {
   serve: '[--port=4310] [--state-dir=<path>] [--print-key | --rotate-key]',
   service: 'install|uninstall|status|logs|migrate [--state-dir=<path>] [--port=4310] [--public-origin=<origin>]',
   root: 'add <dir> [--depth=2] | remove <dir> | list | scan [dir] [--state-dir=<path>]',
-  migrate: '[project]', init: '', check: '[source...] [--read-only] [--impacted --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--state-dir=<path>] [--explain]]', render: '[source...] [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--base=<rev>] [--impacted [--state-dir=<path>] [--explain]]',
+  migrate: '[project]', init: '', check: '[source...] [--transitions] [--read-only] [--impacted --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--state-dir=<path>] [--explain]]', render: '[source...] [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--base=<rev>] [--impacted [--state-dir=<path>] [--explain]]',
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] | --all',
   diff: '[source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--impacted [--state-dir=<path>] [--explain]]',
   review: '--base=<rev> [--format=html|png] [--theme=system|light|dark] [--out=<file>] [--viewer-url=<project-url>] [--exact] [--json]',
-  owner: '(--file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --text=<text> [--contains] [--locale=<tag>] | --color=<css> | --token=<name> | --part=<source>[#<Export>]) [--theme=both|light|dark] [--state-dir=<path>] [--json]',
-  inspect: '[source] [--frame=<name>] [--theme=both|light|dark] [--part=<source>#<Export> | --element=<id> | --text=<text> [--contains]] [--depth=<n|all>] [--fields=<groups>] [--wrappers=semantic|all] [--expand] [--state-dir=<path>] [--json]',
-  impact: '(--source=<path>... [--part=<name>] | --token=<name>... | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --base=<rev> [--head=<rev>]) [--theme=both|light|dark] [--explain] [--state-dir=<path>] [--json]',
+  owner: '[--transitions] (--transition=<id> | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --text=<text> [--contains] [--locale=<tag>] | --color=<css> | --token=<name> | --part=<source>[#<Export>]) [--theme=both|light|dark] [--state-dir=<path>] [--json]',
+  inspect: '[--transition=<id> [--explain] | <source> --frame=<name> --transitions] [source] [--frame=<name>] [--theme=both|light|dark] [--part=<source>#<Export> | --element=<id> | --text=<text> [--contains]] [--depth=<n|all>] [--fields=<groups>] [--wrappers=semantic|all] [--expand] [--state-dir=<path>] [--json]',
+  impact: '[--transitions] (--source=<path>... [--part=<name>] | --token=<name>... | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --base=<rev> [--head=<rev>]) [--theme=both|light|dark] [--explain] [--state-dir=<path>] [--json]',
 };
 const details = {
   comments: 'List open project comment threads by default, or read, reply to or resolve a thread by number, #number or ID. Run from the project directory.',
@@ -56,7 +56,7 @@ export function parseCli(args) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' } };
   const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
-  const strings = { comments: ['status', 'source', 'frame', 'author', 'message', 'state-dir'], open: ['port', 'state-dir', ...locators], link: [...locators, 'comment'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir', 'public-origin'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['file', 'text', 'color', 'token', 'part', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
+  const strings = { comments: ['status', 'source', 'frame', 'author', 'message', 'state-dir'], open: ['port', 'state-dir', ...locators], link: [...locators, 'comment'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir', 'public-origin'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['transition','file', 'text', 'color', 'token', 'part', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['transition','frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'review') {
     for (const name of ['base', 'format', 'theme', 'out', 'viewer-url']) options[name] = { type: 'string' };
@@ -68,6 +68,8 @@ export function parseCli(args) {
   if (command === 'check') options['read-only'] = { type: 'boolean' };
   if (['render', 'check', 'diff'].includes(command)) { options.impacted = { type: 'boolean' }; options.explain = { type: 'boolean' }; }
   if (command === 'owner' || command === 'inspect') options.contains = { type: 'boolean' };
+  if (['inspect','owner','impact','check'].includes(command)) options.transitions = {type:'boolean'};
+  if (command === 'inspect') options.explain = {type:'boolean'};
   if (command === 'inspect') options.expand = { type: 'boolean' };
   if (command === 'impact') {
     options.explain = { type: 'boolean' };
@@ -100,6 +102,9 @@ export function parseCli(args) {
       for(const token of parsed.tokens)if(token.kind==='option'&&!['json','help','version'].includes(token.name)){
         if(seen.has(token.name))throw new CliError('USAGE_INVALID',`Do not repeat --${token.name}; run adg inspect --help.`);seen.add(token.name);
       }
+      if ((values.transition!==undefined && (positionals.length || Object.keys(values).some(k=>!['transition','json','theme','explain','state-dir'].includes(k)))) ||
+          (values.explain && !values.transition) || (values.transitions && (!values.frame || positionals.length!==1 || Object.keys(values).some(k=>!['frame','transitions','state-dir','json'].includes(k)))))
+        throw new CliError('USAGE_INVALID','Choose --transition=<id> or <source> --frame=<name> --transitions.');
       if(positionals.length>1 || strings.inspect.some(k=>values[k]!==undefined&&!values[k].trim()) ||
         ['part','element','text'].filter(k=>values[k]!==undefined).length>1 || values.contains!==undefined&&values.text===undefined ||
         values.theme!==undefined&&!['both','light','dark'].includes(values.theme) ||
@@ -121,12 +126,13 @@ export function parseCli(args) {
         values.line !== undefined && (!/^[1-9]\d*$/.test(values.line) || !Number.isSafeInteger(Number(values.line)))) throw new CliError('USAGE_INVALID', 'Choose one nonempty impact selector family and compatible options; run adg impact --help.');
     }
     if (command === 'owner') {
-      const kinds = ['file', 'text', 'color', 'token', 'part'].filter(key => values[key] !== undefined);
+      const kinds = ['file', 'text', 'color', 'token', 'part','transition'].filter(key => values[key] !== undefined);
       const seen = new Set();
       for (const token of parsed.tokens) if (token.kind === 'option' && !['json', 'help', 'version'].includes(token.name)) {
         if (seen.has(token.name)) throw new CliError('USAGE_INVALID', `Do not repeat --${token.name}; run adg owner --help.`);
         seen.add(token.name);
       }
+      if (values.transitions && !['token','file'].includes(kinds[0])) throw new CliError('USAGE_INVALID','Use --transitions with --file or --token.');
       if (positionals.length || kinds.length !== 1 || strings.owner.some(key => values[key] !== undefined && !values[key].trim()) ||
         values.theme !== undefined && !['both', 'light', 'dark'].includes(values.theme) ||
         (values.line !== undefined || values.symbol !== undefined) && kinds[0] !== 'file' ||

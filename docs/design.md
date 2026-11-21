@@ -10,7 +10,7 @@ ADG uses the Float direction: a dotted canvas fills the window, neutral rounded 
 
 `design/tokens.css` (mirrored byte-for-byte to `public/tokens.css`) defines light and dark tokens grouped under section comments (`Typography`, `Shape`, `Control sizing`, `Surfaces and borders`, `Text and accents`, `Elevation`) so the Tokens Board derives group titles directly from the stylesheet. Both themes render from the same frames.
 
-The review platform is macOS at 1440 × 900 (`en-US`, `UTC`), plus 390 × 844 phone forms for the resident hub home and project switcher. `adg.config.mjs` requires ADG `>=0.15.0` and enables `check.strictLayers` and `check.lifecycle`.
+The review platform is macOS at 1440 × 900 (`en-US`, `UTC`), plus 390 × 844 phone forms for the resident hub home and project switcher. `adg.config.mjs` requires ADG `>=0.16.0` and enables `check.strictLayers`, `check.lifecycle` and `check.strictMotion`.
 
 ## Motion adoption (proposed)
 
