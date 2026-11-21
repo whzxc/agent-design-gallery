@@ -6,16 +6,16 @@ Resolve the serving host, global installation and public endpoint through MAP be
 
 ## Pack and install
 
-From the repository root, inspect `git status --short` and the milestone commit. Ensure packaged files match that commit. If unrelated working-tree changes affect the package, pack a temporary export of the commit under `output/` using `git archive`; leave the working tree intact.
+From the repository root, inspect `git status --short` and the milestone commit. Record the installed artifact set before replacing it. Set `update_root` to the absolute path of `output/local-update/` in the maintainer's primary ADG checkout so delivery from different checkouts uses one store. Ensure packaged files match the milestone commit. If unrelated working-tree changes affect the package, set `update_dir` before using `git archive` to pack from a temporary export of the commit, then remove the export.
 
 ```sh
-update_dir="$PWD/output/local-update/$(git rev-parse --short HEAD)"
+update_dir="${update_root%/}/$(git rev-parse --short HEAD)"
 mkdir -p "$update_dir"
 npm pack --pack-destination "$update_dir"
 npm install --global "$update_dir"/whzxc-agent-design-gallery-*.tgz --prefer-offline --no-audit --no-fund
 ```
 
-Use the same tarball on the serving host when it differs from the development host. `npm pack` refreshes the packaged token stylesheet. Its file list must contain only `src/`, `public/`, package metadata, README and license. Keep local tarballs and any check output under ignored `output/`.
+Use the same tarball on the serving host when it differs from the development host. `npm pack` refreshes the packaged token stylesheet. Its file list must contain only `src/`, `public/`, package metadata, README and license.
 
 ## One-time service migration
 
@@ -72,4 +72,5 @@ origin, port and state directory when those options are omitted. `adg service st
 1. Confirm the installed runtime files match the milestone package. If the hub restarted, verify a new health ID at its direct-local `/api/health` endpoint and a running service state.
 2. Read the existing project list through the direct-local `/api/projects` endpoint. Fetch changed public shell resources through the deployed `/p/<slug>/` routes and compare their bytes with the package. The viewer HTML sets its base to `/p/<slug>/`. For a shared layout update, check each registered project route. Public data endpoints must still return 401 without a key.
 3. Reload a deployed viewer in IAB and confirm its designs finish loading and the changed behavior works. Use an existing authenticated session or the direct-local viewer served by the same hub; keep the public resource comparison in either case.
-4. Report the installed commit, endpoint result and checks actually run. Keep verification captures local. A documentation-only follow-up needs no reinstall or service restart.
+4. Report the installed commit, endpoint result and checks actually run. Include the current and previous successful artifact set paths in the delivery record under the task's run directory. If reinstalling the same set, carry forward the previous successful set from the last delivery record.
+5. After successful delivery verification, preview `update_root` and remove the superseded package sets from completed attempts, keeping the verified current and previous successful sets. Preserve active or pending-recovery sets. Move any verification evidence out of a superseded set before removing it.

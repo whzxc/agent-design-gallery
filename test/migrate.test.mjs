@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
+import { tmpdir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -14,9 +15,7 @@ import { service, renderLaunchAgent, SERVICE_LABEL } from '../src/service.mjs';
 const exec = promisify(execFile);
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url));
 async function temporary(t) {
-  const base = new URL('../output/adg-rename/tests/', import.meta.url);
-  await mkdir(base, { recursive: true });
-  const root = await mkdtemp(path.join(fileURLToPath(base), 'case-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'adg-migrate-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   return root;
 }

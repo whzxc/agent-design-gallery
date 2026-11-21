@@ -128,10 +128,10 @@ Further work should profile native SVG/canvas retention, visible vector decode c
 - `npm test` passes 97 tests in 21.21 seconds, within the previous 36-second budget. All fixture assertions remain; independent fixture pages run with concurrency two.
 - Final samples preserve the camera on save and report no page errors.
 
-Run the comparison from this repository against a disposable source copy:
+Run the comparison from this repository against a disposable source copy. Set `run_dir` to the absolute path of the task's run directory:
 
 ```sh
-node tooling/compare.mjs /path/to/snapshot/design output/comparison 3 --adg-baseline=/path/to/baseline-code --warm-restart
+node tooling/compare.mjs /path/to/snapshot/design "$run_dir/comparison" 3 --adg-baseline=/path/to/baseline-code --warm-restart
 ```
 
 Pass `--browse-only` to the comparison runner to measure navigation without interactions, saves or screenshots.
@@ -140,13 +140,11 @@ The runner derives an isolated design copy, uses separate preferences and free p
 
 The benchmark uses Fit all and an interior viewport zoom anchor, switches to the opposite theme, and waits for ADG readiness. Resource entries distinguish source/preview GETs from cache uploads. Metadata, image queues and cache writes settle before warm/restart samples and isolated save timing.
 
-Detailed commands and raw results are retained locally in `output/perf-round2/baseline.md`, `result.md` and `summary.json`. The local retention harness records server/driver process identities, worker statistics, current metadata coverage and renderer RSS. Copied acceptance assets and raw measurements stay under ignored `output/` and are excluded from the npm package.
+Detailed commands and raw results are retained locally in `output/perf-round2/baseline.md`, `result.md` and `summary.json`. The local retention harness records server/driver process identities, worker statistics, current metadata coverage and renderer RSS.
 
 ## Impact performance methodology
 
-For new impact material, retain workload identities, local machine paths, measured results, copied
-assets and traces under ignored `output/`. The following procedures use fictional examples; the
-agreed milestone 3 budgets and historical evidence above remain unchanged.
+Use the same `run_dir` for the following examples.
 
 ## Freeze the workload
 
@@ -166,7 +164,7 @@ Set workload-specific budgets before comparing results; they are not portable ti
 From the ADG repository, with fictional project/runtime exports:
 
 ```sh
-node tooling/compare.mjs /tmp/catalog-project output/performance/viewer 3 \
+node tooling/compare.mjs /tmp/catalog-project "$run_dir/viewer" 3 \
   --phases --scope=all --adg-baseline=/tmp/adg-baseline --no-screenshots
 ```
 
@@ -199,9 +197,9 @@ Prepare a frozen Git base and one working-tree edit per disposable copy. Fiction
 Run ordinary full and impacted diff on the same pair, with separate output directories:
 
 ```sh
-adg diff --base=HEAD --out-dir=output/performance/full --json
-adg diff --base=HEAD --impacted --out-dir=output/performance/selected --json
-adg render --base=HEAD --impacted --out-dir=output/performance/render --json
+adg diff --base=HEAD --out-dir="$run_dir/full" --json
+adg diff --base=HEAD --impacted --out-dir="$run_dir/selected" --json
+adg render --base=HEAD --impacted --out-dir="$run_dir/render" --json
 adg check --base=HEAD --impacted --read-only --json
 ```
 
@@ -244,8 +242,8 @@ partial for skipped evaluations.
 
 ## Retain evidence and close resources
 
-Retain raw command JSON, PNGs, geometry, traces, server logs and environment/sample details locally
-under `output/`. Inspect cache/worker counts and memory over repeated refreshes when relevant;
+Pass explicit destinations in `run_dir` to the measurement tools. Save push-gate logs, timing medians,
+raw samples and workload details there. Inspect cache/worker counts and memory over repeated refreshes when relevant;
 stable application caches alone do not establish stable native renderer memory. Benchmark processes
 must close their browsers, pages, servers and workers. Do not use a resident production hub or modify
 an original project to collect a sample. Package-content checks exclude all local evidence.

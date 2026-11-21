@@ -708,7 +708,7 @@ later capture skip; each consuming operation rebuilds and validates its own inpu
 ```sh
 adg diff --base=HEAD --impacted --json
 adg diff --base=HEAD --json
-adg diff modules/toolbar --base=HEAD~1 --frame=compact --out-dir=output/review --json
+adg diff modules/toolbar --base=HEAD~1 --frame=compact --out-dir=/path/to/run/review --json
 ```
 
 `diff` compares the source/frame union at a Git revision and in the current working tree.
@@ -835,7 +835,7 @@ the consumer's normal approval process.
 ```sh
 adg review --base=<rev> --json
 adg review --base=<rev> --format=png --json
-adg review --base=<rev> --theme=dark --out=output/design/review.html --viewer-url=https://gallery.example/p/project/
+adg review --base=<rev> --theme=dark --out=/path/to/run/review.html --viewer-url=https://gallery.example/p/project/
 ```
 
 Use the commit where the task started as `--base`. Share the artifact at `data.path`. HTML is the default and suits frame-by-frame review and approvals. The default path is `<configured output>/review.html` or `<configured output>/review.png`. A relative `--out` resolves from the project root and its extension must match the format. Both formats default to the macOS system theme or light on other platforms. Regenerate the report when its design inputs change.
@@ -949,7 +949,7 @@ ADG does not infer architecture layers or freshness from them.
 
 ```sh
 adg check arch/mechanisms/work.mmd --read-only
-adg render arch/mechanisms/work.mmd --theme=both --scale=2 --out-dir=output/arch --json
+adg render arch/mechanisms/work.mmd --theme=both --scale=2 --out-dir=/path/to/run/arch --json
 adg open . --asset=arch/mechanisms/work.mmd --frame=default
 adg link http://127.0.0.1:4310/p/example/ --asset=arch/mechanisms/work.mmd
 ```

@@ -316,7 +316,7 @@ usage warning without changing the exit.
 ```sh
 adg diff [source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json]
 adg diff --base=HEAD --json
-adg diff modules/toolbar --base=HEAD~1 --frame=compact --theme=both --out-dir=output/review --json
+adg diff modules/toolbar --base=HEAD~1 --frame=compact --theme=both --out-dir=/path/to/run/review --json
 ```
 
 The canonical identity is `diff`. The required nonempty `--base` resolves to a Git commit;

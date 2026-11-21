@@ -21,8 +21,8 @@ import { startHub } from '../src/hub.mjs';
 import { addRoot, listProjects } from '../src/hub/registry.mjs';
 const exec=promisify(execFile),asset='arch/mechanisms/work.mmd',cli=new URL('../src/cli.mjs',import.meta.url).pathname;
 const git=(c,...args)=>exec('git',['-c','user.name=ADG Test','-c','user.email=adg-test@example.invalid',...args],{cwd:c.root});
-async function fixture(t, directory=tmpdir()) {
-  const root=await realpath(await mkdtemp(path.join(directory,'adg-overlay-')));
+async function fixture(t) {
+  const root=await realpath(await mkdtemp(path.join(tmpdir(),'adg-overlay-')));
   await cp(new URL('../fixtures/arch-sample/',import.meta.url),root,{recursive:true});
   t.after(()=>rm(root,{recursive:true,force:true}));
   const c=await loadConfig(root);
@@ -144,9 +144,7 @@ test('overlay style combines phase fill and diff border and stamps labels and ar
 });
 
 test('base reads and discovery preserve source paths through a symlinked project root, including deletions',async t=>{
-  const directory=new URL('../output/arch-segment-b/',import.meta.url).pathname;
-  await mkdir(directory,{recursive:true});
-  const c=await fixture(t,directory),link=c.root+'-link';
+  const c=await fixture(t),link=c.root+'-link';
   await symlink(c.root,link);t.after(()=>rm(link,{force:true}));
   const linked=await loadConfig(link),file=path.join(link,asset),base=await resolveBase(linked,'HEAD');
   const original=await readBase(base,file);
