@@ -203,6 +203,7 @@ async function writePair(output, pair, thresholds, reviewImages, reviewFormat) {
       after: row.after ? { locale: row.after.locale ?? null, proposed: row.after.proposed ?? null, fixture: row.after.fixture ?? null, capture: row.after.capture ?? null } : null }, paths,
   };
   const pngSummary = reviewFormat === 'png';
+  const omitDifference = pngSummary || reviewFormat === 'embed';
   const shownInSummary = row.status === 'added' ||
     (row.status !== 'removed' && (row.previousSource || comparison.verdict === 'changed'));
   const embedCaptures = output || pngSummary;
@@ -210,7 +211,7 @@ async function writePair(output, pair, thresholds, reviewImages, reviewFormat) {
     reviewImages.set(comparison.id, {
       before: embedCaptures && pair.before ? `data:image/png;base64,${pair.before.png.toString('base64')}` : null,
       after: embedCaptures && pair.after ? `data:image/png;base64,${pair.after.png.toString('base64')}` : null,
-      difference: pngSummary ? null : `data:image/png;base64,${pair.difference.toString('base64')}`,
+      difference: omitDifference ? null : `data:image/png;base64,${pair.difference.toString('base64')}`,
     });
   }
   if (!directory) return comparison;

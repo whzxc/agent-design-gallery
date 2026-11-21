@@ -86,34 +86,45 @@ async function observeUnchanged(session, theme) {
   }
 }
 
+const maxEmbedCards = 8;
+
+function selectEmbedEntries(model, comparisons, groups) {
+  const byId = new Map([...model.sections.added, ...model.sections.changed].map(entry => [identity(entry), entry]));
+  const selected = [], seen = new Set();
+  const push = entry => {
+    if (!entry || selected.length >= maxEmbedCards) return;
+    const key = identity(entry);
+    if (seen.has(key)) return;
+    seen.add(key);
+    selected.push(entry);
+  };
+  for (const entry of model.sections.added) if (comparisons.get(identity(entry))?.proposed) push(entry);
+  for (const entry of model.sections.added) push(entry);
+  for (const entry of model.sections.changed) if (entry.change?.kind !== 'inherited') push(entry);
+  for (const group of groups ?? []) {
+    if (group.representative) push(byId.get(identity(group.representative)));
+    for (const outlier of group.outliers ?? []) push(byId.get(identity(outlier)));
+  }
+  return selected;
+}
+
 function buildHtmlReview(model, data, built, theme, locate, format = 'html') {
   const { compileFrame, assets } = compileSpecimens({ built, theme });
   const comparisons = new Map(data.comparisons.filter(row => row.theme === theme).map(row => [identity(row), row]));
   const allEntries = [...model.sections.added, ...model.sections.changed];
-  let selected = allEntries;
-  if (format === 'embed') {
-    const featured = new Set([
-      ...model.sections.added.map(identity),
-      ...model.sections.changed.filter(entry => entry.change?.kind !== 'inherited').map(identity),
-    ]);
-    for (const group of data.review.groups ?? []) {
-      if (group.representative) featured.add(identity(group.representative));
-      for (const outlier of group.outliers ?? []) featured.add(identity(outlier));
-    }
-    selected = allEntries.filter(entry => featured.has(identity(entry)));
-  }
-  const omittedInherited = allEntries.length - selected.length;
+  const selected = format === 'embed' ? selectEmbedEntries(model, comparisons, data.review.groups) : allEntries;
+  const omitted = allEntries.length - selected.length;
   const cards = selected.map((entry, index) => {
     const row = comparisons.get(identity(entry));
     const changed = entry.status === 'changed';
     const before = changed ? compileFrame(row.before, row.beforeSize, 'before') : null;
     const after = compileFrame(row.after, row.afterSize, 'after');
-    const difference = changed ? entry.themes.find(item => item.theme === theme)?.images.difference : null;
+    const difference = format === 'embed' ? null : (changed ? entry.themes.find(item => item.theme === theme)?.images.difference : null);
     return { index, source: entry.source, frame: entry.frame, status: entry.status, change: entry.change, origin: locate(entry),
       previousOrigin: entry.previousSource && locate(row.before), before, after, difference, differentPixels: row.pixels?.differentPixels,
       proposed: row?.proposed ?? null, note: row?.note?.after ?? row?.note?.before ?? null };
   });
-  const report = { title: model.label, theme, base: model.base.sha, head: model.current.head, counts: model.counts, cards, omittedInherited,
+  const report = { title: model.label, theme, base: model.base.sha, head: model.current.head, counts: model.counts, cards, omitted,
     groups: data.review.groups, removed: model.sections.removed.map(entry => ({ ...entry, origin: locate(entry, true) })),
     motion: model.motion, moved: model.movePairs.map(({ before, after }) => ({ before: locate(before, true), after: locate(after) })), failures: model.failures };
   return format === 'embed' ? reviewEmbedDocument(report, assets()) : reviewDocument(report, assets());

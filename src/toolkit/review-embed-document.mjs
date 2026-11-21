@@ -5,13 +5,13 @@ const short = revision => revision?.slice(0, 8) ?? 'Working';
 const cssText = value => value.replace(/<\/style/gi, '<\\/style');
 const safeJson = value => JSON.stringify(value).replaceAll('<', '\\u003c');
 
-function summaryLine(counts, omittedInherited) {
+function summaryLine(counts, omitted) {
   const parts = [];
   if (counts.added) parts.push(`${counts.added} added`);
   if (counts.changed) parts.push(`${counts.changed} changed`);
   if (counts.removed) parts.push(`${counts.removed} removed`);
   if (counts.moved) parts.push(`${counts.moved} moved`);
-  if (omittedInherited) parts.push(`${omittedInherited} inherited collapsed`);
+  if (omitted) parts.push(`${omitted} more in full HTML`);
   return parts.join(' · ') || 'No changes';
 }
 
@@ -38,12 +38,12 @@ function buildItems(cards, motion) {
 }
 
 export function reviewEmbedDocument(report, { properties, styles, templates }) {
-  const { title, theme, base, head, cards, counts, omittedInherited = 0, failures, motion } = report;
+  const { title, theme, base, head, cards, counts, omitted = 0, failures, motion } = report;
   const items = buildItems(cards, motion);
   const payload = {
     theme,
     counts,
-    omittedInherited,
+    omitted,
     items,
     cards: cards.map(card => ({
       index: card.index,
@@ -110,7 +110,7 @@ export function reviewEmbedDocument(report, { properties, styles, templates }) {
           <button type="button" data-theme-toggle="light" aria-pressed="${theme === 'light'}">Light</button>
           <button type="button" data-theme-toggle="dark" aria-pressed="${theme === 'dark'}">Dark</button>
         </div>
-        <span class="summary">${escape(summaryLine(counts, omittedInherited))}</span>
+        <span class="summary">${escape(summaryLine(counts, omitted))}</span>
       </div>
       <div class="revisions" title="${escape(title)}">
         <code title="Base ${escape(base)}">${escape(short(base))}</code>

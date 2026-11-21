@@ -179,6 +179,7 @@ export default () => [
   const embedHtml = await readFile(embed.path, 'utf8');
   assert.doesNotMatch(embedHtml, /(?:src|href)=["'](?:https?:|\/)/i);
   assert.doesNotMatch(embedHtml, /Content-Security-Policy/i);
+  assert.doesNotMatch(embedHtml, /<template id="difference-/i);
 
   stdout = '';
   const badOutCode = await main(['review', `--base=${baseSha}`, '--format=embed', '--out=bad.png', '--json'], project,
@@ -199,6 +200,7 @@ export default () => [
     assert.equal(await page.locator('[role="tab"]').count(), 2);
     await page.getByRole('tab', { name: /themed/i }).click();
     assert.equal(await page.locator('#foot-index').textContent(), '2 / 2');
+    assert.equal(await page.locator('.stage-pane').count(), 2);
     const darkBg = await page.evaluate(() => {
       const spec = document.querySelector('[data-side="after"] .specimen');
       return getComputedStyle(spec.shadowRoot.querySelector('[data-adg-frame] > div')).backgroundColor;
@@ -213,8 +215,14 @@ export default () => [
     });
     assert.equal(lightBg.theme, 'light');
     assert.notEqual(lightBg.bg, darkBg);
-    await page.getByRole('button', { name: /^Diff/ }).click();
-    assert.match(await page.locator('.stage-body img').getAttribute('src'), /^data:image\/png;base64,/);
+    await page.getByRole('button', { name: 'After', exact: true }).click();
+    assert.equal(await page.locator('.stage-pane').count(), 1);
+    assert.equal(await page.locator('.stage-pane').getAttribute('data-side'), 'after');
+    await page.getByRole('button', { name: 'Before', exact: true }).click();
+    assert.equal(await page.locator('.stage-pane').count(), 1);
+    assert.equal(await page.locator('.stage-pane').getAttribute('data-side'), 'before');
+    await page.getByRole('button', { name: 'Split', exact: true }).click();
+    assert.equal(await page.locator('.stage-pane').count(), 2);
     assert.deepEqual(errors, []);
     assert.deepEqual(network, []);
   } finally {
