@@ -197,32 +197,47 @@ export default () => [
     const embedHeight = await page.evaluate(() => document.getElementById('embed-root').getBoundingClientRect().height);
     assert.ok(embedHeight > 0 && embedHeight <= 450, `Expected compact embed height <= 450, got ${embedHeight}`);
     assert.equal(await page.locator('#embed-root').getAttribute('data-preview-theme'), 'dark');
-    assert.equal(await page.locator('[role="tab"]').count(), 2);
-    await page.getByRole('tab', { name: /themed/i }).click();
-    assert.equal(await page.locator('#foot-index').textContent(), '2 / 2');
-    assert.equal(await page.locator('.stage-pane').count(), 2);
-    const darkBg = await page.evaluate(() => {
-      const spec = document.querySelector('[data-side="after"] .specimen');
+    assert.equal(await page.locator('[data-embed-card]').count(), 2);
+    const themedCard = page.locator('[data-embed-card="1"]');
+    assert.equal(await themedCard.locator('.stage-pane').count(), 2);
+    const darkBg = await themedCard.evaluate(el => {
+      const spec = el.querySelector('[data-side="after"] .specimen');
       return getComputedStyle(spec.shadowRoot.querySelector('[data-adg-frame] > div')).backgroundColor;
     });
     assert.equal(darkBg, 'rgb(40, 24, 56)');
     await page.getByRole('button', { name: 'Light' }).click();
     assert.equal(await page.locator('#embed-root').getAttribute('data-preview-theme'), 'light');
-    const lightBg = await page.evaluate(() => {
-      const spec = document.querySelector('[data-side="after"] .specimen');
+    const lightBg = await themedCard.evaluate(el => {
+      const spec = el.querySelector('[data-side="after"] .specimen');
       const theme = spec.shadowRoot.querySelector('.review-root').getAttribute('data-theme');
       return { theme, bg: getComputedStyle(spec.shadowRoot.querySelector('[data-adg-frame] > div')).backgroundColor };
     });
     assert.equal(lightBg.theme, 'light');
     assert.notEqual(lightBg.bg, darkBg);
-    await page.getByRole('button', { name: 'After', exact: true }).click();
-    assert.equal(await page.locator('.stage-pane').count(), 1);
-    assert.equal(await page.locator('.stage-pane').getAttribute('data-side'), 'after');
-    await page.getByRole('button', { name: 'Before', exact: true }).click();
-    assert.equal(await page.locator('.stage-pane').count(), 1);
-    assert.equal(await page.locator('.stage-pane').getAttribute('data-side'), 'before');
-    await page.getByRole('button', { name: 'Split', exact: true }).click();
-    assert.equal(await page.locator('.stage-pane').count(), 2);
+
+    await themedCard.getByRole('button', { name: 'Slider', exact: true }).click();
+    await themedCard.locator('.slider-range').fill('25');
+    assert.equal(await themedCard.locator('.slider-wrap').evaluate(el => el.style.getPropertyValue('--split')), '25%');
+    await themedCard.getByRole('button', { name: 'After', exact: true }).click();
+    assert.equal(await themedCard.locator('.stage-pane').count(), 1);
+    assert.equal(await themedCard.locator('.stage-pane').getAttribute('data-side'), 'after');
+    await themedCard.getByRole('button', { name: 'Before', exact: true }).click();
+    assert.equal(await themedCard.locator('.stage-pane').count(), 1);
+    assert.equal(await themedCard.locator('.stage-pane').getAttribute('data-side'), 'before');
+    await themedCard.getByRole('button', { name: 'Split', exact: true }).click();
+    assert.equal(await themedCard.locator('.stage-pane').count(), 2);
+
+    await themedCard.getByRole('button', { name: /Enlarge/i }).first().click();
+    const zoom = page.locator('#embed-zoom');
+    assert.equal(await zoom.evaluate(el => el.open), true);
+    await zoom.getByRole('button', { name: 'Slider', exact: true }).click();
+    assert.equal(await zoom.locator('.slider-range').count(), 1);
+    await zoom.getByRole('button', { name: '100%', exact: true }).click();
+    assert.equal(await zoom.locator('#zoom-scale').textContent(), '100%');
+    await zoom.getByRole('button', { name: 'Dark', exact: true }).click();
+    assert.equal(await page.locator('#embed-root').getAttribute('data-preview-theme'), 'dark');
+    await zoom.getByRole('button', { name: /Close/i }).click();
+    assert.equal(await zoom.evaluate(el => el.open), false);
     assert.deepEqual(errors, []);
     assert.deepEqual(network, []);
   } finally {
