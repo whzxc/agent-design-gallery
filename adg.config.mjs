@@ -177,7 +177,7 @@ export default {
           return async()=>{try{await server.close();}finally{await rm(temporary,{recursive:true,force:true});}};
         }
         if (reviewFixtures.has(selectedFixture)) {
-          const close = await startReviewFixture(port, temporary);
+          const close = await startReviewFixture(port, temporary, selectedFixture);
           return async () => { try { await close(); } finally { await rm(temporary, { recursive: true, force: true }); } };
         }
         if (Object.hasOwn(hubFixtures, selectedFixture)) {

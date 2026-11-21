@@ -145,3 +145,17 @@ export function observeScene(stage, design, freeze = false) {
     return row;
   });
 }
+
+export async function readySceneResources(doc = document) {
+  await doc.fonts.ready;
+  await Promise.all([...doc.images].map(image => image.decode()));
+  const urls = new Set();
+  for (const element of doc.querySelectorAll('*')) {
+    for (const match of doc.defaultView.getComputedStyle(element).backgroundImage.matchAll(/url\(["']?(.+?)["']?\)/g)) urls.add(match[1]);
+  }
+  for (const element of doc.querySelectorAll('svg image')) {
+    const href = element.getAttribute('href') ?? element.getAttribute('xlink:href');
+    if (href) urls.add(href);
+  }
+  await Promise.all([...urls].map(async url => { const image = new doc.defaultView.Image(); image.src = url; await image.decode(); }));
+}

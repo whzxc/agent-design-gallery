@@ -63,6 +63,28 @@ export function ReviewFrameCard(fixture: Fixture) {
   </article>;
 }
 
+export function ReviewMotionCard() {
+  return <article class="rounded-panel border border-border bg-surface text-body leading-[1.5]">
+    <header class="flex items-center justify-between border-b border-border px-3 py-3">
+      <strong>Open details</strong><span>changed</span>
+    </header>
+    <div class="p-3"><code>open-details</code> · Direct declaration
+      <div class="grid grid-cols-2 gap-3">{['Before', 'After'].map((name, i) =>
+        <section key={name}>
+          <h4 class="mt-3 font-semibold">{name} · Open details</h4>
+          <div>Click “Details” · toggle · Current</div>
+          <code>design/components/details.tsx#closed → design/components/details.tsx#open</code>
+          <div>Focus · frame</div><div>{i ? '--fast · 80 ms' : '--details · 140 ms'}</div>
+          <div class="my-2 flex gap-2">{(i ? ['From 0 ms','40 ms','To 80 ms'] : ['From 0 ms','70 ms','100 ms','To 140 ms']).map((time, j) =>
+            <figure key={time} class="min-w-0 flex-1"><div class="h-20 bg-canvas p-2">Details{j ? 'Ready' : ''}</div>
+              <figcaption class="text-center text-caption">{time}</figcaption></figure>)}</div>
+          <div class="flex items-center gap-2"><Control>Play {name.toLowerCase()}</Control><Control>Preview {name.toLowerCase()}</Control>0 ms</div>
+        </section>)}</div>
+      <label class="mt-2 flex items-center gap-2">Seek both sides <input type="range" value="0" /></label>
+    </div>
+  </article>;
+}
+
 function SectionTitle({ title, count }: { title: string; count: number }) {
   return <header class="mb-[13px] flex items-baseline justify-between border-b border-border pb-[10px]">
     <h2 class="text-[22px] font-[650] leading-[1.5] tracking-tight">{title}</h2>
@@ -104,6 +126,7 @@ export default () => [
   <Frame name="review-header" width={1100}><div class="w-[1100px]"><ReviewHeader /></div></Frame>,
   <Frame name="review-frame-card-added" width={540}><div class="w-[540px]"><ReviewFrameCard {...addedFrame} /></div></Frame>,
   <Frame name="review-frame-card-changed" width={900}><div class="w-[900px]"><ReviewFrameCard {...changedFrame} /></div></Frame>,
+  <Frame name="review-motion-card" width={1100}><div class="w-[1100px]"><ReviewMotionCard /></div></Frame>,
   <Frame name="review-layout" width={1440} height={900}><div class="h-[900px] w-[1440px]"><ReviewLayout /></div></Frame>,
   <Frame name="review-zoom" width={1440} height={900}><div class="h-[900px] w-[1440px] p-[17px]"><ReviewZoom /></div></Frame>,
 ];

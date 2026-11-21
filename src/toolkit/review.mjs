@@ -12,6 +12,7 @@ import { diff } from './diff.mjs';
 import { installFramePrimitives } from './frame-primitives.mjs';
 import { impactRowKey, withImpacted } from './impact-selection.mjs';
 import { readGroups, relative } from './project.mjs';
+import { reviewEdgeCandidates, reviewMotion } from './review-motion.mjs';
 import { reviewDocument } from './review-document.mjs';
 import { observeFrame } from './review-observation.mjs';
 import { renderReviewSheet } from './review-sheet.mjs';
@@ -98,7 +99,7 @@ function buildHtmlReview(model, data, built, theme, locate) {
   });
   const report = { title: model.label, theme, base: model.base.sha, head: model.current.head, counts: model.counts, cards,
     groups: data.review.groups, removed: model.sections.removed.map(entry => ({ ...entry, origin: locate(entry, true) })),
-    moved: model.movePairs.map(({ before, after }) => ({ before: locate(before, true), after: locate(after) })), failures: model.failures };
+    motion: model.motion, moved: model.movePairs.map(({ before, after }) => ({ before: locate(before, true), after: locate(after) })), failures: model.failures };
   return reviewDocument(report, assets());
 }
 
@@ -118,6 +119,7 @@ export async function review(config, values, { log = console.log } = {}) {
   const options = { base: values.base, theme, impacted: true, json: true };
   let model, built, skipped, baseConfig;
   const { data, warnings } = await withImpacted(config, [], options, 'diff', async session => {
+    const candidates = reviewEdgeCandidates(session, theme);
     skipped = values.exact ? new Set() : await observeUnchanged(session, theme);
     const scheduled = session.scheduled;
     if (format === 'html') {
@@ -126,14 +128,19 @@ export async function review(config, values, { log = console.log } = {}) {
     }
     baseConfig = session.diffInputs.before.config;
     session.scheduled = (row, theme) => scheduled(row, theme) && !skipped.has(impactRowKey(row, theme));
+    let result;
     try {
-      return await diff(config, [], options, { session, reviewFormat: format, onReview: value => { model = value; } });
+      result = await diff(config, [], options, { session, reviewFormat: format, onReview: value => { model = value; } });
     } catch (error) {
       if (error.code !== 'DIFF_FAILED' && !error.partialSourceFailures) throw error;
-      return { data: error.data, warnings: error.warnings };
+      result = { data: error.data, warnings: error.warnings };
     } finally {
       session.scheduled = scheduled;
     }
+    model.motion = await reviewMotion(session, candidates, model, result.data.comparisons, theme);
+    if (model.failures.length) model.complete = false;
+    if (model.motion) result.data.motion = { count: model.motion.cards.length };
+    return result;
   });
 
   const temporary = `${destination}.${randomUUID()}.tmp`;
@@ -159,7 +166,14 @@ export async function review(config, values, { log = console.log } = {}) {
   const result = { path: destination, format, base: model.base, current: model.current, theme, counts: model.counts, groups: data.review.groups,
     mode: values.exact ? 'exact' : 'hybrid', structureMatches: skipped.size, pixelComparisons: data.summary.comparisons,
     complete: model.complete, failures: model.failures, bytes, generationMs: performance.now() - started };
-  if (!values.json) log(`${destination}\n${result.counts.added} added, ${result.counts.changed} changed, ${result.counts.removed} removed, ${result.counts.moved} moved.`);
+  if (model.motion) {
+    result.motion = { added: 0, changed: 0, removed: 0 };
+    for (const card of model.motion.cards) result.motion[card.kind]++;
+  }
+  if (!values.json) {
+    log(`${destination}\n${result.counts.added} added, ${result.counts.changed} changed, ${result.counts.removed} removed, ${result.counts.moved} moved.`);
+    if (result.motion) log(`Transitions: ${result.motion.added} added, ${result.motion.changed} changed, ${result.motion.removed} removed.`);
+  }
   if (!result.complete) throw new CliError('SOURCE_BUILD_FAILED', 'Review contains source build failures.', { data: result, warnings });
   return { data: result, warnings };
 }

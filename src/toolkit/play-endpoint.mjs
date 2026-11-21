@@ -19,13 +19,7 @@ export async function playEndpoint(config, root, source, frame, theme, build, so
   if (!endpoint) throw new CliError('FRAME_NOT_FOUND', 'Unknown playback frame.');
   const tokens = loadTokens(config),
     design = relative(config, root);
-  const edges = records.map(({ edge }) => {
-    const timings = Object.fromEntries(
-      timingRefs(edge).map(({ pointer, name, kind }) => [pointer, resolveMotionToken(tokens, theme, name, kind).value])
-    );
-    if (Object.values(timings).includes(null)) throw Error('Unresolved timing on ' + edge.id + '. Run adg check.');
-    return { ...edge, ...edgePresentation(edge, endpoint.html, design), authoredLabel: !!edge.label, timings };
-  });
+  const edges = records.map(({ edge }) => playbackEdge(edge, endpoint, tokens, theme, design));
   return {
     design,
     source,
@@ -36,4 +30,11 @@ export async function playEndpoint(config, root, source, frame, theme, build, so
     height: endpoint.height,
     edges
   };
+}
+
+export function playbackEdge(edge, endpoint, tokens, theme, design) {
+  const timings = Object.fromEntries(timingRefs(edge).map(({ pointer, name, kind }) =>
+    [pointer, resolveMotionToken(tokens, theme, name, kind).value]));
+  if (Object.values(timings).includes(null)) throw Error('Unresolved timing on ' + edge.id + '. Run adg check.');
+  return { ...edge, ...edgePresentation(edge, endpoint.html, design), authoredLabel: !!edge.label, timings };
 }

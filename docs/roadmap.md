@@ -101,7 +101,8 @@ See the [transition contract](design-toolkit.md#frame-transitions), [ownership](
 
 1. **Author and check (done).** Read versioned sidecars, resolve the endpoint graph, identities and motion tokens, bind current edges and diagnose invalid or unsupported declarations. Deliver scoped check, inspect, owner and impact JSON and measure default responses on ARC.
 2. **Play on a board (done).** Start at a specimen caption, the Float toolbar or the Playable filter. A flow rail names each action and groups its gestures. A transition inspector provides seekable FLIP and fades, replay, interruption, focus and reduced motion in one sandboxed document. ADG’s switcher edges and playback controls are the first consumer.
-3. **Review and adopt.** Play added, changed and removed edges offline, with deterministic seek samples and motion-only Git changes. Exercise current dialog/panel fades and centered replacement, then review proposed two-sided and cross-slot fades; identify implementation gaps separately.
+3. **Offline review (ADG done).** Review added, removed and changed edge IDs with revision-local playback, normalized seek, deterministic filmstrips and a compact motion receipt. The project switcher exercises duration and action-label changes with identical endpoint paint.
+   **ARC adoption for round 3 (pending).** Author and bind current dialog/panel entry and exit and centered replacement, including trigger history, focus and reduced motion. Supply stable slot keys, named anchors, timing tokens and reachable endpoint frames. Use the offline review and filmstrips for proposed two-sided and cross-slot fades, then graduate each proposal with its implementation.
 
 ## 8. Review and architecture
 

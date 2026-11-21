@@ -152,7 +152,7 @@ A source describes structure, not coordinates. Write it the way the UI is built.
 
 ## Frame transitions
 
-The toolkit validates authored edges and exposes them to agent queries. A selected specimen can play its outgoing edges on the board. Offline motion review is scheduled for round 3.
+The toolkit validates authored edges and exposes them to agent queries. A selected specimen can play its outgoing edges on the board. Standalone Git reviews include offline playback and sampled filmstrips for changed edges.
 
 A source can own a sibling `<stem>.motion.json` (including `index.motion.json` for a feature folder). Version 1 contains an ordered `edges` array. Each edge has a stable project-unique kebab-case `id`. Its owner is the adjacent configured TSX frame source. The edge list is declarative JSON with no expression evaluation. Both endpoints are exact `{source,frame}` references with project-root-relative POSIX paths including the extension, under the same project and Git revision. The `from` source must be the owner. A UX flow is the directed graph of these references. A reverse action needs its own edge, trigger, timing and focus. Layer admission and retirement follow the [asset rules](asset-rules.md#transition-ownership-and-lifecycle).
 
@@ -682,7 +682,7 @@ The hybrid pass uses impact proofs first, then compares frame dimensions, text, 
 
 Source build failures are listed by source and side. The generated artifact includes the available results and the command exits 2. The [CLI contract](agent-interface.md#review) defines result fields.
 
-### Transition changes (proposed)
+### Transition changes
 
 A motion-only edit can leave both endpoint images byte-identical. Review indexes edges by stable ID on each revision before applying static-frame skip proofs. Compare normalized edge data, status, referenced token values, endpoint paint/boxes and match identities in the selected theme. Distinguish direct edits from inherited endpoint/token effects and coalesce causes per ID. Keep removed edges from the base, additions from the head, and changed edges from both. Sort by owner path then edge ID. Keep moved references under the same ID when an established frame move explains the path change.
 

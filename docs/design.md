@@ -23,7 +23,7 @@ Sources follow strict downward layer order (`components` → `modules` → `surf
 - `design/components/`: shared controls and containers (`Button`, `IconButton`, `Field`, `TreeRow`, `MenuItem`, `CommentPin`, `Canvas`, `Panel`, `Toolbar`, `Separator`, `Tooltip`).
 - `design/modules/`: feature compositions and states:
   - Viewer: live Board View (`BoardChapter`, `BoardSection`, `SpecimenWell`, `Minimap`), scope tabs and contents sidebar (`ScopeTabs`, `ScopeRow`, `Contents`), top and bottom toolbars (`ViewerBars`, `ViewerTools`, `ZoomBar`), popovers (`Menu`), selection details (`Inspector`), comment composer/thread/preview/panel (`CommentComposer`, `CommentThread`, `CommentPreview`, `CommentsPanel`), keyboard shortcuts (`Shortcuts`, including `C` and `⇧C`), and token views (`TokenBoardPreview`, `TokenCatalog`).
-  - Standalone review report (`ReviewHeader`, `ReviewFrameCard`, `ReviewLayout`, `ReviewZoom`).
+  - Standalone review report (`ReviewHeader`, `ReviewFrameCard`, `ReviewMotionCard`, `ReviewLayout`, `ReviewZoom`).
   - Project access: resident hub picker and popover (`ProjectPicker`, `SwitcherMenu`, `Switcher`), hub home (`HubBar`, `HubHeading`, `Rescan`, `ProjectList`, `LiveInstances`, `HubEmpty`), and 401 access card (`AccessState` with inline key/`?key=` URL entry, `Unlock` submit, inline rejection error and `adg serve --print-key` hint).
 - `design/surfaces/`: full layouts for `canvas`, `tokens`, `inspector`, `review`, `hub-home`, `hub-switcher` and `hub-access`, bound as whole sources with `fixture` and `capture` metadata.
 

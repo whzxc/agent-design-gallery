@@ -1,3 +1,4 @@
+import { motionCard, motionStyle } from './review-motion-card.mjs';
 import { renderReviewFailures } from './diff-document.mjs';
 import { browserTask, readyResources } from './browser.mjs';
 
@@ -19,7 +20,8 @@ export function reviewSheetHtml(review, theme, frameOrder = [], designDirs = { b
   const inherited = groups.flatMap(group => [group.representative, ...group.outliers]);
   const [firstAdded, ...otherAdded] = added;
   const [firstDirect, ...otherDirect] = direct;
-  const priority = new Map([firstAdded, firstDirect, ...representativeByFrame.keys(), ...otherAdded, ...otherDirect,
+  const motion = review.motion?.cards ?? [];
+  const priority = new Map([firstAdded, firstDirect, ...motion, ...representativeByFrame.keys(), ...otherAdded, ...otherDirect,
     ...outliers].filter(Boolean).slice(0, 12).map((entry, index) => [entry, index]));
   const name = (entry, dir) => {
     const source = dir && entry.source.startsWith(`${dir}/`) ? entry.source.slice(dir.length + 1) : entry.source;
@@ -44,8 +46,9 @@ export function reviewSheetHtml(review, theme, frameOrder = [], designDirs = { b
   };
   const section = (kind, label, entries, render, list = 'div') => entries.length ?
     `<section class="${kind}"><h2>${label}</h2><${list} class="cells">${entries.map(render).join('')}</${list}></section>` : '';
-  const total = added.length + review.sections.changed.length + removed.length + moved.length;
-  const more = added.length + review.sections.changed.length - priority.size;
+  const total = added.length + review.sections.changed.length + removed.length + moved.length + motion.length;
+  const more = added.length + review.sections.changed.length + motion.length - priority.size;
+  const omittedMotion = motion.filter(entry => !priority.has(entry)).length;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(review.label)}</title>
 <style>
 :root { color-scheme:light; --canvas:#f5f5f3; --text:#20211f; --muted:#575953; --border:#d0d1cc; }
@@ -78,15 +81,17 @@ code { font-family:ui-monospace,Menlo,Consolas,monospace; overflow-wrap:anywhere
 .arrow { color:var(--muted); flex:none; font-size:20px; line-height:1; }
 img { display:block; max-width:100%; height:auto; max-height:480px; object-fit:contain; object-position:left top; }
 footer { margin-top:12px; color:var(--muted); }
-</style></head><body data-theme="${escapeHtml(theme)}">
+${motion.length ? motionStyle : ''}</style></head><body data-theme="${escapeHtml(theme)}">
 <header><h1>${escapeHtml(review.label)}</h1>${renderReviewFailures(review.failures)}</header>
 ${total || review.failures.length ? '' : '<p>No design changes.</p>'}
 ${section('added', 'Added', added.filter(entry => priority.has(entry)), card)}
 ${section('changed', 'Direct changes', direct.filter(entry => priority.has(entry)), card)}
 ${section('changed', 'Inherited changes', inherited.filter(entry => priority.has(entry)), card)}
+${section('changed', 'Transition changes', motion.filter(e => priority.has(e)), e =>
+  `<div data-priority="${priority.get(e)}">${motionCard(e, priority.get(e), review.motion.assets)}</div>`)}
 ${section('removed', 'Removed', removed, entry => `<li data-list-entry>${name(entry, designDirs.before)}</li>`, 'ul')}
 ${section('moved', 'Moved', moved, ({ before, after }) => `<li data-list-entry>${name(before, designDirs.before)} → ${name(after, designDirs.after)}</li>`, 'ul')}
-<footer data-more="${more}"${more ? '' : ' hidden'}>${more ? `+${more} more in the full review` : ''}</footer>
+<footer data-motion-more="${omittedMotion}" data-more="${more}"${more ? '' : ' hidden'}>${more ? `+${more} more in the full review${omittedMotion ? ' · ' + omittedMotion + ' transition cards omitted' : ''}` : ''}</footer>
 </body></html>`;
 }
 
@@ -101,14 +106,15 @@ export async function renderReviewSheet(browser, review, theme, file, frameOrder
         const listEntries = [...document.querySelectorAll('[data-list-entry]')].reverse();
         const cells = [...document.querySelectorAll('[data-priority]')]
           .sort((a, b) => Number(b.dataset.priority) - Number(a.dataset.priority));
-        let more = Number(footer.dataset.more);
+        let more = Number(footer.dataset.more), omittedMotion = Number(footer.dataset.motionMore);
         for (const entry of [...listEntries, ...cells]) {
           if (document.body.getBoundingClientRect().height <= 4000) break;
           const grid = entry.parentElement;
           entry.remove();
           if (!grid.childElementCount) grid.closest('section').remove();
           more++;
-          footer.textContent = `+${more} more in the full review`;
+          if (entry.querySelector('[data-motion]')) omittedMotion++;
+          footer.textContent = `+${more} more in the full review` + (omittedMotion ? ` · ${omittedMotion} transition cards omitted` : '');
           footer.hidden = false;
         }
       });

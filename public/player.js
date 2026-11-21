@@ -2,7 +2,7 @@ import { icon } from './icons.js';
 import { dataFetch } from './auth.js';
 import { candidates } from './motion-identity.js';
 import { createStage, mountScene, observeScene } from './motion-scene.js';
-import { preparePaint } from './motion-paint.js';
+import { preparePaint, playTimeline } from './motion-paint.js';
 
 let preference = sessionStorage.getItem('adg-player-reduced') ?? 'system';
 const exact = (rows, target) => {
@@ -56,7 +56,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     active = null,
     last = null,
     busy = true,
-    raf = 0,
+    cancelClock,
     run = false,
     progress = 0,
     speed = 1,
@@ -66,7 +66,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     overlay;
   const reduced = () => preference === 'on' || (preference === 'system' && media.matches);
   function stop() {
-    cancelAnimationFrame(raf);
+    cancelClock?.();
     run = false;
   }
   function exit() {
@@ -327,18 +327,12 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     }
     stop();
     run = true;
-    let before = performance.now();
-    function tick(now) {
-      if (!run) return;
-      progress = Math.min(1, progress + ((now - before) * speed) / active.paint.duration);
-      before = now;
-      active.paint.seek(progress);
-      clock();
-      if (progress === 1) commit();
-      else raf = requestAnimationFrame(tick);
-    }
     update();
-    raf = requestAnimationFrame(tick);
+    cancelClock = playTimeline(active.paint.duration, progress, speed, p => {
+      progress = p;
+      active.paint.seek(p);
+      clock();
+    }, commit);
   }
   async function begin(edge, seek = null, restore = null) {
     busy = true;
@@ -474,7 +468,8 @@ export async function openPlayer({ source, frame, theme, invoker }) {
         button.textContent = value + '×';
         button.onclick = () => {
           speed = Number(value);
-          update();
+          if (run) play();
+          else update();
         };
       } else {
         button.dataset.reduce = value;

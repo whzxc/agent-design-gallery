@@ -23,19 +23,7 @@ export async function loadFrame(page, frame, theme = 'light') {
   });
 }
 
-export async function readyResources() {
-  await document.fonts.ready;
-  await Promise.all([...document.images].map(image => image.decode()));
-  const urls = new Set();
-  for (const element of document.querySelectorAll('*')) {
-    for (const match of getComputedStyle(element).backgroundImage.matchAll(/url\(["']?(.+?)["']?\)/g)) urls.add(match[1]);
-  }
-  for (const element of document.querySelectorAll('svg image')) {
-    const href = element.getAttribute('href') ?? element.getAttribute('xlink:href');
-    if (href) urls.add(href);
-  }
-  await Promise.all([...urls].map(async url => { const image = new Image(); image.src = url; await image.decode(); }));
-}
+export { readySceneResources as readyResources } from '../../public/motion-scene.js';
 
 /** Classify Playwright execution failures where the browser's connection is observable. */
 export async function browserTask(browser, work) {

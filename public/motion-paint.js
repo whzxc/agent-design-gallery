@@ -13,6 +13,7 @@ function unique(rows, target) {
 export function preparePaint(stage, from, to, edge) {
   const doc = stage.ownerDocument,
     tracks = [],
+    boundaries = [],
     clocks = new Map(),
     oldClaim = new Set(),
     newClaim = new Set();
@@ -65,10 +66,11 @@ export function preparePaint(stage, from, to, edge) {
       }
     });
     start += length;
+    boundaries.push(start);
   });
   total = start;
   const excluded = { from: covered(from, subtrees.from), to: covered(to, subtrees.to) };
-  const pairs = matchRoots(from, to, excluded).pairs;
+  const { pairs, ambiguous } = matchRoots(from, to, excluded);
   function implicit(left, right, mode) {
     add(left, right, mode, properties, defaultTime);
     if (
@@ -247,6 +249,11 @@ export function preparePaint(stage, from, to, edge) {
   }
   return {
     duration: total,
+    boundaries,
+    fallback: [
+      ...(tracks.some(t => t.mode === 'match' && t.flat) ? ['Opacity fallback for clipped or degenerate geometry'] : []),
+      ...(ambiguous.length ? [ambiguous.length + ' ambiguous match groups fade independently'] : [])
+    ].join(' · ') || null,
     seek(fraction) {
       const ms = fraction * total;
       stage.style.opacity = fraction === 1 ? original : '0';
@@ -303,4 +310,18 @@ export function preparePaint(stage, from, to, edge) {
       for (const a of clocks.values()) a.cancel();
     }
   };
+}
+
+// A caller owns the clock. Painting always seeks the frozen pair by absolute progress.
+export function playTimeline(duration, initial, speed, draw, finish) {
+  const origin = performance.now();
+  let raf;
+  function tick(now) {
+    const p = Math.min(1, initial + Math.max(0, now - origin) * speed / duration);
+    draw(p);
+    if (p === 1) finish();
+    else raf = requestAnimationFrame(tick);
+  }
+  raf = requestAnimationFrame(tick);
+  return () => cancelAnimationFrame(raf);
 }
