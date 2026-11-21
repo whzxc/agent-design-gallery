@@ -100,7 +100,7 @@ that loaded slowly.
 See the [transition contract](design-toolkit.md#frame-transitions), [ownership](asset-rules.md#transition-ownership-and-lifecycle) and [agent queries](agent-interface.md#frame-transition-queries) for round 1. ARC's layer slots pilot the motion vocabulary. ADG's project switcher supplies the small, replayable viewer case.
 
 1. **Author and check (done).** Read versioned sidecars, resolve the endpoint graph, identities and motion tokens, bind current edges and diagnose invalid or unsupported declarations. Deliver scoped check, inspect, owner and impact JSON and measure default responses on ARC.
-2. **Play on a board.** Deliver the Float control bar, input routing, one sandboxed document, seekable FLIP and fades, interruption, focus, reduced motion and a keyboard-accessible route through every outgoing edge. Sync ADG's own switcher and player design sources under implement-first.
+2. **Play on a board (done).** The viewer provides the Float control bar, input routing, one sandboxed document, seekable FLIP and fades, interruption, focus, reduced motion and a keyboard-accessible route through every outgoing edge. ADG’s switcher edges and playback controls are the first consumer.
 3. **Review and adopt.** Play added, changed and removed edges offline, with deterministic seek samples and motion-only Git changes. Exercise current dialog/panel fades and centered replacement, then review proposed two-sided and cross-slot fades; identify implementation gaps separately.
 
 ## 8. Review and architecture

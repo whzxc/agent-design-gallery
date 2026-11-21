@@ -14,6 +14,8 @@ export const viewerFiles = {
   '/relationships.js': 'relationships.js', '/selection.js': 'selection.js', '/style.css': 'style.css', '/tokens.css': 'tokens.css',
   '/token-catalog.js': 'token-catalog.js',
   '/comments.js': 'comments.js', '/comments.css': 'comments.css', '/comment-anchors.js': 'comment-anchors.js', '/context-menu.js': 'context-menu.js',
+  '/player.js': 'player.js', '/player.css': 'player.css', '/motion-identity.js': 'motion-identity.js',
+  '/motion-scene.js': 'motion-scene.js', '/motion-paint.js': 'motion-paint.js',
   '/view-route.js': 'view-route.js',
 };
 export const viewerFile = pathname => isViewPath(pathname) ? 'index.html' : viewerFiles[pathname];

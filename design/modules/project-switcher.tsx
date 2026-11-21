@@ -10,6 +10,7 @@ export function ProjectPicker({ current, kind, open = false, width = 220 }: any)
   return (
     <div
       class={open ? 'rounded-field outline outline-accent -outline-offset-1' : ''}
+      role="button" tabindex="0" data-adg-id="picker"
       aria-expanded={open ? 'true' : 'false'}
       aria-label={current.name}
     >
@@ -44,7 +45,7 @@ function SwitcherRow({ item, current, kind }: any) {
       {content}
     </div>
   ) : (
-    <a class={classes} href={`/${kind === 'instance' ? 'i' : 'p'}/${item.id}/`}>
+    <a class={classes} data-adg-id={selected ? 'current-destination' : undefined} href={`/${kind === 'instance' ? 'i' : 'p'}/${item.id}/`}>
       {content}
     </a>
   );
@@ -64,7 +65,7 @@ export function SwitcherMenu({
   current,
   search = false,
   empty = false,
-  query = 'zzz',
+  query = 'z',
   width = 360,
 }: {
   current: any;
@@ -81,13 +82,13 @@ export function SwitcherMenu({
       <div class="flex flex-col gap-1 p-[6px]">
         <a href="/" class="flex items-center pr-[10px]">
           <span class="flex-1">
-            <MenuItem label={copy.home} />
+            <MenuItem key="home" label={copy.home} />
           </span>
           <Icon name="arrow-up-left" size={14} class="text-text-tertiary" />
         </a>
         <div class="my-1 h-px bg-border" />
-        <div class="px-1 pb-1">
-          <Field form={activeSearch ? 'search-active' : 'search'} label={searchLabel} meta="" width={width - 20} />
+        <div role="searchbox" aria-label="Find project or instance" tabindex="0" data-adg-id="search" class="px-1 pb-1">
+          <Field clearAnchor={empty ? 'clear-search' : undefined} form={activeSearch ? 'search-active' : 'search'} label={searchLabel} meta="" width={width - 20} />
         </div>
         {empty ? (
           <p class="px-[10px] py-3 text-body text-text-secondary">{copy.emptyMatch}</p>
@@ -95,16 +96,16 @@ export function SwitcherMenu({
           <>
             {!search && (
               <>
-                <MenuItem form="label" label={copy.projects} />
+                <MenuItem key="projects" form="label" label={copy.projects} />
                 {projects.map(item => (
-                  <SwitcherRow item={item} current={current} kind="project" />
+                  <SwitcherRow key={item.id} item={item} current={current} kind="project" />
                 ))}
                 <div class="my-1 h-px bg-border" />
               </>
             )}
-            <MenuItem form="label" label={copy.live} />
+            <MenuItem key="instances" form="label" label={copy.live} />
             {(search ? instances.slice(0, 1) : instances).map(item => (
-              <SwitcherRow item={item} current={current} kind="instance" />
+              <SwitcherRow key={item.id} item={item} current={current} kind="instance" />
             ))}
           </>
         )}

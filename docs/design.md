@@ -2,7 +2,7 @@
 
 [Asset rules](asset-rules.md) · [Design toolkit](design-toolkit.md) · [Architecture](architecture.md)
 
-This document records ADG's visual direction, declared forms, artwork budget, open proposals, deliberate exceptions and remaining gaps. Exact implementation counterparts live in `design/implementation.json` (version 1); this document keeps no counterpart rows or status ladder.
+This document records ADG's visual direction, declared forms, artwork budget, open proposals, deliberate exceptions and remaining gaps. Exact implementation counterparts live in `design/implementation.json` (version 2); this document keeps no counterpart rows or status ladder.
 
 ## Direction and tokens
 
@@ -12,11 +12,11 @@ ADG uses the Float direction: a dotted canvas fills the window, neutral rounded 
 
 The review platform is macOS at 1440 × 900 (`en-US`, `UTC`), plus 390 × 844 phone forms for the resident hub home and project switcher. `adg.config.mjs` requires ADG `>=0.16.0` and enables `check.strictLayers`, `check.lifecycle` and `check.strictMotion`.
 
-## Motion adoption (proposed)
+## Motion adoption
 
-Start with the project switcher's picker, open menu and filtered empty state. Keep its frames static and author edges when the player lands. The player extends the existing Float toolbar and reuses its controls, selection treatment and keyboard navigation. Implement inside that direction and sync the player forms in the same round. A separate visual proposal would be warranted by a change of direction; these controls fit the current one. See the [board playback contract](design-toolkit.md#board-playback).
+Select the project switcher's `project-picker` form and choose **Play**. Its graph connects the picker, open popover and empty search result. Entering `z` in the search specimen represents the filter action. Clearing, clicking the picker again, and Escape follow the real switcher's handlers. JSX keys distinguish Home, the two section labels and the project/instance rows. Behavior bindings live beside the existing visual bindings in the v2 implementation map.
 
-The contract probe used the built `project-picker`, `switcher-open` and `switcher-empty` frames at `e1083b5`. Opening paired both origin roots with two of eleven destination roots. Filtering paired seven of eight destination roots from eleven origin roots. The three old `MenuItem` instances shared an owner; one remained. A build-only variant keyed Home and the two section headings by role, pairing all eight destination roots. Reuse JSX keys for this adoption.
+The floating Play control and dock use the existing Float controls, focus ring and surface tokens. The `viewer-tools-play`, `player-ready` and `player-paused` forms in `view-controls.tsx` document entry and playback. The viewer owns the controls and focus history. See [board playback](design-toolkit.md#board-playback).
 
 ## Layers and declared forms
 

@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "edges": [
+    {
+      "id": "open-project-switcher",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
+      "trigger": {"on": "click", "target": {"anchor": "picker"}},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor": "current-destination"}},
+      "rememberTrigger": true
+    },
+    {
+      "id": "open-project-switcher-down",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
+      "trigger": {"on": "key", "target": {"anchor": "picker"}, "key": "ArrowDown"},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor": "current-destination"}},
+      "rememberTrigger": true
+    },
+    {
+      "id": "open-project-switcher-up",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
+      "trigger": {"on": "key", "target": {"anchor": "picker"}, "key": "ArrowUp"},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor": "current-destination"}},
+      "rememberTrigger": true
+    },
+    {
+      "id": "filter-projects",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty"},
+      "trigger": {"on": "key", "target": {"anchor": "search"}, "key": "z"},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor": "search"}}
+    },
+    {
+      "id": "clear-project-filter",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
+      "trigger": {"on": "click", "target": {"anchor": "clear-search"}},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor": "search"}}
+    },
+    {
+      "id": "dismiss-switcher",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
+      "trigger": {"on": "key", "target": {"frame": true}, "key": "Escape"},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": "restore-trigger"
+    },
+    {
+      "id": "toggle-switcher",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
+      "trigger": {"on": "click", "target": {"anchor": "picker"}},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": "restore-trigger"
+    },
+    {
+      "id": "dismiss-switcher-filtered",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
+      "trigger": {"on": "key", "target": {"frame": true}, "key": "Escape"},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": "restore-trigger"
+    },
+    {
+      "id": "toggle-switcher-filtered",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
+      "trigger": {"on": "click", "target": {"anchor": "picker"}},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": "restore-trigger"
+    }
+  ]
+}

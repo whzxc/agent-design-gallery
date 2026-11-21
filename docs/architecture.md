@@ -18,6 +18,8 @@ The server uses `src/toolkit/build-store.mjs` for TSX builds. Each source has a 
 
 `src/viewer-cache.mjs` stores measured metadata and ready-cropped SVGs under the server's state directory, separate from design sources. Its metadata LRU is 32 MiB; its disk LRU is 256 MiB with at most 2,048 records. Manifest references refresh LRU recency so unchanged current sources stay cached while old revisions are evicted. The initial manifest supplies measured metadata for the requested theme; subsequent manifests carry source hashes, metadata references and cached preview IDs. The compact source response carries frame HTML and one shared stylesheet, with no second copy of every full frame document. Relationships use the cached source graph. Cache writes persist geometry and generated cropped previews once; the browser does not upload a second full-source SVG.
 
+Board specimens retain their atlas previews. Play loads a separate viewer module on activation and reuses one script-disabled, same-origin sandbox for the session. The parent installs sanitized static markup in that document, owns its timeline and commits focus. Old paint uses resolved styles captured before swapping endpoints. Exit disposes the player and returns to the still-mounted board.
+
 The browser prioritizes preview work by viewport proximity and defers new preparation/decode work during camera gestures. It first uses ready-cropped persistent SVGs; a missing or evicted crop lazily rebuilds only its owning source. Its prepared-source LRU is 64 MiB and shares identical stylesheet text while restoring the exact stylesheet for individual crops. The existing offscreen preview LRU evicts obsolete output hashes and themes while retaining current visible previews. No alternative far-zoom representation is used.
 
 Local legacy SVG references are embedded recursively and retain their dependency invalidation behavior. An update sends an SSE revision after invalidation, before any scoped rebuild. The camera belongs to the directory and scope and survives refresh. Source completion order does not change the final chapter order or column assignment.
@@ -33,6 +35,7 @@ The viewer shell sets the base URL to the direct viewer, project, or live instan
 | Route | Purpose |
 | --- | --- |
 | `GET manifest?scope=...&context=...&theme=...` | Catalog for `default`, `all`, `layer:<name>`, `group:<name>` or `asset:<path>`, with the resolved scope and layer list. An omitted scope returns the full catalog for tooling. `metadata=1` includes measured geometry for the requested theme. `initial=1` honors the persisted theme. |
+| `GET api/play?source=<design-path>&frame=<name>` | Selected-frame eligibility. With `scene=1&theme=light\|dark`, return that endpoint and its outgoing edges with resolved timing tokens. Both direct and hub routes require project-data access. |
 | `GET asset/<source>` | Compact TSX `{hash,frames,css,imports,component}` or a legacy SVG. `frame=<name>` returns only the named TSX frame. This variant has a distinct ETag and uses session-local browser metadata and previews. |
 | `GET metadata/<hash>?theme=...&context=...` | One cached geometry record and available crop IDs. |
 | `POST metadata/<hash>?theme=...&context=...` | Persist browser-measured geometry. |

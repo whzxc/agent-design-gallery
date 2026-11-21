@@ -9,6 +9,10 @@
   --text-meta: 12px;
   --text-caption: 11px;
 
+  /* Motion */
+  --motion-switcher: 160ms;
+  --ease-switcher: ease-out;
+
   /* Shape */
   --radius-dialog: 16px;
   --radius-panel: 14px;

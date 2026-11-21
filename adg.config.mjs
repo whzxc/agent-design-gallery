@@ -14,6 +14,7 @@ const fixtureStates = {
   ...states,
   [comments.commentCanvas.fixture]: { ...states['scope-layer'], sidebar: false, camera: 'origin', origin: [48, 100], scale: 2 },
 };
+export const playerFixtureURL='/?asset=modules%2Fproject-switcher.tsx&frame=project-picker';
 let fixtureStore;
 let selectedFixture;
 
@@ -87,6 +88,10 @@ export default {
     async start({ port, root }) {
       const temporary = await mkdtemp(path.join(tmpdir(), 'adg-fixture-'));
       try {
+        if (selectedFixture === 'motion-player') {
+          const server=await startServer({directory:path.join(root,'design'),port,stateDirectory:temporary});
+          return async()=>{try{await server.close();}finally{await rm(temporary,{recursive:true,force:true});}};
+        }
         if (reviewFixtures.has(selectedFixture)) {
           const close = await startReviewFixture(port, temporary);
           return async () => { try { await close(); } finally { await rm(temporary, { recursive: true, force: true }); } };
@@ -104,6 +109,7 @@ export default {
     },
     fixture(name) {
       selectedFixture = name;
+      if (name === 'motion-player') return {url:playerFixtureURL,theme:'light',locale:'en-US',timezone:'UTC',clock};
       if (reviewFixtures.has(name)) return { url: '/', theme: 'dark', locale: 'en-US', timezone: 'UTC', clock };
       if (Object.hasOwn(hubFixtures, name)) return { url: hubFixtures[name], theme: 'light', locale: 'en-US', timezone: 'UTC', clock };
       const state = fixtureStates[name];
@@ -114,6 +120,11 @@ export default {
       return reviewFixtures.has(selectedFixture) ? reviewFixtureTexts(page) : [];
     },
     async ready(page, name) {
+      if (name === 'motion-player') {
+        await page.getByRole('button',{name:'Play',exact:true}).click();
+        await page.getByRole('button',{name:'click → switcher-open',exact:true}).waitFor();
+        return;
+      }
       if (reviewFixtures.has(name)) return readyReviewFixture(page, name);
       if (Object.hasOwn(hubFixtures, name)) return readyFixtureHub(page, name);
       await page.waitForFunction(name => document.documentElement.dataset.fixtureError || document.documentElement.dataset.fixtureReady === name, name, { timeout: 15000 });

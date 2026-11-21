@@ -283,6 +283,8 @@ export async function startServer({
     refreshing = true;
     try {
       const observed = [...touched];
+      const motionSources = observed.filter(name=>name.endsWith('.motion.json')).map(name=>name.replace(/\.motion\.json$/,'.tsx'));
+      if (motionSources.length) emit({motionSources});
       touched.clear();
       const base = root,
         project = await loadConfig(base),
@@ -535,6 +537,13 @@ export async function startServer({
       const file = ['GET', 'HEAD'].includes(request.method) && viewerFile(url.pathname);
       if (file) return await shell(request, response, file, request.headers['x-adg-viewer-base']);
       if (!directLocal(request)) return json(response, 401, { error: 'Unauthorized' });
+      if (url.pathname === '/api/play' && request.method === 'GET') {
+        const source = url.searchParams.get('source'), frame = url.searchParams.get('frame');
+        if (!activeProject || !codePaths.has(source) || !source.endsWith('.tsx')) return json(response,404,{error:'Unknown playback source.'});
+        const {playEndpoint} = await import('./toolkit/play-endpoint.mjs');
+        const result = await playEndpoint(activeProject, root, source, frame, url.searchParams.get('theme'), url.searchParams.has('scene') ? sourceBuild : null);
+        return json(response,200,result);
+      }
       if (url.pathname === '/api/comments') {
         if (request.method !== 'GET' && request.method !== 'POST') return json(response,405,{error:'Use GET or POST.'});
         if (request.method === 'POST' && request.headers.origin && ![`http://${host}`,`https://${host}`].includes(request.headers.origin)) return json(response,403,{error:'Cross-origin request refused.'});

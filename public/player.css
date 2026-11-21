@@ -1,0 +1,77 @@
+#motion-player {
+  box-sizing: border-box;
+  width: min(960px, calc(100vw - 24px));
+  height: min(760px, calc(100dvh - 24px));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  color: var(--text);
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-dialog);
+  box-shadow: var(--shadow-float);
+}
+#motion-player[open] {
+  display: flex;
+  flex-direction: column;
+}
+#motion-player::backdrop {
+  background: rgb(0 0 0 / 28%);
+}
+.play-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.play-stage iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.play-dock {
+  margin: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-panel);
+}
+.play-location,
+.play-controls,
+.play-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.play-location {
+  justify-content: space-between;
+}
+.play-controls,
+.play-actions:not(:empty) {
+  margin-top: 6px;
+}
+.play-dock :is(button, select) {
+  min-height: 28px;
+  padding: 3px 9px;
+  border: 0;
+  border-radius: var(--radius-field);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font: inherit;
+}
+.play-dock :is(button, select, input):focus-visible {
+  outline: 2px solid var(--accent);
+}
+.play-dock button:disabled {
+  color: var(--text-tertiary);
+}
+.play-dock input {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--accent);
+}
+.play-dock [aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}

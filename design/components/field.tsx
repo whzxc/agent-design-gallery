@@ -11,7 +11,7 @@ export function Field({
   width = 236,
   height,
   chevron = true,
-  placeholder,
+  placeholder, clearAnchor,
 }: {
   form?: FieldForm | string;
   label?: string;
@@ -20,7 +20,7 @@ export function Field({
   width?: number;
   height?: number;
   chevron?: boolean;
-  placeholder?: boolean;
+  placeholder?: boolean; clearAnchor?: string;
 }) {
   const search = form.startsWith('search');
   const input = form.startsWith('input');
@@ -45,7 +45,9 @@ export function Field({
         />
       )}
       <span class={`min-w-0 flex-1 truncate ${spacing}`}>{label}</span>
-      {active ? (
+      {active && clearAnchor ? (
+        <button data-adg-id={clearAnchor} aria-label="Clear project search"><Icon name="x" size={14} class="text-text-tertiary" /></button>
+      ) : active ? (
         <Icon name="x" size={14} class="text-text-tertiary" />
       ) : search ? (
         meta ? <span class="text-caption text-text-tertiary">{meta}</span> : null

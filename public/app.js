@@ -743,6 +743,20 @@ function renderRelationships(source) {
     $('#'+id).replaceChildren(...nodes);
   }
 }
+let playSelection;
+function offerPlay(host,part) {
+  const button=$('#play-frame');
+  const key=part && host.path.endsWith('.tsx') ? JSON.stringify([host.path,part.name]) : null;
+  if(key===playSelection)return;
+  playSelection=key;button.hidden=true;button.onclick=null;
+  if(!key)return;
+  const ref={source:host.path,frame:part.name};
+  dataFetch('api/play?'+new URLSearchParams(ref)).then(r=>r.ok?r.json():null).then(result=>{
+    if(key!==playSelection || !result?.available)return;
+    button.hidden=false;
+    button.onclick=async()=>{const {openPlayer}=await import('./player.js');await openPlayer({...ref,theme:effectiveTheme,invoker:button});};
+  }).catch(error=>console.warn('Play unavailable:',error.message));
+}
 function selection() {
   hoveredElement=null;
   if (!selected) inspector = false;
@@ -750,6 +764,7 @@ function selection() {
   renderNav(); updateChrome();
   $('#back').disabled = !history.length && !onlyFrame && !['group', 'asset'].includes(scopeKind(initializedScope));
   const host=currentItem(), part=host?.parts.find(p=>p.id===selectedForm);
+  offerPlay(host,part);
   const owner=selectedElement?.owner;
   const hasExport=!!owner?.export;
   const a=hasExport ? manifest?.assets.find(a=>a.path===owner.source) ?? manifest?.extraAssets?.find(a=>a.path===owner.source) ?? {path:owner.source,parts:[]} : host;
@@ -2113,6 +2128,14 @@ if ((tokenManifest || manifest) && !isUnauthorized()) {
   window.addEventListener('adg-unauthorized', () => events.close(), { once: true });
   events.onmessage = (e) => {
     const data = JSON.parse(e.data);
+    if(data.motionSources){
+      const host=currentItem();
+      if(host && data.motionSources.includes(host.path)){
+        playSelection=null;
+        offerPlay(host,host.parts.find(p=>p.id===selectedForm));
+      }
+      return;
+    }
     if (data.error) error(data.error);
     else {
       void refresh();

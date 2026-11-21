@@ -1,6 +1,34 @@
 {
-  "version": 1,
+  "version": 2,
   "mappings": [
+    {
+      "implementation": {"file": "public/switcher.js", "symbol": "open", "anchor": "function open(trigger) {"},
+      "design": [
+        {"source": "design/modules/project-switcher.tsx", "transition": "open-project-switcher"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "open-project-switcher-down"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "open-project-switcher-up"}
+      ]
+    },
+    {
+      "implementation": {"file": "public/switcher.js", "symbol": "close", "anchor": "function close() {"},
+      "design": [
+        {"source": "design/modules/project-switcher.tsx", "transition": "dismiss-switcher"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "toggle-switcher"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "dismiss-switcher-filtered"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "toggle-switcher-filtered"}
+      ]
+    },
+    {
+      "implementation": {"file": "public/switcher.js", "symbol": "makeSearchField", "anchor": "function makeSearchField() {"},
+      "design": [
+        {"source": "design/modules/project-switcher.tsx", "transition": "filter-projects"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "clear-project-filter"}
+      ]
+    },
+    {
+      "implementation": {"file":"public/player.js","symbol":"openPlayer"},
+      "design": [{"source":"design/modules/view-controls.tsx","part":"PlaybackBar"}]
+    },
     {
       "implementation": { "file": "public/style.css", "symbol": "button", "anchor": "button { border:0;" },
       "design": [{ "source": "design/components/button.tsx", "part": "Button" }]
