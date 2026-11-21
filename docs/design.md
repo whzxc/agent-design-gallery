@@ -14,7 +14,7 @@ The review platform is macOS at 1440 × 900 (`en-US`, `UTC`), plus 390 × 844 ph
 
 ## Motion adoption
 
-The project switcher is the board playback pilot. Its current routes open the picker, filter by entering `Nova`, clear search, dismiss and follow the enabled live-instance link. The last action opens a new viewer with an instance picker and uses the instant navigation token. The `flow-*` surfaces capture these states. See [board playback](design-toolkit.md#board-playback) and [frame filters](boards.md#frame-filters).
+The project switcher is the board playback pilot. The shared toolbar keeps the picker and Contents control in place across states. Its routes open the picker, filter by entering `Nova`, clear search, dismiss and follow the enabled live-instance link. The last action opens a new viewer with an instance picker and uses the instant navigation token. The `flow-*` surfaces capture these states. See [board playback](design-toolkit.md#board-playback) and [frame filters](boards.md#frame-filters).
 
 ## Layers and declared forms
 

@@ -1,5 +1,6 @@
 import { labelResolver } from './motion-label.mjs';
 import { canonicalBytes } from './impact-proof.mjs';
+import { frameKey } from './motion-flows.mjs';
 import { motionRows } from './motion.mjs';
 import { targetsFor, usesTiming } from './motion-queries.mjs';
 import { parseTokens } from './tokens.mjs';
@@ -20,8 +21,10 @@ export async function impactedEdges(views, query, themes, assessments, explain, 
     let kind = 'candidate';
     if (git) {
       kind = !records[0] ? 'added' : !records[1] ? 'removed' : 'changed';
-      const declaration = (r) => r && canonicalBytes({ owner: r.owner, edge: r.edge });
-      if (declaration(records[0]) !== declaration(records[1])) reasons.add('declaration');
+      const declarations = records.map((r, i) => r && canonicalBytes({
+        owner: r.owner, edge: r.edge, flow: r.valid ? views[i].motion.flows.get(frameKey(r.edge.from)) : null
+      }));
+      if (declarations[0] !== declarations[1]) reasons.add('declaration');
       const selectors = views.map((v) =>
         canonicalBytes(
           v.map.mappings

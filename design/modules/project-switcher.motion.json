@@ -1,5 +1,11 @@
 {
   "version": 1,
+  "flows": [
+    {
+      "start": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
+      "anchor": {"anchor": "picker"}
+    }
+  ],
   "edges": [
     {
       "id": "open-project-switcher",
@@ -9,7 +15,7 @@
       "trigger": {"on": "click", "target": {"anchor": "picker"}},
       "duration": "--motion-switcher",
       "easing": "--ease-switcher",
-      "phases": [],
+      "phases": [[{"mode": "enter", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
       "interrupt": "finish",
       "reduced": "instant",
       "focus": {"target": {"anchor": "current-destination"}},
@@ -23,7 +29,7 @@
       "trigger": {"on": "key", "target": {"anchor": "picker"}, "key": "ArrowDown"},
       "duration": "--motion-switcher",
       "easing": "--ease-switcher",
-      "phases": [],
+      "phases": [[{"mode": "enter", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
       "interrupt": "finish",
       "reduced": "instant",
       "focus": {"target": {"anchor": "current-destination"}},
@@ -37,7 +43,7 @@
       "trigger": {"on": "key", "target": {"anchor": "picker"}, "key": "ArrowUp"},
       "duration": "--motion-switcher",
       "easing": "--ease-switcher",
-      "phases": [],
+      "phases": [[{"mode": "enter", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
       "interrupt": "finish",
       "reduced": "instant",
       "focus": {"target": {"anchor": "current-destination"}},
@@ -51,7 +57,7 @@
       "trigger": {"on": "input", "target": {"anchor": "search"}, "value": "Nova"},
       "duration": "--motion-switcher",
       "easing": "--ease-switcher",
-      "phases": [],
+      "phases": [[{"mode": "crossfade", "targets": [{"anchor": "results"}], "properties": ["opacity"]}, {"mode": "enter", "targets": [{"anchor": "clear-search"}], "properties": ["opacity"]}]],
       "interrupt": "finish",
       "reduced": "instant",
       "focus": {"target": {"anchor": "search"}}
@@ -64,7 +70,7 @@
       "trigger": {"on": "click", "target": {"anchor": "clear-search"}},
       "duration": "--motion-switcher",
       "easing": "--ease-switcher",
-      "phases": [],
+      "phases": [[{"mode": "crossfade", "targets": [{"anchor": "results"}], "properties": ["opacity"]}, {"mode": "exit", "targets": [{"anchor": "clear-search"}], "properties": ["opacity"]}]],
       "interrupt": "finish",
       "reduced": "instant",
       "focus": {"target": {"anchor": "search"}}
@@ -77,7 +83,7 @@
       "trigger": {"on": "key", "target": {"frame": true}, "key": "Escape"},
       "duration": "--motion-switcher",
       "easing": "--ease-switcher",
-      "phases": [],
+      "phases": [[{"mode": "exit", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
       "interrupt": "finish",
       "reduced": "instant",
       "focus": "restore-trigger"
@@ -90,7 +96,7 @@
       "trigger": {"on": "click", "target": {"anchor": "picker"}},
       "duration": "--motion-switcher",
       "easing": "--ease-switcher",
-      "phases": [],
+      "phases": [[{"mode": "exit", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
       "interrupt": "finish",
       "reduced": "instant",
       "focus": "restore-trigger"
@@ -103,7 +109,7 @@
       "trigger": {"on": "key", "target": {"frame": true}, "key": "Escape"},
       "duration": "--motion-switcher",
       "easing": "--ease-switcher",
-      "phases": [],
+      "phases": [[{"mode": "exit", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
       "interrupt": "finish",
       "reduced": "instant",
       "focus": "restore-trigger"
@@ -116,7 +122,7 @@
       "trigger": {"on": "click", "target": {"anchor": "picker"}},
       "duration": "--motion-switcher",
       "easing": "--ease-switcher",
-      "phases": [],
+      "phases": [[{"mode": "exit", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
       "interrupt": "finish",
       "reduced": "instant",
       "focus": "restore-trigger"
@@ -128,7 +134,7 @@
       "trigger": {"on": "click", "target": {"anchor": "live-instance"}},
       "duration": "--motion-navigation",
       "easing": "--ease-switcher",
-      "phases": [],
+      "phases": [[{"mode": "exit", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
       "interrupt": "finish",
       "reduced": "instant",
       "focus": {"target": {"anchor":"picker"}}

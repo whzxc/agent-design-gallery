@@ -10,7 +10,7 @@ function unique(rows, target) {
 
 // Each paint root has its own frame-coordinate layer. Nested roots are cut out of
 // the parent copy, so their composed world transform is applied exactly once.
-export function preparePaint(stage, from, to, edge) {
+export function preparePaint(stage, from, to, edge, pin) {
   const doc = stage.ownerDocument,
     tracks = [],
     boundaries = [],
@@ -81,6 +81,11 @@ export function preparePaint(stage, from, to, edge) {
       left.box.some((v, i) => v !== right.box[i])
     )
       total = Math.max(total, defaultTime.duration);
+  }
+  if (pin) {
+    const left = candidates(from, pin), right = candidates(to, pin);
+    if (left.length === 1 && right.length === 1 && !oldClaim.has(left[0].i) && !newClaim.has(right[0].i))
+      implicit(left[0], right[0], 'match');
   }
   for (const pair of pairs)
     if (!oldClaim.has(pair.from) && !newClaim.has(pair.to)) implicit(from[pair.from], to[pair.to], 'match');

@@ -6,6 +6,7 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { flowLayout } from '../public/motion-flow.js';
 import { starterTokens } from '../src/toolkit/project.mjs';
 
 const cli=fileURLToPath(new URL('../src/cli.mjs',import.meta.url));
@@ -29,7 +30,7 @@ function consumer(t){
   function run(args,expected=0){
     const result=spawnSync(process.execPath,[cli,...args,'--json'],{cwd:root,encoding:'utf8',env:{...process.env,XDG_STATE_HOME:path.join(root,'.state')}});
     const envelope=JSON.parse(result.stdout);
-    assert.equal(result.status,expected,JSON.stringify(envelope.error)+' '+result.stderr);return envelope;
+    assert.equal(result.status,expected,JSON.stringify(envelope.error)+' '+JSON.stringify(envelope.data?.findings)+' '+result.stderr);return envelope;
   }
   const git=(...args)=>execFileSync('git',['-C',root,...args]);
   const edges=list=>put(sidecar,{version:1,edges:list});
@@ -48,7 +49,10 @@ test('contract: keyed frames, scoped bindings, timing aliases and Git edge queri
   const check=run(['check','--read-only','--transitions']).data;
   assert.deepEqual(check.motion,{count:1,edges:[{id:edge.id,label:'Click “Open”'}]});
   const detail=run(['inspect','--transition='+edge.id,'--explain']).data;
-  assert.deepEqual(detail.findings,[]);assert.equal(detail.themes.light.timings['/duration'],120);
+  assert.deepEqual(detail.findings.map(f=>[f.code,f.warning]), [
+    ['MOTION_UNANIMATED_MOVE',true], ['MOTION_UNANIMATED_MOVE',true]
+  ]);
+  assert.equal(detail.themes.light.timings['/duration'],120);
   assert.equal(detail.themes.light.counts.match,2);assert.equal(detail.themes.light.tracks[0].duration,120);
   assert.ok(detail.themes.light.pairs.every(p=>p.from!==p.to));assert.deepEqual(detail.themes.dark,{sameAs:'light'});
   assert.equal(run(['inspect',last,'--frame=ready','--transitions']).data.motion.edges[0].from.source,first);
@@ -230,4 +234,39 @@ test('contract: project reopen and sidecar-only edits refresh board availability
     }
     assert.fail('Missing revision for a sidecar-only edit');
   } finally { await server.close(); }
+});
+
+test('algorithmic core: stage bounds and offsets for unequal frame sizes and anchor origins', () => {
+  const frame = (box, anchors) => ({ box, rows: anchors.map(([anchor, box]) => ({ anchor, box })) });
+  const frames = [
+    frame([0, 0, 110, 100], [['shared', [37.5, 18, 10, 12]], ['local', [10, 5, 10, 12]]]),
+    frame([5, 3, 200, 80], [['shared', [14.5, 31, 10, 12]]]),
+    frame([0, 0, 85, 60], [['shared', [44.5, 10, 10, 12]]])
+  ];
+  const layout = flowLayout({ triggers: [{ anchor: 'local' }, { anchor: 'shared' }] }, frames);
+  assert.deepEqual(layout.pin.target, { anchor: 'shared' });
+  assert.deepEqual(layout.offsets, [[7, 10], [35, 0], [0, 18]]);
+  assert.deepEqual([layout.width, layout.height], [235, 110]);
+  const unpinned = flowLayout({ anchor: { anchor: 'local' } }, frames);
+  assert.deepEqual(unpinned, { pin: null, offsets: [[0, 0], [0, 0], [0, 0]], width: 200, height: 100 });
+});
+
+test('contract: flow geometry and presence findings follow strictMotion', t => {
+  const { put, run } = consumer(t);
+  put(last, `import {Frame} from 'adg';import {Row} from '../components/row';
+    export default()=> <Frame name="ready" fixture="ready" capture={{page:true}}><main class="flex gap-2"><button data-adg-id="open">Open</button>
+    <Row key="other" name="other"/><Row key="save" name="save"/><span data-adg-id="new">Text</span></main></Frame>;`);
+  const flow = { start: ref(first), anchor: { anchor: 'open' } };
+  const declaration = phases => put(sidecar, { version: 1, flows: [flow], edges: [{ ...edge, phases }] });
+  declaration([]);
+  const codes = ['MOTION_UNANIMATED_MOVE', 'MOTION_UNANIMATED_PRESENCE'];
+  const { warnings } = run(['check', '--read-only']);
+  assert.ok(codes.every(code => warnings.some(w => w.code === code)));
+  put('adg.config.mjs', options(true));
+  const { findings } = run(['check', '--read-only'], 1).data;
+  assert.ok(codes.every(code => findings.some(f => f.code === code)));
+  const opacity = (mode, anchor) => ({ mode, targets: [{ anchor }], properties: ['opacity'] });
+  declaration([[{ ...track, targets: ['save', 'other'].map(key => ({ part: row + '#Row', key })), properties: ['x'] },
+    opacity('exit', 'plain'), opacity('enter', 'new')]]);
+  assert.deepEqual(run(['check', '--read-only']).data.findings, []);
 });

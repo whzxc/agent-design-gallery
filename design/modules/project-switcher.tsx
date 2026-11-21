@@ -90,25 +90,27 @@ export function SwitcherMenu({
         <div class="px-1 pb-1">
           <Field searchInput clearAnchor={empty ? 'clear-search' : undefined} form={activeSearch ? 'search-active' : 'search'} label={searchLabel} meta="" width={width - 20} />
         </div>
-        {empty ? (
-          <p class="px-[10px] py-3 text-body text-text-secondary">{copy.emptyMatch}</p>
-        ) : (
-          <>
-            {!search && (
-              <>
-                <MenuItem key="projects" form="label" label={copy.projects} />
-                {projects.map(item => (
-                  <SwitcherRow key={item.id} item={item} current={current} kind="project" />
-                ))}
-                <div class="my-1 h-px bg-border" />
-              </>
-            )}
-            <MenuItem key="instances" form="label" label={copy.live} />
-            {(search ? instances.slice(0, 1) : instances).map(item => (
-              <SwitcherRow key={item.id} item={item} current={current} kind="instance" />
-            ))}
-          </>
-        )}
+        <div class="flex flex-col gap-1" data-adg-id="results">
+          {empty ? (
+            <p class="px-[10px] py-3 text-body text-text-secondary">{copy.emptyMatch}</p>
+          ) : (
+            <>
+              {!search && (
+                <>
+                  <MenuItem key="projects" form="label" label={copy.projects} />
+                  {projects.map(item => (
+                    <SwitcherRow key={item.id} item={item} current={current} kind="project" />
+                  ))}
+                  <div class="my-1 h-px bg-border" />
+                </>
+              )}
+              <MenuItem key="instances" form="label" label={copy.live} />
+              {(search ? instances.slice(0, 1) : instances).map(item => (
+                <SwitcherRow key={item.id} item={item} current={current} kind="instance" />
+              ))}
+            </>
+          )}
+        </div>
       </div>
     </Panel>
   );
@@ -129,7 +131,7 @@ export function Switcher({
         <ProjectPicker current={current} kind={kind} open={open} width={narrow ? 220 : 240} />
       </Toolbar>
       {open && (
-        <div class={narrow ? '' : 'ml-[46px]'}>
+        <div data-adg-id="menu" class={narrow ? '' : 'ml-[46px]'}>
           <SwitcherMenu current={current} search={search} empty={empty} width={narrow ? 366 : 360} />
         </div>
       )}
@@ -141,11 +143,7 @@ export default () =>
   switcherFrames.map(({ name, current, kind, open, search, empty }) => (
     <Frame name={name} note={hubNotes.switcher}>
       <div class="bg-canvas p-6">
-        {open ? (
-          <Switcher current={current} kind={kind} open search={search} empty={empty} />
-        ) : (
-          <ProjectPicker current={current} kind={kind} />
-        )}
+        <Switcher current={current} kind={kind} open={open} search={search} empty={empty} />
       </div>
     </Frame>
   ));

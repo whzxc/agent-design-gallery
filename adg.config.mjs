@@ -57,7 +57,9 @@ async function readyPlayback(page, name) {
   }
   await page.getByRole('button', { name: 'Play', exact: true }).click();
   const player = page.locator('#motion-player');
-  await player.locator('[data-edge=open-project-switcher]').waitFor();
+  const scene = player.frameLocator('iframe');
+  const picker = scene.locator('[data-adg-id=picker]');
+  await picker.waitFor();
   if (name === 'flow-at-rest') {
     await player
       .frameLocator('iframe')
@@ -69,7 +71,8 @@ async function readyPlayback(page, name) {
     const time = new Date('2025-01-01T00:00:00Z');
     await page.clock.install({ time });
     await page.clock.pauseAt(new Date(+time + 1000));
-    await player.locator('[data-edge=open-project-switcher]').evaluate((b) => b.click());
+    await picker.evaluate((el) => el.click());
+    await player.locator('[data-control=inspector]:enabled').evaluate((el) => el.click());
     await player.locator('[data-control=state]').filter({ hasText: 'Playing transition' }).waitFor();
     // Set the approved 64 ms sample directly, independent of the browser's first animation tick.
     await player.getByRole('slider').evaluate((slider) => {
@@ -79,20 +82,24 @@ async function readyPlayback(page, name) {
     if (name === 'flow-playing') await player.locator('[data-control=pause]').evaluate((b) => b.click());
     return;
   }
-  await player.locator('[data-edge=open-project-switcher]').click();
+  await picker.click();
   const current = (frame) =>
     player
       .locator('[data-control=current]')
       .filter({ hasText: new RegExp('^' + frame + '$') })
-      .waitFor();
+      .waitFor({ state: 'attached' });
   await current('switcher-open');
   if (name === 'flow-terminal') {
-    await player.locator('[data-edge=open-live-instance]').click();
+    await scene.locator('[data-adg-id=live-instance]').click();
     await current('project-picker-instance');
   }
   if (name === 'flow-reduced-motion') {
     await player.frameLocator('iframe').getByRole('searchbox').fill('Nova');
     await current('switcher-empty');
+  }
+  if (['flow-completed', 'flow-terminal'].includes(name)) {
+    await player.locator('[data-control=flow]').click();
+    if (name === 'flow-completed') await player.locator('[data-control=inspector]').click();
   }
   if (name === 'flow-settings') await player.locator('[data-control=settings]').click();
 }

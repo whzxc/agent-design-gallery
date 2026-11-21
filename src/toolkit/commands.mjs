@@ -326,7 +326,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
       });
     }
     if (records.some(r=>r.valid)) {
-      const evaluate=motionEvaluator(config,{themes:session?.themes,bindings:validatedMap?.transitionBindings,hasMap:mapping.present,
+      const evaluate=motionEvaluator(config,{flows:motion.flows,themes:session?.themes,bindings:validatedMap?.transitionBindings,hasMap:mapping.present,
         getBuild:source=>allBuilt.get(source)??session?.views[1].built.get(source),
         getPage:async()=>{browser??=await launchBrowser();return page??=await browser.newPage();}});
       // Other edges on this origin can conflict even when a Git or destination filter selects only one edge.

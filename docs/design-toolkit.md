@@ -219,6 +219,24 @@ The pilot follows ARC's [layer guide](https://github.com/whzxc/agent-remote-cont
 
 **Later:** stagger, scoped `within` targets, automatic triggers (`trigger.delay`, `MOTION_AUTO_CYCLE`), and `interrupt:"ignore"`. These fields and values are schema errors in v1.
 
+### Prototype flows
+
+A flow is the connected component of a set of directed edges. Its frames share one screen composition. Connect branches and terminal states with edges as usual. Declare the flow once in the start frame’s sidecar using the optional top-level `flows` array next to `edges`.
+
+```json
+"flows": [
+  {
+    "start": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
+    "anchor": {"anchor": "picker"},
+    "stage": {"width": 520, "height": 680}
+  }
+]
+```
+
+Use a part target (with an instance key when needed) or an authored motion anchor. It must resolve to a single visible-sized box with stable dimensions in every member. Keep persistent neighbors in the same composition and author tracks for intentional movement and presence changes. The player fixes the anchor at the same stage coordinate by translating each frame from its own origin. The stage defaults to the union of the aligned frame bounds. An explicit width and height, in CSS pixels, reserve a larger stage. If those bounds are too small, the player uses the union and the check reports the dimensions. The aligned union starts at the top left of the stage.
+
+For a component without a declaration, the player tries edge trigger targets, preferring edges from the inferred start. A target that identifies a unique box throughout the component pins the flow. With no common target, every frame uses the same top-left stage origin and the check reports the missing pin. The inferred start is the first frame with no incoming edge, or the first edge’s origin in a cycle. Existing version 1 sidecars continue to play.
+
 ### Action labels
 
 An edge may declare an optional `label`, a nonempty plain-text string in the source language. Use a short verb phrase naming the user action, for example `"label": "Open project switcher"`. The flow action, hotspot hint and transition inspector use the same name. Keep the exact trigger and endpoint references alongside it. The stable edge ID continues to identify bindings, impact and history. A label edit changes presentation only.
@@ -227,11 +245,11 @@ When absent, derive the name from the trigger and the accessible name of its tar
 
 ### Board playback
 
-TSX specimens with outgoing edges offer a caption **Play** and a selected-frame Float shortcut. See [frame filters](boards.md#frame-filters) for discovery. Keep selection, scope, zoom, camera and invoking control for return. Open one player on that frame with a flow rail showing the committed frame, path, named Back action and outgoing actions. Group edges by authored label, or by destination when unlabeled. Put the action name first and give every gesture its own keyboard-accessible button. While a transition runs, identify the destination whose actions can interrupt it. Load only needed endpoints on demand. Board specimens keep their existing atlas previews. A terminal frame offers Back and Exit. Cross-source edges stay inside the player.
+TSX specimens with outgoing edges offer a caption **Play** and a selected-frame Float shortcut. See [frame filters](boards.md#frame-filters) for discovery. Keep selection, scope, zoom, camera and invoking control for return. Open the player on the selected frame with the stage taking the available space. The Flow toggle reveals the committed frame, visited path, and outgoing actions. Group edges by authored label, or by destination when unlabeled. Put the action name first and give every gesture its own keyboard-accessible button. While a transition runs, identify the destination whose actions can interrupt it. Measure the flow members when playback opens to establish a fixed stage. Board specimens keep their existing atlas previews. A terminal frame offers Back and Exit. Cross-source edges stay inside the player.
 
 The trusted viewer controls one live `sandbox="allow-same-origin"` frame without script permission. Use inert built HTML and its own theme stylesheet. Measure First, retain inert paint for exits, swap to Last in the same document, wait for fonts and image readiness, measure and animate. Isolate styles from the other endpoint when retaining paint. Suppress native link navigation, form submission and editing outside declared text-entry targets. Enable only plain-text entry for an input edge. Prevent child browsing contexts, network loads and navigation out of the built frame. The parent owns listeners, timeline, hit testing and focus. Ghosts are inert, hidden from accessibility and never receive input. Dispose of ghosts, listeners and animation handles on settle, cancel or exit. No camera work depends on player layout.
 
-After the first action, retain its transition inspector until the next action or Back. Show its action name, endpoints, duration/easing tokens, elapsed milliseconds, scrubber and Replay transition. Instant transitions show 0 ms. Playback settings group speed and session motion choices. Start at 1×, with 0.5× and 0.25× for inspection. Pause/resume and seek the selected edge on a 0–100% range with keyboard steps of 1% (Page Up/Down 10%). Back restores a visited frame directly. Replay restarts the selected edge. Seeking is silent. Reaching 100% by seeking previews the final paint; only completing playback commits navigation and focus. Reduced motion defaults to system with an explicit on/off override for this session. Hover or focus reveals the target’s hotspot. Clicking unused stage space reveals all hotspots until the next action. Provide a keyboard-accessible outgoing-action list that can invoke every edge, including hover. An authored Escape edge on the specimen wins there; Exit is always reachable in chrome. Exit restores the invoking board control.
+The transition inspector is collapsed on entry and becomes available after the first action. Show its action name, endpoints, duration/easing tokens, elapsed milliseconds, scrubber and Replay transition. Instant transitions show 0 ms. Playback settings group speed and session motion choices. Start at 1×, with 0.5× and 0.25× for inspection. Pause/resume and seek the selected edge on a 0–100% range with keyboard steps of 1% (Page Up/Down 10%). Left and Right revisit frames along the visited path. R restarts at the flow start. Authored keys and text entry keep precedence. Replay restarts the selected edge. Seeking is silent. Reaching 100% by seeking previews the final paint; only completing playback commits navigation and focus. Reduced motion defaults to system with an explicit on/off override for this session. Hover or focus reveals the target’s hotspot. Clicking unused stage space reveals all hotspots until the next action. Provide a keyboard-accessible outgoing-action list that can invoke every edge, including hover. Escape closes the most recently opened player panel first, then dispatches a frame-wide Escape edge when available, then exits playback. Exit is always reachable in chrome. Exit restores the invoking board control.
 
 The Float toolbar keeps Play explicit so ordinary specimen selection still inspects. Always-visible hotspots would obscure review paint. Speed alone misses short phases, and a next-frame button cannot inspect the middle of an edge; the seek control serves both tasks. Separate player iframes per specimen would duplicate styles, inflate board cost and split focus history.
 
@@ -269,6 +287,12 @@ Validate the selected sources' incident edges, including the remote endpoint of 
 | `MOTION_IDENTITY_AMBIGUOUS`, `MOTION_TARGET_MISSING` | Qualify a required trigger, track or focus identity, repair duplicate authored keys in scope or supply the missing side. Identify the side, target and multiplicity. |
 | `MOTION_TRACK_CONFLICT`, `MOTION_REDUCED_MISSING`, `MOTION_FOCUS` | Correct property ownership or mode, supply the explicit instant fallback, or repair the focus outcome. |
 | `MOTION_STATUS`, `MOTION_BINDING` | Align proposal scopes or fix a missing/stale behavior counterpart under the [lifecycle rules](asset-rules.md#transition-ownership-and-lifecycle). |
+
+| `MOTION_FLOW_SCHEMA` | Declare at most one start and anchor per connected component, in the start frame’s sidecar. |
+| `MOTION_FLOW_ANCHOR`, `MOTION_FLOW_STAGE` | Resolve the same anchor in each frame, keep its dimensions stable, and reserve room for the aligned union. |
+| `MOTION_UNANIMATED_MOVE`, `MOTION_UNANIMATED_PRESENCE` | Animate changed axes with a position track. Give one-sided anchors and owner roots an enter or exit track, which may cover an entire subtree. Use a crossfade for a declared content replacement. |
+
+The flow geometry and composition findings warn by default and become errors with `check.strictMotion: true`. Position checks use the aligned stage coordinates.
 
 Source-only findings (`MOTION_SOURCE_CSS`), including dormant timing declarations, warn by default. Set `check.strictMotion: true` to make them errors. This setting is independent of sidecar validation. Invalid authored edges produce completed findings (exit 1) even with the default setting. An unreadable file, malformed JSON, unsupported file version or inability to build/observe a required endpoint is incomplete execution (exit 2, preserve partial findings). An ambiguous *implicit* match emits `MOTION_IMPLICIT_FADE` as a warning and plays with fades. `MOTION_UNSUPPORTED` warns about each declared coverage gap. Keep warnings outside the problem count. A proposed marker exempts only a missing counterpart. Rejecting every ambiguous decorative repeat would make existing lists unplayable; silently choosing an occurrence for an authored trigger would route input to the wrong action. The distinction between implicit fade and required identity gives each case its own remedy. Reduced-motion capture alone cannot enforce timing tokens or detect animated CSS in a resting design.
 

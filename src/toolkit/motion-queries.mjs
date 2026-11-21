@@ -125,6 +125,7 @@ export async function transitionQuery(config, command, args, values, log) {
         let browser, page;
         try {
           const evaluate = motionEvaluator(config, {
+            flows: graph.flows,
             bindings,
             hasMap: validated.map.present,
             themes: values.theme && values.theme !== 'both' ? [values.theme] : ['light', 'dark'],

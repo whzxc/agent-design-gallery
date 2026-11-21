@@ -67,9 +67,10 @@ export async function startServer({
     buildStore, viewerCache, codePaths=new Set();
   const recentJobs = new Map();
   const motionOwners = new Map();
-  let motionFrames;
+  let motionFrames, playGraph;
   // Project discovery and its watcher own this projection. Drawing and selection only read it.
   async function indexMotion(project, directory, changed, inventory, reopening = false) {
+    playGraph = null;
     if (!changed.size) return;
     const summaries = await createIndexStore({
       directory: path.join(stateDirectory, 'cache', digest(directory), 'motion-frames'),
@@ -87,16 +88,17 @@ export async function startServer({
             motionOwners.set(source, { frames: saved });
             continue;
           }
-          const { outgoingRecords } = await import('./toolkit/play-endpoint.mjs');
-          const records = outgoingRecords(project, directory, source);
-          const frames = [...new Set(records.map(r => r.edge.from.frame))];
-          motionOwners.set(source, { records, frames });
+          const { sourceMotion } = await import('./toolkit/play-endpoint.mjs');
+          const motion = sourceMotion(project, directory, source);
+          const frames = [...new Set(motion.records.map(r => r.edge.from.frame))];
+          motionOwners.set(source, { motion, frames });
           await summaries.put(key, frames);
         } catch (error) {
           motionOwners.set(source, { error, frames: [] });
         }
       }
       motionFrames = Object.fromEntries([...motionOwners].map(([source, row]) => [source, row.frames]));
+      playGraph = null;
     } finally {
       await summaries.close();
     }
@@ -379,6 +381,7 @@ export async function startServer({
       files = next;
       tokenSource = nextTokenSource;
       codePaths=nextCode;
+      if (structural) playGraph = null;
       sources = nextSources;
       groups = nextGroups;
       revision++;
@@ -635,9 +638,10 @@ export async function startServer({
         const indexed = motionOwners.get(source);
         if (indexed?.error) throw indexed.error;
         if (!url.searchParams.has('scene')) return json(response, 200, { available: indexed?.frames.includes(frame) ?? false });
-        const { playEndpoint, outgoingRecords } = await import('./toolkit/play-endpoint.mjs');
-        if (indexed && !indexed.records) indexed.records = outgoingRecords(activeProject, root, source);
-        const result = await playEndpoint(activeProject, root, source, frame, url.searchParams.get('theme'), sourceBuild, indexed?.records ?? []);
+        const { playEndpoint, playbackGraph } = await import('./toolkit/play-endpoint.mjs');
+        playGraph ??= playbackGraph(activeProject, root, motionOwners, codePaths);
+        if (indexed?.error) throw indexed.error;
+        const result = await playEndpoint(activeProject, root, source, frame, url.searchParams.get('theme'), sourceBuild, playGraph);
         return json(response, 200, result);
       }
       if (url.pathname === '/api/comments') {

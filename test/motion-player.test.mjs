@@ -38,11 +38,20 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
   const frame=player.frameLocator('iframe');
   const action=async id=>{const button=player.locator('[data-edge="'+id+'"]');await button.focus();await page.keyboard.press('Enter');};
   const current=name=>player.locator(name.includes(' → ')?'[data-control=endpoints]':'[data-control=current]').filter({hasText:new RegExp('^'+name+'$')}).waitFor();
-  await action('open-project-switcher');
+  const picker = frame.locator('[data-adg-id=picker]');
+  await picker.waitFor();
+  assert.ok(await player.getByRole('complementary', { name: 'Flow' }).isHidden());
+  assert.ok(await player.getByRole('region', { name: 'Transition inspector' }).isHidden());
+  const anchor = await picker.boundingBox();
+  await picker.click();
+  await player.locator('[data-control=inspector]').click();
   await player.getByRole('button',{name:'Pause transition',exact:true}).click();
   await seek.focus();await page.keyboard.press('End');
   assert.equal(await seek.inputValue(),'100');
   await current('project-picker → switcher-open');
+  assert.deepEqual(await picker.boundingBox(), anchor);
+  await player.locator('[data-control=flow]').click();
+  assert.deepEqual(await picker.boundingBox(), anchor);
   assert.equal(await frame.locator('[data-adg-id="current-destination"]').evaluate(el=>el===el.ownerDocument.activeElement),false);
   await player.getByRole('button',{name:'Resume transition',exact:true}).click();await current('switcher-open');
   assert.ok(await frame.locator('[data-adg-id="current-destination"]').evaluate(el=>el===el.ownerDocument.activeElement));
@@ -56,7 +65,11 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
   await action('clear-project-filter');await current('switcher-open');
   await action('dismiss-switcher');await current('project-picker');
   assert.ok(await frame.locator('[data-adg-id="picker"]').evaluate(el=>el===el.ownerDocument.activeElement));
-  await player.getByRole('button',{name:'Back to switcher-open',exact:true}).click();await current('switcher-open');
+  await page.keyboard.press('ArrowLeft');await current('switcher-open');
+  assert.deepEqual(await picker.boundingBox(), anchor);
+  await page.keyboard.press('ArrowRight');await current('project-picker');
+  await page.keyboard.press('r');await current('project-picker');
+  assert.equal(await player.locator('[data-control=path]').textContent(), 'project-picker');
   await player.getByRole('button',{name:'Exit to board',exact:true}).click();
   assert.deepEqual(await board(),before);assert.ok(await invoker.evaluate(el=>el===document.activeElement));
 });
@@ -67,11 +80,11 @@ test('contract: player entry and Escape restore focus one layer at a time', asyn
   const invoker = page.getByRole('button', { name: 'Play', exact: true });
   await invoker.click();
   const player = page.getByRole('dialog', { name: 'Play transitions' });
-  const first = player.locator('[data-edge]').first();
+  const first = player.frameLocator('iframe').locator('[data-adg-id=picker]');
   await first.waitFor();
-  assert.ok(await first.evaluate(b => b === document.activeElement));
-  await page.keyboard.press('Enter');
-  await player.locator('[data-control=current]').filter({hasText:/^switcher-open$/}).waitFor();
+  assert.ok(await first.evaluate(b => b === b.ownerDocument.activeElement));
+  await page.keyboard.press('ArrowDown');
+  await player.locator('[data-control=current]').filter({hasText:/^switcher-open$/}).waitFor({state:'attached'});
   const settings = player.getByRole('button', { name: /Playback settings/ });
   for (const target of [player.locator('[data-speed="1"]'), player.frameLocator('iframe').getByRole('searchbox')]) {
     await settings.click();
@@ -81,6 +94,9 @@ test('contract: player entry and Escape restore focus one layer at a time', asyn
     assert.ok(await settings.evaluate(b => b === document.activeElement));
     assert.equal(await player.locator('[data-control=current]').textContent(), 'switcher-open');
   }
+  await page.keyboard.press('Escape');
+  await player.locator('[data-control=current]').filter({hasText:/^project-picker$/}).waitFor({state:'attached'});
+  assert.ok(await first.evaluate(b => b === b.ownerDocument.activeElement));
   await page.keyboard.press('Escape');
   await player.waitFor({state:'detached'});
   assert.ok(await invoker.evaluate(b => b === document.activeElement));
@@ -102,6 +118,7 @@ test('contract: board filter preserves placement, grouped gestures dispatch indi
   await row.click();
   await caption.focus();await page.keyboard.press('Enter');
   const player=page.locator('#motion-player'), stage=player.frameLocator('iframe');
+  await player.locator('[data-control=flow]').click();
   assert.equal(await player.locator('.play-actions strong').first().innerText(),'Open project switcher');
   assert.equal(await player.locator('.play-actions > div').count(),1);
   assert.equal(await player.locator('[data-edge]').count(),3);

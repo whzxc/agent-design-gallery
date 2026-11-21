@@ -2,6 +2,7 @@ import { icon } from './icons.js';
 import { dataFetch } from './auth.js';
 import { candidates } from './motion-identity.js';
 import { createStage, mountScene, observeScene } from './motion-scene.js';
+import { flowLayout } from './motion-flow.js';
 import { preparePaint, playTimeline } from './motion-paint.js';
 
 let preference = sessionStorage.getItem('adg-player-reduced') ?? 'system';
@@ -20,14 +21,21 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   link.href = new URL('player.css', document.baseURI);
   dialog.innerHTML = `<header class="play-header"><div><span class="play-project">${icon('route', 17)}<b data-control="source"></b></span>
     <button data-control="settings" aria-controls="play-settings" aria-expanded="false">${icon('settings-2', 15)}Playback settings <span data-control="mode"></span></button></div>
-    <button data-control="exit">${icon('log-out', 14)}Exit to board</button></header>
+    <nav aria-label="Player controls">
+    <button data-control="flow" aria-controls="play-flow" aria-expanded="false">${icon('route', 14)}Flow</button>
+    <button data-control="inspector" aria-controls="play-inspector" aria-expanded="false" disabled>${icon('panel-right', 14)}Transition inspector</button>
+    <button data-control="exit">${icon('log-out', 14)}Exit to board</button></nav></header>
     <section id="play-settings" class="play-settings" aria-label="Playback settings" hidden></section>
     <section class="play-stage" aria-label="Frame preview"></section>
-    <aside class="play-rail"><section><small>Current frame</small><h1 data-control="current" aria-live="polite"></h1>
-    <small>Path taken</small><p data-control="path"></p><button data-control="back">${icon('arrow-left', 14)}<span></span></button></section>
+    <aside id="play-flow" class="play-rail" aria-label="Flow" hidden><section><small>Current frame</small><h1 data-control="current" aria-live="polite"></h1>
+    <small>Path taken</small><p data-control="path"></p><div class="play-history">
+    <button data-control="back" aria-keyshortcuts="ArrowLeft">${icon('arrow-left', 14)}<span></span></button>
+    <button data-control="forward" aria-keyshortcuts="ArrowRight">${icon('chevron-right', 14)}<span></span></button>
+    <button data-control="restart" aria-keyshortcuts="R">${icon('rotate-ccw', 14)}Restart flow</button>
+    </div></section>
     <section><h2 data-control="next">Next actions</h2><p data-control="next-context"></p>
     <div class="play-actions" role="group" aria-label="Outgoing actions"></div></section></aside>
-    <section class="play-dock" aria-label="Transition inspector" hidden><div class="play-transport">
+    <section id="play-inspector" class="play-dock" aria-label="Transition inspector" hidden><div class="play-transport">
     <div><small data-control="state"></small><h2 data-control="action"></h2><code data-control="endpoints"></code></div>
     <div><button data-control="pause">Pause transition</button><button data-control="replay">${icon('rotate-ccw', 14)}Replay transition</button></div></div>
     <div class="play-clock"><span>0 ms</span><input data-control="seek" type="range" min="0" max="100" step="1" value="0" aria-label="Transition progress">
@@ -47,7 +55,11 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     signal = controller.signal,
     cache = new Map();
   const history = [],
-    focusStack = [];
+    future = [],
+    focusStack = [],
+    panels = [],
+    offsets = new Map();
+  let prototype, startScene, pin;
   let iframe,
     doc,
     scene,
@@ -86,8 +98,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   }
   control('exit').onclick = exit;
   function dismissPopover() {
-    const open = dialog.querySelectorAll('[aria-controls][aria-expanded="true"]');
-    const button = open[open.length - 1];
+    const button = panels.at(-1);
     if (!button) return false;
     button.click();
     button.focus();
@@ -98,7 +109,11 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     if (!dismissPopover()) exit();
   });
   // Modal keyboard commands never reach board camera or navigation handlers.
-  dialog.addEventListener('keydown', (e) => e.stopPropagation());
+  dialog.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape' && !panels.length && dispatch(e, 'key', stage?.firstElementChild)) return;
+    historyKey(e);
+  });
   dialog.addEventListener('keyup', (e) => e.stopPropagation());
   control('source').textContent = source
     .split('/')
@@ -120,7 +135,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     update();
   }
   async function fetchScene(ref) {
-    const key = JSON.stringify(ref);
+    const key = sceneKey(ref);
     if (!cache.has(key)) {
       const res = await dataFetch('api/play?' + new URLSearchParams({ ...ref, theme, scene: '1' }), { signal });
       if (!res.ok) throw Error((await res.json()).error ?? 'Cannot load frame.');
@@ -128,9 +143,41 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     }
     return cache.get(key);
   }
+  const sceneKey = ({ source, frame }) => JSON.stringify([source, frame]);
+  const localRef = (ref, design) => ({
+    source: design && design !== '.' ? ref.source.slice(design.length + 1) : ref.source,
+    frame: ref.frame
+  });
+  async function prepareStage(initial) {
+    const flow = initial.flow ?? { frames: [], triggers: [] };
+    const refs = flow.frames.map((ref) => localRef(ref, initial.design));
+    const endpoints = refs.length ? await Promise.allSettled(refs.map(fetchScene)) : [{ value: initial }];
+    const frames = [];
+    for (const { value: endpoint } of endpoints) {
+      if (!endpoint || signal.aborted) continue;
+      const specimen = await mountScene(doc, endpoint, theme);
+      const { x, y, width, height } = specimen.getBoundingClientRect();
+      frames.push({ endpoint, box: [x, y, width, height], rows: observeScene(specimen, endpoint.design) });
+    }
+    if (signal.aborted) throw new DOMException('Player closed', 'AbortError');
+    const layout = flowLayout(frames.length < endpoints.length ? { triggers: [] } : flow, frames);
+    pin = layout.pin?.target;
+    frames.forEach(({ endpoint }, i) => offsets.set(sceneKey(endpoint), layout.offsets[i]));
+    startScene = frames.find(({ endpoint }) => flow.start &&
+      sceneKey(endpoint) === sceneKey(localRef(flow.start, initial.design)))?.endpoint ?? initial;
+    prototype = doc.createElement('div');
+    Object.assign(prototype.style, {
+      position: 'relative', flex: 'none', margin: 'auto',
+      width: Math.max(layout.width, flow.stage?.width ?? 0) + 'px',
+      height: Math.max(layout.height, flow.stage?.height ?? 0) + 'px'
+    });
+    doc.body.replaceChildren(prototype);
+  }
   async function show(endpoint) {
     overlay?.remove();
-    stage = await mountScene(doc, endpoint, theme);
+    composing = null;
+    const offset = offsets.get(sceneKey(endpoint)) ?? [0, 0];
+    stage = await mountScene(doc, endpoint, theme, { parent: prototype, offset });
     if (signal.aborted) throw new DOMException('Player closed', 'AbortError');
     rows = observeScene(stage, endpoint.design);
     hovered = null;
@@ -231,10 +278,13 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       transition = active ?? last;
     label.textContent = scene?.frame ?? 'Loading…';
     control('path').textContent = [...history.map((h) => h.scene.frame), scene?.frame].filter(Boolean).join(' › ');
-    const prev = history.at(-1)?.scene;
-    control('back').hidden = !prev;
-    control('back').disabled = busy;
-    control('back').lastElementChild.textContent = 'Back to ' + (prev?.frame ?? '');
+    for (const [id, entry] of [['back', history.at(-1)], ['forward', future.at(-1)]]) {
+      const button = control(id);
+      button.hidden = !entry;
+      button.disabled = busy;
+      button.lastElementChild.textContent = (id === 'back' ? 'Back to ' : 'Forward to ') + (entry?.scene.frame ?? '');
+    }
+    control('restart').disabled = busy;
     control('next').textContent = dest && !dest.edges.length ? 'End of flow' : 'Next actions';
     control('next-context').textContent = active
       ? 'Continue from ' + dest.frame
@@ -244,7 +294,9 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     if (actionFrame !== dest || actionsBusy !== busy) drawActions(dest);
     actionFrame = dest;
     actionsBusy = busy;
-    dialog.querySelector('.play-dock').hidden = !transition;
+    const inspector = control('inspector');
+    if (!transition && panels.includes(inspector)) setPanel(inspector, false);
+    inspector.disabled = !transition;
     if (transition) {
       const { edge, instant } = transition;
       control('state').textContent = active ? (run ? 'Playing transition' : 'Paused transition') : 'Last transition';
@@ -293,11 +345,12 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   }
   function commit() {
     if (!active) return;
-    const { edge, to, from, priorFocus, priorStack, paint } = active;
+    const { edge, to, from, priorFocus, priorStack, paint, replaying } = active;
     stop();
     paint?.dispose();
     active = null;
     history.push({ scene: from, focus: priorFocus, stack: priorStack });
+    if (!replaying) future.length = 0;
     if (edge.rememberTrigger === 'replace') focusStack.pop();
     if (edge.rememberTrigger) focusStack.push(edge.trigger.target);
     scene = to;
@@ -346,10 +399,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       priorStack = [...focusStack];
     let replaced = false;
     try {
-      const to = await fetchScene({
-        source: from.design ? edge.to.source.slice(from.design.length + 1) : edge.to.source,
-        frame: edge.to.frame
-      });
+      const to = await fetchScene(localRef(edge.to, from.design));
       let first = reduced() || edge.unsupported ? null : observeScene(stage, from.design, true);
       replaced = true;
       await show(to);
@@ -359,8 +409,8 @@ export async function openPlayer({ source, frame, theme, invoker }) {
         await show(to);
       }
       const instant = reduced() || !!edge.unsupported;
-      const paint = instant ? null : preparePaint(stage, first, observeScene(stage, to.design, true), edge);
-      active = { edge, from, to, paint, priorFocus, priorStack, duration: paint?.duration ?? 0, instant };
+      const paint = instant ? null : preparePaint(stage, first, observeScene(stage, to.design, true), edge, pin);
+      active = { edge, from, to, paint, priorFocus, priorStack, replaying: !!restore, duration: paint?.duration ?? 0, instant };
       progress = seek ?? 0;
       busy = false;
       if (edge.unsupported) status.textContent = edge.unsupported.map((u) => u.effect + ' — ' + u.reason).join(' · ');
@@ -406,28 +456,51 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     await show(scene);
     await begin(prior.edge, at, prior);
   }
-  control('back').onclick = async () => {
-    if (busy) return;
-    const prev = history.pop();
-    if (!prev) return;
+  async function visit(entry) {
     stop();
     active?.paint?.dispose();
     active = null;
     last = null;
     progress = 0;
+    spots = false;
     busy = true;
+    status.textContent = '';
+    scene = entry.scene;
+    focusStack.splice(0, Infinity, ...entry.stack);
     update();
-    try {
-      scene = prev.scene;
-      focusStack.splice(0, Infinity, ...prev.stack);
-      await show(scene);
-      busy = false;
-      update();
-      focus(prev.focus);
-    } catch (e) {
-      fail(e);
-    }
-  };
+    await show(scene);
+    busy = false;
+    update();
+    focus(entry.focus);
+  }
+  function step(from, to) {
+    if (busy) return;
+    if (active) commit();
+    const entry = from.pop();
+    if (!entry) return;
+    to.push({ scene, stack: [...focusStack], focus: focusIdentity(doc.activeElement) });
+    visit(entry).catch(fail);
+  }
+  function initialFocus(endpoint) {
+    return endpoint.edges.find((edge) => !edge.trigger.target.frame)?.trigger.target;
+  }
+  function restart() {
+    if (busy || !startScene) return;
+    history.length = future.length = 0;
+    visit({ scene: startScene, stack: [], focus: initialFocus(startScene) }).catch(fail);
+  }
+  control('back').onclick = () => step(history, future);
+  control('forward').onclick = () => step(future, history);
+  control('restart').onclick = restart;
+  function historyKey(e) {
+    if (e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.isComposing || composing ||
+        e.target.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])')) return;
+    if (e.key === 'ArrowLeft') step(history, future);
+    else if (e.key === 'ArrowRight') step(future, history);
+    else if (e.key.toLowerCase() === 'r') restart();
+    else return;
+    e.preventDefault();
+  }
   control('pause').onclick = () => {
     if (run) {
       stop();
@@ -445,10 +518,20 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     }
   };
   const settings = dialog.querySelector('.play-settings');
-  control('settings').onclick = () => {
-    settings.hidden = !settings.hidden;
-    control('settings').setAttribute('aria-expanded', String(!settings.hidden));
-  };
+  function setPanel(button, open) {
+    const panel = dialog.querySelector('#' + button.getAttribute('aria-controls'));
+    panel.hidden = !open;
+    button.setAttribute('aria-expanded', String(open));
+    if (open) panels.push(button);
+    else panels.splice(panels.indexOf(button), 1);
+    panels.forEach((toggle, i) => {
+      dialog.querySelector('#' + toggle.getAttribute('aria-controls')).style.zIndex = String(2 + i);
+    });
+  }
+  for (const id of ['settings', 'flow', 'inspector']) {
+    const button = control(id);
+    button.onclick = () => setPanel(button, !panels.includes(button));
+  }
   const preferenceChanged = () => {
     if (active && reduced()) commit();
     else update();
@@ -487,7 +570,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   media.addEventListener('change', preferenceChanged, { signal });
   let composing;
   const editingValue = (el) => el.value ?? el.innerText;
-  function dispatch(event, on) {
+  function dispatch(event, on, target = event.target) {
     if (
       busy ||
       committing ||
@@ -500,9 +583,9 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       return;
     const dest = active?.to ?? scene;
     const origin =
-      on === 'key' && [doc.body, doc.documentElement, doc].includes(event.target)
-        ? stage.firstElementChild
-        : event.target;
+      on === 'key' && [doc.body, doc.documentElement, doc].includes(target)
+        ? stage?.firstElementChild
+        : target;
     for (let node = origin; node && node !== doc; node = node.parentElement) {
       const edge = dest?.edges.find(
         (e) =>
@@ -523,7 +606,9 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     iframe = await createStage(stageHost);
     if (signal.aborted) return;
     doc = iframe.contentDocument;
-    Object.assign(doc.body.style, { minHeight: '100vh', display: 'grid', placeItems: 'center' });
+    doc.documentElement.style.background = 'transparent';
+    Object.assign(doc.body.style, { background: 'transparent', margin: '0', minHeight: '100vh' });
+    iframe.style.visibility = 'hidden';
     for (const kind of ['pointerover', 'pointerout', 'focusin', 'focusout'])
       actions.addEventListener(kind, hints);
     for (const kind of ['pointerover', 'pointerout', 'focusin', 'focusout'])
@@ -552,7 +637,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
           spots = true;
           hints();
         } else if (!hits.some((x) => x.trigger.on === 'input'))
-          actions.querySelector('[data-edge="' + CSS.escape(hits[0].id) + '"]')?.focus();
+          (actions.closest('[hidden]') ? control('flow') : actions.querySelector('[data-edge="' + CSS.escape(hits[0].id) + '"]'))?.focus();
       }
     });
     doc.addEventListener('beforeinput', (e) => {
@@ -572,12 +657,18 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       doc.addEventListener(
         name,
         (e) => {
-          if (name === 'keydown' && e.key === 'Escape' && !e.isComposing && !composing && dismissPopover()) {
+          if (name === 'keydown' && e.key === 'Escape' && !e.repeat && !e.isComposing && !composing && dismissPopover()) {
             e.preventDefault();
             return;
           }
+          if (dispatch(e, input)) return;
+          if (name === 'keydown') {
+            const button = e.target.closest?.('[role="button"], a[tabindex]');
+            if (button && !e.repeat && !e.isComposing && !composing &&
+                ['Enter', ' '].includes(e.key) && dispatch(e, 'click', button)) return;
+            historyKey(e);
+          }
           if (
-            !dispatch(e, input) &&
             !busy &&
             !e.repeat &&
             !composing &&
@@ -602,10 +693,13 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       true
     );
     scene = await fetchScene({ source, frame });
+    await prepareStage(scene);
+    doc.body.style.display = 'flex';
     await show(scene);
+    iframe.style.visibility = '';
     busy = false;
     update();
-    (actions.querySelector('button') ?? control('exit')).focus();
+    focus(initialFocus(scene));
   } catch (err) {
     fail(err);
   }

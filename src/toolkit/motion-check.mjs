@@ -1,4 +1,6 @@
 import {matchRoots,candidates,chain} from '../../public/motion-identity.js';
+import { flowLayout } from '../../public/motion-flow.js';
+import { frameKey } from './motion-flows.mjs';
 import { nativeTextEntry } from '../../public/motion-scene.js';
 export {instanceKeyMatches} from '../../public/motion-identity.js';
 import path from 'node:path';
@@ -87,11 +89,12 @@ function observe({ design, nativeTextEntry }) {
 
 export function motionEvaluator(
   config,
-  { getPage, getBuild, bindings = [], hasMap = false, themes = ['light', 'dark'] } = {}
+  { getPage, getBuild, bindings = [], hasMap = false, flows = new Map(), themes = ['light', 'dark'] } = {}
 ) {
   const builds = new Map(),
     observations = new Map(),
-    dispatch = new Map();
+    dispatch = new Map(),
+    layouts = new Map();
   const layers = sourceDirectories(config).filter((s) => s !== 'studies'),
     top = layers.at(-1);
   const inventory = new Set(listSources(config.design, sourceDirectories(config)).map((f) => relative(config, f)));
@@ -109,10 +112,25 @@ export function motionEvaluator(
     const key = JSON.stringify([ref.source, ref.frame, theme]);
     if (!observations.has(key)) {
       const page = await getPage();
-      await loadFrame(page, frame, theme);
-      observations.set(key, await page.evaluate(observe, { design: relative(config, config.design), nativeTextEntry }));
+      const { x, y, width, height } = await loadFrame(page, frame, theme);
+      const rows = await page.evaluate(observe, { design: relative(config, config.design), nativeTextEntry });
+      observations.set(key, { box: [x, y, width, height], rows });
     }
     return observations.get(key);
+  }
+  async function layoutFor(flow, theme) {
+    if (!layouts.has(flow)) layouts.set(flow, new Map());
+    const byTheme = layouts.get(flow);
+    if (!byTheme.has(theme)) {
+      const frames = [];
+      for (const ref of flow.frames) {
+        const frame = await frameAt(ref);
+        if (!frame) break;
+        frames.push(await observeFrame(ref, frame, theme));
+      }
+      byTheme.set(theme, frames.length === flow.frames.length ? flowLayout(flow, frames) : null);
+    }
+    return byTheme.get(theme);
   }
   return async function evaluate(record) {
     const { edge: e, owner } = record,
@@ -177,7 +195,8 @@ export function motionEvaluator(
           );
       }
       if (!from || !to) continue;
-      const rows = { from: await observeFrame(e.from, from, theme), to: await observeFrame(e.to, to, theme) };
+      const observed = { from: await observeFrame(e.from, from, theme), to: await observeFrame(e.to, to, theme) };
+      const rows = { from: observed.from.rows, to: observed.to.rows };
       const matched = matchRoots(rows.from, rows.to);
       for (const conflict of matched.conflicts)
         issue(
@@ -256,7 +275,7 @@ export function motionEvaluator(
                 )
                   issue('MOTION_TRACK_CONFLICT', p, 'Overlapping track claims on ' + side + ' endpoint.', theme);
               }
-              claims[side].push({ row, subtree, props: track.properties });
+              claims[side].push({ row, subtree, mode: track.mode, props: track.properties, duration });
             }
             if (
               track.mode === 'match' &&
@@ -280,6 +299,30 @@ export function motionEvaluator(
         for (const row of rows[side]) if (subtrees.has(row.i) || excluded[side].has(row.parent)) excluded[side].add(row.i);
       }
       const implicit = excluded.from.size || excluded.to.size ? matchRoots(rows.from, rows.to, excluded) : matched;
+      const flow = flows.get(frameKey(e.from));
+      if (flow) {
+        const layout = await layoutFor(flow, theme);
+        const fromIndex = flow.frames.findIndex((ref) => frameKey(ref) === frameKey(e.from));
+        const toIndex = flow.frames.findIndex((ref) => frameKey(ref) === frameKey(e.to));
+        const warning = !config.check?.strictMotion;
+        if (!layout?.pin)
+          issue('MOTION_FLOW_ANCHOR', '/trigger/target', flow.anchor
+            ? 'Flow anchor must resolve to one nonempty box in every member frame.'
+            : 'No trigger target is present uniquely across the flow. Playback uses an unpinned stage.', theme, warning);
+        if (layout && flow.stage && (layout.width > flow.stage.width + 0.01 || layout.height > flow.stage.height + 0.01))
+          issue('MOTION_FLOW_STAGE', '/to', 'Flow stage is smaller than the aligned frame union.', theme, warning);
+        if (layout?.pin) {
+          const { boxes } = layout.pin;
+          if ([2, 3].some(axis => Math.abs(boxes[fromIndex][axis] - boxes[toIndex][axis]) > 0.01))
+            issue('MOTION_FLOW_ANCHOR', '/to', 'The persistent flow anchor changes size.', theme, warning);
+        }
+        const positions = ['from', 'to'].map((side, i) => {
+          const offset = layout?.offsets[i ? toIndex : fromIndex] ?? [0, 0];
+          return offset.map((value, axis) => value - observed[side].box[axis]);
+        });
+        checkComposition(rows, matched.pairs, excluded, claims, positions,
+          (code, message) => issue(code, '/phases', message, theme, warning));
+      }
       if (implicit.ambiguous.length)
         issue(
           'MOTION_IMPLICIT_FADE',
@@ -294,4 +337,46 @@ export function motionEvaluator(
       detail.themes.dark = { sameAs: 'light' };
     return { detail, findings: [...problems.values()] };
   };
+}
+
+function checkComposition(rows, pairs, excluded, claims, positions, issue) {
+  const active = (row) => row.box[2] > 0 && row.box[3] > 0;
+  const identity = (row) => row.anchor ? '#' + row.anchor : row.parts.at(-1);
+  const matched = { from: new Set(), to: new Set() };
+  const compare = (left, right) => {
+    if (!active(left) || !active(right)) return;
+    matched.from.add(left.i);
+    matched.to.add(right.i);
+    const axes = ['x', 'y'].filter((axis, i) =>
+      Math.abs(left.box[i] + positions[0][i] - right.box[i] - positions[1][i]) > 0.01 &&
+      !claims.from.some((claim) => claim.row === left && claim.mode === 'match' &&
+        claim.props.includes(axis) && claim.duration > 0));
+    if (axes.length) issue('MOTION_UNANIMATED_MOVE', identity(left) + ' moves on ' + axes.join('/') + ' without a position track.');
+  };
+  const replaced = (side, row) => excluded[side].has(row.i) &&
+    !claims[side].some((claim) => claim.subtree && claim.row === row);
+  for (const pair of pairs) {
+    const left = rows.from[pair.from], right = rows.to[pair.to];
+    if (!replaced('from', left) && !replaced('to', right)) compare(left, right);
+  }
+  const anchors = new Set([...rows.from, ...rows.to].flatMap((row) => row.anchor ? [row.anchor] : []));
+  for (const anchor of anchors) {
+    const [left, right] = ['from', 'to'].map((side) => candidates(rows[side], { anchor }));
+    if (left.length === 1 && right.length === 1 &&
+        !matched.from.has(left[0].i) && !matched.to.has(right[0].i) &&
+        !replaced('from', left[0]) && !replaced('to', right[0])) compare(left[0], right[0]);
+  }
+  for (const side of ['from', 'to']) {
+    const uncovered = new Set();
+    for (const row of rows[side]) {
+      if (uncovered.has(row.parent)) {
+        uncovered.add(row.i);
+        continue;
+      }
+      if (!identity(row) || !active(row) || matched[side].has(row.i) || excluded[side].has(row.i)) continue;
+      uncovered.add(row.i);
+      issue('MOTION_UNANIMATED_PRESENCE', identity(row) + ' appears only on ' + side +
+        ' without ' + (side === 'from' ? 'an exit' : 'an enter') + ' track.');
+    }
+  }
 }

@@ -12,7 +12,7 @@ export async function createStage(parent) {
   return frame;
 }
 
-export async function mountScene(doc, endpoint, theme) {
+export async function mountScene(doc, endpoint, theme, { parent = doc.body, offset } = {}) {
   const template = doc.createElement('template');
   template.innerHTML = endpoint.html;
   const fragment = template.content;
@@ -67,8 +67,12 @@ export async function mountScene(doc, endpoint, theme) {
     width: endpoint.width ? endpoint.width + 'px' : 'max-content',
     height: endpoint.height ? endpoint.height + 'px' : ''
   });
+  if (offset) {
+    const [x, y] = offset;
+    Object.assign(stage.style, { position: 'absolute', left: x + 'px', top: y + 'px' });
+  }
   stage.append(fragment);
-  doc.body.replaceChildren(stage);
+  parent.replaceChildren(stage);
   await Promise.all([doc.fonts.ready, ...[...doc.images].map((img) => img.decode().catch(() => {}))]);
   return stage;
 }

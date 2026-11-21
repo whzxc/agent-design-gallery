@@ -5,7 +5,6 @@ import { CommentPin } from '../components/comment-pin';
 import { Field } from '../components/field';
 import { IconButton } from '../components/icon-button';
 import { Separator, Toolbar } from '../components/toolbar';
-import { Tooltip } from '../components/tooltip';
 import { hubNotes, instances, projects, switcherFrames } from '../fixtures/hub';
 import { boardFilters, nextActions, playableNames, playerMoments, type FrameFilter, type PlayerMoment } from '../fixtures/board-playback';
 import recentPeriods from '../fixtures/recent-updates.json';
@@ -15,7 +14,7 @@ import { BoardChapter, BoardSection, SpecimenWell } from '../modules/canvas';
 import { CommentsPanel, CommentThread } from '../modules/comments';
 import { Inspector } from '../modules/inspector';
 import { Contents, ScopeTabs } from '../modules/navigation';
-import { ProjectPicker, Switcher, SwitcherMenu } from '../modules/project-switcher';
+import { ProjectPicker, Switcher } from '../modules/project-switcher';
 import { ViewerBars, ZoomBar } from '../modules/view-controls';
 
 const { commentCanvas, commentExample, changedExample } = commentFixtures;
@@ -306,60 +305,62 @@ function FlowPlayer({ moment }: { moment: PlayerMoment }) {
   const to = terminal ? instance : instant ? empty : open;
   const current = rest || underway ? picker : to;
   const history = current === picker ? [picker] : current === open ? [picker, open] : [picker, open, current];
-  const actions = rest ? nextActions.picker : instant ? nextActions.empty : nextActions.open;
+  const flowOpen = moment === 'completed' || terminal;
+  const inspectorOpen = underway || moment === 'completed';
   const title = terminal ? 'Open live instance' : instant ? 'Search for “Nova”' : 'Open project switcher';
   return <Canvas {...screen}>
-    <div class="absolute inset-0 flex flex-col gap-4 p-5 text-text">
-      <header class="flex items-center justify-between">
-        <Toolbar wide><div class="flex items-center gap-3 px-2 text-title font-semibold">
+    <div class="absolute inset-0 text-text">
+      <header class="absolute inset-x-5 top-3 flex items-center justify-between">
+        <Toolbar wide><div class="flex items-center gap-2 px-2 text-title font-semibold">
           <Icon name="route" size={17} /><span>Project switcher</span>
         </div><Separator />
           <button type="button" aria-expanded={settings}
             class="flex h-(--control-size) items-center gap-2 rounded-row bg-surface-sunken px-3 text-body font-semibold">
             <Icon name="settings-2" size={15} />Playback settings
-            <span class="border-l border-border pl-2 text-text-secondary">{instant ? 'Reduced motion' : '1×'}</span>
+            <span class="border-l border-border pl-2">{instant ? 'Reduced motion' : '1×'}</span>
           </button>
         </Toolbar>
-        <Toolbar><Button form="ghost" icon="log-out" label="Exit to board" /></Toolbar>
+        <Toolbar wide>
+          <Button form="secondary" icon="route" label="Flow" />
+          <div class={rest ? 'opacity-50' : ''}>
+            <Button form="secondary" icon="panel-right" label="Transition inspector" />
+          </div>
+          <Button form="secondary" icon="log-out" label="Exit to board" />
+        </Toolbar>
       </header>
-      <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_350px] gap-4">
-        <div class="flex min-h-0 min-w-0 flex-col gap-4">
-          <div class="grid min-h-0 flex-1 place-items-center">
-            {rest ? <div class="relative rounded-field outline-2 outline-offset-4 outline-accent">
-              <ProjectPicker current={projects[0]} kind="project" />
-              <div class="absolute top-full left-0 mt-3 whitespace-nowrap"><Tooltip label="Open project switcher" /></div>
-            </div> : terminal ? <ProjectPicker current={instances[0]} kind="instance" /> :
-              <div class="flex w-[410px] flex-col items-start gap-[6px]">
-                <Toolbar wide><IconButton icon="panel-left" label="Contents" /><ProjectPicker current={projects[0]} kind="project" open width={240} /></Toolbar>
-                <div class={`ml-[46px] ${underway ? 'opacity-[0.58]' : ''}`}>
-                  <SwitcherMenu current={projects[0]} empty={instant} query="Nova" />
-                </div>
-              </div>}
-          </div>
-          {!rest && <TransitionInspector moment={moment} from={from} to={to} title={title} />}
-        </div>
-        <aside class="self-start rounded-panel border border-border bg-surface shadow-float">
-          <div class="p-5">
-            <p class={smallHeading}>Current frame</p>
-            <h1 class="mt-2 font-mono text-[22px] leading-7 font-semibold">{current}</h1>
-            <div class="mt-5"><p class={`mb-2 ${smallHeading}`}>Path taken</p><PathTaken frames={history} /></div>
-            {history.length > 1 && <div class="mt-4"><Button form="secondary" icon="arrow-left" label={`Back to ${history[history.length - 2]}`} /></div>}
-          </div>
-          <div class="border-t border-border p-5">
-            <h2 class="text-title font-semibold">{terminal ? 'End of flow' : 'Next actions'}</h2>
-            {underway && <p class="mt-1 text-meta text-text-secondary">Continue from {to}</p>}
-            {terminal ? <p class="mt-2 text-body text-text-secondary">No outgoing actions from this frame.</p> :
-              <div class="mt-3 flex flex-col gap-2">
-                {actions.map(([label, ...gestures]) => <div key={label} class="rounded-field border border-border px-3 py-[10px]">
-                  <strong class="block text-body">{label}</strong>
-                  <div class="mt-1 flex flex-wrap gap-1">{gestures.map(gesture =>
-                    <Button key={gesture} form="secondary" label={gesture} />)}</div>
-                </div>)}
-              </div>}
-          </div>
-        </aside>
+      <div class={`absolute left-[493px] top-[179px] bg-canvas p-6 ${underway ? '[&_[data-adg-id=menu]]:opacity-[0.58]' : ''}`}>
+        <Switcher current={terminal ? instances[0] : projects[0]} kind={terminal ? 'instance' : 'project'}
+          open={!rest && !terminal} empty={instant} />
       </div>
-      {settings && <div data-free class="absolute top-[71px] left-[184px] w-[296px] space-y-4 rounded-panel border border-border bg-surface p-4 shadow-menu">
+      {rest && <div class="absolute left-[563px] top-[209px] h-8 w-60 outline-2 outline-dashed outline-accent">
+        <span class="align-top bg-surface text-[11px]">Open project switcher</span>
+      </div>}
+      {flowOpen && <aside class="absolute top-[68px] right-5 w-[350px] rounded-panel border border-border bg-surface shadow-float">
+        <div class="p-5">
+          <p class={smallHeading}>Current frame</p>
+          <h1 class="mt-2 font-mono text-[22px] leading-7 font-semibold">{current}</h1>
+          <div class="mt-5"><p class={`mb-2 ${smallHeading}`}>Path taken</p><PathTaken frames={history} /></div>
+          <div class="mt-3 flex flex-wrap gap-1">
+            <Button form="secondary" icon="arrow-left" label={`Back to ${history[history.length - 2]}`} />
+            <Button form="secondary" icon="rotate-ccw" label="Restart flow" />
+          </div>
+        </div>
+        <div class="border-t border-border p-5">
+          <h2 class="text-title font-semibold">{terminal ? 'End of flow' : 'Next actions'}</h2>
+          {terminal ? <p class="mt-2 text-body text-text-secondary">No outgoing actions from this frame.</p> :
+            <div class="mt-3 flex flex-col gap-2">
+              {nextActions.open.map(([label, ...gestures]) => <div key={label} class="rounded-field border border-border px-3 py-[10px]">
+                <strong class="block text-body">{label}</strong>
+                <div class="mt-1 flex flex-wrap gap-1">{gestures.map(gesture =>
+                  <Button key={gesture} form="secondary" label={gesture} />)}</div>
+              </div>)}
+            </div>}
+        </div>
+      </aside>}
+      {inspectorOpen && <div class="absolute bottom-5 left-5 w-[640px]">
+        <TransitionInspector moment={moment} from={from} to={to} title={title} />
+      </div>}
+      {settings && <div data-free class="absolute top-[68px] left-[184px] w-[296px] space-y-4 rounded-panel border border-border bg-surface p-4 shadow-menu">
         <SettingChoices title="Playback speed" choices={['0.25×', '0.5×', '1×']} selected="1×" />
         <SettingChoices title="Reduced motion" choices={['System', 'On', 'Off']} selected="System" />
       </div>}

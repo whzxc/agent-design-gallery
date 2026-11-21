@@ -4,6 +4,7 @@ import { lexer } from 'css-tree';
 import { CliError } from '../cli-output.mjs';
 import { jsonLocations } from './json-locations.mjs';
 import { portablePath } from './owner-locators.mjs';
+import { motionFlows } from './motion-flows.mjs';
 import { relative } from './project.mjs';
 
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -135,6 +136,7 @@ export function motionFiles(config) {
 
 export function readMotion(config, files = motionFiles(config)) {
   const records = [],
+    declarations = [],
     findings = [],
     ids = new Map();
   for (const file of files) {
@@ -162,9 +164,23 @@ export function readMotion(config, files = motionFiles(config)) {
         theme: null
       });
     }
-    if (!fields(doc, ['version', 'edges']) || doc.version !== 1 || !Array.isArray(doc.edges)) {
+    if (!fields(doc, ['version', 'edges', 'flows']) || doc.version !== 1 || !Array.isArray(doc.edges)) {
       issue('MOTION_SCHEMA', '', 'Expected version 1 and an edges array.');
       continue;
+    }
+    if (doc.flows !== undefined && !Array.isArray(doc.flows))
+      issue('MOTION_FLOW_SCHEMA', '/flows', 'Expected a flows array.');
+    for (const [index, declaration] of (Array.isArray(doc.flows) ? doc.flows : []).entries()) {
+      const pointer = '/flows/' + index;
+      if (!fields(declaration, ['start', 'anchor', 'stage']) ||
+          !frameRef(declaration.start) || declaration.start.source !== owner ||
+          !target(declaration.anchor) || declaration.anchor.frame ||
+          (declaration.stage !== undefined && (!fields(declaration.stage, ['width', 'height']) ||
+            ![declaration.stage.width, declaration.stage.height].every((value) => Number.isFinite(value) && value > 0)))) {
+        issue('MOTION_FLOW_SCHEMA', pointer, 'Use a start frame in this sidecar’s source, a part or motion anchor, and optional positive stage dimensions.');
+        continue;
+      }
+      declarations.push({ declaration, source, pointer, locations });
     }
     doc.edges.forEach((edge, index) => {
       const pointer = '/edges/' + index,
@@ -197,7 +213,9 @@ export function readMotion(config, files = motionFiles(config)) {
           message: 'Duplicate transition ID ' + r.edge.id
         });
       }
-  return { records, findings, ids, files: files.map((f) => relative(config, f)) };
+  const { byFrame: flows, findings: flowFindings } = motionFlows(records.filter((r) => r.valid), declarations);
+  findings.push(...flowFindings);
+  return { records, findings, ids, declarations, flows, files: files.map((f) => relative(config, f)) };
 }
 
 const cssNumber = '[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][+-]?\\d+)?';
