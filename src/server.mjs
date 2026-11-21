@@ -584,10 +584,11 @@ export async function startServer({
       const file = ['GET', 'HEAD'].includes(request.method) && viewerFile(url.pathname);
       if (file) return await shell(request, response, file, request.headers['x-adg-viewer-base']);
       if (!directLocal(request)) return json(response, 401, { error: 'Unauthorized' });
-      if (request.method === 'GET' && ['/api/recent-visit','/api/recent-updates','/api/recent-state'].includes(url.pathname)) {
+      if (request.method === 'GET' && ['/api/recent-visit','/api/recent-updates','/api/recent-state','/api/recent-visual'].includes(url.pathname)) {
         if (!activeProject) return json(response,404,{error:'No project is open.'});
         const { visitRevision, dirtyGeneration } = await import('./recent-history.mjs');
-        if (url.pathname !== '/api/recent-updates') {
+        const visual = url.pathname === '/api/recent-visual';
+        if (!visual && url.pathname !== '/api/recent-updates') {
           const visit = await visitRevision(activeProject.root);
           if (visit.branch && url.pathname === '/api/recent-state')
             visit.generation = (await dirtyGeneration(activeProject.root,visit.head,activeProject.output)).generation;
@@ -599,8 +600,14 @@ export async function startServer({
         const {runRecentJob} = await import('./recent-job.mjs');
         const controller = new AbortController();
         response.once('close',()=>controller.abort());
+        const sendEvent = event => { if (!response.destroyed) response.write(JSON.stringify(event)+'\n'); };
+        if (visual) {
+          response.writeHead(200, {'Content-Type':'application/x-ndjson','Cache-Control':'no-store'});
+          sendEvent({phase:'Preparing visual comparison'});
+        }
         const job = runRecentJob({root:activeProject.root, directory:path.join(stateDirectory,'cache',digest(root),'recent'),
-          day,week,since:url.searchParams.get('since')},controller.signal);
+          day,week,since:url.searchParams.get('since'), visual:visual && {base:url.searchParams.get('from'),
+            head:url.searchParams.get('to'),generation:url.searchParams.get('generation')}},controller.signal,visual ? sendEvent : null);
         recentJobs.set(controller,job);
         // Keep streaming proxies alive during long cold comparisons. Whitespace is valid JSON.
         const heartbeat = setInterval(() => {
@@ -612,7 +619,8 @@ export async function startServer({
         try {
           const result = await job;
           if (!response.destroyed) {
-            if (response.headersSent) response.end(JSON.stringify(result));
+            if (visual) {sendEvent({result});response.end();}
+            else if (response.headersSent) response.end(JSON.stringify(result));
             else json(response,200,result);
           }
         } catch (error) {

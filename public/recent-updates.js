@@ -54,7 +54,16 @@ function boundaries() {
 
 export function createHistoryFilter(update) {
   let request, timer, invalidation, directory, result, message, baseline, range, stamp;
+  let activeGroup, query, verifying;
+  const visualStates = new Map();
+  function cancelVisual() {
+    verifying?.controller.abort();
+    verifying = null;
+  }
   function close() {
+    cancelVisual();
+    activeGroup = null;
+    visualStates.clear();
     request?.abort();
     request = null;
     clearTimeout(timer);
@@ -67,13 +76,13 @@ export function createHistoryFilter(update) {
     const controller = (request = new AbortController());
     const { signal } = controller;
     result = null;
-    message = 'Comparing frames across revisions…';
+    message = 'Finding changed sources and inputs…';
     update();
     try {
       ({ baseline } = await recordVisit(directory, true, false));
       signal.throwIfAborted();
       const dates = boundaries();
-      const query = new URLSearchParams(dates);
+      query = new URLSearchParams(dates);
       if (range === 'visit' && baseline) query.set('since', baseline);
       const response = await read('api/recent-updates?' + query, signal);
       signal.throwIfAborted();
@@ -113,6 +122,83 @@ export function createHistoryFilter(update) {
       }
     }
   }
+  async function visualChanges(period) {
+    if (verifying?.period === period) {
+      cancelVisual();
+      visualStates.delete(period);
+      update();
+      return;
+    }
+    if (verifying) visualStates.delete(verifying.period);
+    cancelVisual();
+    const controller = new AbortController();
+    verifying = { period, controller };
+    const state = { message: 'Preparing visual comparison', verdicts: new Map() };
+    visualStates.set(period, state);
+    update();
+    try {
+      const params = new URLSearchParams(query);
+      params.set('from', period.base ?? '');
+      params.set('to', period.head ?? '');
+      params.set('generation', result.generation);
+      const response = await dataFetch('api/recent-visual?' + params, { signal: controller.signal });
+      if (!response.ok) throw Error('Visual comparison unavailable.');
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let pending = '',
+        finished = false;
+      function apply(line) {
+        if (!line.trim()) return;
+        const event = JSON.parse(line);
+        if (event.error) throw Error(event.error);
+        if (event.phase) {
+          state.message = event.phase + (event.total ? ' · ' + event.completed + ' / ' + event.total : '') + '…';
+          if (state.output) state.output.textContent = state.message;
+          for (const row of event.changes ?? []) {
+            for (const id of [identity(row), ...(row.former ? [identity(row.former)] : [])]) {
+              state.verdicts.set(id, row.status);
+              const label = state.labels?.get(id);
+              if (label) label.textContent = 'Visual comparison · ' + row.status;
+            }
+          }
+        } else if (event.result) {
+          if (event.result.stale) throw Error('Period changed. Refresh Recently updated.');
+          const checked = event.result.periods[0];
+          if (!checked) throw Error('Period unavailable.');
+          state.verdicts = new Map();
+          for (const row of checked.rows) {
+            state.verdicts.set(identity(row), row.status);
+            if (row.former) state.verdicts.set(identity(row.former), row.status);
+          }
+          state.complete = checked.complete;
+          state.message = checked.complete
+            ? 'Visual comparison complete · ' + checked.rows.length + ' changes'
+            : 'Visual coverage incomplete. ' + (checked.failures?.[0]?.message ?? '');
+          finished = true;
+        }
+      }
+      for (;;) {
+        const { value, done } = await reader.read();
+        controller.signal.throwIfAborted();
+        if (done) {
+          apply(pending);
+          break;
+        }
+        const lines = (pending + value).split('\n');
+        pending = lines.pop();
+        for (const line of lines) apply(line);
+      }
+      if (!finished) throw Error('Visual comparison ended early.');
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      state.verdicts.clear();
+      state.message = error.message;
+    } finally {
+      if (verifying?.controller === controller) {
+        verifying = null;
+        update();
+      }
+    }
+  }
   return {
     open,
     close,
@@ -134,17 +220,29 @@ export function createHistoryFilter(update) {
         button.onclick = () => void open(directory, id);
         controls.append(button);
       }
-      const nodes = [controls];
+      const nodes = [controls, element('p', 'Frames whose sources or inputs changed.')];
       if (message) nodes.push(element('p', message));
       if (result?.available && !result.complete)
         nodes.push(element('p', 'Incomplete coverage. Unclassified frames keep their normal emphasis.'));
       const matches = new Map(),
         redirects = new Map();
-      const key = (row) => JSON.stringify([row.source, row.frame]);
-      const expanded = new Set([...container.querySelectorAll('details[open]')].map((node) => node.dataset.group));
+      const key = identity;
       for (const period of result?.periods ?? []) {
         const section = element('section');
-        section.append(element('h3', period.title));
+        const header = element('header');
+        const visual = visualStates.get(period);
+        const action = element('button', verifying?.period === period ? 'Cancel comparison' : 'Visual changes');
+        action.setAttribute('aria-label', action.textContent + ' · ' + period.title);
+        action.dataset.recentFocus = JSON.stringify(['visual', period.base, period.head]);
+        action.onclick = () => void visualChanges(period);
+        header.append(element('h3', period.title), action);
+        section.append(header);
+        if (visual) {
+          visual.labels = new Map();
+          visual.output = element('small', visual.message);
+          visual.output.setAttribute('role', 'status');
+          section.append(visual.output);
+        }
         for (const subject of period.subjects) section.append(element('small', subject));
         const inherited = new Map(),
           direct = [];
@@ -153,6 +251,16 @@ export function createHistoryFilter(update) {
           const source = context.relative(locator?.source ?? row.source);
           const live = row.status !== 'removed' && locator && context.visible.get(source)?.has(locator.frame);
           if (!live && !context.inScope(context.relative(row.source), row.frame, row.chapter)) continue;
+          const group = row.causes && JSON.stringify([period.title, ...row.causes]);
+          if (live && (activeGroup ? activeGroup === group : !group)) {
+            if (!matches.has(source)) matches.set(source, new Set());
+            matches.get(source).add(locator.frame);
+          }
+          if (group) {
+            if (!inherited.has(group)) inherited.set(group, { causes: row.causes, rows: [], count: 0 });
+            inherited.get(group).count++;
+            if (activeGroup !== group) continue;
+          }
           const button = element(live ? 'button' : 'div');
           button.className = 'recent-row';
           button.append(
@@ -165,28 +273,69 @@ export function createHistoryFilter(update) {
             button.append(
               element('small', 'From ' + context.relative(row.former.source) + ' · ' + row.former.frame)
             );
+          if (visual?.verdicts) {
+            const status = visual.verdicts.get(key(row)) ?? (row.former && visual.verdicts.get(key(row.former)));
+            const annotation = element(
+              'small',
+              status
+                ? 'Visual comparison · ' + status
+                : visual.complete
+                  ? 'Visually unchanged'
+                  : verifying?.period === period
+                    ? ''
+                    : 'Visual result unknown'
+            );
+            visual.labels.set(key(row), annotation);
+            if (row.former) visual.labels.set(key(row.former), annotation);
+            button.append(annotation);
+          }
           if (live) {
-            if (!matches.has(source)) matches.set(source, new Set());
-            matches.get(source).add(locator.frame);
             button.setAttribute('aria-label', 'Locate ' + row.frame + ' on board');
+            button.dataset.recentFocus = JSON.stringify([period.base, period.head, row.source, row.frame]);
             button.onclick = () => context.locate(source, locator.frame);
           }
-          if (row.causes) {
-            const causes = [...row.causes].sort().join(', ') || 'Inherited changes';
-            if (!inherited.has(causes)) inherited.set(causes, []);
-            inherited.get(causes).push(button);
-          } else direct.push(button);
+          if (group) inherited.get(group).rows.push(button);
+          else direct.push(button);
         }
         section.append(...direct);
-        if (inherited.size) section.append(element('small', 'Inherited changes'));
-        for (const [cause, rows] of inherited) {
-          const details = element('details');
-          details.dataset.group = period.title + ' ' + cause;
-          details.open = expanded.has(details.dataset.group);
-          details.append(element('summary', cause + ' → ' + rows.length + ' frames'), ...rows);
-          section.append(details);
+        const select = (id) => {
+          activeGroup = activeGroup === id ? null : id;
+          update();
+        };
+        if (inherited.size) section.append(element('small', 'Shared inputs'));
+        for (const [id, { causes, rows, count }] of inherited) {
+          const button = element(
+            'button',
+            causeLabel(causes) + ' → ' + count + (count === 1 ? ' frame' : ' frames')
+          );
+          button.title = causes.join(', ');
+          button.setAttribute('aria-label', button.title + ' → ' + count + ' frames');
+          button.setAttribute('aria-expanded', String(activeGroup === id));
+          button.onclick = () => select(id);
+          section.append(button, ...rows);
         }
-        if (!direct.length && !inherited.size && period.complete)
+        if (period.globalCauses?.length) {
+          const id = JSON.stringify([period.title, 'global']);
+          const button = element('button', causeLabel(period.globalCauses) + ' → all frames');
+          button.title = period.globalCauses.join(', ');
+          button.setAttribute('aria-label', button.title + ' → all frames');
+          button.setAttribute('aria-pressed', String(activeGroup === id));
+          button.onclick = () => select(id);
+          section.append(element('small', 'Global inputs'), button);
+          if (activeGroup === id) {
+            for (const [source, frames] of Object.entries(period.globalFrames ?? {}))
+              for (const frame of frames) {
+                const ref = { source, frame },
+                  target = redirects.has(key(ref)) ? redirects.get(key(ref)) : ref;
+                if (!target) continue;
+                const file = context.relative(target.source);
+                if (!context.visible.get(file)?.has(target.frame)) continue;
+                if (!matches.has(file)) matches.set(file, new Set());
+                matches.get(file).add(target.frame);
+              }
+          }
+        }
+        if (!direct.length && !inherited.size && !period.globalCauses?.length && period.complete)
           section.append(element('p', 'No matching changes in this scope.'));
         for (const failure of period.failures ?? []) section.append(element('small', failure.message));
         nodes.push(section);
@@ -202,10 +351,11 @@ export function createHistoryFilter(update) {
       const focus = container.contains(document.activeElement) ? document.activeElement : null;
       container.replaceChildren(...nodes);
       if (focus) {
-        const same = [...container.querySelectorAll('button, summary')].find(
-          (node) =>
-            node.textContent === focus.textContent &&
-            node.getAttribute('aria-label') === focus.getAttribute('aria-label')
+        const same = [...container.querySelectorAll('button, summary')].find((node) =>
+          focus.dataset.recentFocus
+            ? node.dataset.recentFocus === focus.dataset.recentFocus
+            : node.textContent === focus.textContent &&
+              node.getAttribute('aria-label') === focus.getAttribute('aria-label')
         );
         same?.focus({ preventScroll: true });
       }
@@ -217,4 +367,13 @@ function element(tag, text) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+function identity({ source, frame }) {
+  return JSON.stringify([source, frame]);
+}
+function causeLabel(causes) {
+  return causes.length <= 2
+    ? causes.join(', ')
+    : causes.slice(0, 2).join(', ') + ' + ' + (causes.length - 2) + ' more';
 }

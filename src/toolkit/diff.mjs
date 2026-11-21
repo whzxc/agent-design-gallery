@@ -304,8 +304,10 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
     const ordinaryJobs = ordinary.flatMap(row => (row.previousSource ? moveThemes :
       themes.filter(theme => !session || row.support || session.scheduled(row, theme))).map(theme => ({ row, theme })));
     const partJobs = built.frames.filter(row => row.parentRow).flatMap(row => themes.filter(theme => !session || session.scheduled(row, theme)).map(theme => ({ row, theme })));
+    let comparedJobs = 0;
     for (const jobs of [ordinaryJobs, partJobs]) for (let start = 0; start < jobs.length; start += concurrency) {
       const failures = [], openPairs = [];
+      const changes = [];
       const phase = async (name, items, work) => {
         const settled = await timed(name, () => Promise.allSettled(items.map(work)));
         return settled.flatMap((result, index) => {
@@ -342,6 +344,10 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
           context?.comparisons.set(comparisonIdentity(row, row.theme), row);
           if (supportKeys.has(frameIdentity(row))) { data.support.push(row); data.summary.supportComparisons++; }
           else {
+            if (options.onProgress && (row.status !== 'matched' || row.verdict==='changed')) {
+              changes.push({source:row.source,frame:row.frame,status:row.status==='matched'?'changed':row.status,
+                ...(row.previousSource ? {former:row.before} : {})});
+            }
             completed.push(row); data.summary.comparisons++; data.summary[row.verdict]++;
             for (const name of classNames) data.summary.classPixels[name] += row.pixels.classes[name].pixels;
           }
@@ -352,6 +358,8 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
           catch (error) { failures.push({ index: jobs.length, error }); }
         }
       }
+      comparedJobs += Math.min(concurrency,jobs.length-start);
+      options.onProgress?.({phase:'Comparing frame images',completed:comparedJobs,total:ordinaryJobs.length+partJobs.length,changes});
       data.comparisons = completed;
       completed.sort((a, b) => selectedOrder.get(comparisonIdentity(a, a.theme)) - selectedOrder.get(comparisonIdentity(b, b.theme)));
       data.summary.isolationCaptures = context?.isolation.size ?? 0;

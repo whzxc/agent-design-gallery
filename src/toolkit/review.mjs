@@ -1,6 +1,7 @@
+import { liveDependencies } from './input-generation.mjs';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { realpath, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import path from 'node:path';
 import { CliError } from '../cli-output.mjs';
@@ -167,31 +168,18 @@ export async function review(config, values, { log = console.log } = {}) {
 export async function reviewFrameChanges(config, options) {
   const values = { ...options, theme: 'both', impacted: true, json: true };
   let model;
-  const dependencies = new Map(), chapters = {};
+  let dependencies;
+  options.onProgress?.({phase:'Resolving frame inputs'});
   const { data } = await withImpacted(config, [], values, 'diff', async session => {
     const scheduled = session.scheduled;
     const skipped = new Set();
-    for (const theme of session.themes)
+    for (const theme of session.themes) {
+      options.onProgress?.({phase:'Inspecting '+theme+' frames'});
       for (const key of await observeUnchanged(session, theme)) skipped.add(key);
-    session.scheduled = (row, theme) => scheduled(row, theme) && !skipped.has(impactRowKey(row, theme));
-    const resolvedFiles = new Set();
-    for (const view of session.views) {
-      const prefix = relative(view.config,view.config.design);
-      chapters[view.side] = new Map();
-      for (const group of readGroups(view.config.design,view.config.sources))
-        for (const name of group.assets) chapters[view.side].set(path.posix.join(prefix,name),group.title);
-      for (const built of view.built.values()) {
-        for (const [name, hash] of Object.entries(built.dependencyHashes ?? {})) {
-          const file = path.resolve(view.config.design, name);
-          if (resolvedFiles.has(file)) continue;
-          resolvedFiles.add(file);
-          if (!file.startsWith(options.temporaryDirectory + path.sep) || file.includes(path.sep + 'node_modules' + path.sep)) {
-            const physical = await realpath(file).catch(() => file);
-            if (!physical.startsWith(options.temporaryDirectory + path.sep)) dependencies.set(physical, hash);
-          }
-        }
-      }
     }
+    options.onProgress?.({phase:'Comparing frame images'});
+    session.scheduled = (row, theme) => scheduled(row, theme) && !skipped.has(impactRowKey(row, theme));
+    dependencies = await liveDependencies(session.views,options.temporaryDirectory);
     try {
       return await diff(session.diffInputs.after.config, [], values, {
         session, reviewFormat: 'rows', onReview: value => { model = value; }
@@ -201,14 +189,10 @@ export async function reviewFrameChanges(config, options) {
       return { data: error.data, warnings: error.warnings ?? [] };
     }
   });
-  const rows = Object.values(model.sections).flat().map(({source,frame,status,change,previousSource}) => {
+  const rows = Object.values(model.sections).flat().map(({source,frame,status,previousSource}) => {
     const former = previousSource && data.comparisons.find(c => c.source === source && c.frame === frame)?.before;
-    return { source,frame,status, ...(former ? {former} : {}), ...(change?.kind === 'inherited' ? {causes:change.causes} : {}) };
+    return { source,frame,status, ...(former ? {former} : {}) };
   });
   for (const {before,after} of model.movePairs) rows.push({...after,status:'moved',former:before});
-  for (const row of rows) {
-    const chapter = chapters[row.status === 'removed' ? 'before' : 'after'].get(row.source);
-    if (chapter) row.chapter = chapter;
-  }
-  return { rows, complete:model.complete, failures:model.failures, dependencies:[...dependencies] };
+  return { rows, complete:model.complete, failures:model.failures, dependencies };
 }

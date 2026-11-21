@@ -2,6 +2,7 @@ import { parentPort } from 'node:worker_threads';
 import { createHash } from 'node:crypto';
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
+import { captureFrameOrigins } from './runtime.mjs';
 import { buildSource } from './build.mjs';
 import { createArchBrowser } from './arch-browser.mjs';
 
@@ -17,10 +18,15 @@ parentPort.on('message', async ({ id, config, name, type }) => {
   }
   if (shuttingDown) return;
   try {
+    const origins = config.frameOrigins && captureFrameOrigins();
     const snapshot = new Map();
     const build = async browser => config.overlay && name.endsWith('.mmd') ? (await import('./arch-overlay.mjs')).buildOverlay(config,path.join(config.root,name),{base:config.overlay,browser,snapshot}) : buildSource(config, path.join(name.endsWith('.mmd')?config.root:config.design, name), { write: false, snapshot, browser, allowLegacy: config.allowLegacy ?? true });
     const built = await (name.endsWith('.mmd') ? archBrowser.run(build) : build());
     const frames = JSON.parse(JSON.stringify(built.frames.map(({ document, ...frame }) => frame))); 
+    if (origins) built.frames.forEach((frame,i) => {
+      const origin = origins.get(frame);
+      if (origin) frames[i].declaration = {source:path.relative(config.root,path.resolve(origin.fileName)), line:origin.lineNumber,column:origin.columnNumber};
+    });
     const designRoot = realpathSync(config.design);
     const dependencies = [...new Set(built.dependencies.map(file => path.relative(file.startsWith(designRoot + path.sep) ? designRoot : config.design, file).split(path.sep).join('/')))].sort();
     const dependencyHashes = Object.fromEntries(dependencies.map(name => {

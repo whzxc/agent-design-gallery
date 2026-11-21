@@ -49,3 +49,18 @@ export async function verifyInputGeneration({ tracked, views, inputs, verifyConf
   }
   await verifyTracked();await inputs?.verifyChanges();
 }
+
+export async function liveDependencies(views,temporaryDirectory) {
+  const files = new Map(), checked = new Set();
+  for (const view of views) for (const built of view.built.values()) {
+    for (const [name,hash] of Object.entries(built.dependencyHashes)) {
+      const file=path.resolve(view.config.design,name);
+      if (checked.has(file)) continue;
+      checked.add(file);
+      if (file.startsWith(temporaryDirectory+path.sep) && !file.includes(path.sep+'node_modules'+path.sep)) continue;
+      const physical=await realpath(file).catch(()=>file);
+      if (!physical.startsWith(temporaryDirectory+path.sep)) files.set(physical,hash);
+    }
+  }
+  return [...files];
+}

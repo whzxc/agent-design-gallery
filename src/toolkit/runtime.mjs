@@ -44,8 +44,14 @@ export function jsx(type, props = {}, key = props.key) {
   return result;
 }
 export const jsxs = jsx;
+let frameOrigins;
+export const captureFrameOrigins = () => (frameOrigins ??= new WeakMap());
 export function jsxDEV(type, props, key, isStatic, source) {
-  try { return jsx(type, props, key); }
+  try {
+    const value = jsx(type, props, key);
+    if (frameOrigins && type === Frame && source) frameOrigins.set(value,source);
+    return value;
+  }
   catch (error) { if (!error.located && source) { error.message = `${source.fileName}:${source.lineNumber}:${source.columnNumber}: ${error.message}`; error.located = true; } throw error; }
 }
 export function Frame({ children: content, ...props }) { return { frame: true, ...props, html: children(content) }; }

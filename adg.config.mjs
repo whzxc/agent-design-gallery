@@ -37,7 +37,7 @@ async function readyPlayback(page, name) {
         const row=(frame,status,extra={})=>({source:'design/modules/project-switcher.tsx',frame,status,...extra});
         const periods=[
           {title:'Uncommitted',subjects:[],rows:[row('switcher-open','changed'),row('legacy-picker','removed')]},
-          {title:'Today',subjects:['Add an empty search state','Adjust menu elevation'],rows:[
+          {title:'Today',globalCauses:['adg.config.mjs','bun.lock'],subjects:['Add an empty search state','Adjust menu elevation'],rows:[
             row('switcher-empty','added'),...Object.entries({
               'project-switcher':['project-picker'], menus:['more','more-tokens','zoom','context-element','context-frame'],
               navigation:['scope-tabs','contents-layer','contents-search','contents-search-empty','contents-tokens'],tokens:['token-board']

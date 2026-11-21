@@ -243,4 +243,7 @@ kbd { display:inline-flex; align-items:center; height:var(--keycap-size); paddin
 #filter-rows .recent-row { display:grid; grid-template-columns:1fr auto; gap:2px 8px; padding:6px 8px; text-align:left; overflow-wrap:anywhere }
 .recent-row small { grid-column:1 / -1 }
 .recent-row span:last-of-type { color:var(--text-secondary); font-family:var(--font-ui) }
-#filter-rows summary { cursor:pointer; padding:8px; background:var(--surface-sunken); border-radius:var(--radius-row); overflow-wrap:anywhere }
+
+#filter-rows section header button { width:auto; font:inherit; color:var(--text-secondary) }
+#filter-rows button[aria-expanded], #filter-rows section button[aria-pressed] { background:var(--surface-sunken); overflow-wrap:anywhere }
+#filter-rows button[aria-expanded=true], #filter-rows section button[aria-pressed=true] { color:var(--accent) }

@@ -146,9 +146,13 @@ function FilterResults({ filter, sinceVisit }: { filter: FrameFilter; sinceVisit
             class={`flex-1 rounded-row px-2 py-[6px] text-meta font-semibold
               ${sinceVisit === Boolean(i) ? 'bg-surface text-text shadow-float' : 'text-text-secondary'}`}>{range}</button>)}
       </div>
+      <p class="mt-2 text-meta text-text-secondary">Frames whose sources or inputs changed.</p>
       {recentGroups.filter(group => !sinceVisit || group.period !== 'Earlier this week').map(group =>
         <section key={group.period} class="mt-3 border-t border-border pt-3">
-          <h3 class="text-section font-semibold">{group.period}</h3>
+          <header class="flex items-center justify-between">
+            <h3 class="text-section font-semibold">{group.period}</h3>
+            <Button form="ghost" label="Visual changes" />
+          </header>
           {group.period !== 'Uncommitted' && <ul class="my-2 space-y-1">
             {group.changes.map(commit => <li key={commit.subject} class="flex items-center gap-2 text-meta text-text-secondary">
               <Icon name="git-commit-horizontal" size={13} />{commit.subject}
@@ -158,13 +162,17 @@ function FilterResults({ filter, sinceVisit }: { filter: FrameFilter; sinceVisit
           {group.changes.flatMap(commit => commit.frames).map(([name, change]) =>
             <ResultRow key={name} name={name} change={change} selected={sinceVisit && name === 'switcher-open'} />)}
           {group.changes.filter(commit => commit.cause).map(commit => <div class="mt-2" key={commit.cause}>
-            <p class="mb-1 px-2 text-caption text-text-tertiary">Inherited changes</p>
+            <p class="mb-1 px-2 text-caption text-text-tertiary">Shared inputs</p>
             <button type="button" aria-expanded="false"
               class="flex h-9 w-full items-center gap-2 rounded-row bg-surface-sunken px-2 text-body">
               <Icon name="chevron-right" size={14} /><code>{commit.cause}</code><Icon name="arrow-right" size={12} />
               <span>{commit.affected} frames</span>
             </button>
           </div>)}
+          {group.period === 'Today' && <div class="mt-2">
+            <p class="px-2 text-caption text-text-tertiary">Global inputs</p>
+            <button type="button" aria-pressed="false" class="w-full rounded-row px-2 py-2 text-left text-meta">adg.config.mjs, bun.lock → all frames</button>
+          </div>}
         </section>)}
     </> : <section class="mt-3 border-t border-border pt-3">
       <h3 class={smallHeading}>Project switcher</h3>

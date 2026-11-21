@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, realpath, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 // One request owns the worker and its materializations. Only completed period rows outlive it.
-export async function runRecentJob(options, signal) {
+export async function runRecentJob(options, signal, onProgress) {
   await mkdir(options.directory, { recursive: true });
   const temporaryDirectory = await realpath(await mkdtemp(path.join(options.directory, 'job-')));
   let child, timer;
@@ -40,13 +40,17 @@ export async function runRecentJob(options, signal) {
     signal.addEventListener('abort', abort, { once: true });
     try {
       const code = await new Promise((resolve, reject) => {
+        if (onProgress)
+          child.on('message', ({ progress }) => {
+            if (progress && !signal.aborted) onProgress(progress);
+          });
         child.once('error', reject);
         child.once('exit', resolve);
         child.send({ ...options, temporaryDirectory });
       });
       signal.throwIfAborted();
       if (code !== 0) throw Error('The history comparison worker stopped before completing.');
-      const reply = JSON.parse(await readFile(path.join(temporaryDirectory,'result.json'),'utf8'));
+      const reply = JSON.parse(await readFile(path.join(temporaryDirectory, 'result.json'), 'utf8'));
       if (reply.error) throw Error(reply.error);
       return reply.result;
     } finally {

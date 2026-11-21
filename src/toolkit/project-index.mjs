@@ -47,7 +47,7 @@ async function resolutionFiles(config, artifactDirectory) {
   return files.sort();
 }
 
-export async function openProjectIndex(config, { stateDirectory = defaultStateDirectory, persist = true, fresh = false, artifactDirectory } = {}) {
+export async function openProjectIndex(config, { stateDirectory = defaultStateDirectory, persist = true, fresh = false, frameOrigins = false, artifactDirectory } = {}) {
   const inventory = discoverProject(config), root = await realpath(config.root), buildPromises = new Map();
   const directory = path.join(stateDirectory, 'cache', indexDigest(root), 'index-v1');
   const shards = await createIndexStore({ directory, persist });
@@ -91,7 +91,7 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
     if (!materializations.has(source)) {
       requestedSources.add(source); freshPool ??= new BuildPool();
       materializations.set(source, freshPool.run({ config: { root, design: physicalDesign ?? config.design, output: config.output,
-        sources: config.sources, arch: config.arch, check: config.check, allowLegacy: false },
+        sources: config.sources, arch: config.arch, check: config.check, allowLegacy: false, frameOrigins },
       name: path.relative(physicalDesign ?? config.design, path.join(root, source)).split(path.sep).join('/') }, new AbortController().signal).then(built => {
         observeDependencies(built);
         for (const frame of built.frames) frame.document = theme => frameDocument(frame, theme, built.css);
