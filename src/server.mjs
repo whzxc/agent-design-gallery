@@ -1,3 +1,5 @@
+import { gunzip } from 'node:zlib';
+import { promisify } from 'node:util';
 // Adapted from ARC's MIT-licensed tooling/design-server.mjs.
 import { frameKey as motionFrameKey, motionFlows } from './toolkit/motion-flows.mjs';
 import { changeComment, commentFile, commentRevision, listComments, readComment } from './comments.mjs';
@@ -37,6 +39,7 @@ function tokenSourcePath(directory, project) {
   const base = project.design === directory ? project.root : path.dirname(directory);
   return path.relative(base, path.join(directory, tokenFile)).split(path.sep).join('/');
 }
+const decompress = promisify(gunzip);
 const viewerVersion = Promise.all(['assets.js','frame-identity.js','layout.js','selection.js','arrangement.js','arrangement-worker.js'].map(file => readFile(new URL('../public/'+file,import.meta.url)))).then(parts => digest(Buffer.concat(parts)));
 const defaultState = path.join(os.homedir(), ".agent-design-gallery");
 export async function startServer({
@@ -523,18 +526,24 @@ export async function startServer({
     data.sourceImports=Object.fromEntries([...knownBuilds].map(([name,built])=>[name,built.imports]));
     const frameOnly = data.scope.startsWith('asset:') && url.searchParams.has('frame');
     if(viewerCache && !frameOnly) {
-      const includeMetadata=url.searchParams.get('metadata')==='1';
+      const mode=url.searchParams.get('metadata');
       const requestedTheme=url.searchParams.get('initial')==='1'&&['light','dark'].includes(state.theme)?state.theme:(url.searchParams.get('theme')==='light'?'light':'dark');
+      const includeLayout=mode==='layout' && data.view && data.assets.every(asset=>
+        asset.hash && viewerCache.hasLayout(asset.hash,requestedTheme,context));
       data.metadataTheme=requestedTheme;
       data.assets=await Promise.all(data.assets.map(async asset=>{
         if(!asset.hash)return {...asset};
         const metadata={},metadataRefs={},previewIds={};
+        let layout;
         for(const theme of ['light','dark']) {
           const reference=viewerCache.reference(asset.hash,theme,context);
           if(reference){metadataRefs[theme]=true;previewIds[theme]=reference.previewIds;}
-          if(includeMetadata&&theme===requestedTheme&&reference){const saved=await viewerCache.get(asset.hash,theme,context);if(saved)metadata[theme]=saved.metadata;}
+          if(theme===requestedTheme && reference) {
+            if(includeLayout)layout=await viewerCache.layout(asset.hash,theme,context);
+            if(mode==='1')metadata[theme]=(await viewerCache.get(asset.hash,theme,context))?.metadata;
+          }
         }
-        return {...asset,metadata,metadataRefs,previewIds};
+        return {...asset,metadata,metadataRefs,previewIds,layout};
       }));
     }
     data.features={compactSources:1,persistedMetadata:1,incrementalHashes:1};
@@ -620,10 +629,13 @@ export async function startServer({
     while(svgCache.size>128||bytes>32*1024*1024){const first=svgCache.keys().next().value;bytes-=svgCache.get(first).body.length;svgCache.delete(first);}
     return entry;
   }
-  async function body(request,limit=16384,raw=false) {
+  async function body(request,limit=16384,raw=false,compressed=false) {
     const chunks=[];let size=0;
     for await(const chunk of request){size+=chunk.length;if(size>limit)throw Error('Request too large.');chunks.push(chunk);}
-    const text=Buffer.concat(chunks).toString('utf8');
+    let bytes=Buffer.concat(chunks);
+    if(compressed && request.headers['content-encoding']==='gzip')
+      bytes=await decompress(bytes,{maxOutputLength:limit});
+    const text=bytes.toString('utf8');
     return raw?text:JSON.parse(text||'{}');
   }
   const server = createServer(async (request, response) => {
@@ -759,11 +771,11 @@ export async function startServer({
           const [,kind,hash]=cacheRoute,theme=url.searchParams.get('theme')==='dark'?'dark':'light',context=await contextFor(url);
           if(![...knownBuilds.values()].some(built=>built.hash===hash)&&!overlayHashes.has(hash))return json(response,409,{error:'Source changed; reload its metadata.'});
           if(kind==='metadata') {
-            const data=await body(request,32*1024*1024),metadata=data.metadata;
+            const data=await body(request,32*1024*1024,false,true),metadata=data.metadata;
             if(!metadata||!Array.isArray(metadata.parts)||!metadata.full||!Number.isFinite(metadata.full.width)||!Number.isFinite(metadata.full.height))throw Error('Invalid measured source metadata.');
             await viewerCache.save(hash,theme,context,metadata);
           } else {
-            const source=await body(request,32*1024*1024,true),crop=url.searchParams.get('crop')??'overview';
+            const source=await body(request,32*1024*1024,true,true),crop=url.searchParams.get('crop')??'overview';
             if(!/^\s*<svg\b/.test(source))throw Error('Expected an SVG preview.');
             await viewerCache.savePreview(hash,theme,context,crop,source);
           }
@@ -815,7 +827,13 @@ export async function startServer({
         return;
       }
       const metadataRoute=url.pathname.match(/^\/metadata\/([a-f0-9]{64})$/);
-      if(metadataRoute){const saved=await viewerCache?.get(metadataRoute[1],url.searchParams.get('theme')==='dark'?'dark':'light',await contextFor(url));return json(response,saved?200:404,saved??{error:'Source metadata is not cached.'});}
+      if(metadataRoute) {
+        const saved=await viewerCache?.readMetadata(metadataRoute[1],url.searchParams.get('theme')==='dark'?'dark':'light',await contextFor(url));
+        if(!saved)return json(response,404,{error:'Source metadata is not cached.'});
+        response.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
+        response.end(`{"metadata":${saved.text},"previewIds":${JSON.stringify(saved.previewIds)}}`);
+        return;
+      }
       const previewRoute=url.pathname.match(/^\/preview\/([a-f0-9]{64})$/);
       if(previewRoute) {
         const content=await viewerCache?.preview(previewRoute[1],url.searchParams.get('theme')==='dark'?'dark':'light',await contextFor(url),url.searchParams.get('crop')??'overview');

@@ -9,7 +9,30 @@ The frozen large-project workload has 143 TSX sources and 2,722 frames. Its modu
 | Module layer | ≤5.0 s | ≤1.0 s | ≤350 / ≤250 ms |
 | Full workload | ≤9.0 s | ≤2.5 s | ≤350 / ≤250 ms |
 
-## Arrangement-only measurements
+On the measurement host, the frozen project is `~/home/cache/adg/sacp-client-7c46191/snapshot`.
+It contains the tracked `design/` tree and `adg.config.mjs` from sacp-client commit
+`7c4619119683a41bdd01b5432ea76d2fbbc514a3`. Use this same project path for both
+implementations. The file receipt and retained timing evidence live under
+`~/home/runs/adg/perf-budget/`. Check load average and competing browser, test,
+compiler and comparison processes before each sample. Log the process list and
+load alongside the sample, and repeat a contended sample with fresh state.
+
+## Current frozen-snapshot results
+
+The paired comparison against `67c4729` met every first-content and visible-ready budget. Each cell gives median first content / visible-ready in milliseconds for five runs per implementation.
+
+| Scope | Route | Cold | Warm reload | Warm restart |
+| --- | --- | ---: | ---: | ---: |
+| Modules | direct | 258.4 / 3,962.0 | 126.1 / 516.5 | 165.2 / 689.7 |
+| Modules | hub | 303.2 / 4,049.0 | 145.2 / 606.8 | 210.7 / 730.9 |
+| Full | direct | 261.0 / 3,911.3 | 131.4 / 390.1 | 147.9 / 435.7 |
+| Full | hub | 306.0 / 3,927.8 | 138.6 / 412.4 | 197.9 / 490.1 |
+
+Cold frame measurement dominated the module-layer baseline. The viewer now overlaps source builds with frame measurement, reuses each source’s stylesheet and propagates ancestor clips in one tree walk. On warm navigation it uses cached frame bounds to request visible previews and their interaction metadata first. Complete placement still uses the full measurements.
+
+The host report at `~/home/runs/adg/perf-budget/report.md` includes before/after ranges for all four milestones, phase breakdowns for both routes, process logs and the final geometry comparison.
+
+## Earlier arrangement-only measurements
 
 Baseline `e2bca11` versus the arrangement Worker and provisional stream placement. Values are **median [minimum–maximum]**, with five samples for each route/scenario/implementation. Apple M4 Pro, macOS ARM64, Node v24.22.0, Chromium 156.0.8078.4 headless, 1440 × 900 CSS pixels, DPR 2, dark theme; isolated direct and hub processes. The same frozen source path is used throughout; OS file caches are not purged.
 
@@ -30,9 +53,9 @@ Baseline `e2bca11` versus the arrangement Worker and provisional stream placemen
 
 Streaming uses linear provisional rows without populating width choices. A complete width-search miss runs once in a Web Worker; complete cached inputs repack directly at their known winning widths without searching. Occupied-edge scans preserve the original width search and exact tie/Float rules while avoiding temporary candidate arrays and sorting. Final group, block, frame/crop, item and world geometry is byte-identical to the baseline for both workloads. All 120 rendered item-position arrays match the stored geometry. A seeded Property test verifies provisional-to-complete convergence and cache/input isolation.
 
-The 6.5-second module cold stop threshold is not hit. First-content guardrails are met; readiness budget status is shown per row. The next proposed step targets SVG preview decode/raster/drawing on warm navigation, with prototype savings targets of 0.4–0.6 s for modules and 0.8–1.3 s for the full workload. It has not been implemented. Renderer arrangement is now milliseconds; remaining asynchronous decode intervals include image loading, native rendering and scheduler waits and are not CPU-only timings.
+The 6.5-second module cold stop threshold is not hit. First-content guardrails are met; readiness budget status is shown per row. At this stage the proposed next step was warm SVG preview decoding and drawing, with estimated savings of 0.4–0.6 s for modules and 0.8–1.3 s for the full workload. Renderer arrangement is now milliseconds; remaining asynchronous decode intervals include image loading, native rendering and scheduler waits and are not CPU-only timings.
 
-Raw comparisons, geometry proof and the report remain locally under ignored `output/perf-m3/step2a/`. Reproduce with `node tooling/compare.mjs <frozen-project> <new-output> 5 --phases --scope=all --adg-baseline=<e2bca11-archive>`, and repeat with `--scope=layer:modules`. The runner alternates baseline/current, isolates state per sample, waits for complete before reload and reuses only that sample's persistent state for restart. Runtime tests pass all 147 checks.
+Reproduce with `node tooling/compare.mjs <frozen-project> <new-output> 5 --phases --scope=all --adg-baseline=<e2bca11-archive>`, and repeat with `--scope=layer:modules`. The runner alternates baseline/current, isolates state per sample, waits for complete before reload and reuses only that sample's persistent state for restart. Runtime tests pass all 147 checks.
 
 ## Earlier persistent-cache measurements
 
@@ -140,7 +163,7 @@ The runner derives an isolated design copy, uses separate preferences and free p
 
 The benchmark uses Fit all and an interior viewport zoom anchor, switches to the opposite theme, and waits for ADG readiness. Resource entries distinguish source/preview GETs from cache uploads. Metadata, image queues and cache writes settle before warm/restart samples and isolated save timing.
 
-Detailed commands and raw results are retained locally in `output/perf-round2/baseline.md`, `result.md` and `summary.json`. The local retention harness records server/driver process identities, worker statistics, current metadata coverage and renderer RSS.
+The local retention harness records server/driver process identities, worker statistics, current metadata coverage and renderer RSS.
 
 ## Impact performance methodology
 

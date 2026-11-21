@@ -36,10 +36,8 @@ reverted because it optimized first content while visible readiness was the real
   [Performance](performance.md).
 - Budgets (agreed): module layer cold visible-ready 5.0 s and warm 1.0 s; full workload cold 9.0 s and warm 2.5 s;
   first content 350 ms cold and 250 ms warm.
-- Fix the tool (done for now): the width search runs once in a Web Worker, streaming uses provisional placement and
-  final geometry stays byte-identical. Module layer cold visible-ready dropped from about 8.8 to 5.0 s. The remaining
-  warm cost is per-preview SVG decoding and drawing in the browser; raising decode concurrency missed the gate and
-  changed pixels, so warm budgets stay open.
+- Both routes meet the agreed cold, warm reload and warm restart budgets on the frozen workload. The paired
+  measurements compare final geometry byte for byte. See the [current results](performance.md#current-frozen-snapshot-results).
 - Govern consumer assets and modules afterwards, so governance does not hide tool regressions. This runs with regular
   consumer design work.
 

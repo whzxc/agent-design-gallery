@@ -12,7 +12,7 @@ export function previewAddress(asset,theme,crop) {
   return `preview/${asset.hash}?${query}`;
 }
 
-export async function prepare(asset, theme, {signal} = {}) {
+export async function fetchSource(asset, theme, signal) {
   const frameQuery = asset.onlyFrame && /\.(tsx|mmd)$/.test(asset.path) ? `&frame=${encodeURIComponent(asset.onlyFrame)}` : '';
   const response = await dataFetch(
     `asset/${encodeURIComponent(asset.path)}?theme=${theme}&v=${encodeURIComponent(asset.version)}${frameQuery}`,
@@ -23,7 +23,11 @@ export async function prepare(asset, theme, {signal} = {}) {
     const problem = frameQuery && (await response.json().catch(() => null))?.error;
     throw new Error(problem || `Cannot load ${asset.path}`);
   }
-  const source = await response.text();
+  return response.text();
+}
+
+export async function prepare(asset, theme, {signal, source: prefetched} = {}) {
+  const source = await (prefetched ?? fetchSource(asset, theme, signal));
   if (/\.(tsx|mmd)$/.test(asset.path)) {
     const built=JSON.parse(source);
     return prepareSource({...asset,hash:built.hash??asset.hash,version:built.hash??asset.version},built,theme,signal);
@@ -298,10 +302,9 @@ export function arrange(data, { placed, previousGroups } = {}) {
   return { groups, items, world: { x: 0, y: 0, width: Math.max(1, ...groups.map(g => g.x + g.w)), height: Math.max(1, ...groups.map(g => g.y + g.h)) } };
 }
 
-function formDocument(form,css,theme) {
-  if(form.document)return form.document;
+function formShell(form) {
   const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  return `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><meta name="darkreader-lock"><style data-adg-style>${css.replace(/<\/style/gi,'<\\/style')}</style></head><body><div data-adg-frame="${escape(form.name)}" style="${form.width ? `width:${form.width}px;` : 'width:max-content;'}${form.height ? `height:${form.height}px;` : ''}">${form.html}</div></body></html>`;
+  return `<div data-adg-frame="${escape(form.name)}" style="${form.width ? `width:${form.width}px;` : 'width:max-content;'}${form.height ? `height:${form.height}px;` : ''}">${form.html}</div>`;
 }
 async function prepareSource(asset, built, theme, signal) {
   const endMeasurement = globalThis.__adgTiming?.span('measurement', asset.path, {frames:built.frames.length});
@@ -319,15 +322,20 @@ async function prepareSource(asset, built, theme, signal) {
         await (globalThis.scheduler?.yield?.()??new Promise(resolve=>setTimeout(resolve,0)));
         sliceStart=performance.now();
       }
-      const documentSource=formDocument(form,built.css,theme);
+
       frame.style.width=(form.width ?? 1600)+'px'; frame.style.height=(form.height ?? 1200)+'px';
       if (index === 0) {
-        await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=documentSource;});
+        const source = form.document ?? `<!doctype html><html data-theme="${theme}"><head><meta charset="utf-8"><meta name="darkreader-lock"><style data-adg-style>${built.css.replace(/<\/style/gi,'<\\/style')}</style></head><body>${formShell(form)}</body></html>`;
+        await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=source;});
       } else {
         // Frames from one source share CSS. Keep its sandbox document and viewport,
         // replacing only the specimen instead of navigating for every form.
-        const parsed = new DOMParser().parseFromString(documentSource, 'text/html');
-        frame.contentDocument.body.replaceChildren(frame.contentDocument.importNode(parsed.querySelector('[data-adg-frame]'), true));
+        if (form.document) {
+          const parsed = new DOMParser().parseFromString(form.document, 'text/html');
+          frame.contentDocument.body.replaceChildren(frame.contentDocument.importNode(parsed.querySelector('[data-adg-frame]'), true));
+        } else {
+          frame.contentDocument.body.innerHTML = formShell(form);
+        }
         await Promise.all([...frame.contentDocument.images].map(image => image.decode().catch(() => {})));
       }
       await frame.contentDocument.fonts.ready;

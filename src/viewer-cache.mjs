@@ -16,11 +16,10 @@ export async function createViewerCache(directory, {memoryBytes=32*1024*1024,dis
   } catch(error) {if(error.code!=='ENOENT' && !(error instanceof SyntaxError)) throw error;}
   total=[...entries.values()].reduce((n,entry)=>n+entry.bytes,0);
   const keyFor=(hash,theme,context)=>digest(JSON.stringify([hash,theme,context]));
-  function remember(key,metadata) {
+  function remember(key,text,bytes) {
     if(resident.has(key)){residentBytes-=resident.get(key).bytes;resident.delete(key);}
-    const bytes=Buffer.byteLength(JSON.stringify(metadata));
     if(bytes>memoryBytes)return;
-    resident.set(key,{metadata,bytes});residentBytes+=bytes;
+    resident.set(key,{text,bytes});residentBytes+=bytes;
     while(residentBytes>memoryBytes){const first=resident.keys().next().value;residentBytes-=resident.get(first).bytes;resident.delete(first);}
   }
   async function persist() {
@@ -41,13 +40,33 @@ export async function createViewerCache(directory, {memoryBytes=32*1024*1024,dis
     pending=result.catch(()=>{});
     return result;
   }
-  async function get(hash,theme,context) {
+  async function readMetadata(hash,theme,context) {
     const key=keyFor(hash,theme,context),entry=entries.get(key);
     if(!entry)return null;
-    let metadata=resident.get(key)?.metadata;
-    if(!metadata){try{metadata=JSON.parse(await readFile(path.join(directory,key,'metadata.json'),'utf8'));}catch(error){if(error.code==='ENOENT')return null;throw error;}}
-    if(resident.has(key)){const item=resident.get(key);resident.delete(key);resident.set(key,item);}else remember(key,metadata);entry.used=Date.now();
-    return {metadata,previewIds:Object.keys(entry.previews)};
+    let cached=resident.get(key);
+    if(cached) {
+      resident.delete(key);resident.set(key,cached);
+    } else {
+      let text;
+      try {text=await readFile(path.join(directory,key,'metadata.json'),'utf8');}
+      catch(error){if(error.code==='ENOENT')return null;throw error;}
+      cached={text};
+      remember(key,text,entry.metadataBytes);
+    }
+    entry.used=Date.now();
+    return {text:cached.text,previewIds:Object.keys(entry.previews)};
+  }
+  async function get(hash,theme,context) {
+    const saved=await readMetadata(hash,theme,context);
+    return saved && {metadata:JSON.parse(saved.text),previewIds:saved.previewIds};
+  }
+  async function layout(hash,theme,context) {
+    const key=keyFor(hash,theme,context);
+    const entry=entries.get(key);
+    if (!entry || entry.layoutBytes === undefined) return;
+    if (!entry.layoutBytes) return (await get(hash,theme,context))?.metadata;
+    try { return JSON.parse(await readFile(path.join(directory,key,'layout.json'),'utf8')); }
+    catch(error) { if(error.code==='ENOENT')return;throw error; }
   }
   async function save(hash,theme,context,metadata) {
     return mutate(async()=>{
@@ -55,10 +74,25 @@ export async function createViewerCache(directory, {memoryBytes=32*1024*1024,dis
       await mkdir(location,{recursive:true});
       const temporary=path.join(location,'metadata.'+randomUUID()+'.tmp');
       await writeFile(temporary,text);
-      await rename(temporary,path.join(location,'metadata.json'));
+      const outline=JSON.stringify({...metadata,parts:metadata.parts.map(({elements,...part})=>part)});
       const old=entries.get(key),bytes=Buffer.byteLength(text);
-      const entry={key,hash,theme,context,metadataBytes:bytes,previews:old?.previews??{},bytes:bytes+Object.values(old?.previews??{}).reduce((n,p)=>n+p.bytes,0),used:Date.now()};
-      total+=entry.bytes-(old?.bytes??0);entries.set(key,entry);remember(key,metadata);
+      const layoutBytes=outline===text ? 0 : Buffer.byteLength(outline);
+      const layoutFile=path.join(location,'layout.json');
+      const layoutTemp=layoutBytes && path.join(location,'layout.'+randomUUID()+'.tmp');
+      try {
+        if(layoutTemp)await writeFile(layoutTemp,outline);
+        // An interrupted overwrite leaves a projection miss. Readers can still
+        // recover the complete record from the atomically replaced metadata.
+        if(old)await rm(layoutFile,{force:true});
+        await rename(temporary,path.join(location,'metadata.json'));
+        if(layoutTemp)await rename(layoutTemp,layoutFile);
+      } catch (error) {
+        await rm(temporary,{force:true});
+        if(layoutTemp)await rm(layoutTemp,{force:true});
+        throw error;
+      }
+      const entry={key,hash,theme,context,metadataBytes:bytes,layoutBytes,previews:old?.previews??{},bytes:bytes+layoutBytes+Object.values(old?.previews??{}).reduce((n,p)=>n+p.bytes,0),used:Date.now()};
+      total+=entry.bytes-(old?.bytes??0);entries.set(key,entry);remember(key,text,bytes);
       await trim();await persist();
     });
   }
@@ -81,5 +115,6 @@ export async function createViewerCache(directory, {memoryBytes=32*1024*1024,dis
     catch(error){if(error.code==='ENOENT')return null;throw error;}
   }
   const reference=(hash,theme,context)=>{const entry=entries.get(keyFor(hash,theme,context));if(entry)entry.used=Date.now();return entry?{previewIds:Object.keys(entry.previews)}:null;};
-  return {get,reference,save,savePreview,preview,close:()=>pending,stats:()=>({entries:entries.size,residentBytes,diskBytes:total})};
+  const hasLayout=(hash,theme,context)=>entries.get(keyFor(hash,theme,context))?.layoutBytes !== undefined;
+  return {get,layout,hasLayout,readMetadata,reference,save,savePreview,preview,close:()=>pending,stats:()=>({entries:entries.size,residentBytes,diskBytes:total})};
 }

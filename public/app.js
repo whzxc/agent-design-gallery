@@ -7,7 +7,7 @@ import { dataFetch, keyURL, isUnauthorized } from './auth.js';
 import { blockForAsset, fitArea, fitView, specimenPaintCrop } from "./layout.js";
 import { icon, hydrateIcons } from "./icons.js";
 hydrateIcons();
-import { prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext, measuredMetadata, previewAddress, compactPreparedSource, scopeKind, scopeTarget } from "./assets.js";
+import { fetchSource, prepare, imageURL, arrange, groupAssets, evictPreviews, metadataContext, measuredMetadata, previewAddress, compactPreparedSource, scopeKind, scopeTarget } from "./assets.js";
 import { sourceRelationships, relatedSources } from './relationships.js';
 import { contains, hitSelection, frameBox, exportFrames } from './selection.js';
 import { groupTokens, renderTokenTable, tokenBoardSection } from './token-catalog.js';
@@ -116,10 +116,20 @@ function cacheWrite(url,data,raw=false) {
   uploadPromises.add(promise);promise.finally(()=>uploadPromises.delete(promise));
   pumpUploads();return promise;
 }
+async function uploadCache(task) {
+  const headers = {'Content-Type':task.raw ? 'image/svg+xml' : 'application/json'};
+  let body = task.raw ? task.data : JSON.stringify(task.data);
+  if (body.length >= 16384 && typeof CompressionStream === 'function') {
+    const compressed = new Blob([body]).stream().pipeThrough(new CompressionStream('gzip'));
+    body = await new Response(compressed).arrayBuffer();
+    headers['Content-Encoding'] = 'gzip';
+  }
+  return dataFetch(task.url, {method:'POST',headers,body});
+}
 function pumpUploads() {
   while(uploadActive<3&&uploadQueue.length) {
     const task=uploadQueue.shift();uploadActive++;
-    dataFetch(task.url,{method:'POST',headers:{'Content-Type':task.raw?'image/svg+xml':'application/json'},body:task.raw?task.data:JSON.stringify(task.data)})
+    uploadCache(task)
       .then(response=>{if(response.status===409)return false;if(!response.ok)throw Error(`Derived cache HTTP ${response.status}`);return true})
       .catch(()=>{cacheFailures++;return false})
       .then(result=>{uploadActive--;cacheWrites--;task.resolve(result);pumpUploads()});
@@ -496,9 +506,14 @@ document.addEventListener('visibilitychange', () => {if (document.hidden) void p
 const layoutData = data => onlyFrame ? { ...data, assets: data.assets.map(asset => ({ ...asset, sourceComponent: !!asset.component, component: false, parts: asset.parts.filter(part => part.name === onlyFrame) })) } : data;
 function layout(data, preserve = false, options = {}) {
   const endArrangement = globalThis.__adgTiming?.span('arrangement', undefined, {sources:data.assets.length,provisional:!!options.provisional});
+  const activeKey = groups[active]?.key;
   const previousGroups = groups,
     result = arrange(layoutData(data),{...options, previousGroups: preserve ? previousGroups : undefined});
   groups = result.groups;
+  if (activeKey) {
+    const index = groups.findIndex(group => group.key === activeKey);
+    active = index < 0 ? null : index;
+  }
   assets = result.items;
   hoveredPlay = null;
   world = result.world;
@@ -1290,7 +1305,13 @@ function fitWorld(area, data) {
 function frame(box, padding = 0) {
   const target=box===world?'all':groups.includes(box)?'group':'selection';
   for(const name of ['all','group','selection']) $("#zoom-fit-"+name).setAttribute('aria-current',String(name===target));
-  commit(box===world ? fitWorld(cameraArea(),manifest) : fitView(box, cameraArea(), padding));
+  // Fit is a discrete camera placement. Its viewport is already settled.
+  clearTimeout(idleTimer);
+  moving = false;
+  window.__adg.ready = false;
+  view = box===world ? fitWorld(cameraArea(),manifest) : fitView(box, cameraArea(), padding);
+  requestDraw();
+  save();
 }
 function fit() {
   if (tokenManifest) {
@@ -1381,7 +1402,7 @@ function ensureImage(a, p) {
 function pump() {
   // New vector parsing/decoding waits until the gesture settles. Existing exact
   // raster previews continue to move with the camera during interaction.
-  if(moving)return;
+  if(moving || loading >= 3 || !queued.length)return;
   if (frameFilter === 'all') queued.sort((a,b)=>Number(visible(b.asset))-Number(visible(a.asset))||
     Math.hypot(view.x+(a.asset.x+a.asset.width/2)*view.scale-width/2,view.y+(a.asset.y+a.asset.height/2)*view.scale-height/2)-
     Math.hypot(view.x+(b.asset.x+b.asset.width/2)*view.scale-width/2,view.y+(b.asset.y+b.asset.height/2)*view.scale-height/2));
@@ -1420,7 +1441,9 @@ async function loadPreview(e) {
   const decode=async source=>{
     if(cache.get(e.key)!==e)return;
     while(moving)await new Promise(resolve=>setTimeout(resolve,16));
-    const img=new Image();e.image=img;img.decoding='async';img.src=source;
+    const img=new Image();e.image=img;img.decoding='async';
+    if (e.visiblePriority) img.fetchPriority='high';
+    img.src=source;
     const endDecode = globalThis.__adgTiming?.span('decode', e.asset.path, {crop:e.part.id});
     try { await img.decode();e.state='ready'; } finally {endDecode?.();}
   };
@@ -1505,8 +1528,8 @@ async function drawCardPreview({ asset, part }, canvas) {
 
 function thumbnail(e, upgrade = false) {
   const scale = Math.min(2, view.scale) * dpr;
-  if (e.bitmap && (!upgrade || e.bitmapScale >= scale)) return e.bitmap;
   const limit = Math.min(scale, 4096 / Math.max(e.part.width, e.part.height));
+  if (e.bitmap && (!upgrade || e.bitmapScale >= limit)) return e.bitmap;
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.ceil(e.part.width * limit));
   c.height = Math.max(1, Math.ceil(e.part.height * limit));
@@ -1573,7 +1596,7 @@ function draw() {
     Math.abs(dx) <= drawingMargin && Math.abs(dy) <= drawingMargin;
   if (!reuse) {
     const zooming = moving && drawingView?.scale !== view.scale;
-    drawingMargin = zooming ? 0 : Math.ceil(Math.min(width, height) / 4);
+    drawingMargin = zooming || manifest?.loading ? 0 : Math.ceil(Math.min(width, height) / 4);
     const bufferWidth = Math.round((width + drawingMargin * 2) * dpr), bufferHeight = Math.round((height + drawingMargin * 2) * dpr);
     if (canvas.width !== bufferWidth || canvas.height !== bufferHeight) {
       canvas.width = bufferWidth; canvas.height = bufferHeight;
@@ -2253,15 +2276,59 @@ async function applyManifest(data, force = false) {
   const previous=manifest, results=new Array(data.assets.length), signal=refreshController?.signal;
   let next=0,publishFrame=0,streamView=null,streamMoved=false,publishedCount=0,nextPublish=1;
   const streaming=first && !leavingOverlayView;
+  let cachedPlacement;
+  const order = data.assets.map((_, i) => i);
+  if (streaming && data.view && data.metadataTheme === versionTheme &&
+      data.assets.length && data.assets.every(a => a.layout)) {
+    // The cached frame bounds determine placement without loading the much larger hit maps.
+    const outlines = data.assets.map(a => decorateMetadata(a, a.layout));
+    if (data.scope === 'all' && data.tokenBoard && !tokenHeight)
+      boardLayer.tokens(data.tokenBoard, height => { tokenHeight = height; });
+    const panel = layoutData({...data,assets:outlines});
+    cachedPlacement = await arranger.arrange(panel, {signal});
+    const priority = new Map();
+    const camera = entry?.view ?? data.view;
+    const items = arrange(panel, {placed:cachedPlacement}).items;
+    const offset = data.scope === 'all' && data.tokenBoard && tokenHeight ? tokenHeight + 480 : 0;
+    const candidates = [];
+    for (const item of items) {
+      const x = camera.x + item.x * camera.scale, y = camera.y + (item.y + offset) * camera.scale;
+      const w = item.width * camera.scale, h = item.height * camera.scale;
+      const distance = Math.hypot(x + w / 2 - width / 2, y + h / 2 - height / 2);
+      priority.set(item.path, Math.min(priority.get(item.path) ?? Infinity, distance));
+      if (x < width && x+w > 0 && y < height && y+h > 0) candidates.push({item,distance});
+    }
+    // Start the actual cached images while their interaction metadata is in flight.
+    // Reuse the same bounded queue when the corresponding specimens are published.
+    const primed = new Set();
+    for (const {item} of candidates.sort((a,b) => a.distance-b.distance)) {
+      const crop = item.previewCrop ?? item.shown[0];
+      const key = assetURL(item,crop);
+      if (primed.has(key) || !item.previewIds?.[versionTheme]?.includes(crop.id)) continue;
+      ensureImage(item,crop).visiblePriority = true;
+      primed.add(key);
+      if (primed.size === 3) break;
+    }
+    pump();
+    order.sort((a,b) => priority.get(data.assets[a].path) - priority.get(data.assets[b].path));
+  }
+  let lastPublish = -Infinity;
   const publish=()=>{
     publishFrame=0;
     if(signal?.aborted||versionTheme!==effectiveTheme)return;
     const available=results.filter(Boolean);
     if(!available.length)return;
+    lastPublish = performance.now();
     publishedCount=available.length;nextPublish=Math.max(publishedCount+1,publishedCount*2);
     if(streamView&&view!==streamView)streamMoved=true;
     manifest={...data,assets:available,renderTheme:versionTheme,loading:true};
-    layout(manifest,false,{provisional:true});
+    let placed;
+    if (cachedPlacement) {
+      const paths = new Set(available.map(a => a.path));
+      placed = cachedPlacement.map(board => ({...board, blocks:board.blocks.filter(b => paths.has(b.asset))}))
+        .filter(board => board.blocks.length);
+    }
+    layout(manifest,false,{provisional:true,placed});
     if(streaming&&!streamMoved){view=entry?.view??data.view??fitWorld(cameraArea(),data);streamView=view;}
     requestDraw();
   };
@@ -2272,14 +2339,32 @@ async function applyManifest(data, force = false) {
   }
   let completed=results.filter(Boolean).length;
   if(streaming&&completed&&completed<data.assets.length)publish();
+  // Let the server build the next sources while the browser measures this batch.
+  const prefetched = new Map();
+  let fetchIndex = 0;
+  function prefetch() {
+    while (fetchIndex < data.assets.length && prefetched.size < 4) {
+      const i = order[fetchIndex++], asset = data.assets[i];
+      if (results[i]) continue;
+      const source = asset.metadataRefs?.[versionTheme]
+        ? readSourceMetadata(asset, versionTheme, signal)
+        : fetchSource(asset, versionTheme, signal);
+      source.catch(() => {}); // A superseded refresh can abandon this lookahead.
+      prefetched.set(i, source);
+    }
+  }
+  prefetch();
   await Promise.all(Array.from({length:4},async()=>{
     while(next<data.assets.length) {
       signal?.throwIfAborted();
-      const i=next++,a=data.assets[i];
+      const i=order[next++],a=data.assets[i];
       if(results[i])continue;
-      let entry = await readSourceMetadata(a, versionTheme, signal);
+      const source = prefetched.get(i);
+      prefetched.delete(i);
+      prefetch();
+      let entry = a.metadataRefs?.[versionTheme] ? await source : null;
       if(!entry) {
-        entry=await prepare(a,versionTheme,{signal});
+        entry=await prepare(a,versionTheme,{signal,source:a.metadataRefs?.[versionTheme] ? undefined : source});
         if (a.onlyFrame && !entry.parts.some(part => part.name === a.onlyFrame)) throw Error(`Frame ${a.onlyFrame} does not exist in ${a.path}.`);
         Object.assign(a,{hash:entry.hash,version:entry.version});
         persistSource(entry,versionTheme);
@@ -2288,16 +2373,14 @@ async function applyManifest(data, force = false) {
       const metadata=measuredMetadata(entry);
       metadataCache.set(sourceKey(entry,versionTheme,data.directory),metadata);
       results[i]=decorateMetadata(a,metadata);completed++;
-      if(streaming&&completed>=nextPublish&&!publishFrame)publishFrame=requestAnimationFrame(publish);
+      if(streaming&&completed>=nextPublish&&!publishFrame&&performance.now()-lastPublish>=100)publishFrame=requestAnimationFrame(publish);
     }
   }));
   if(publishFrame)cancelAnimationFrame(publishFrame);
   if(versionTheme!==effectiveTheme){pending=true;return;}
   signal?.throwIfAborted();
   const complete={...data,assets:results};
-  const placed=await arranger.arrange(layoutData(complete),{signal,onPending:()=>{
-    if(streaming&&completed>publishedCount)publish();
-  }});
+  const placed=await arranger.arrange(layoutData(complete),{signal});
   if(versionTheme!==effectiveTheme){pending=true;return;}
   signal?.throwIfAborted();
   if(streamView&&view!==streamView)streamMoved=true;
@@ -2322,19 +2405,21 @@ async function applyManifest(data, force = false) {
   document.title = `${data.label} — Agent Design Gallery`;
   if (first || leavingOverlayView) {
     const target = entry ? entry.target : link ?? data.selection;
-    if (!fixtureState) restoreSelection(target);
+    if (!fixtureState && !(streaming && (selected || active !== null))) restoreSelection(target);
     const saved = data.selection;
     const sameSelection = link && saved && (link.path
       ? link.path === saved.path && link.form === saved.form && link.element?.id === saved.element?.id
       : !saved.path && link.group === saved.group);
     const reload = performance.getEntriesByType('navigation')[0]?.type === 'reload';
-    if (entry?.view) view=entry.view;
+    if (entry?.view && !streamMoved) view=entry.view;
     else if (entry?.target || (link && (onlyFrame || !(reload && sameSelection && data.view)))) {
       const target = selectedBox() || currentItem() || groups[active] || world;
       frame(target, selected ? 24 : 0);
     } else if (leavingOverlayView && previous?.directory === data.directory && previous.scope === data.scope && previous.view) view = previous.view;
-    else if (data.view) view = data.view;
-    else if (!streamMoved) frame(world);
+    else if (!streamMoved) {
+      if (data.view) view = data.view;
+      else frame(world);
+    }
   } else if (groupTitle) {
     const index = groups.findIndex(group=>group.title===groupTitle);
     active = index < 0 ? null : index;
@@ -2513,7 +2598,7 @@ async function refresh(force = false) {
     if (onlyFrame) query.set('frame', onlyFrame);
     if (!manifest) query.set('initial', '1');
     if (!(frameFilter !== 'all' && (!manifest || derivedLanding)) &&
-        (!manifest || manifest.renderTheme !== effectiveTheme || scopeRequest !== initializedScope)) query.set('metadata', '1');
+        (!manifest || manifest.renderTheme !== effectiveTheme || scopeRequest !== initializedScope)) query.set('metadata', !manifest && !onlyFrame ? 'layout' : '1');
     const signal=refreshController.signal, data=await api(`manifest?${query}`,null,false,signal);
     signal.throwIfAborted();
     data.scope ??= 'all';

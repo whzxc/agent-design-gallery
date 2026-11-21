@@ -197,11 +197,33 @@ export function collectViewerElements(shell, { projectSource, assetPath, frame, 
   const clean = n => n === 0 ? 0 : n;
   const elements = [];
   const boundaries = new Map();
+  const clips = new Map();
+  const clipsOverflow = /^(hidden|clip|scroll|auto)$/;
   for (let i = 0; i < domNodes.length; i++) {
     const node = domNodes[i], input = inputs[i], idRow = assigned[i];
     const parentBoundary = boundaries.get(input.parentPath) ?? null;
     boundaries.set(input.path, parentBoundary);
-    if (input.neutral) continue;
+    // Ancestor opacity/display and each overflow axis apply to the whole subtree.
+    // Visibility can be overridden lower down, so test it on the hit itself.
+    const inherited = clips.get(input.parentPath) ?? origin;
+    if (inherited === false) { clips.set(input.path, false); continue; }
+    const style = styleFor(node);
+    if (style.display === 'none' || Number(style.opacity) === 0) {
+      clips.set(input.path, false);
+      continue;
+    }
+    const clipX = style.display !== 'inline' && clipsOverflow.test(style.overflowX);
+    const clipY = style.display !== 'inline' && clipsOverflow.test(style.overflowY);
+    if (clipX || clipY) {
+      const rect = rectFor(node);
+      clips.set(input.path, {
+        left: clipX ? Math.max(inherited.left, rect.left) : inherited.left,
+        right: clipX ? Math.min(inherited.right, rect.right) : inherited.right,
+        top: clipY ? Math.max(inherited.top, rect.top) : inherited.top,
+        bottom: clipY ? Math.min(inherited.bottom, rect.bottom) : inherited.bottom,
+      });
+    } else clips.set(input.path, inherited);
+    if (input.neutral || style.visibility !== 'visible') continue;
     const semanticRole = input.role ?? additionalCommentRoles.get(input.tag);
     const role = /^(none|presentation)$/.test(semanticRole) ? null : semanticRole?.trim().split(/\s+/, 1)[0];
     const boundary = Boolean(input.owners.length || input.keys.length || role ||
@@ -211,17 +233,8 @@ export function collectViewerElements(shell, { projectSource, assetPath, frame, 
       !node.hasAttribute('role') && containerRoots.has(node.localName);
     if (commentOnly && !boundary) continue;
     const rect = rectFor(node);
-    let left = Math.max(rect.left, origin.left), right = Math.min(rect.right, origin.right);
-    let top = Math.max(rect.top, origin.top), bottom = Math.min(rect.bottom, origin.bottom);
-    for (let p = node; p && p !== shell; p = p.parentElement) {
-      const s = styleFor(p);
-      if (s.display === 'none' || (p === node && s.visibility !== 'visible') || Number(s.opacity) === 0) { left = right; break; }
-      if (p !== node && s.display !== 'inline') {
-        const clip = rectFor(p);
-        if (/(hidden|clip|scroll|auto)/.test(s.overflowX)) { left = Math.max(left, clip.left); right = Math.min(right, clip.right); }
-        if (/(hidden|clip|scroll|auto)/.test(s.overflowY)) { top = Math.max(top, clip.top); bottom = Math.min(bottom, clip.bottom); }
-      }
-    }
+    const left = Math.max(rect.left, inherited.left), right = Math.min(rect.right, inherited.right);
+    const top = Math.max(rect.top, inherited.top), bottom = Math.min(rect.bottom, inherited.bottom);
     if (right <= left || bottom <= top) continue;
     const owner = idRow.defining.at(-1) ?? { source: assetPath, export: null };
     if (boundary) boundaries.set(input.path, idRow.id);

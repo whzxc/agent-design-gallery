@@ -187,7 +187,15 @@ export async function createBuildStore({ config, cacheDirectory }) {
   try {
     const saved = JSON.parse(await readFile(indexPath, 'utf8'));
     const startupHashes = new Map();
-    for (const entry of saved?.namespace === namespace && Array.isArray(saved.entries) ? saved.entries : []) if (await valid(entry, startupHashes)) { entries.set(entry.path, entry); link(entry); }
+    if (saved?.namespace === namespace && Array.isArray(saved.entries)) {
+      for (let i = 0; i < saved.entries.length; i += 16) {
+        const batch = saved.entries.slice(i, i + 16);
+        const verified = await Promise.all(batch.map(entry => valid(entry, startupHashes)));
+        batch.forEach((entry, index) => {
+          if (verified[index]) { entries.set(entry.path, entry); link(entry); }
+        });
+      }
+    }
   } catch (error) { if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
   await trimDisk();
   async function loadPayload(hash) {

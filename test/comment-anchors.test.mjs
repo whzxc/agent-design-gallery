@@ -76,6 +76,12 @@ export default () => [
   </Frame>,
   <Frame name="secondary" width={420} height={240}>
     <main class="w-[420px] h-[240px] p-6 bg-[var(--surface)] text-[var(--text)]">
+      <div style={{ width: 45.5, overflow: 'hidden', visibility: 'hidden' }}>
+        <div style={{ visibility: 'visible', width: 100 }}>
+          <button style={{ width: 80, height: 20 }}>Clipped action</button>
+        </div>
+        <div style={{ opacity: 0 }}><button>Transparent action</button></div>
+      </div>
       <ActionButton label="Retry sync" />
     </main>
   </Frame>,
@@ -124,13 +130,18 @@ test('browser SHA-256 and viewer element identities match Node SHA-256 and adg i
   await page.goto(server.url + '?scope=all');
   await page.waitForFunction(() => window.__adg?.ready);
 
-  const viewerIds = await page.evaluate(async () => {
+  const { viewerIds, secondary } = await page.evaluate(async () => {
     const { prepare } = await import('/assets.js');
     const m = await (await fetch('/manifest?scope=all')).json();
     const ws = m.assets.find(a => a.path === 'surfaces/workspace.tsx');
     const prepared = await prepare(ws, 'light');
-    return prepared.parts.find(p => p.name === 'ready').elements;
+    return {
+      viewerIds: prepared.parts.find(p => p.name === 'ready').elements,
+      secondary: prepared.parts.find(p => p.name === 'secondary').elements,
+    };
   });
+  assert.equal(secondary.find(e => e.tag === 'button' && e.text === 'Clipped action')?.width, 45.5);
+  assert.equal(secondary.some(e => e.tag === 'button' && e.text === 'Transparent action'), false);
   assert.ok(viewerIds.some(e => e.id === labelInspect.id && e.owner.export === 'ActionButton' && e.owner.source === 'components/action.tsx'));
   assert.ok(viewerIds.some(e => e.id === statusInspect.id && e.owner.export === null && e.owner.source === 'surfaces/workspace.tsx'));
 });

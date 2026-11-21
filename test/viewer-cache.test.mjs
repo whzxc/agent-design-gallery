@@ -15,12 +15,14 @@ const metadata={format:'tsx',full:{x:0,y:0,width:200,height:80},parts:[{id:'0',n
 test('measured geometry and exact Unicode previews survive restart in their browser context',async t=>{
   const directory=await temporary(t),first=await createViewerCache(directory);
   const source='<svg xmlns="http://www.w3.org/2000/svg"><text>中文😀</text></svg>';
-  await first.save('source-output','light','browser-a|2',metadata);
+  const interactive={...metadata,parts:metadata.parts.map(part=>({...part,elements:[{id:'hit',x:0,y:0,width:20,height:12}]}))};
+  await first.save('source-output','light','browser-a|2',interactive);
   assert.equal(await first.savePreview('source-output','light','browser-a|2','overview',source),true);
   await first.close();
   const restarted=await createViewerCache(directory);
   t.after(()=>restarted.close());
-  assert.deepEqual(await restarted.get('source-output','light','browser-a|2'),{metadata,previewIds:['overview']});
+  assert.deepEqual(await restarted.get('source-output','light','browser-a|2'),{metadata:interactive,previewIds:['overview']});
+  assert.deepEqual(await restarted.layout('source-output','light','browser-a|2'),metadata);
   assert.deepEqual(restarted.reference('source-output','light','browser-a|2'),{previewIds:['overview']});
   assert.equal((await restarted.preview('source-output','light','browser-a|2','overview')).toString('utf8'),source);
   assert.equal(await restarted.get('source-output','dark','browser-a|2'),null);

@@ -116,6 +116,19 @@ test('camera and selected form survive immediate reload and a server restart', {
       await new Promise(requestAnimationFrame);
     });
     assert.ok(Math.abs((await heading.boundingBox()).x-before.x+8)<.1,'board source titles pan with their specimens');
+    const delayed = data.assets.find(asset => asset.hash && asset.path !== 'components/button.tsx');
+    let resumeMetadata;
+    const held = new Promise(resolve => { resumeMetadata = resolve; });
+    await restored.route(`**/metadata/${delayed.hash}?*`, async route => { await held; await route.continue(); });
+    try {
+      await restored.reload({waitUntil:'domcontentloaded'});
+      await restored.waitForFunction(() => window.__adg?.assets > 0 && !window.__adg.metadataComplete);
+      await restored.locator('#plus').click();
+      const duringHydration = await restored.evaluate(() => window.__adg.view);
+      resumeMetadata();
+      await restored.waitForFunction(() => window.__adg.ready);
+      assert.deepEqual(await restored.evaluate(() => window.__adg.view), duringHydration);
+    } finally { resumeMetadata(); }
   } finally {await browser.close();await server.close()}
 });
 test('board source titles select and copy through pointer and keyboard without moving the camera', {timeout:30000}, async t => {
