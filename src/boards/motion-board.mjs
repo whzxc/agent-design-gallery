@@ -3,7 +3,7 @@ import { patternParameters } from '../toolkit/motion-patterns.mjs';
 import { milliseconds, tokenValue } from '../toolkit/motion-primitives.mjs';
 
 export const motionBoardCss = `
-[data-motion-patterns]{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-bottom:40px}
+[data-motion-patterns]{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;align-items:start;margin-bottom:40px}
 [data-motion-pattern]{display:flex;flex-direction:column;gap:12px;padding:20px;border:1px solid var(--adg-border);border-radius:var(--radius-card,12px);min-width:0}
 [data-motion-pattern] h3,[data-motion-pattern] p{margin:0}
 [data-motion-pattern] h3{font-size:17px}
@@ -11,7 +11,13 @@ export const motionBoardCss = `
 [data-motion-pattern] dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;margin:0}
 [data-motion-pattern] dd{margin:0;overflow-wrap:anywhere}
 [data-motion-pattern] code{font:12px/1.5 var(--font-mono,monospace)}
-[data-motion-pattern] button{align-self:start}
+[data-motion-pattern] h4{margin:0;font-size:14px;line-height:1.4}
+[data-motion-variants]{display:flex;flex-direction:column;gap:10px}
+[data-motion-variant]{display:grid;gap:6px;padding-top:10px;border-top:1px solid var(--adg-border)}
+[data-motion-default]{font:11px/1.5 var(--font-ui,system-ui);white-space:nowrap;color:var(--adg-text)}
+[data-motion-unadopted]{margin-top:32px;border-top:1px solid var(--adg-border)}
+[data-motion-unadopted] summary{padding:16px 0;pointer-events:auto;cursor:pointer;font-size:14px;font-weight:600}
+[data-motion-unadopted] summary span{margin-left:8px;color:var(--adg-muted);font-weight:400}
 [data-motion-pattern] button,[data-motion-stage][tabindex]{pointer-events:auto;cursor:pointer}
 [data-motion-stage]{display:grid;place-items:center;position:relative;min-width:0;height:116px;overflow:hidden;border-radius:8px;background:var(--adg-canvas);color:var(--action,var(--adg-text))}
 [data-motion-stage][data-effect=follow]{touch-action:none;cursor:crosshair}
@@ -56,9 +62,44 @@ export function motionCards(catalog, inventory, source, prefix) {
     const frame = '<a href="' + escape(frameLink(ref)) + '">' + escape(ref.frame + ' · ' + ref.source) + '</a>';
     return ref.type === 'edge' ? codeLink(ref.sidecar, ref.line, ref.id) + ' · ' + frame : frame;
   };
-  return '<div data-motion-patterns>' + [...catalog.patterns].map(([id, pattern]) => {
-    const consumers = inventory.consumers.get(id) ?? [];
-    const count = consumers.length;
+  const countLabel = count => 'Used in ' + count + (count === 1 ? ' place' : ' places');
+  const uses = id => inventory.consumers.get(id) ?? [];
+  const usage = (id, refs, prefix = '') => refs.length
+    ? '<button type="button" data-motion-consumers="' + escape(title(id)) + '" aria-label="' +
+      escape(title(id) + ' · ' + countLabel(refs.length)) + '">' + prefix + countLabel(refs.length) +
+      '</button><template><ul>' + refs.map(ref => '<li>' + listConsumer(ref) + '</li>').join('') + '</ul></template>'
+    : '<p>' + countLabel(0) + '</p>';
+  const describe = params => Object.entries(params).map(([key,value]) => {
+    const spring = catalog.springs.light[value];
+    const light = tokenValue(catalog.tokens, 'light', value);
+    const dark = tokenValue(catalog.tokens, 'dark', value);
+    const label = spring ? spring.duration + ' ms / bounce ' + spring.bounce : light;
+    const darkSpring = catalog.springs.dark[value];
+    const themeLabel = darkSpring ? darkSpring.duration + ' ms / bounce ' + darkSpring.bounce : dark;
+    const fallback = catalog.defaultTokens.has(value) || (spring &&
+      ['-duration','-bounce'].some(suffix => catalog.defaultTokens.has(value + suffix)));
+    return escape(key) + ' <code>' + escape(value) + '</code>' +
+      (label === undefined ? '' : ' · ' + escape(label)) + (label === themeLabel ? '' : ' / dark ' + escape(themeLabel)) +
+      (fallback ? ' <span data-motion-default>ADG default</span>' : '');
+  }).join('<br>');
+  const equal = (left, right) => Object.keys(left).length === Object.keys(right).length &&
+    Object.entries(left).every(([key, value]) => right[key] === value);
+  const deltas = (base, variant, phase) => {
+    const inherited = patternParameters(base, phase);
+    return Object.fromEntries(Object.entries(patternParameters(variant, phase)).filter(([key, value]) => inherited[key] !== value));
+  };
+  const variantRow = (base, id) => {
+    const variant = catalog.patterns.get(id);
+    const enter = deltas(base, variant, 'enter'), exit = deltas(base, variant, 'exit');
+    const overrides = equal(enter, exit)
+      ? (Object.keys(enter).length ? pair('Overrides', describe(enter)) : '')
+      : (Object.keys(enter).length ? pair('Enter', describe(enter)) : '') +
+        (Object.keys(exit).length ? pair('Exit', describe(exit)) : '');
+    return '<div data-motion-variant="' + escape(id) + '"><h4>' + title(id) + '</h4>' +
+      (overrides ? '<dl>' + overrides + '</dl>' : '<p>Inherits base parameters</p>') +
+      '<div>' + usage(id, uses(id)) + '</div></div>';
+  };
+  const render = (id, pattern) => {
     const directions = ['enter','exit'];
     const themeValues = (theme, direction) => {
       const params = patternParameters(pattern, direction);
@@ -72,22 +113,19 @@ export function motionCards(catalog, inventory, source, prefix) {
     };
     const preview = Object.fromEntries(['light','dark'].map(theme =>
       [theme, Object.fromEntries(directions.map(direction => [direction, themeValues(theme, direction)]))]));
-    const describe = params => Object.entries(params).map(([key,value]) => {
-      const spring = catalog.springs.light[value];
-      const light = tokenValue(catalog.tokens, 'light', value);
-      const dark = tokenValue(catalog.tokens, 'dark', value);
-      const label = spring ? spring.duration + ' ms / bounce ' + spring.bounce : light;
-      const darkSpring = catalog.springs.dark[value];
-      const themeLabel = spring && darkSpring
-        ? darkSpring.duration + ' ms / bounce ' + darkSpring.bounce : dark;
-      return escape(key) + ' <code>' + escape(value) + '</code>' +
-        (label === undefined ? '' : ' · ' + escape(label)) + (label === themeLabel ? '' : ' / dark ' + escape(themeLabel));
-    }).join('<br>');
     const primary = pattern.action === 'exit' ? 'exit' : 'enter';
     const alternate = primary === 'enter' ? 'exit' : 'enter';
     const main = patternParameters(pattern, primary), other = patternParameters(pattern, alternate);
-    const asymmetric = JSON.stringify(main) !== JSON.stringify(other);
-    const summary = 'Used in ' + count + (count === 1 ? ' place' : ' places');
+    const asymmetric = !equal(main, other);
+    const variants = catalog.variants.get(id) ?? [];
+    const direct = uses(id);
+    const total = new Set([id, ...variants].flatMap(uses).map(ref =>
+      JSON.stringify([ref.type, ref.source, ref.frame, ref.id, ref.line, ref.match]))).size;
+    const adoption = variants.length
+      ? '<p data-motion-family-count>' + countLabel(total) + '</p>' +
+        (direct.length ? '<div>' + usage(id, direct, 'Base · ') + '</div>' : '') +
+        '<div data-motion-variants>' + variants.map(child => variantRow(pattern, child)).join('') + '</div>'
+      : usage(id, direct);
     return '<article data-motion-pattern="' + escape(id) + '" data-specimen="' + escape(source + '#' + id) + '">' +
       '<h3>' + title(id) + '</h3><p>' + escape(pattern.kind + ' · ' + pattern.action) + '</p>' +
       '<div data-motion-stage data-effect="' + escape(pattern.effect) + '" data-action="' + escape(pattern.action) +
@@ -100,8 +138,18 @@ export function motionCards(catalog, inventory, source, prefix) {
       pair(asymmetric ? title(primary) : 'Parameters', describe(main)) +
       (asymmetric ? pair(title(alternate), describe(other)) : '') +
       pair('Interrupt', escape(pattern.interrupt)) + pair('Reduced motion', escape(pattern.reduced)) + '</dl>' +
-      (count ? '<button type="button" data-motion-consumers aria-label="' + escape(title(id) + ' · ' + summary) + '">' + summary +
-        '</button><template><ul>' + consumers.map(ref => '<li>' + listConsumer(ref) + '</li>').join('') + '</ul></template>'
-        : '<p>' + summary + '</p>') + '</article>';
-  }).join('') + '</div>';
+      adoption + '</article>';
+  };
+  const grid = cards => '<div data-motion-patterns>' + cards.join('') + '</div>';
+  const adopted = [], notAdopted = [];
+  for (const [id, pattern] of catalog.patterns) {
+    if (pattern.extends) continue;
+    const unused = catalog.variants.has(id) && ![id, ...catalog.variants.get(id)].some(key => uses(key).length);
+    (unused ? notAdopted : adopted).push(render(id, pattern));
+  }
+  return {
+    adopted: adopted.length ? grid(adopted) : '',
+    notAdopted: notAdopted.length ? '<details data-motion-unadopted><summary>Not adopted <span>' +
+      notAdopted.length + '</span></summary>' + grid(notAdopted) + '</details>' : '',
+  };
 }

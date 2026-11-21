@@ -174,17 +174,18 @@ export function tokenBoard(source, css, { projectName = 'Design library', patter
     }).join('');
     sections.push(section('Sizing', `<div data-adg-token-groups>${sizeGroups}</div>`));
   }
-  const cards = patterns ? motionCards(patterns, inventory, patternSource, prefix) :
-    patternError ? `<p role="status">${escape(patternError)}</p>` : '';
-  if (cards || categories.has('easing') || categories.has('duration')) {
+  const cards = patterns ? motionCards(patterns, inventory, patternSource, prefix) : {
+    adopted: patternError ? `<p role="status">${escape(patternError)}</p>` : '', notAdopted: '',
+  };
+  if (cards.adopted || cards.notAdopted || categories.has('easing') || categories.has('duration')) {
     const milliseconds = name => parseFloat(light(name)) * (light(name).endsWith('ms') ? 1 : 1000);
     const names = [...tokens.light.keys()].filter(name => categories.get('easing')?.includes(name) || categories.get('duration')?.includes(name));
-    sections.push(section('Motion', cards + groups(names, group => {
+    sections.push(section('Motion', cards.adopted + groups(names, group => {
       const maximum = Math.max(1, ...group.filter(name => categories.get('duration')?.includes(name)).map(milliseconds));
       return `<div data-adg-motion-grid>${group.map(name => article(name, categories.get('easing')?.includes(name)
         ? easingCurve(light(name)) + label(name)
         : `<div data-adg-duration-track><div data-adg-duration style="width:${milliseconds(name) / maximum * 100}%"></div></div>${label(name)}`)).join('')}</div>`;
-    })));
+    }) + cards.notAdopted));
   }
   const body = `<main data-adg-board>${boardHeader({ title: 'Tokens', projectName, layer: 'Tokens', number: 1, sourceCount: 1, frameCount: tokens.light.size, countLabel: 'tokens' })}${sections.join('')}</main>`;
   // Scope project tokens to the board so a DOM overlay never changes viewer chrome.

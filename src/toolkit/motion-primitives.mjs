@@ -65,6 +65,7 @@ export function springEasing(bounce) {
 export function motionPrimitives(authored, { base = true } = {}) {
   const light = new Map([...(base ? Object.entries(defaults) : []), ...authored.light]);
   const dark = new Map(authored.dark);
+  const defaultTokens = new Set(base ? Object.keys(defaults).filter(name => !authored.light.has(name)) : []);
   const tokens = { light, dark };
   const names = [...light.keys()].flatMap(name => {
     const match = /^(--motion-spring-[\w-]+)-(?:duration|bounce)$/.exec(name);
@@ -84,7 +85,7 @@ export function motionPrimitives(authored, { base = true } = {}) {
     }
   }
   for (const theme of ['light', 'dark']) for (const [name, easing] of generated[theme]) tokens[theme].set(name, easing);
-  return { tokens, springs, generated };
+  return { tokens, springs, generated, defaultTokens };
 }
 
 export function motionTokenCss(tokens) {

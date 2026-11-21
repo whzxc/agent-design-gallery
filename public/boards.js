@@ -98,9 +98,11 @@ export function createBoardLayer(viewport, onSource, { onSelectFrame, onFocusFra
       tokenNode.innerHTML = `<style>${board.css}</style>${board.body}`;
       root.prepend(tokenNode);
       const node = tokenNode;
-      measurement = requestAnimationFrame(() => {
+      const measure = () => {
         if (node.isConnected) onMeasure(node.offsetHeight);
-      });
+      };
+      measurement = requestAnimationFrame(measure);
+      node.querySelector('[data-motion-unadopted]')?.addEventListener('toggle', measure);
     },
     tokenSection(slug) {
       if (!tokenNode?.isConnected) return null;

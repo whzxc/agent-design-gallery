@@ -469,7 +469,7 @@ export async function startServer({
             const config = { ...activeProject, design: data.directory };
             patterns = loadMotionPatterns(config, { light, dark });
             inventory = scanMotion(config, patterns, undefined, { mappedOnly: true });
-            data.motionPatternCount = patterns.patterns.size;
+            data.motionPatternCount = [...patterns.patterns.values()].filter(pattern => !pattern.extends).length;
           } catch (error) {
             patterns = null;
             data.motionPatternError = error.message;

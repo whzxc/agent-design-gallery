@@ -167,7 +167,7 @@ export function installMotionSpecimens(board) {
     }
   }
   board.addEventListener('pointerdown', event => {
-    if (event.target.closest('[data-motion-pattern] button, [data-effect=follow]')) event.stopPropagation();
+    if (event.target.closest('[data-motion-pattern] button, [data-effect=follow], [data-motion-unadopted] summary')) event.stopPropagation();
   });
   board.addEventListener('pointermove', event => {
     const stage = event.target.closest('[data-effect=follow]');
@@ -218,7 +218,7 @@ export function installMotionSpecimens(board) {
     const consumers = event.target.closest('[data-motion-consumers]');
     if (consumers) {
       event.stopPropagation();
-      openDialog(card.querySelector('h3').textContent + ' consumers', card.querySelector('template').content.cloneNode(true));
+      openDialog(consumers.dataset.motionConsumers + ' consumers', consumers.nextElementSibling.content.cloneNode(true));
     }
   });
   document.addEventListener('click', event => {

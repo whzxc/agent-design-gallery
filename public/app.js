@@ -2068,15 +2068,17 @@ function applyTokenManifest(data) {
   canvas.width = canvas.width;
   boardLayer.update([], [], data);
   boardLayer.camera(view, false);
+  let firstMeasurement = true;
   boardLayer.tokens(data.tokenBoard, boardHeight => {
     tokenHeight=boardHeight;
     world={x:0,y:0,width:data.tokenBoard.width,height:boardHeight};
-    if (entering) {
+    if (entering && firstMeasurement) {
       const section = data.fixture?.section ?? new URLSearchParams(location.search).get('section');
       const box = section === 'motion' && boardLayer.tokenSection(section);
       if (box) commit(fitView({ ...box, height: Math.min(box.height, 650) }, fitArea(width, height, sidebar, false), 24));
       else frame(world);
     }
+    firstMeasurement = false;
     requestDraw();
   });
   scopeRequest = data.scope;

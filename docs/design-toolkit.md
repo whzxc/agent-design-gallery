@@ -230,6 +230,19 @@ Projects can override them and declare their own in `design/motion-patterns.json
 | `continuous` | `follow` | `follow` |
 | `ambient` | `loop` | `ambient-loop` |
 
+Map shared project tokens once in the file's optional `roles` object.
+Each value is an authored CSS custom-property name, or a spring name backed
+by its authored duration and bounce pair. Both themes must resolve to values
+of the role's type. Built-in pattern parameters and edge compilation use the
+mapped tokens. Unmapped roles use the shared ADG values, marked **ADG default**
+on the card when the value comes from ADG.
+
+| Roles | Use |
+| --- | --- |
+| `duration-base`, `duration-fast`, `duration-loop` | Typical transitions and layouts, short exits, ambient cycles |
+| `easing-enter`, `easing-exit`, `easing-loop` | Entry and geometry, exit, ambient cycles |
+| `spring-small`, `distance-small`, `scale-small`, `stagger-small` | Small spring, travel, scale and stagger interval |
+
 A pattern has a kebab-case ID, a kind and action, a specimen `effect`, a list
 of affected `properties`, and `parameters`. The specimen effects are `fade`,
 `expand`, `size`, `slide`, `pop`, `crossfade`, `follow`, `avoid`,
@@ -239,7 +252,19 @@ tokens by CSS custom property name. Supply `duration` and `easing` or a
 `spring` name, plus optional `distance`, `scale`, `stagger` or numeric
 `fromOpacity` (0–1) where applicable. Optional `enter` and `exit`
 objects override those parameters for their direction. Built-in overrides
-inherit unspecified fields and base parameters. The interruption policy is
+inherit unspecified fields and directional parameters. A named project
+variant uses `extends` with a built-in ID. It inherits the base effect and
+policies and may declare only `parameters`, `enter`, `exit`, and its own
+`frames` and `consumers`. It inherits the effective base after project
+role mappings and direct base overrides. A variant can override timing with
+a spring, or a spring with a duration and easing. Layers merge per parameter,
+with direction-specific entries taking precedence.
+
+The board shows one specimen per base family. Each variant lists the
+parameters that differ and links its own consumers. A base is adopted when
+it or any variant has consumers. Unadopted built-ins appear in a collapsed
+**Not adopted** group at the end. Standalone project patterns have their own
+specimens. The interruption policy is
 `finish` (settle), `retarget` (start from the current value) or `cancel`
 (stop). Reduced motion is `instant` (apply the result without interpolation)
 or `static` (show a resting state).
@@ -247,10 +272,17 @@ or `static` (show a resting state).
 ```json
 {
   "version": 1,
+  "roles": {
+    "duration-base": "--motion-base",
+    "duration-fast": "--motion-fast",
+    "easing-enter": "--ease-enter",
+    "easing-exit": "--ease-exit"
+  },
   "patterns": {
-    "fade": {
-      "parameters": { "duration": "--motion-base", "easing": "--ease-enter" },
-      "exit": { "duration": "--motion-fast", "easing": "--ease-exit" }
+    "appear": {
+      "extends": "fade",
+      "parameters": { "duration": "--motion-fast" },
+      "consumers": [{ "file": "ui/popover.css", "match": "keyframes:appear" }]
     },
     "aurora-border": {
       "kind": "ambient",

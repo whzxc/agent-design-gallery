@@ -179,7 +179,8 @@ export function scanMotion(config, catalog = loadMotionPatterns(config), graph =
   }
   for (const [file, refs] of mappings) for (const ref of refs) if (!ref.hits)
     issue('MOTION_CONSUMER_MISSING', declaration, ref.id + ' consumer did not match ' + file + ' (' + ref.match + ').');
-  for (const id of catalog.declared) if (!consumers.get(id).length) {
+  for (const id of catalog.declared) if (!consumers.get(id).length &&
+    !catalog.variants.get(id)?.some(variant => consumers.get(variant).length)) {
     unused++;
     issue('MOTION_UNUSED', declaration, 'Pattern ' + id + ' has no consumers.');
   }
