@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,rm,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {createViewerCache} from '../src/viewer-cache.mjs';
@@ -28,6 +28,36 @@ test('measured geometry and exact Unicode previews survive restart in their brow
   assert.equal(await restarted.get('source-output','dark','browser-a|2'),null);
   assert.equal(await restarted.get('source-output','light','browser-b|2'),null);
   assert.equal(await restarted.preview('source-output','light','browser-a|2','missing'),null);
+});
+
+test('version-1 metadata without byte counts stays within the resident budget after restart',async t=>{
+  const directory=await temporary(t);
+  const seed=await createViewerCache(directory);
+  await seed.save('legacy','light','browser',metadata);
+  await seed.savePreview('legacy','light','browser','overview','<svg/>');
+  await seed.close();
+
+  const indexPath=path.join(directory,'index.json');
+  const index=JSON.parse(await readFile(indexPath,'utf8'));
+  assert.equal(index.version,1);
+  delete index.entries[0].metadataBytes;
+  delete index.entries[0].layoutBytes;
+  await writeFile(indexPath,JSON.stringify(index));
+
+  const bytes=Buffer.byteLength(JSON.stringify(metadata));
+  const cache=await createViewerCache(directory,{memoryBytes:bytes});
+  t.after(()=>cache.close());
+  assert.equal(cache.hasLayout('legacy','light','browser'),false);
+  assert.equal(await cache.layout('legacy','light','browser'),undefined);
+  const readLegacy=()=>cache.get('legacy','light','browser');
+  assert.deepEqual(await readLegacy(),{metadata,previewIds:['overview']});
+  assert.equal(cache.stats().residentBytes,bytes);
+
+  const smaller={...metadata,background:''};
+  await cache.save('new','light','browser',smaller);
+  assert.equal(cache.stats().residentBytes,Buffer.byteLength(JSON.stringify(smaller)));
+  assert.deepEqual((await readLegacy()).metadata,metadata);
+  assert.equal(cache.stats().residentBytes,bytes);
 });
 
 test('viewer cache evicts least-recently used sources within memory and disk budgets',async t=>{

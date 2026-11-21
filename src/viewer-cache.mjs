@@ -16,7 +16,8 @@ export async function createViewerCache(directory, {memoryBytes=32*1024*1024,dis
   } catch(error) {if(error.code!=='ENOENT' && !(error instanceof SyntaxError)) throw error;}
   total=[...entries.values()].reduce((n,entry)=>n+entry.bytes,0);
   const keyFor=(hash,theme,context)=>digest(JSON.stringify([hash,theme,context]));
-  function remember(key,text,bytes) {
+  // Version-1 entries can omit metadataBytes. Count only their UTF-8 metadata.
+  function remember(key,text,bytes=Buffer.byteLength(text)) {
     if(resident.has(key)){residentBytes-=resident.get(key).bytes;resident.delete(key);}
     if(bytes>memoryBytes)return;
     resident.set(key,{text,bytes});residentBytes+=bytes;
