@@ -219,6 +219,12 @@ The pilot follows ARC's [layer guide](https://github.com/whzxc/agent-remote-cont
 
 **Later:** stagger, scoped `within` targets, automatic triggers (`trigger.delay`, `MOTION_AUTO_CYCLE`), and `interrupt:"ignore"`. These fields and values are schema errors in v1.
 
+### Proposed action labels
+
+An edge may declare an optional `label`, a nonempty plain-text string in the source language. Use a short verb phrase naming the user action, for example `"label": "Open project switcher"`. The flow action, hotspot hint and transition inspector use the same name. Keep the exact trigger and endpoint references alongside it. The stable edge ID continues to identify bindings, impact and history. A label edit changes presentation only.
+
+When absent, derive the name from the trigger and the accessible name of its target in the source frame. Examples include **Click “Atlas”**, **Hover over “Atlas”**, **Focus “Find project or instance”** and **Press Esc**. Spell out arrow keys and use familiar key names. For an unnamed target use **Click the highlighted element** (or the corresponding gesture). For a frame target use **this frame**. When two actions have the same name, show their target or destination as secondary context and keep each edge keyboard reachable. The shipped v1 checker still rejects the new field pending approval.
+
 ### Board playback
 
 A selected TSX specimen with outgoing edges offers **Play** in its Float toolbar. Keep selection, scope, zoom, camera and invoking control for return. Open one player on that frame with a lightweight floating control bar. Load only needed endpoints on demand. Board specimens keep their existing atlas previews. A terminal frame offers Back and Exit. Cross-source edges stay inside the player.

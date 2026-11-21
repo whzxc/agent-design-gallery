@@ -36,7 +36,15 @@ Sources follow strict downward layer order (`components` → `modules` → `surf
 
 ## Open proposals
 
-New visual directions carry `Frame proposed="<scope>"` while under review, are listed by `adg check`, and are either bound in `design/implementation.json` or deleted when review closes. None are currently open.
+New visual directions carry `Frame proposed="<scope>"` while under review, are listed by `adg check`, and are either bound in `design/implementation.json` or deleted when review closes. The **Board playback redesign** scope in `design/surfaces/canvas.tsx` is open for approval before implementation. Compare `board-play-affordance` with `board-playable-filter`, then follow the `flow-*` frames. The board pair uses the same camera and specimens. A caption Play button marks each frame with outgoing edges and starts there. The existing Float Play shortcut can serve a selected frame. The shared Filter frames control offers Playable and Recently updated. Each opens a result list and dims other specimens in place. Review the picker, Git groups and focused result in the three additional board frames. See [frame filters](boards.md#frame-filters-proposed) for history and cache semantics. Keeping captions legible and the Play target usable at overview zoom matters more than packing matches into a new grid.
+
+The player rail names the committed frame, its visited path and the available actions. During a transition the rail labels the destination's actions explicitly. Choosing one finishes the current edge before dispatch. An initial frame omits Back. A terminal frame offers its named Back action and Exit. The terminal example uses a hypothetical edge to the existing instance picker, which has no outgoing edges. Each pictured moment is static.
+
+The transition inspector appears on the first action and stays through completion. It names the action and both endpoints beside elapsed milliseconds, duration and easing tokens. Scrubbing previews the edge without adding a history step. Back returns directly to the prior frame and clears the inspector. Reduced motion commits immediately and shows the authored timing alongside the actual 0 ms result. Replay respects the session preference. Playback settings group the three speeds into one segmented control and put the motion override below it.
+
+Hover or keyboard focus outlines a hotspot and shows its action. Clicking unused stage space reveals all hotspots; the next action clears that reveal. A click on a hotspot invokes its click action; a target with only keyboard or text gestures offers its named actions on click. The keyboard action list remains available throughout. Exit returns focus to the caption Play button or toolbar button that opened the player.
+
+For the filter example, propose **Search for “Nova”** on the search field. The live switcher filters as text arrives; clicking or focusing the field alone keeps its results. The proposed trigger matches the exact committed input value `Nova` in viewer-owned input, including paste. Other values never dispatch this edge. The action list can invoke the same frozen example directly. This would extend the current key-only search example; the existing v1 sidecar still uses `z`. Approve this input extension separately from the [edge label proposal](design-toolkit.md#proposed-action-labels).
 
 ## Exceptions
 
