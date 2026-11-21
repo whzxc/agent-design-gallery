@@ -19,6 +19,8 @@ async function viewer(t){
 
 test('contract: switcher keyboard actions, seek without focus commit, finish interruption and reduced-motion history',async t=>{
   const {page,url}=await viewer(t);
+  // Match the designed desktop player viewport so wider Linux fallback fonts do not wrap the header on Reduced motion.
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({reducedMotion:'no-preference'});
   // Stretch the authored clock to make interruption observable under a busy test runner.
   await page.route('**/api/play?*',async route=>{
