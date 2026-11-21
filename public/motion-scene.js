@@ -1,3 +1,5 @@
+export const nativeTextEntry = 'textarea,input:is(:not([type]),[type="text" i],[type="search" i],[type="email" i],[type="tel" i],[type="url" i],[type="password" i])';
+
 // Only the viewer writes to the document. Parse in an inert template before attachment.
 export async function createStage(parent) {
   const frame = document.createElement('iframe');
@@ -19,8 +21,12 @@ export async function mountScene(doc, endpoint, theme) {
   ))
     el.remove();
   for (const el of fragment.querySelectorAll('*')) {
+    el.removeAttribute('data-player-text-entry');
     for (const attr of [...el.attributes]) {
       const name = attr.name.toLowerCase();
+      if (name === 'contenteditable' && attr.value.toLowerCase() === 'false') continue;
+      if (name === 'contenteditable' && ['', 'true', 'plaintext-only'].includes(attr.value.toLowerCase()))
+        el.dataset.playerTextEntry = 'editable';
       if (name === 'href' && el.localName === 'a' && !el.hasAttribute('tabindex')) el.tabIndex = 0;
       if (
         /^on/.test(name) ||
@@ -46,12 +52,15 @@ export async function mountScene(doc, endpoint, theme) {
       )
         el.removeAttribute(attr.name);
     }
-    if (el.matches('input,textarea')) el.readOnly = true;
+    if (el.matches('input,textarea')) {
+      if (!el.readOnly && el.matches(nativeTextEntry)) el.dataset.playerTextEntry = 'input';
+      el.readOnly = true;
+    }
   }
   doc.documentElement.dataset.theme = theme;
   doc.head.querySelector('style').textContent =
     endpoint.css +
-    '\n*,*::before,*::after {animation:none!important;transition:none!important;caret-color:transparent!important}';
+    '\n*,*::before,*::after {animation:none!important;transition:none!important;caret-color:transparent!important} [data-player-text-entry]:read-write {caret-color:auto!important}';
   const stage = doc.createElement('div');
   stage.dataset.adgFrame = endpoint.frame;
   Object.assign(stage.style, {

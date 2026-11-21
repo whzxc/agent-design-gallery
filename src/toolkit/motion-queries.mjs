@@ -1,3 +1,4 @@
+import { labelResolver } from './motion-label.mjs';
 import path from 'node:path';
 import { CliError } from '../cli-output.mjs';
 import { listSources, relative, selectSources, sourceDirectories, loadTokens } from './project.mjs';
@@ -7,6 +8,10 @@ import { motionEvaluator } from './motion-check.mjs';
 import { buildSource } from './build.mjs';
 import { launch } from './browser.mjs';
 
+async function labeled(config,records) {
+  const label = labelResolver(config);
+  return Promise.all(records.map(async r=>({id:r.edge.id,label:await label(r)})));
+}
 export function targetsFor(edge, side) {
   return [
     ...(side === 'from' ? [edge.trigger.target] : edge.focus.target ? [edge.focus.target] : []),
@@ -21,7 +26,7 @@ export function usesTiming(edge, tokens, names, themes) {
     themes.some((theme) => resolveMotionToken(tokens, theme, ref.name, ref.kind).names.some((name) => names.includes(name)))
   );
 }
-export function tokenEdges(config, values, data) {
+export async function tokenEdges(config, values, data) {
   const graph = readMotion(config);
   if (!graph.records.length) {
     motionSummary(data, [], values.transitions);
@@ -32,11 +37,11 @@ export function tokenEdges(config, values, data) {
   const records = motionRows(graph.records.filter((r) => r.valid && usesTiming(r.edge, tokens, [values.token], themes)));
   motionSummary(
     data,
-    records.map((r) => r.edge.id),
+    values.transitions ? await labeled(config,records) : records.map(r=>r.edge.id),
     values.transitions
   );
 }
-export function boundEdges(config, bindings, data, expanded = false) {
+export async function boundEdges(config, bindings, data, expanded = false) {
   const active = (bindings ?? []).filter((b) => b.active);
   let ids = active.map((b) => b.design.transition);
   if (data.query.kind === 'part') {
@@ -54,7 +59,8 @@ export function boundEdges(config, bindings, data, expanded = false) {
         .map((r) => r.edge.id);
     }
   }
-  motionSummary(data, [...new Set(ids)].sort(), expanded);
+  const unique = [...new Set(ids)].sort();
+  motionSummary(data, expanded && unique.length ? await labeled(config,motionRows(readMotion(config).records.filter(r=>unique.includes(r.edge?.id)))) : unique, expanded);
 }
 async function behaviorMap(config, owner) {
   const map = await loadImplementationMap(config);
@@ -72,6 +78,7 @@ export async function transitionQuery(config, command, args, values, log) {
     motionVersion: 1,
     mode: values.transitions ? 'transitions' : 'transition'
   };
+  const label = labelResolver(config);
   if (values.transitions) {
     const [file] = selectSources(config, args, { write: false }),
       source = relative(config, file);
@@ -85,13 +92,10 @@ export async function transitionQuery(config, command, args, values, log) {
     );
     motionSummary(
       data,
-      rows.map(({ edge: e }) => ({
-        id: e.id,
-        from: e.from,
-        to: e.to,
-        input: e.trigger.on,
-        ...(e.proposed ? { proposed: e.proposed } : {})
-      })),
+      await Promise.all(rows.map(async (r) => ({
+        id: r.edge.id, label:await label(r), from:r.edge.from, to:r.edge.to, input:r.edge.trigger.on,
+        ...(r.edge.proposed ? { proposed:r.edge.proposed } : {})
+      }))),
       true
     );
   } else {
@@ -102,6 +106,7 @@ export async function transitionQuery(config, command, args, values, log) {
     const [r] = records,
       validated = await behaviorMap(config, r.owner);
     const bindings = validated.transitionBindings.filter((b) => b.active && b.design.transition === r.edge.id);
+    data.label = await label(r);
     if (command === 'owner') {
       data.query = { kind: 'transition', id: r.edge.id };
       data.bindings = bindings.map((b) => ({

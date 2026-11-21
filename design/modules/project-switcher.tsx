@@ -45,7 +45,7 @@ function SwitcherRow({ item, current, kind }: any) {
       {content}
     </div>
   ) : (
-    <a class={classes} data-adg-id={selected ? 'current-destination' : undefined} href={`/${kind === 'instance' ? 'i' : 'p'}/${item.id}/`}>
+    <a class={classes} aria-label={item.name} data-adg-id={selected ? 'current-destination' : kind === 'instance' && item.stoppable ? 'live-instance' : undefined} href={`/${kind === 'instance' ? 'i' : 'p'}/${item.id}/`}>
       {content}
     </a>
   );
@@ -65,7 +65,7 @@ export function SwitcherMenu({
   current,
   search = false,
   empty = false,
-  query = 'z',
+  query = 'Nova',
   width = 360,
 }: {
   current: any;
@@ -87,8 +87,8 @@ export function SwitcherMenu({
           <Icon name="arrow-up-left" size={14} class="text-text-tertiary" />
         </a>
         <div class="my-1 h-px bg-border" />
-        <div role="searchbox" aria-label="Find project or instance" tabindex="0" data-adg-id="search" class="px-1 pb-1">
-          <Field clearAnchor={empty ? 'clear-search' : undefined} form={activeSearch ? 'search-active' : 'search'} label={searchLabel} meta="" width={width - 20} />
+        <div class="px-1 pb-1">
+          <Field searchInput clearAnchor={empty ? 'clear-search' : undefined} form={activeSearch ? 'search-active' : 'search'} label={searchLabel} meta="" width={width - 20} />
         </div>
         {empty ? (
           <p class="px-[10px] py-3 text-body text-text-secondary">{copy.emptyMatch}</p>

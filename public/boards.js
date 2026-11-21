@@ -11,7 +11,7 @@ function markCopied(node, duration = 1200) {
   copyTimers.set(node, setTimeout(() => { delete node.dataset.copied; }, duration));
 }
 
-export function createBoardLayer(viewport, onSource, { onSelectFrame, onFocusFrame, onCopyError } = {}) {
+export function createBoardLayer(viewport, onSource, { onSelectFrame, onFocusFrame, onCopyError, onPlay } = {}) {
   const root = document.createElement('div');
   root.id = 'board-chrome';
   viewport.append(root);
@@ -30,6 +30,13 @@ export function createBoardLayer(viewport, onSource, { onSelectFrame, onFocusFra
     }
   });
   root.addEventListener('click', event => {
+    const play = event.target.closest('.caption-play');
+    if(play) {
+      event.stopPropagation();
+      const {frameName,frameSource} = play.parentNode.dataset;
+      onPlay(frameSource,frameName,play);
+      return;
+    }
     const button = event.target.closest('[data-source]');
     if (button) {
       event.stopPropagation();
@@ -88,6 +95,21 @@ export function createBoardLayer(viewport, onSource, { onSelectFrame, onFocusFra
         return node;
       }));
     },
+    emphasize(playableFrames, matches) {
+      for (const caption of root.querySelectorAll('.board-caption')) {
+        const {frameSource,frameName} = caption.dataset;
+        const playable = playableFrames.get(frameSource)?.has(frameName);
+        caption.classList.toggle('dimmed', !!matches && !matches.get(frameSource)?.has(frameName));
+        let button = caption.querySelector('.caption-play');
+        if (!playable) {button?.remove(); continue;}
+        if (button) continue;
+        button = document.createElement('button');
+        button.className = 'caption-play';
+        button.setAttribute('aria-label','Play from '+frameName);
+        button.innerHTML = icon('play',14)+' Play';
+        caption.append(button);
+      }
+    },
     tokens(board, onMeasure) {
       cancelAnimationFrame(measurement);
       tokenNode?.remove();
@@ -119,6 +141,10 @@ export function createBoardLayer(viewport, onSource, { onSelectFrame, onFocusFra
       const css = getComputedStyle(root);
       return Object.fromEntries(['surface','canvas','border','radius-card'].map(name => [name,css.getPropertyValue('--'+name).trim()]));
     },
-    camera(view, hidden) {root.hidden = hidden;root.dataset.scale=view.scale;root.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.scale})`;},
+    camera(view, hidden) {root.hidden = hidden;
+      if(root.dataset.scale!==String(view.scale)){
+        root.dataset.scale=view.scale;
+        root.style.setProperty('--caption-scale',String(1/view.scale));
+      }root.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.scale})`;},
   };
 }

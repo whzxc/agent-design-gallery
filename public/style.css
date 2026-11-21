@@ -220,3 +220,17 @@ kbd { display:inline-flex; align-items:center; height:var(--keycap-size); paddin
 #board-chrome [data-adg-token] code:hover {text-decoration:underline;text-underline-offset:2px}
 #board-chrome [data-adg-token] code[data-copied="true"] {color:var(--accent)}
 #board-chrome [data-adg-token] code[data-copied="true"]::after {content:" ✓"}
+
+.board-caption.dimmed {opacity:.4}
+.caption-play {position:absolute;right:0;top:0;transform-origin:top right;transform:scale(var(--caption-scale,1));display:inline-flex;align-items:center;gap:4px;height:26px;padding:0 8px;border-radius:var(--radius-field);background:var(--accent);color:var(--on-accent);font:600 12px var(--font-ui)}
+#frame-filter {position:relative}
+#filter-toggle.active {background:var(--accent);color:var(--on-accent)}
+#filter-options {position:absolute;top:calc(100% + 10px);left:0;min-width:160px;padding:5px;border-radius:var(--radius-menu);background:var(--surface);box-shadow:var(--shadow-menu);z-index:3}
+#filter-options button,#filter-rows button {display:block;text-align:left;width:100%;padding:7px 10px;border-radius:var(--radius-row)}
+#filter-options button[aria-pressed=true],#filter-options button:hover,#filter-rows button:hover {background:var(--surface-sunken)}
+#filter-results {top:var(--panel-top);left:12px;width:min(332px,90vw);padding:14px;max-height:70vh;overflow:auto;z-index:3}
+#filter-results header {display:flex;align-items:center;justify-content:space-between}
+#filter-results h3 {font:500 var(--text-meta) var(--font-ui);color:var(--text-secondary)}
+#filter-rows button {font-family:var(--font-mono)}
+
+@media(max-width:700px){#filter-results{width:min(42vw,240px)}#filter-rows button{overflow-wrap:anywhere}}

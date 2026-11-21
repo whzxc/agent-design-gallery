@@ -367,7 +367,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
     data.coverage.inventory = data.failures.length ? 'incomplete' : 'complete';
     if (data.unresolvedInputs.length || data.mappingFindings.length) warn('IMPACT_MAPPING_INCOMPLETE', 'Some implementation mappings are absent, unmatched or stale; inspect the resolvable targets and findings.', checkNext('Repair implementation.json and its reported locators before repeating the query.'));
     for(const view of views)view.motionTokenHits=seeds.filter(s=>s.view===view && s.fact.kind==='token').map(s=>s.fact);
-    const motion=impactedEdges(views,query,themes,assessments,values.explain);
+    const motion=await impactedEdges(views,query,themes,assessments,values.explain,values.transitions);
     motionSummary(data,motion,values.transitions);
     if (!data.frames.length && !motion.length) {
       const observed = query.kind === 'token' ? { token: query.tokens[0], theme: values.theme } : query.kind === 'file' ? { file: query.input, theme: values.theme } : null;

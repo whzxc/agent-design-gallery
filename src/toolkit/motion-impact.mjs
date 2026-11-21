@@ -1,12 +1,14 @@
+import { labelResolver } from './motion-label.mjs';
 import { canonicalBytes } from './impact-proof.mjs';
 import { motionRows } from './motion.mjs';
 import { targetsFor, usesTiming } from './motion-queries.mjs';
 import { parseTokens } from './tokens.mjs';
 
-export function impactedEdges(views, query, themes, assessments, explain) {
+export async function impactedEdges(views, query, themes, assessments, explain, expanded) {
   const git = query.kind === 'git',
     ids = new Set(views.flatMap((v) => [...v.motion.ids.keys()]));
   const output = [];
+  const labels = views.map(v => labelResolver(v.config,source=>v.built.get(source) ?? v.index.materialize(source)));
   const tokenMaps = new Map();
   const tokens = (v) => {
     if (!tokenMaps.has(v)) tokenMaps.set(v, parseTokens(v.tokenBytes.toString()));
@@ -73,7 +75,8 @@ export function impactedEdges(views, query, themes, assessments, explain) {
           reasons.add('endpoint');
       }
     });
-    if (reasons.size) output.push({ id, kind, ...(explain ? { reasons: [...reasons].sort() } : {}) });
+    const side = records.findLastIndex(Boolean);
+    if (reasons.size) output.push({ id, kind, ...(expanded ? {label:await labels[side](records[side])} : {}), ...(explain ? { reasons: [...reasons].sort() } : {}) });
   }
   return output;
 }

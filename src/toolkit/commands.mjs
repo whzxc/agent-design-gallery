@@ -1,3 +1,4 @@
+import { labelResolver } from './motion-label.mjs';
 import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { availableParallelism } from 'node:os';
@@ -337,7 +338,21 @@ export async function check(config, args = [], options = {}, log = console.log, 
         catch(cause){failed(cause);}
       }
     }
-    motionSummary(data,motionRows(records).map(({edge})=>({id:edge.id,...(edge.proposed?{proposed:edge.proposed}:{})})),options.transitions);
+    const rows = motionRows(records);
+    if (options.transitions) {
+      const actionName = labelResolver(config, source => {
+        const built = allBuilt.get(source) ?? session?.views[1].built.get(source);
+        if (built) return built;
+        const file = path.join(config.root, source);
+        if (chapterFiles.includes(path.relative(config.design, file).split(path.sep).join('/')))
+          return buildSource(config, file, { write: false });
+      });
+      const edges = await Promise.all(rows.map(async record => ({
+        id: record.edge.id, label: await actionName(record),
+        ...(record.edge.proposed ? { proposed: record.edge.proposed } : {})
+      })));
+      motionSummary(data, edges, true);
+    } else motionSummary(data, rows);
     await cleanup(() => browser?.close(), primary);
     browser = null;
     if (config.check?.importDirection !== false) for (const { source, target, from, to, sameLayer, featureBoundary } of importDirectionViolations(graph, sourceDirectories(config), { strictLayers: config.check?.strictLayers === true })) {

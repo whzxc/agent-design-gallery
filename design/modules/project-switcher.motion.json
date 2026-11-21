@@ -3,6 +3,7 @@
   "edges": [
     {
       "id": "open-project-switcher",
+      "label": "Open project switcher",
       "from": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
       "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
       "trigger": {"on": "click", "target": {"anchor": "picker"}},
@@ -16,6 +17,7 @@
     },
     {
       "id": "open-project-switcher-down",
+      "label": "Open project switcher",
       "from": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
       "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
       "trigger": {"on": "key", "target": {"anchor": "picker"}, "key": "ArrowDown"},
@@ -29,6 +31,7 @@
     },
     {
       "id": "open-project-switcher-up",
+      "label": "Open project switcher",
       "from": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
       "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
       "trigger": {"on": "key", "target": {"anchor": "picker"}, "key": "ArrowUp"},
@@ -42,9 +45,10 @@
     },
     {
       "id": "filter-projects",
+      "label": "Search for “Nova”",
       "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
       "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty"},
-      "trigger": {"on": "key", "target": {"anchor": "search"}, "key": "z"},
+      "trigger": {"on": "input", "target": {"anchor": "search"}, "value": "Nova"},
       "duration": "--motion-switcher",
       "easing": "--ease-switcher",
       "phases": [],
@@ -54,6 +58,7 @@
     },
     {
       "id": "clear-project-filter",
+      "label": "Clear project search",
       "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty"},
       "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
       "trigger": {"on": "click", "target": {"anchor": "clear-search"}},
@@ -66,6 +71,7 @@
     },
     {
       "id": "dismiss-switcher",
+      "label": "Close project switcher",
       "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
       "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
       "trigger": {"on": "key", "target": {"frame": true}, "key": "Escape"},
@@ -78,6 +84,7 @@
     },
     {
       "id": "toggle-switcher",
+      "label": "Close project switcher",
       "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
       "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
       "trigger": {"on": "click", "target": {"anchor": "picker"}},
@@ -90,6 +97,7 @@
     },
     {
       "id": "dismiss-switcher-filtered",
+      "label": "Close project switcher",
       "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty"},
       "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
       "trigger": {"on": "key", "target": {"frame": true}, "key": "Escape"},
@@ -102,6 +110,7 @@
     },
     {
       "id": "toggle-switcher-filtered",
+      "label": "Close project switcher",
       "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty"},
       "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
       "trigger": {"on": "click", "target": {"anchor": "picker"}},
@@ -111,6 +120,18 @@
       "interrupt": "finish",
       "reduced": "instant",
       "focus": "restore-trigger"
+    },{
+      "id": "open-live-instance",
+      "label": "Open live instance",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker-instance"},
+      "trigger": {"on": "click", "target": {"anchor": "live-instance"}},
+      "duration": "--motion-navigation",
+      "easing": "--ease-switcher",
+      "phases": [],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor":"picker"}}
     }
   ]
 }

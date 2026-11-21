@@ -48,16 +48,18 @@ const boardLayer = createBoardLayer(viewport, (path, title, button) => {
     if (item && part) selectFrame(item, part);
     else if (item) selectSource(item);
   },
-  onFocusFrame(source, frameName) {
-    const item = assets.find(a => a.path === source && (a.component || a.shown[0]?.name === frameName));
-    const part = item?.parts.find(p => p.name === frameName);
-    if (item && part) inspectForm(item, part);
-  },
+  onFocusFrame: locateFrame,
+  onPlay: startFramePlayer,
   onCopyError(failure) {
     if (failure) error(`Cannot copy token name: ${failure.message}`);
     else if ($('#error').textContent.startsWith('Cannot copy token name:')) error('');
   },
 });
+function locateFrame(source, frameName) {
+  const item = assets.find(a => a.path === source && (a.component || a.shown[0]?.name === frameName));
+  const part = item?.parts.find(p => p.name === frameName);
+  if (item && part) inspectForm(item, part);
+}
 let manifest,
   catalog = null,
   tokenManifest = null,
@@ -283,6 +285,8 @@ function updateChrome() {
   updateSwitcherLabels();
   const data = tokenManifest ?? catalog ?? manifest;
   const opened = !!data?.directory;
+  $('#frame-filter').hidden=!!tokenManifest || !opened;
+  $('#filter-results').hidden=!!tokenManifest || frameFilter==='all';
   const showTokens = !!tokenManifest && tokenList;
   $('#token-list-toggle').hidden = !tokenManifest;
   $('#token-list-toggle').disabled = !tokenManifest?.tokenBoard;
@@ -313,7 +317,7 @@ function updateChrome() {
   $('.gallery').classList.toggle('tokens-mode', showTokens);
   $('#token-catalog').hidden = !showTokens;
   viewport.inert = showTokens;
-  $('#sidebar').hidden = !opened || !sidebar;
+  $('#sidebar').hidden = !opened || !sidebar || (!tokenManifest && frameFilter!=='all');
   const allArch = assets.length > 0 && assets.every(a => a.path.endsWith('.mmd'));
   const canComment = opened && !tokenManifest && scopeRequest !== 'layer:arch' && !allArch;
   const unavailableReason = canComment ? ''
@@ -335,7 +339,7 @@ function updateChrome() {
   $('#zoom-fit-group').disabled = !!tokenManifest || active === null || !groups[active];
   $('#zoom-fit-selection').disabled = !!tokenManifest || !selected;
   if (!opened) $('#minimap').hidden = true;
-  $('#sidebar-toggle').setAttribute('aria-expanded', String(opened && sidebar));
+  $('#sidebar-toggle').setAttribute('aria-expanded', String(!$('#sidebar').hidden));
   positionZoomMenu();
 }
 function positionZoomMenu() {
@@ -480,7 +484,9 @@ function layout(data, preserve = false, options = {}) {
     world.height += offset;
     world.width = Math.max(world.width, 1680);
   }
+  if(motionProjection!==data.motionFrames)setMotionProjection(data.motionFrames);
   boardLayer.update(groups, assets, data);
+  if(frameFilter!=='all'||playableFrames.size)renderFilter();
   boardLayer.tokens(data.scope === 'all' ? data.tokenBoard : null, h => {
     if (Math.abs(tokenHeight-h)>1) {
       const firstMeasurement = !tokenHeight;
@@ -743,19 +749,93 @@ function renderRelationships(source) {
     $('#'+id).replaceChildren(...nodes);
   }
 }
-let playSelection;
-function offerPlay(host,part) {
-  const button=$('#play-frame');
-  const key=part && host.path.endsWith('.tsx') ? JSON.stringify([host.path,part.name]) : null;
-  if(key===playSelection)return;
-  playSelection=key;button.hidden=true;button.onclick=null;
-  if(!key)return;
-  const ref={source:host.path,frame:part.name};
-  dataFetch('api/play?'+new URLSearchParams(ref)).then(r=>r.ok?r.json():null).then(result=>{
-    if(key!==playSelection || !result?.available)return;
-    button.hidden=false;
-    button.onclick=async()=>{const {openPlayer}=await import('./player.js');await openPlayer({...ref,theme:effectiveTheme,invoker:button});};
-  }).catch(error=>console.warn('Play unavailable:',error.message));
+const playableFrames = new Map();
+let motionProjection;
+const frameFilters = {
+  playable: { title: 'Playable', matches: playableFrames, empty: 'No playable frames in this scope.' }
+};
+let frameFilter = 'all';
+let filterMatches = null;
+
+async function startFramePlayer(source, frame, invoker) {
+  const { openPlayer } = await import('./player.js');
+  await openPlayer({ source, frame, theme: effectiveTheme, invoker });
+}
+function offerPlay(host, part) {
+  const button = $('#play-frame');
+  button.hidden = !playableFrames.get(host?.path)?.has(part?.name);
+  button.onclick = button.hidden ? null : () => startFramePlayer(host.path, part.name, button);
+}
+function renderFilter() {
+  const filter = !tokenManifest && frameFilters[frameFilter];
+  filterMatches = filter?.matches ?? null;
+  $('#filter-label').textContent = filter?.title ?? 'Filter frames';
+  $('#filter-toggle').classList.toggle('active', !!filter);
+  $('#filter-results').hidden = !filter;
+  if (filter) {
+    const rows = [];
+    for (const [source, names] of filter.matches) {
+      const items = assets.filter((a) => a.path === source);
+      const visibleNames = [...names].filter((name) => items.some((a) => a.shown?.some((p) => p.name === name)));
+      if (!visibleNames.length) continue;
+      const heading = document.createElement('h3');
+      heading.textContent = source;
+      rows.push(heading);
+      for (const name of visibleNames) {
+        const button = document.createElement('button');
+        button.textContent = name;
+        button.onclick = () => navigate(() => locateFrame(source, name));
+        rows.push(button);
+      }
+    }
+    $('#filter-rows').replaceChildren(...rows);
+    if (!rows.length)
+      $('#filter-rows').textContent = manifest?.loading ? 'Loading frames…' : filter.empty;
+  }
+  boardLayer.emphasize(playableFrames, filterMatches);
+}
+function setFrameFilter(value) {
+  frameFilter = value;
+  $('#filter-options').hidden = true;
+  $('#filter-toggle').setAttribute('aria-expanded', 'false');
+  renderFilter();
+  updateChrome();
+  requestDraw();
+  $('#filter-toggle').focus();
+}
+$('#filter-toggle').onclick = () => {
+  const menu = $('#filter-options');
+  menu.hidden = !menu.hidden;
+  $('#filter-toggle').setAttribute('aria-expanded', String(!menu.hidden));
+  for (const b of menu.children) b.setAttribute('aria-pressed', String(b.dataset.filter === frameFilter));
+};
+$('#filter-options').onclick = (e) => {
+  if (e.target.dataset.filter) setFrameFilter(e.target.dataset.filter);
+};
+$('#clear-filter').onclick = () => setFrameFilter('all');
+for (const panel of [$('#frame-filter'), $('#filter-results')])
+  panel.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (panel.id === 'filter-results') setFrameFilter('all');
+      else {
+        $('#filter-options').hidden = true;
+        $('#filter-toggle').setAttribute('aria-expanded', 'false');
+        $('#filter-toggle').focus();
+      }
+    }
+  });
+document.addEventListener('pointerdown', (e) => {
+  if (!e.target.closest('#frame-filter')) {
+    $('#filter-options').hidden = true;
+    $('#filter-toggle').setAttribute('aria-expanded', 'false');
+  }
+});
+function setMotionProjection(projection) {
+  motionProjection = projection;
+  playableFrames.clear();
+  for (const [source, names] of Object.entries(projection ?? {})) playableFrames.set(source, new Set(names));
 }
 function selection() {
   hoveredElement=null;
@@ -964,7 +1044,14 @@ function updateOutlines() {
   }
 }
 
-function cameraArea() { return fitArea(width, height, false, false); }
+function cameraArea() {
+  const area=fitArea(width,height,false,false);
+  if(frameFilter!=='all' && !tokenManifest){
+    const inset=$('#filter-results').getBoundingClientRect().right;
+    return {...area,x:area.x+inset,width:Math.max(1,area.width-inset)};
+  }
+  return area;
+}
 function fitWorld(area, data) {
   if (scopeKind(data?.scope) !== 'asset' || !assets.length) return fitView(world,area);
   const x=Math.min(...assets.map(a=>a.x)), y=Math.min(...assets.map(a=>a.y));
@@ -1210,7 +1297,9 @@ function draw() {
       rounded(g.x, g.y, g.width, g.height, 0, boardPalette.surface || palette.surface);
       for (const section of g.blocks) for (const specimen of section.frames) {
         const well = specimen.well;
+        if(filterMatches && !filterMatches.get(section.asset)?.has(specimen.name))ctx.globalAlpha=.4;
         rounded(g.x+section.x+well.x, g.y+section.y+well.y, well.w, well.h, parseFloat(boardPalette["radius-card"]) || 12, boardPalette.canvas || palette.canvas);
+        if(filterMatches)ctx.globalAlpha=1;
       }
     }
     let ready = 0, count = 0;
@@ -1223,6 +1312,7 @@ function draw() {
       ctx.beginPath();
       ctx.roundRect(well.x, well.y, well.width, well.height, parseFloat(boardPalette['radius-card']) || 12);
       ctx.clip();
+      if(filterMatches && !inspection && !filterMatches.get(a.path)?.has(a.shown[0]?.name))ctx.globalAlpha=.4;
       const inViewport = visible(a);
       for (const pos of parts) {
         if (inViewport) count++;
@@ -1575,7 +1665,10 @@ $("#back").onclick = back;
 $("#scope-isolation").onclick = () => exitIsolation(true);
 $("#token-view-toggle").onclick = () => setTokenList(!tokenList);
 $("#token-board-button").onclick = () => setTokenList(false);
-$('#sidebar-toggle').onclick = () => toggleSidebar();
+$('#sidebar-toggle').onclick = () => {
+  if(frameFilter!=='all' && !tokenManifest){setFrameFilter('all');toggleSidebar(true);$('#sidebar-toggle').focus();}
+  else toggleSidebar();
+};
 $('#inspect').onclick = () => {
   inspector = !inspector;
   if (inspector) commentUI?.closePanel?.();
@@ -2124,16 +2217,22 @@ if ((tokenManifest || manifest) && !isUnauthorized()) {
   const events = new EventSource(keyURL('events'));
   const refreshComments = () => commentUI.refresh().catch(err => error(err.message));
   events.addEventListener('comments', refreshComments);
-  events.addEventListener('open', refreshComments);
+  let connectedOnce=false;
+  events.addEventListener('open',()=>{
+    refreshComments();
+    if(connectedOnce)void refresh();
+    connectedOnce=true;
+  });
   window.addEventListener('adg-unauthorized', () => events.close(), { once: true });
-  events.onmessage = (e) => {
+  events.onmessage = async (e) => {
     const data = JSON.parse(e.data);
     if(data.motionSources){
-      const host=currentItem();
-      if(host && data.motionSources.includes(host.path)){
-        playSelection=null;
-        offerPlay(host,host.parts.find(p=>p.id===selectedForm));
+      if (manifest) {
+        manifest.motionFrames = data.motionFrames;
+        manifest.revision = data.revision;
       }
+      setMotionProjection(data.motionFrames);
+      renderFilter();const host=currentItem();offerPlay(host,host?.parts.find(p=>p.id===selectedForm));requestDraw();
       return;
     }
     if (data.error) error(data.error);

@@ -17,6 +17,7 @@ import path from "node:path";
 import os from "node:os";
 import { perfSpan } from './perf.mjs';
 
+import { createIndexStore } from './toolkit/index-store.mjs';
 import { createBuildStore } from './toolkit/build-store.mjs';
 import { CliError, asCliError } from './cli-output.mjs';
 import { cleanup } from './toolkit/results.mjs';
@@ -64,6 +65,41 @@ export async function startServer({
     revision = 0,
     closing = false,
     buildStore, viewerCache, codePaths=new Set();
+  const motionOwners = new Map();
+  let motionFrames;
+  // Project discovery and its watcher own this projection. Drawing and selection only read it.
+  async function indexMotion(project, directory, changed, inventory, reopening = false) {
+    if (!changed.size) return;
+    const summaries = await createIndexStore({
+      directory: path.join(stateDirectory, 'cache', digest(directory), 'motion-frames'),
+      persist: !readOnly
+    });
+    try {
+      for (const source of changed) {
+        if (!inventory.has(source)) { motionOwners.delete(source); continue; }
+        try {
+          const file = path.join(directory, source.replace(/\.tsx$/, '.motion.json'));
+          const { ino, size, ctimeNs } = await stat(file, { bigint: true });
+          const key = JSON.stringify([1, project.root, source, String(ino), String(size), String(ctimeNs)]);
+          const saved = reopening && await summaries.get(key);
+          if (Array.isArray(saved) && saved.every(name => typeof name === 'string')) {
+            motionOwners.set(source, { frames: saved });
+            continue;
+          }
+          const { outgoingRecords } = await import('./toolkit/play-endpoint.mjs');
+          const records = outgoingRecords(project, directory, source);
+          const frames = [...new Set(records.map(r => r.edge.from.frame))];
+          motionOwners.set(source, { records, frames });
+          await summaries.put(key, frames);
+        } catch (error) {
+          motionOwners.set(source, { error, frames: [] });
+        }
+      }
+      motionFrames = Object.fromEntries([...motionOwners].map(([source, row]) => [source, row.frames]));
+    } finally {
+      await summaries.close();
+    }
+  }
   const overlayStores = new Map(), overlayHashes = new Set();
   let resettingOverlays = false;
   const knownBuilds = new Map(), legacyDependencies = new Map(), failedSources=new Set(), dirtyBuilds=new Set();
@@ -156,14 +192,15 @@ export async function startServer({
     overlayHashes.add(built.hash);frameCounts.set(name,built.frames.length);
     return built;
   }
-  async function collect(base, relative = "", out = new Map(), sourceNames = sources, discoveredCode = new Set()) {
+  async function collect(base, relative = "", out = new Map(), sourceNames = sources, discoveredCode = new Set(), sidecars = new Set()) {
     for (const entry of await readdir(path.join(base, relative), {
       withFileTypes: true,
     })) {
       if (entry.name.startsWith(".") || entry.name === "node_modules" || (relative === "" && entry.name === "art" && !sourceNames.includes("art"))) continue;
       const name = path.posix.join(relative, entry.name);
-      if (entry.isDirectory()) await collect(base, name, out, sourceNames, discoveredCode);
+      if (entry.isDirectory()) await collect(base, name, out, sourceNames, discoveredCode, sidecars);
       else if (entry.isFile()) {
+        if(name.endsWith('.motion.json')) sidecars.add(name.replace(/\.motion\.json$/,'.tsx'));
         if(/\.[jt]sx?$/.test(name))discoveredCode.add(name);
         if(!(/\.svg$/i.test(name)||isSourcePath(name,sourceNames)))continue;
         const info = await stat(path.join(base, name));
@@ -186,8 +223,8 @@ export async function startServer({
     }
     return out;
   }
-  async function collectProject(base, project, sourceNames, discoveredCode) {
-    const out=await collect(base,'',new Map(),sourceNames,discoveredCode);
+  async function collectProject(base, project, sourceNames, discoveredCode, sidecars) {
+    const out=await collect(base,'',new Map(),sourceNames,discoveredCode,sidecars);
     if(project.design !== base) return out;
     for(const file of archFiles(project.arch)) {
       const name=path.relative(project.root,file).split(path.sep).join('/'),info=await stat(file),stamp=`${info.mtimeMs}-${info.size}`;
@@ -223,7 +260,7 @@ export async function startServer({
     if (hasTokens && !readOnly) refreshTypes({design:next});
     const project = await loadConfig(next);
     const nextSources = project.design === next ? project.sources : sourceDirectories({design:next});
-    const nextCode=new Set(), nextFiles = await collectProject(next, project, nextSources, nextCode),
+    const nextCode=new Set(), sidecars=new Set(), nextFiles = await collectProject(next, project, nextSources, nextCode, sidecars),
       nextGroups = await readGroups(next, nextSources);
 
     const cacheBase=path.join(stateDirectory,'cache',digest(next));
@@ -255,6 +292,7 @@ export async function startServer({
     watcher = nextWatcher;
     activeProject=project;watchArch(project,next);
     root = next;
+    motionOwners.clear(); motionFrames=undefined; await indexMotion(project, next, sidecars, sidecars, true);
     commentsFile = await commentFile(project.root, commentStateDirectory);
     commentStamp = await readCommentStamp(commentsFile);
     tokenSource = hasTokens ? tokenSourcePath(next, project) : null;
@@ -284,18 +322,24 @@ export async function startServer({
     try {
       const observed = [...touched];
       const motionSources = observed.filter(name=>name.endsWith('.motion.json')).map(name=>name.replace(/\.motion\.json$/,'.tsx'));
-      if (motionSources.length) emit({motionSources});
+
       touched.clear();
       const base = root,
         project = await loadConfig(base),
         nextSources = project.design===base ? project.sources : sourceDirectories({design:base}),
-        nextCode=new Set(),
-        next = await collectProject(base,project,nextSources,nextCode),
+        nextCode=new Set(), sidecars=new Set(),
+        next = await collectProject(base,project,nextSources,nextCode,sidecars),
         nextGroups = await readGroups(base, nextSources);
       const tokensChanged = observed.includes(tokenFile);
       const hasTokens = tokensChanged ? (await readdir(base)).includes(tokenFile) : !!tokenSource;
       const nextTokenSource = hasTokens ? tokenSourcePath(base, project) : null;
       if (root !== base) return;
+      const changedMotion = new Set([...motionSources,...[...new Set([...sidecars,...motionOwners.keys()])].filter(name=>sidecars.has(name)!==motionOwners.has(name))]);
+      if(changedMotion.size) {
+        await indexMotion(project,base,changedMotion,sidecars);
+        revision++;
+        emit({ revision, motionSources: [...changedMotion], motionFrames });
+      }
       const stamps=[...new Set([...files.keys(),...next.keys()])].filter(name=>files.get(name)?.stamp!==next.get(name)?.stamp);
       const grouping=JSON.stringify(groups)!==JSON.stringify(nextGroups);
       const configChanged=JSON.stringify(sources)!==JSON.stringify(nextSources)||activeProject.arch!==project.arch;
@@ -354,6 +398,7 @@ export async function startServer({
       : "Agent Design Gallery",
     assets: [...files.values()].filter(asset => !isFeatureInternal(asset.path, sources)).sort((a, b) => a.path.localeCompare(b.path)),
     groups,
+    ...(motionOwners.size ? {motionFrames} : {}),
     revision,
     recent: state.recent,
     theme: state.theme,
@@ -368,7 +413,7 @@ export async function startServer({
     const preset = fixtures.states[name];
     if (!preset) throw new Error(`Unknown fixture ${name}; choose a declared ADG fixture.`);
     return { ...data, ...(preset.empty ? { directory: null, projectRoot: null, sourcePrefix: '', assets: [], groups: [] } : {}),
-      label: 'agent-remote-control', recent: fixtures.recent, view: null, theme: preset.themeChoice ?? preset.theme,
+      label: fixtures.label ?? 'agent-remote-control', recent: fixtures.recent, view: null, theme: preset.themeChoice ?? preset.theme,
       sidebar: preset.sidebar, inspector: !!preset.inspector, fixture: { name, ...preset } };
   }
   const contextFor=async url=>(await viewerVersion)+'|'+(url.searchParams.get('context')??'')+(url.searchParams.has('base')?'|base:'+url.searchParams.get('base'):'');
@@ -540,9 +585,13 @@ export async function startServer({
       if (url.pathname === '/api/play' && request.method === 'GET') {
         const source = url.searchParams.get('source'), frame = url.searchParams.get('frame');
         if (!activeProject || !codePaths.has(source) || !source.endsWith('.tsx')) return json(response,404,{error:'Unknown playback source.'});
-        const {playEndpoint} = await import('./toolkit/play-endpoint.mjs');
-        const result = await playEndpoint(activeProject, root, source, frame, url.searchParams.get('theme'), url.searchParams.has('scene') ? sourceBuild : null);
-        return json(response,200,result);
+        const indexed = motionOwners.get(source);
+        if (indexed?.error) throw indexed.error;
+        if (!url.searchParams.has('scene')) return json(response, 200, { available: indexed?.frames.includes(frame) ?? false });
+        const { playEndpoint, outgoingRecords } = await import('./toolkit/play-endpoint.mjs');
+        if (indexed && !indexed.records) indexed.records = outgoingRecords(activeProject, root, source);
+        const result = await playEndpoint(activeProject, root, source, frame, url.searchParams.get('theme'), sourceBuild, indexed?.records ?? []);
+        return json(response, 200, result);
       }
       if (url.pathname === '/api/comments') {
         if (request.method !== 'GET' && request.method !== 'POST') return json(response,405,{error:'Use GET or POST.'});

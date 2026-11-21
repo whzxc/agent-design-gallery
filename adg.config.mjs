@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { implementationTexts } from './src/toolkit/document.mjs';
 import { startServer } from './src/server.mjs';
 import { states, recent, assetModifiedAt } from './fixtures/viewer.mjs';
 import { commentFile } from './src/comments.mjs';
@@ -15,6 +16,59 @@ const fixtureStates = {
   [comments.commentCanvas.fixture]: { ...states['scope-layer'], sidebar: false, camera: 'origin', origin: [48, 100], scale: 2 },
 };
 export const playerFixtureURL='/?asset=modules%2Fproject-switcher.tsx&frame=project-picker';
+export const playbackFixture = (name) => /^(?:flow-|board-play-|board-playable-|board-frame-filters$)/.test(name);
+export const playbackURL = (name) =>
+  name.startsWith('flow-') ? playerFixtureURL : '/?fixture=' + encodeURIComponent(name);
+async function readyPlayback(page, name) {
+  await page.emulateMedia({ reducedMotion: name === 'flow-reduced-motion' ? 'reduce' : 'no-preference' });
+  if (!name.startsWith('flow-')) {
+    await page.waitForFunction((n) => document.documentElement.dataset.fixtureReady === n, name);
+    await page.getByRole('button', { name: 'Play from project-picker', exact: true }).waitFor();
+    if (name !== 'board-play-affordance') await page.locator('#filter-toggle').click();
+    if (name === 'board-playable-filter') await page.locator('[data-filter=playable]').click();
+    return;
+  }
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  const player = page.locator('#motion-player');
+  await player.locator('[data-edge=open-project-switcher]').waitFor();
+  if (name === 'flow-at-rest') {
+    await player
+      .frameLocator('iframe')
+      .locator('body')
+      .click({ position: { x: 2, y: 2 } });
+    return;
+  }
+  if (['flow-playing', 'flow-paused'].includes(name)) {
+    const time = new Date('2025-01-01T00:00:00Z');
+    await page.clock.install({ time });
+    await page.clock.pauseAt(new Date(+time + 1000));
+    await player.locator('[data-edge=open-project-switcher]').evaluate((b) => b.click());
+    await player.locator('[data-control=state]').filter({ hasText: 'Playing transition' }).waitFor();
+    // Set the approved 64 ms sample directly, independent of the browser's first animation tick.
+    await player.getByRole('slider').evaluate((slider) => {
+      slider.value = '40';
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    if (name === 'flow-playing') await player.locator('[data-control=pause]').evaluate((b) => b.click());
+    return;
+  }
+  await player.locator('[data-edge=open-project-switcher]').click();
+  const current = (frame) =>
+    player
+      .locator('[data-control=current]')
+      .filter({ hasText: new RegExp('^' + frame + '$') })
+      .waitFor();
+  await current('switcher-open');
+  if (name === 'flow-terminal') {
+    await player.locator('[data-edge=open-live-instance]').click();
+    await current('project-picker-instance');
+  }
+  if (name === 'flow-reduced-motion') {
+    await player.frameLocator('iframe').getByRole('searchbox').fill('Nova');
+    await current('switcher-empty');
+  }
+  if (name === 'flow-settings') await player.locator('[data-control=settings]').click();
+}
 let fixtureStore;
 let selectedFixture;
 
@@ -88,8 +142,11 @@ export default {
     async start({ port, root }) {
       const temporary = await mkdtemp(path.join(tmpdir(), 'adg-fixture-'));
       try {
-        if (selectedFixture === 'motion-player') {
-          const server=await startServer({directory:path.join(root,'design'),port,stateDirectory:temporary});
+        if (playbackFixture(selectedFixture)) {
+          const fixture = {theme:'light',scope:'layer:modules',group:'Project access',sidebar:false,
+            camera:'origin',origin:[190,70],scale:.63};
+          const server=await startServer({directory:path.join(root,'design'),port,stateDirectory:temporary,
+            fixtures:selectedFixture.startsWith('flow-') ? null : {label:'agent-design-gallery',states:{[selectedFixture]:fixture},recent,assetModifiedAt}});
           return async()=>{try{await server.close();}finally{await rm(temporary,{recursive:true,force:true});}};
         }
         if (reviewFixtures.has(selectedFixture)) {
@@ -109,7 +166,7 @@ export default {
     },
     fixture(name) {
       selectedFixture = name;
-      if (name === 'motion-player') return {url:playerFixtureURL,theme:'light',locale:'en-US',timezone:'UTC',clock};
+      if (playbackFixture(name)) return {url:playbackURL(name),theme:'light',locale:'en-US',timezone:'UTC',clock};
       if (reviewFixtures.has(name)) return { url: '/', theme: 'dark', locale: 'en-US', timezone: 'UTC', clock };
       if (Object.hasOwn(hubFixtures, name)) return { url: hubFixtures[name], theme: 'light', locale: 'en-US', timezone: 'UTC', clock };
       const state = fixtureStates[name];
@@ -117,14 +174,16 @@ export default {
       return { url: `/?fixture=${encodeURIComponent(name)}`, theme: state.theme, locale: 'en-US', timezone: 'UTC', clock };
     },
     async texts(page) {
+      if (selectedFixture?.startsWith('flow-')) {
+        const iframe = page.locator('#motion-player iframe');
+        const origin = await iframe.boundingBox();
+        const { box, texts } = await iframe.contentFrame().locator('body').evaluate(implementationTexts);
+        return texts.map(({ x, y, ...text }) => ({ ...text, x: origin.x + box.x + x, y: origin.y + box.y + y }));
+      }
       return reviewFixtures.has(selectedFixture) ? reviewFixtureTexts(page) : [];
     },
     async ready(page, name) {
-      if (name === 'motion-player') {
-        await page.getByRole('button',{name:'Play',exact:true}).click();
-        await page.getByRole('button',{name:'click → switcher-open',exact:true}).waitFor();
-        return;
-      }
+      if (playbackFixture(name)) return readyPlayback(page,name);
       if (reviewFixtures.has(name)) return readyReviewFixture(page, name);
       if (Object.hasOwn(hubFixtures, name)) return readyFixtureHub(page, name);
       await page.waitForFunction(name => document.documentElement.dataset.fixtureError || document.documentElement.dataset.fixtureReady === name, name, { timeout: 15000 });

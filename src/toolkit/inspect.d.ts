@@ -116,7 +116,8 @@ export interface CompactInspectData extends Omit<InspectCommon,'matches'|'limita
 export type InspectData=ExpandedInspectData|CompactInspectData;
 export interface MotionInspection {
   project:string; complete:boolean; motionVersion:1; mode:'transitions'|'transition';
-  motion?:{count:number;edges:{id:string;from:{source:string;frame:string};to:{source:string;frame:string};input:string;proposed?:string}[]};
+  label?:string;
+  motion?:{count:number;edges:{id:string;label:string;from:{source:string;frame:string};to:{source:string;frame:string};input:'click'|'hover'|'focus'|'key'|'input';proposed?:string}[]};
   edge?:Record<string,unknown>;bound?:boolean;findings?:Record<string,unknown>[];
   themes?:Partial<Record<Theme,{sameAs:Theme}|{counts:{match:number;enter:number;exit:number;ambiguous:number};timings:Record<string,string|number|null>}>>;
 }

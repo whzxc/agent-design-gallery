@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { startServer } from '../src/server.mjs';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { spawnSync, execFileSync } from 'node:child_process';
@@ -45,7 +46,7 @@ function consumer(t){
 test('contract: keyed frames, scoped bindings, timing aliases and Git edge queries through the CLI',t=>{
   const {root,put,run,edges,git}=consumer(t);
   const check=run(['check','--read-only','--transitions']).data;
-  assert.deepEqual(check.motion,{count:1,edges:[{id:edge.id}]});
+  assert.deepEqual(check.motion,{count:1,edges:[{id:edge.id,label:'Click “Open”'}]});
   const detail=run(['inspect','--transition='+edge.id,'--explain']).data;
   assert.deepEqual(detail.findings,[]);assert.equal(detail.themes.light.timings['/duration'],120);
   assert.equal(detail.themes.light.counts.match,2);assert.equal(detail.themes.light.tracks[0].duration,120);
@@ -53,7 +54,8 @@ test('contract: keyed frames, scoped bindings, timing aliases and Git edge queri
   assert.equal(run(['inspect',last,'--frame=ready','--transitions']).data.motion.edges[0].from.source,first);
   assert.equal(run(['inspect',first,'--frame=ready','--text=Text']).data.motion,undefined);
   assert.equal(run(['inspect',first,'--frame=ready','--text=Open']).data.motion.count,1);
-  const binding=run(['owner','--transition='+edge.id]).data.bindings[0];
+  const owner=run(['owner','--transition='+edge.id]).data;assert.equal(owner.label,'Click “Open”');
+  const binding=owner.bindings[0];
   assert.equal(binding.selector.symbol,'open');assert.equal(binding.pointer,'/mappings/0/design/3');
   assert.equal(run(['owner','--file=ui.ts','--line=1','--transitions']).data.motion.count,1);
   assert.equal(run(['owner','--part='+row+'#Row']).data.motion.count,1);
@@ -69,13 +71,15 @@ test('contract: keyed frames, scoped bindings, timing aliases and Git edge queri
   const only=run(['owner','--file=ui.ts','--line=1','--transitions']);
   assert.equal(only.data.coverage.activeBindings,1);assert.deepEqual(only.warnings,[]);
   put('design/implementation.json',map);
-  edges([{...edge,duration:'--missing'}]);
+  edges([{...edge,label:'Show settings',duration:'--missing'}]);
   const change=run(['impact','--base=HEAD','--transitions','--explain']).data;
-  assert.deepEqual(change.motion.edges,[{id:edge.id,kind:'changed',reasons:['declaration']}]);
+  assert.deepEqual(change.motion.edges,[{id:edge.id,kind:'changed',label:'Show settings',reasons:['declaration']}]);
   const selected=run(['check',last,'--read-only','--impacted','--base=HEAD'],1).data;
   assert.equal(selected.summary.evaluations,0);assert.equal(selected.motion.count,1);
   assert.ok(selected.findings.some(f=>f.code==='MOTION_TOKEN'));
-  edges([]);assert.equal(run(['impact','--base=HEAD','--transitions']).data.motion.edges[0].kind,'removed');
+  edges([]);
+  const removed=run(['impact','--base=HEAD','--transitions']).data.motion.edges[0];
+  assert.equal(removed.kind,'removed');assert.equal(removed.label,'Click “Open”');
   assert.equal(run(['inspect','--transition=missing'],2).error.code,'MOTION_EDGE_NOT_FOUND');
   put(sidecar,'{');assert.equal(run(['check','--read-only'],2).data.complete,false);
   put(sidecar,{version:2,edges:[]});assert.equal(run(['check','--read-only'],2).data.complete,false);
@@ -89,6 +93,12 @@ test('contract: sidecar findings carry the offending ID, field, side and theme',
     ['unknown-token','MOTION_TOKEN',{duration:'--missing'}],
     ['bad-track-ease','MOTION_TOKEN',{phases:[[{...track,easing:'linear'}]]}],
     ['missing-trigger','MOTION_TRIGGER_MISSING',{trigger:{on:'focus',target:{anchor:'absent'}}}],
+    ['input-target','MOTION_INPUT_TARGET',{trigger:{on:'input',target:{anchor:'open'},value:'Nova'}}],
+    ['input-missing-value','MOTION_SCHEMA',{trigger:{on:'input',target:{anchor:'open'}}}],
+    ['click-value','MOTION_SCHEMA',{trigger:{...edge.trigger,value:'Nova'}}],
+    ['empty-label','MOTION_SCHEMA',{label:'  '}],
+    ...['prefix','regex','debounce'].map(field=>['input-'+field,'MOTION_SCHEMA',{trigger:{on:'input',target:{anchor:'open'},value:'Nova',[field]:true}}]),
+    ['markup-label','MOTION_SCHEMA',{label:'<b>Open</b>'}],
     ['unreachable-key','MOTION_TRIGGER_MISSING',{trigger:{on:'key',key:'Enter',target:{anchor:'plain'}}}],
     ['ambiguous','MOTION_IDENTITY_AMBIGUOUS',{trigger:{on:'hover',target:{part:row+'#Row'}}}],
     ['missing-target','MOTION_TARGET_MISSING',{phases:[[{...track,targets:[{anchor:'absent'}]}]]}],
@@ -153,6 +163,27 @@ test('contract: nested keyed scopes, replacement paint claims and native input e
   assert.ok(run(['check','--read-only'],1).data.findings.some(f=>f.code==='MOTION_TRIGGER_MISSING'));
 });
 
+test('contract: exact input values dispatch separately on editable native controls and named editing hosts',t=>{
+  const {put,run,edges}=consumer(t);
+  const types=['text','search','tel','url','email','password'];
+  put(first,`import {Frame} from 'adg';export default()=> <Frame name="ready" fixture="ready" capture={{page:true}}>
+    <main><label>Project name<input data-adg-id="project"/></label><textarea data-adg-id="notes"/>
+    <div contenteditable="true" data-adg-id="body"/><input readonly data-adg-id="locked"/>
+    <input type="checkbox" data-adg-id="check"/><div role="searchbox" tabindex="0" data-adg-id="fake"/>
+    {${JSON.stringify(types)}.map(type=><input type={type} data-adg-id={type}/>)}</main></Frame>`);
+  const input=(id,anchor,value)=>({...edge,id,proposed:'inputs',phases:[],trigger:{on:'input',target:{anchor},value}});
+  const valid=['project','notes','body',...types].map(anchor=>input('edit-'+anchor,anchor,'Nova'));
+  const other=input('clear-project','project','');
+  const invalid=['locked','check','fake'].map(anchor=>input('bad-'+anchor,anchor,'Nova'));
+  edges([...valid,other,...invalid,input('duplicate-project','project','Nova')]);
+  const findings=run(['check','--read-only'],1).data.findings;
+  assert.deepEqual(findings.filter(f=>f.code==='MOTION_INPUT_TARGET').map(f=>f.transition).sort(),invalid.map(e=>e.id).sort());
+  assert.ok(findings.some(f=>f.code==='MOTION_TRIGGER_CONFLICT' && f.transition==='duplicate-project'));
+  assert.ok(!findings.some(f=>f.transition===other.id));
+  const list=run(['inspect',last,'--frame=ready','--transitions']).data.motion.edges;
+  assert.equal(list.find(e=>e.id==='edit-project').label,'Enter “Nova” in “Project name”');
+});
+
 test('contract: rollout governs hidden and variant utilities, inline timings, shorthands and both themes without a sidecar',t=>{
   const {root,put,run,git}=consumer(t);
   rmSync(path.join(root,sidecar));rmSync(path.join(root,'design/implementation.json'));
@@ -170,4 +201,33 @@ test('contract: rollout governs hidden and variant utilities, inline timings, sh
   const fs=run(['check',row,'--read-only'],1).data.findings.filter(f=>f.code==='MOTION_SOURCE_CSS');
   assert.ok(fs.some(f=>f.frame==='clean' && f.theme==='dark'));
   assert.ok(!fs.some(f=>f.frame==='clean' && f.theme==='light'));
+});
+
+
+test('contract: project reopen and sidecar-only edits refresh board availability without changing frame versions', async t => {
+  const { root, edges } = consumer(t);
+  const open = () => startServer({directory:path.join(root,'design'),stateDirectory:path.join(root,'.state')});
+  let server = await open();
+  const read = async route => (await fetch(new URL(route,server.url))).json();
+  const source = 'surfaces/first.tsx';
+  try {
+    const original = await read('manifest');
+    assert.deepEqual(original.motionFrames[source], ['ready']);
+    await server.close();
+    server = await open();
+    const scene = await read('api/play?' + new URLSearchParams({source,frame:'ready',theme:'light',scene:'1'}));
+    assert.equal(scene.edges[0].label, 'Click “Open”');
+    const warm = await read('manifest');
+    edges([]);
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const current = await read('manifest');
+      if (current.revision > warm.revision) {
+        assert.deepEqual(current.motionFrames[source], []);
+        assert.deepEqual(current.assets.map(a => a.version), warm.assets.map(a => a.version));
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.fail('Missing revision for a sidecar-only edit');
+  } finally { await server.close(); }
 });

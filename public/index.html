@@ -28,11 +28,14 @@
     <button type="button" id="app-directory" class="picker" aria-label="Current project"><span data-icon="folder" data-size="14"></span><span class="directory-name"></span><span class="switcher-chevron" data-icon="chevron-down" data-size="12" hidden></span></button>
     <span class="separator project-divider"></span>
     <div id="scope-tabs" role="tablist" aria-label="Design scope"></div>
+    <div id="frame-filter"><button id="filter-toggle" class="view-pill" aria-expanded="false" aria-controls="filter-options"><span data-icon="list-filter"></span><span id="filter-label">Filter frames</span><span data-icon="chevron-down" data-size="12"></span></button>
+      <div id="filter-options" hidden><button type="button" data-filter="all">All frames</button><button type="button" data-filter="playable">Playable</button></div></div>
     <button type="button" id="scope-isolation" class="isolation-pill" data-tooltip="Show full layer" hidden></button>
     <button type="button" id="token-view-toggle" class="view-pill" hidden></button>
     <span class="separator search-divider"></span>
     <div class="search-field"><span data-icon="search" data-size="14"></span><input id="search" type="search" placeholder="Find assets…" aria-label="Find assets" autocomplete="off"><span id="search-key">⌘F</span><button id="search-clear" aria-label="Clear search" hidden><span data-icon="x" data-size="14"></span></button></div>
   </div>
+  <aside id="filter-results" class="floating" aria-label="Playable results" hidden><header><strong>Playable</strong><button id="clear-filter">Clear filter</button></header><div id="filter-rows"></div></aside>
   <aside id="sidebar" class="floating" aria-label="Contents" hidden>
     <nav id="modules" aria-label="Design modules"></nav>
   </aside>

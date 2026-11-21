@@ -31,6 +31,7 @@ function validateShape(e, issue) {
   if (
     !fields(e, [
       'id',
+      'label',
       'from',
       'to',
       'trigger',
@@ -50,14 +51,17 @@ function validateShape(e, issue) {
   if (!edgeId(e.id)) issue('MOTION_SCHEMA', '/id', 'Use a project-unique kebab-case ID.');
   for (const side of ['from', 'to'])
     if (!frameRef(e[side])) issue('MOTION_SCHEMA', '/' + side, 'Expected an exact project-relative TSX source and frame.');
+  if (e.label !== undefined && (!text(e.label) || /[\r\n\x00-\x1f]|<\/?[a-z][^>]*>/i.test(e.label)))
+    issue('MOTION_SCHEMA', '/label', 'Use a nonempty plain-text action name.');
   const t = e.trigger;
   if (
-    !fields(t, ['on', 'target', 'key']) ||
-    !['click', 'hover', 'focus', 'key'].includes(t.on) ||
+    !fields(t, ['on', 'target', 'key', 'value']) ||
+    !['click', 'hover', 'focus', 'key', 'input'].includes(t.on) ||
     !target(t.target) ||
+    (t.on === 'input' ? typeof t.value !== 'string' : t.value !== undefined) ||
     (t.on === 'key' ? !(text(t.key) || t.key === ' ') : t.key !== undefined)
   )
-    issue('MOTION_SCHEMA', '/trigger', 'Choose an input and a unique target; only key input takes a key.');
+    issue('MOTION_SCHEMA', '/trigger', 'Choose an input and a unique target; key takes a key and input takes an exact string value.');
   if (e.interrupt !== 'finish') issue('MOTION_SCHEMA', '/interrupt', 'Version 1 requires finish.');
   if (e.reduced !== 'instant') issue('MOTION_REDUCED_MISSING', '/reduced', 'Declare the instant fallback.');
   if (

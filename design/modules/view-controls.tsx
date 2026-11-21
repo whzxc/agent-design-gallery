@@ -158,26 +158,10 @@ export function ZoomBar({
   );
 }
 
-export function PlaybackBar({paused=false}: {paused?:boolean}) {
-  const control='min-h-7 rounded-field bg-surface-sunken px-[9px] py-[3px] text-body';
-  const button=(text:string,disabled=false)=><button disabled={disabled} class={control}>{text}</button>;
-  return <section class="w-[942px] rounded-panel border border-border bg-surface p-[10px] text-body text-text">
-    <div class="flex items-center justify-between"><strong>{paused ? 'project-picker → switcher-open' : 'project-picker'}</strong>{button('Exit')}</div>
-    <div class="mt-[6px] flex items-center gap-[6px]">{button('Back',!paused)}{button('Replay',!paused)}{button('Resume',!paused)}
-      <input type="range" aria-label="Transition progress" value={paused?'50':'0'} disabled={!paused} class="min-w-20 flex-1" />
-      <select aria-label="Playback speed" class={control}><option>1×</option><option>0.5×</option><option>0.25×</option></select>
-      <select aria-label="Reduced motion" class={control}><option>System motion</option><option>Reduced motion on</option><option>Reduced motion off</option></select>{button('Hotspots')}</div>
-    <div class="mt-[6px] flex gap-[6px]">{(paused ? ['key z → switcher-empty','key Escape → project-picker','click → project-picker'] :
-      ['click → switcher-open','key ArrowDown → switcher-open','key ArrowUp → switcher-open']).map(label=>button(label))}</div>
-  </section>;
-}
-
 const { isolatedBar, zoomBarStates } = viewControlFixtures;
 
 export default () => [
   <Frame name="viewer-tools-play"><ViewerTools play /></Frame>,
-  <Frame name="player-ready" fixture="motion-player" capture={{selector:'.play-dock'}}><PlaybackBar /></Frame>,
-  <Frame name="player-paused"><PlaybackBar paused /></Frame>,
   <Frame name="viewer-tools">
     <ViewerTools inspectorDisabled />
   </Frame>,

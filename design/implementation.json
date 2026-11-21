@@ -2,6 +2,14 @@
   "version": 2,
   "mappings": [
     {
+      "implementation":{"file":"public/boards.js","symbol":"createBoardLayer"},
+      "design":[{"source":"design/surfaces/canvas.tsx","frames":["board-play-affordance","board-playable-filter","board-frame-filters"]}]
+    },
+    {
+      "implementation": {"file":"public/switcher.js","anchor":"else row.href = item.url","symbol":"destination link"},
+      "design":[{"source":"design/modules/project-switcher.tsx","transition":"open-live-instance"}]
+    },
+    {
       "implementation": {"file": "public/switcher.js", "symbol": "open", "anchor": "function open(trigger) {"},
       "design": [
         {"source": "design/modules/project-switcher.tsx", "transition": "open-project-switcher"},
@@ -27,7 +35,7 @@
     },
     {
       "implementation": {"file":"public/player.js","symbol":"openPlayer"},
-      "design": [{"source":"design/modules/view-controls.tsx","part":"PlaybackBar"}]
+      "design": [{"source":"design/surfaces/canvas.tsx","frames":["flow-at-rest","flow-playing","flow-paused","flow-completed","flow-terminal","flow-reduced-motion","flow-settings"]}]
     },
     {
       "implementation": { "file": "public/style.css", "symbol": "button", "anchor": "button { border:0;" },

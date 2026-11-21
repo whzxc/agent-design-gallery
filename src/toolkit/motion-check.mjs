@@ -1,4 +1,5 @@
 import {matchRoots,candidates,chain} from '../../public/motion-identity.js';
+import { nativeTextEntry } from '../../public/motion-scene.js';
 export {instanceKeyMatches} from '../../public/motion-identity.js';
 import path from 'node:path';
 import { loadFrame } from './browser.mjs';
@@ -7,7 +8,7 @@ import { listSources, relative, loadTokens, sourceDirectories, isFeatureInternal
 import { resolveMotionToken, timingRefs } from './motion.mjs';
 
 // Runs inside the frame observation page. Indexes are local to this one observation.
-function observe(design) {
+function observe({ design, nativeTextEntry }) {
   const shell = document.querySelector('[data-adg-frame]').firstElementChild;
   const elements = [shell, ...shell.querySelectorAll('*')],
     indexes = new Map(elements.map((el, i) => [el, i]));
@@ -63,6 +64,7 @@ function observe(design) {
       exposed: visible && !el.closest('[inert],[aria-hidden="true"]'),
       pointer: visible && hit(el, rect),
       disabled: el.matches(':disabled,[aria-disabled="true"]'),
+      textEntry: !el.readOnly && (el.matches(nativeTextEntry) || (el.hasAttribute('contenteditable') && el.isContentEditable)),
       focusable: false,
       keyboard: false
     };
@@ -108,7 +110,7 @@ export function motionEvaluator(
     if (!observations.has(key)) {
       const page = await getPage();
       await loadFrame(page, frame, theme);
-      observations.set(key, await page.evaluate(observe, relative(config, config.design)));
+      observations.set(key, await page.evaluate(observe, { design: relative(config, config.design), nativeTextEntry }));
     }
     return observations.get(key);
   }
@@ -200,6 +202,8 @@ export function motionEvaluator(
       }
       const t = resolve('from', e.trigger.target, '/trigger/target', 'MOTION_TRIGGER_MISSING');
       if (t) {
+        if (e.trigger.on === 'input' && (!t.textEntry || !t.focusable))
+          issue('MOTION_INPUT_TARGET', '/trigger/target', 'Input requires an editable text-entry control.', theme);
         if (
           !t.exposed ||
           t.disabled ||
@@ -208,7 +212,7 @@ export function motionEvaluator(
           (e.trigger.on === 'key' && !e.trigger.target.frame && !t.keyboard)
         )
           issue('MOTION_TRIGGER_MISSING', '/trigger', 'Origin cannot receive ' + e.trigger.on + '.', theme);
-        const k = JSON.stringify([e.from.source, e.from.frame, theme, t.i, e.trigger.on, e.trigger.key]);
+        const k = JSON.stringify([e.from.source, e.from.frame, theme, t.i, e.trigger.on, e.trigger.key ?? e.trigger.value]);
         if (dispatch.has(k) && dispatch.get(k) !== e.id)
           issue('MOTION_TRIGGER_CONFLICT', '/trigger', 'Input also dispatches ' + dispatch.get(k) + '.', theme);
         else dispatch.set(k, e.id);

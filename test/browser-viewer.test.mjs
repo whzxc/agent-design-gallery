@@ -9,7 +9,7 @@ import { states, recent } from '../fixtures/viewer.mjs';
 import { hubFixtures } from '../fixtures/hub-compare.mjs';
 import { reviewFixtures } from '../fixtures/review-compare.mjs';
 import comments from '../design/fixtures/comments.json' with { type: 'json' };
-import config, {playerFixtureURL} from '../adg.config.mjs';
+import config, {playbackFixture,playbackURL} from '../adg.config.mjs';
 import { launch } from '../src/toolkit/browser.mjs';
 import { buildSource } from '../src/toolkit/build.mjs';
 import { loadConfig } from '../src/toolkit/config.mjs';
@@ -32,8 +32,8 @@ test('implementation captures map to isolated fixture environments', async () =>
   for (const name of declared) {
     const fixture=config.compare.fixture(name);
     const state = name === comments.commentCanvas.fixture ? states['scope-layer'] : states[name];
-    assert.equal(fixture.url, name==='motion-player' ? playerFixtureURL : reviewFixtures.has(name) ? '/' : hubFixtures[name] ?? `/?fixture=${name}`);
-    assert.equal(fixture.theme, reviewFixtures.has(name) ? 'dark' : (name==='motion-player' || Object.hasOwn(hubFixtures, name)) ? 'light' : state.theme);
+    assert.equal(fixture.url, playbackFixture(name) ? playbackURL(name) : reviewFixtures.has(name) ? '/' : hubFixtures[name] ?? `/?fixture=${name}`);
+    assert.equal(fixture.theme, reviewFixtures.has(name) ? 'dark' : (playbackFixture(name) || Object.hasOwn(hubFixtures, name)) ? 'light' : state.theme);
     assert.equal(fixture.locale,'en-US'); assert.ok(Number.isFinite(Date.parse(fixture.clock)));
   }
   assert.throws(()=>config.compare.fixture('unknown'), /Unknown ADG fixture/);

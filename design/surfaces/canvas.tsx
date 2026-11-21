@@ -106,7 +106,7 @@ function FilterPicker({ filter, expanded }: { filter: FrameFilter; expanded: boo
       <Icon name="list-filter" size={15} />{active ? filter : 'Filter frames'}<Icon name="chevron-down" size={12} />
     </button>
     {expanded && <div class="absolute top-full left-0 mt-3 w-52 rounded-menu border border-border bg-surface p-1 shadow-menu">
-      {(['All frames', 'Playable', 'Recently updated'] as const).map((item, i) =>
+      {(['All frames', 'Playable'] as const).map((item, i) =>
         <button type="button" key={item} aria-pressed={item === filter}
           class="flex h-9 w-full items-center gap-2 rounded-row px-2 text-left text-body text-text">
           <Icon name={['layout-grid', 'play', 'history'][i]} size={15} />
@@ -235,7 +235,7 @@ function PathTaken({ frames }: { frames: string[] }) {
 function TransitionInspector({ moment, from, to, title }: { moment: PlayerMoment; from: string; to: string; title: string }) {
   const playing = moment === 'playing';
   const paused = moment === 'paused';
-  const instant = moment === 'reduced-motion';
+  const instant = moment === 'reduced-motion' || moment === 'terminal';
   const elapsed = playing || paused ? 64 : 160;
   return <section aria-label="Transition inspector" class="rounded-panel border border-border bg-surface p-5 shadow-float">
     <div class="flex items-start justify-between gap-4">
@@ -262,7 +262,7 @@ function TransitionInspector({ moment, from, to, title }: { moment: PlayerMoment
         <span class="font-mono text-meta">160 ms</span>
       </div>}
       <div class="mt-2 flex items-center justify-between gap-3 text-meta text-text-secondary">
-        <span>Duration <code>--motion-switcher</code> · 160 ms</span>
+        <span>Duration <code>{moment === 'terminal' ? '--motion-navigation' : '--motion-switcher'}</code> · {moment === 'terminal' ? '0' : '160'} ms</span>
         <span>Easing <code>--ease-switcher</code> · ease-out</span>
         {!instant && <strong class="text-text">{elapsed} ms elapsed</strong>}
       </div>
@@ -270,7 +270,7 @@ function TransitionInspector({ moment, from, to, title }: { moment: PlayerMoment
   </section>;
 }
 
-function PlayerProposal({ moment }: { moment: PlayerMoment }) {
+function FlowPlayer({ moment }: { moment: PlayerMoment }) {
   const rest = moment === 'at-rest';
   const underway = moment === 'playing' || moment === 'paused';
   const terminal = moment === 'terminal';
@@ -325,11 +325,11 @@ function PlayerProposal({ moment }: { moment: PlayerMoment }) {
             {underway && <p class="mt-1 text-meta text-text-secondary">Continue from {to}</p>}
             {terminal ? <p class="mt-2 text-body text-text-secondary">No outgoing actions from this frame.</p> :
               <div class="mt-3 flex flex-col gap-2">
-                {actions.map(([label, hint]) => <button key={label} type="button"
-                  class="flex items-center justify-between gap-2 rounded-field border border-border px-3 py-[10px] text-left">
-                  <span><strong class="block text-body">{label}</strong><span class="mt-1 block text-meta text-text-secondary">{hint}</span></span>
-                  <Icon name="arrow-right" size={14} class="text-text-secondary" />
-                </button>)}
+                {actions.map(([label, ...gestures]) => <div key={label} class="rounded-field border border-border px-3 py-[10px]">
+                  <strong class="block text-body">{label}</strong>
+                  <div class="mt-1 flex flex-wrap gap-1">{gestures.map(gesture =>
+                    <Button key={gesture} form="secondary" label={gesture} />)}</div>
+                </div>)}
               </div>}
           </div>
         </aside>
@@ -439,13 +439,13 @@ export default () => [
     </Canvas>
   </Frame>,
   ...boardFilters.map(([name, filter, note]) => (
-    <Frame name={name} {...screen} proposed={playbackScope} note={note}>
+    <Frame name={name} {...screen} {...(name.startsWith('recent-') ? {proposed:playbackScope} : {fixture:name,capture:{page:true as const,viewport:'1440x900'}})} note={note}>
       <FilteredBoard filter={filter} menuOpen={name === 'board-frame-filters'} sinceVisit={name === 'recent-updates-on-board'} />
     </Frame>
   )),
   ...playerMoments.map(([moment, note]) => (
-    <Frame name={`flow-${moment}`} {...screen} proposed={playbackScope} note={note}>
-      <PlayerProposal moment={moment} />
+    <Frame name={`flow-${moment}`} {...screen} fixture={`flow-${moment}`} capture={{region:'Play transitions',viewport:'1440x900'}} note={note}>
+      <FlowPlayer moment={moment} />
     </Frame>
   )),
 ];

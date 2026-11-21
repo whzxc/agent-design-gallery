@@ -37,28 +37,59 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
   const player=page.getByRole('dialog',{name:'Play transitions'}), seek=player.getByRole('slider');
   const frame=player.frameLocator('iframe');
   const action=async id=>{const button=player.locator('[data-edge="'+id+'"]');await button.focus();await page.keyboard.press('Enter');};
-  const current=name=>player.locator('strong').filter({hasText:new RegExp('^'+name+'$')}).waitFor();
+  const current=name=>player.locator(name.includes(' → ')?'[data-control=endpoints]':'[data-control=current]').filter({hasText:new RegExp('^'+name+'$')}).waitFor();
   await action('open-project-switcher');
-  await player.getByRole('button',{name:'Pause',exact:true}).click();
+  await player.getByRole('button',{name:'Pause transition',exact:true}).click();
   await seek.focus();await page.keyboard.press('End');
   assert.equal(await seek.inputValue(),'100');
   await current('project-picker → switcher-open');
   assert.equal(await frame.locator('[data-adg-id="current-destination"]').evaluate(el=>el===el.ownerDocument.activeElement),false);
-  await player.getByRole('button',{name:'Resume',exact:true}).click();await current('switcher-open');
+  await player.getByRole('button',{name:'Resume transition',exact:true}).click();await current('switcher-open');
   assert.ok(await frame.locator('[data-adg-id="current-destination"]').evaluate(el=>el===el.ownerDocument.activeElement));
-  await player.getByRole('button',{name:'Replay',exact:true}).click();await current('project-picker → switcher-open');
+  await player.getByRole('button',{name:'Replay transition',exact:true}).click();await current('project-picker → switcher-open');
   await action('filter-projects');
   await current('switcher-open → switcher-empty');
-  await player.getByLabel('Reduced motion',{exact:true}).selectOption('on');
+  await player.locator('[data-control=settings]').click();await player.locator('[data-reduce=on]').click();
   await current('switcher-empty');
   assert.ok(await frame.locator('[data-adg-id="search"]').evaluate(el=>el===el.ownerDocument.activeElement));
-  assert.ok(await seek.isDisabled());
+  assert.equal(await seek.count(),0);
   await action('clear-project-filter');await current('switcher-open');
   await action('dismiss-switcher');await current('project-picker');
   assert.ok(await frame.locator('[data-adg-id="picker"]').evaluate(el=>el===el.ownerDocument.activeElement));
-  await player.getByRole('button',{name:'Back',exact:true}).click();await current('switcher-open');
-  await player.getByRole('button',{name:'Exit',exact:true}).click();
+  await player.getByRole('button',{name:'Back to switcher-open',exact:true}).click();await current('switcher-open');
+  await player.getByRole('button',{name:'Exit to board',exact:true}).click();
   assert.deepEqual(await board(),before);assert.ok(await invoker.evaluate(el=>el===document.activeElement));
+});
+
+test('contract: board filter preserves placement, grouped gestures dispatch individually, and text matches committed input only',async t=>{
+  const {page,url}=await viewer(t);
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.goto(new URL('/view/layer/modules/asset/modules%2Fproject-switcher.tsx/frame/project-picker',url).href);
+  const caption=page.getByRole('button',{name:'Play from project-picker',exact:true});
+  await caption.waitFor();
+  const camera=()=>page.evaluate(()=>window.__adg.view);
+  const before=await camera();
+  await page.locator('#filter-toggle').click();await page.locator('[data-filter=playable]').click();
+  assert.deepEqual(await camera(),before);
+  assert.equal(await page.locator('#filter-rows button').count(),3);
+  const row=page.locator('#filter-rows button').filter({hasText:/^project-picker$/});
+  await row.click();
+  await caption.focus();await page.keyboard.press('Enter');
+  const player=page.locator('#motion-player'), stage=player.frameLocator('iframe');
+  assert.equal(await player.locator('.play-actions strong').first().innerText(),'Open project switcher');
+  assert.equal(await player.locator('.play-actions > div').count(),1);
+  assert.equal(await player.locator('[data-edge]').count(),3);
+  await player.locator('[data-edge=open-project-switcher-down]').click();
+  const input=stage.getByRole('searchbox');
+  await input.fill('Nov');await input.fill('nova');await input.fill('Nova ');
+  assert.equal(await player.locator('[data-control=current]').innerText(),'switcher-open');
+  await input.evaluate(el=>{
+    el.value='Nova';el.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true}));
+  });
+  assert.equal(await player.locator('[data-control=current]').innerText(),'switcher-open');
+  await input.evaluate(el=>el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertFromPaste'})));
+  await player.locator('[data-control=current]').filter({hasText:'switcher-empty'}).waitFor();
+  await player.locator('[data-control=exit]').click();assert.ok(await caption.evaluate(b=>b===document.activeElement));
 });
 
 test('contract: one inert sandbox, deterministic seek and nested frame-coordinate FLIP',async t=>{

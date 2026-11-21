@@ -25,9 +25,13 @@ combinations are not shown.
 Surfaces are boards like every other layer. Specimen previews are the previews the viewer renders today, at their
 declared sizes; board view changes their placement and the chrome around them, not their pixels.
 
-### Frame filters (proposed)
+### Frame filters
 
-**Filter frames** lives beside the scope tabs. Choose All frames, Playable, or Recently updated. One filter is active at a time and applies inside the current board scope. All frames or Clear filter restores normal emphasis. Each filter supplies matches and their context to the same sidebar and board highlight. A future filter adds a predicate. A list row locates and selects the existing specimen and brings it into view. Selection, comment pins and Back keep their usual frame identity. Switching filters never repacks wells, changes zoom, or moves the camera. A selection ring and the foreground of matching previews remain distinct from the dimmed wells. A separate Recent board would duplicate specimens and introduce a second navigation path for the same comment target.
+**Filter frames** lives beside the scope tabs. Choose All frames or Playable. One filter is active at a time and applies inside the current board scope. All frames or Clear filter restores normal emphasis. Each filter supplies matches and their context to the same sidebar and board highlight. A future filter adds a predicate. A list row locates and selects the existing specimen and brings it into view. Selection, comment pins and Back keep their usual frame identity. Switching filters never repacks wells, changes zoom, or moves the camera. A selection ring and the foreground of matching previews remain distinct from the dimmed wells. A separate Recent board would duplicate specimens and introduce a second navigation path for the same comment target.
+
+The caption Play button uses a fixed screen-space target so zooming out keeps the entry point usable. The board retains atlas previews. Outgoing names are cached per sidecar owner. Project discovery indexes new sidecars once. A reopened project reuses the stored outgoing frame names for unchanged files, and the watcher refreshes only changed owners. The ordinary manifest carries the compact frame names. Board navigation, zoom, filtering and selection do not open sidecars or fetch scenes.
+
+### Recently updated (approved for turn B)
 
 **Recently updated** uses Git history. Show Uncommitted first (HEAD to the live working tree, including untracked design inputs), then Today and Earlier this week, newest first. The default window starts Monday in the viewer's local time zone; group first-parent history by committer time and display its commit subjects. Compare the weekend too when the user chooses a last visit that predates Monday. A source's filesystem modification time remains a board caption detail.
 

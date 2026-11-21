@@ -50,7 +50,7 @@ async function ownerPart(config, values, { log = console.log } = {}) {
     for (const implementation of implementations) row.evidence.push({ matchKind: 'mapping_part', frame: null, theme: null, elementPath: null, boxes: [], owners: [], detail: { kind: 'mapping', file: map.source, pointer: binding.pointer, implementation: implementation.file, selector, symbol: selector.symbol ?? null, region: implementation.region } });
     data.owners.push(row);
   }
-  boundEdges(config,validated.transitionBindings,data);
+  await boundEdges(config,validated.transitionBindings,data,values.transitions);
   data.complete = true;
   if (!data.owners.length && !data.motion?.count) warnings.push({ code: 'OWNER_NO_MATCH', message: 'No implementation binding matched the requested design part.', next: [] });
   if (!values.json) for (const row of data.owners) log(`${row.source}${row.part ? `#${row.part}` : ''} [${row.matchKind}] ${row.evidence.map(e => e.detail.implementation).join(', ')}`);
@@ -63,7 +63,7 @@ export async function owner(config, values, { log = console.log, openIndex = ope
   if (values.file === undefined) {
     const result=await (await import('./owner-search.mjs')).searchOwner(config, values, { log, openIndex, launchBrowser, environment });
     if(values.token!==undefined){
-      tokenEdges(config,values,result.data);
+      await tokenEdges(config,values,result.data);
       if(result.data.motion?.count)result.warnings=result.warnings.filter(w=>w.code!=='OWNER_NO_MATCH');
     }
     return result;
@@ -89,7 +89,7 @@ export async function owner(config, values, { log = console.log, openIndex = ope
     const validated = await index.mappings({ map, mappingIndices, implementationSelection: files, onFinding: finding => { data.mappingFindings.push(finding); data.coverage.mappingState = 'stale'; } });
     data.mappingFindings = validated.findings;
     data.coverage.mappingState = !map.present ? 'absent' : validated.findings.length ? 'stale' : 'valid';
-    boundEdges(config,validated.transitionBindings,data,values.transitions);
+    await boundEdges(config,validated.transitionBindings,data,values.transitions);
     const active = validated.bindings.filter(binding => binding.active);
     const allBindings = [...validated.bindings, ...validated.transitionBindings];
     const activeBindings = allBindings.filter(binding => binding.active);
