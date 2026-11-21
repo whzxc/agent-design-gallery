@@ -135,6 +135,14 @@ test('contract: non-Git, unborn and failed source coverage remain distinguishabl
   const unborn=await get();
   assert.equal(unborn.complete,true,JSON.stringify(unborn));
   assert.deepEqual(unborn.periods[0].rows.map(r=>r.frame),['home']);
+  // A long subject exercises full worker replies beyond the IPC pipe buffer
+  // without requiring thousands of raster comparisons.
+  execFileSync('git',['-C',root,'add','.']);
+  const subject='a'.repeat(512*1024);
+  execFileSync('git',['-C',root,'-c','user.name=Fixture','-c','user.email=fixture@example.test','commit','-qF','-'],{input:subject});
+  const large=await get();
+  assert.equal(large.complete,true);
+  assert.equal(large.periods.at(-1).subjects[0]?.length,subject.length);
   await writeFile(frame,'broken TSX syntax here');
   const broken=await get();
   assert.equal(broken.available,true);

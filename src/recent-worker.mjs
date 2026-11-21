@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { release } from 'node:os';
 import { loadConfig } from './toolkit/config.mjs';
 import { openDiffRevision } from './toolkit/diff-inputs.mjs';
@@ -128,11 +128,14 @@ export async function recentHistory({ root, directory, temporaryDirectory, day, 
 }
 if (process.send)
   process.once('message', async (args) => {
+    let reply;
     try {
-      process.send({ result: await recentHistory(args) });
+      reply = { result: await recentHistory(args) };
     } catch (error) {
-      process.send({ error: error.message });
-    } finally {
-      process.disconnect();
+      reply = { error: error.message };
     }
+    // Large frame lists can exceed the IPC pipe buffer. Close only after the
+    // complete reply is in the request's private directory.
+    await writeFile(path.join(args.temporaryDirectory, 'result.json'), JSON.stringify(reply));
+    process.disconnect();
   });
