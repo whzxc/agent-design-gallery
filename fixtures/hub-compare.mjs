@@ -23,7 +23,7 @@ async function git(directory, args, date) {
   await exec('git', ['-C', directory, ...args], { env });
 }
 
-async function commit(directory, message, date) {
+export async function commit(directory, message, date) {
   await git(directory, ['add', '.'], date);
   await git(directory, ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', message], date);
 }

@@ -5,17 +5,15 @@ import { loadConfig } from '../src/toolkit/config.mjs';
 import { implementationTexts } from '../src/toolkit/document.mjs';
 import { review } from '../src/toolkit/review.mjs';
 import { prepareAtlas } from './hub-compare.mjs';
+import { prepareMotionCompare } from './review-motion.mjs';
 
-import { prepareMotionReview } from './review-motion.mjs';
-
-export const reviewFixtures = new Set(['standalone-review', 'standalone-review-zoom', 'standalone-motion-review']);
+const motionFixtures = new Set(['standalone-motion-review', 'standalone-motion-card']);
+export const reviewFixtures = new Set(['standalone-review', 'standalone-review-zoom', ...motionFixtures]);
 
 export async function startReviewFixture(port, directory, name) {
-  const motion = name === 'standalone-motion-review' && await prepareMotionReview(directory);
-  if (motion) await motion.edges([{ ...motion.edge, duration: '--fast' }]);
-  const project = motion ? motion.project : await prepareAtlas(directory);
+  const project = motionFixtures.has(name) ? await prepareMotionCompare(directory) : await prepareAtlas(directory);
   const output = path.join(directory, 'review.html');
-  await review(await loadConfig(project), { base: motion ? 'HEAD' : 'HEAD~1', theme: 'dark', json: true, out: output,
+  await review(await loadConfig(project), { base: 'HEAD~1', theme: 'dark', json: true, out: output,
     'viewer-url': `http://127.0.0.1:${port}/p/atlas/` });
   const document = await readFile(output);
   const server = createServer((request, response) => {
@@ -30,7 +28,7 @@ export async function startReviewFixture(port, directory, name) {
 }
 
 export async function readyReviewFixture(page, name) {
-  if (name === 'standalone-motion-review') {
+  if (motionFixtures.has(name)) {
     await page.getByRole('button', {name:'Play after'}).waitFor();
     return;
   }
