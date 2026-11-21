@@ -64,7 +64,7 @@ export function BoardSection({ title, path, modified, selected = false, copied =
   );
 }
 
-export function SpecimenWell({ name, note, proposed, span = 6, surface = false, selected = false, children }: any) {
+export function SpecimenWell({ name, note, proposed, span = 6, surface = false, selected = false, overlay, children }: any) {
   const colSpan =
     span === 12
       ? 'col-span-12'
@@ -80,7 +80,8 @@ export function SpecimenWell({ name, note, proposed, span = 6, surface = false, 
 
   return (
     <figure class={`flex min-w-0 flex-col gap-3 ${colSpan}`} style={{ '--span': span }}>
-      <div class={`flex min-h-24 items-center justify-center rounded-card bg-canvas px-6 py-8 ${ring}`}>
+      <div class={`flex min-h-24 items-center justify-center rounded-card bg-canvas px-6 py-8 ${overlay ? 'relative' : ''} ${ring}`}>
+        {overlay}
         {surface ? <div class="border border-border">{children}</div> : children}
       </div>
       <figcaption class="flex flex-col gap-[2px] font-mono text-meta leading-[17px]">

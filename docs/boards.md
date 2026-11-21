@@ -33,7 +33,7 @@ declared sizes; board view changes their placement and the chrome around them, n
 
 The prototype map groups frames by connected transition edges and places them in columns from each flow's start. Arrows name their triggers. Return gestures each have their own lane and entry point on the target frame. **Play flow** starts at the marked frame. The project's motion graph supplies the start and any available flow label and ID. If the current scope excludes the start, the visible edges determine the entry frame.
 
-Hover a playable specimen or select it to reveal Play at its top-right. The icon scales from 20 to 32 screen pixels and disappears at thumbnail sizes. Press **P** to play the selected frame. Exiting playback restores focus to the invoking control. Project discovery caches compact edge summaries per sidecar, and the watcher updates changed owners. Static browsing and the map reuse this index. Opening the player loads a scene.
+Hover or select a playable specimen to reveal Play at the top-right of its card, outside the frame content. When the padding is too small at the current zoom, Play sits just beyond that corner. The icon scales from 20 to 32 screen pixels and disappears at thumbnail sizes. Press **P** to play the selected frame. Exiting playback restores focus to the invoking control. Project discovery caches compact edge summaries per sidecar, and the watcher updates changed owners. Static browsing and the map reuse this index. Opening the player loads a scene.
 
 ### Recently updated
 

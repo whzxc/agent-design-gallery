@@ -60,8 +60,8 @@
 .recent-shared[open] .recent-frame-grid { padding-top: 5px; }
 .recent-removed { margin: 12px 0 0; padding-inline-start: 20px; font: var(--text-meta)/1.65 var(--font-mono); color: var(--text-secondary); }
 .recent-visual { display: block; padding-top: 4px; color: var(--text-secondary); }
-.view-frame { min-width: 0; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); }
-.view-frame-well { position: relative; display: grid; place-items: center; height: 148px; overflow: hidden; background: var(--surface-sunken); }
+.view-frame { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); }
+.view-frame-well { position: relative; display: grid; place-items: center; height: 148px; border-radius: var(--radius-card) var(--radius-card) 0 0; background: var(--surface-sunken); }
 .view-frame-well canvas { position: absolute; inset: 0; margin: auto; pointer-events: none; width: auto; height: auto; max-width: calc(100% - 16px); max-height: calc(100% - 16px); }
 .view-frame-well canvas:not([data-preview="ready"]) { visibility: hidden; }
 .view-frame-caption { display: grid; padding: 8px 10px 0; gap: 3px; }
@@ -108,9 +108,10 @@
 }
 .frame-play svg { width: 55%; height: 55%; }
 .frame-play:hover { background: var(--surface-sunken); }
-.view-frame .frame-play { opacity: 0; }
-.view-frame:is(:hover, :focus-within) .frame-play { opacity: 1; }
-@media (hover: none) { .view-frame .frame-play { opacity: 1; } }
+.view-frame .frame-play { top: calc(-4px - var(--frame-play-size, 26px)); opacity: 0; pointer-events: none; }
+.view-frame .frame-play[data-outside]::after { content: ''; position: absolute; inset: 100% 0 -5px; }
+.view-frame:is(:hover, :focus-within) .frame-play { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .view-frame .frame-play { opacity: 1; pointer-events: auto; } }
 .derived-mode .gallery-viewport > :not(#canvas-background),
 .derived-mode #minimap,
 .derived-mode #comment-layer,

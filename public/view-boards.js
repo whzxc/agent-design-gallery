@@ -19,6 +19,20 @@ export function playButton(frame, onPlay) {
   return button;
 }
 
+export function placePlayButton(card, content, size, viewport) {
+  const inset = 4;
+  const right = card.x + card.width;
+  const visibleRight = viewport ? Math.min(right, viewport.width) : right;
+  const visibleTop = viewport ? Math.max(card.y, 0) : card.y;
+  const corner = { x: visibleRight - size - inset, y: visibleTop + inset, outside: false };
+  const above = { x: visibleRight - size, y: card.y - size - inset, outside: true };
+  const beside = { x: right + inset, y: visibleTop, outside: true };
+  const visible = ({ x, y }) => !viewport || (x >= 0 && y >= 0 && x + size <= viewport.width && y + size <= viewport.height);
+  if (corner.x >= card.x && corner.y + size <= card.y + card.height &&
+      (corner.x >= content.x + content.width || corner.y + size <= content.y) && visible(corner)) return corner;
+  return [above, beside].find(visible);
+}
+
 // Work entirely from the indexed edge summaries and measured frame references.
 export function prototypeFlows(edges, frames, relative) {
   const nodes = new Map();
@@ -162,7 +176,7 @@ export function renderPrototype(container, flows, frames, { card, play, title })
     const positions = new Map();
     const columnsHeight = Math.max(...[...columns.values()].map(items => items.length)) * stepY - rowGap;
     const trackGap = 28;
-    const offset = tracks.length * trackGap + 14;
+    const offset = Math.max(34, tracks.length * trackGap + 14);
     const graphWidth = firstColumn + (columns.size - 1) * stepX + cardWidth + lastColumn;
     const graphHeight = columnsHeight + offset + 8;
     graph.style.cssText = `width:${graphWidth}px;height:${graphHeight}px`;
@@ -220,6 +234,23 @@ let groupsMarker = 0;
 
 export function createFrameCards(root, { preview, show, play, playable }) {
   let pending = new WeakMap();
+  const resize = new ResizeObserver(entries => {
+    for (const { target: well } of entries) {
+      const button = well.querySelector('.frame-play');
+      const preview = well.querySelector('canvas');
+      const outer = well.getBoundingClientRect(), inner = preview.getBoundingClientRect();
+      const size = button.offsetWidth;
+      const position = placePlayButton(
+        { x: 0, y: 0, width: outer.width, height: outer.height },
+        { x: inner.x - outer.x, y: inner.y - outer.y, width: inner.width, height: inner.height },
+        size
+      );
+      button.style.left = position.x + 'px';
+      button.style.top = position.y + 'px';
+      button.style.right = 'auto';
+      button.toggleAttribute('data-outside', position.outside);
+    }
+  });
   const observer = new IntersectionObserver(entries => {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
@@ -227,12 +258,16 @@ export function createFrameCards(root, { preview, show, play, playable }) {
       if (!ref) continue;
       observer.unobserve(canvas);
       pending.delete(canvas);
-      void preview(ref, canvas);
+      void preview(ref, canvas).then(() => {
+        const well = canvas.parentElement;
+        if (canvas.isConnected && well?.querySelector('.frame-play')) resize.observe(well);
+      });
     }
   }, { root, rootMargin: '96px' });
   return {
     reset() {
       observer.disconnect();
+      resize.disconnect();
       pending = new WeakMap();
     },
     card(ref, { badge = '', source = true } = {}) {
@@ -247,7 +282,11 @@ export function createFrameCards(root, { preview, show, play, playable }) {
       well.append(canvas);
       pending.set(canvas, ref);
       observer.observe(canvas);
-      if (playable(asset.path, part.name)) well.append(playButton(part.name, event => play(asset.path, part.name, event.currentTarget)));
+      if (playable(asset.path, part.name)) {
+        const button = playButton(part.name, event => play(asset.path, part.name, event.currentTarget));
+        button.setAttribute('data-outside', '');
+        well.append(button);
+      }
       const heading = boardElement('h4', 'view-frame-title', part.name);
       heading.title = part.name;
       const caption = boardElement('div', 'view-frame-caption');

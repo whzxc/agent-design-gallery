@@ -14,7 +14,7 @@ import { groupTokens, renderTokenTable, tokenBoardSection } from './token-catalo
 import { readViewRoute, viewURL } from './view-route.js';
 import { createBoardLayer } from './boards.js';
 import { installMotionSpecimens } from './motion-specimens.js';
-import { boardElement, createFrameCards, frameKey, playButton, prototypeFlows, renderPrototype } from './view-boards.js';
+import { boardElement, createFrameCards, frameKey, placePlayButton, playButton, prototypeFlows, renderPrototype } from './view-boards.js';
 import { createArranger } from './arrangement.js';
 const arranger = createArranger();
 window.addEventListener('pagehide',()=>arranger.close());
@@ -500,6 +500,7 @@ function layout(data, preserve = false, options = {}) {
     result = arrange(layoutData(data),{...options, previousGroups: preserve ? previousGroups : undefined});
   groups = result.groups;
   assets = result.items;
+  hoveredPlay = null;
   world = result.world;
   if (data.scope === 'all' && data.tokenBoard && tokenHeight) {
     const offset = tokenHeight + 480;
@@ -955,39 +956,81 @@ document.addEventListener('pointerdown', e => {
 });
 
 const floatingPlays = new Map();
+let hoveredPlay;
+function playablePart(asset) {
+  const part = asset?.shown[0];
+  return playableFrames.get(asset?.path)?.has(part?.name) ? part : null;
+}
+
+function canvasPlayPosition(asset, part) {
+  const content = frameBox(asset, part), scale = view.scale;
+  if (scale < .18 || content.width * scale < 64 || content.height * scale < 40) return;
+  const screen = box => ({
+    x: view.x + box.x * scale, y: view.y + box.y * scale,
+    width: box.width * scale, height: box.height * scale
+  });
+  const card = screen(asset.well ?? content);
+  const size = Math.min(32, Math.max(20, 24 * Math.sqrt(scale)));
+  const position = placePlayButton(card, screen(content), size, { width, height });
+  if (position) return { ...position, size, card };
+}
+
+function playHoverAt(x, y) {
+  if (inspection || !playableFrames.size) return;
+  const item = hoveredElement?.asset;
+  if (hoveredElement?.part) {
+    const part = playablePart(item);
+    return part ? { asset: item, part } : null;
+  }
+  if (hoveredPlay) {
+    const position = canvasPlayPosition(hoveredPlay.asset, hoveredPlay.part);
+    if (position?.outside) {
+      const { card, size } = position;
+      const bridge = position.y < card.y
+        ? { x: position.x, y: position.y, width: size, height: card.y - position.y }
+        : { x: card.x + card.width, y: position.y, width: position.x + size - card.x - card.width, height: size };
+      if (contains(bridge, x, y)) return hoveredPlay;
+    }
+  }
+  const worldX = (x - view.x) / view.scale, worldY = (y - view.y) / view.scale;
+  const asset = assets.findLast(item => playablePart(item) && contains(item.well ?? item, worldX, worldY));
+  if (asset) return { asset, part: playablePart(asset) };
+}
+
 function updateFramePlay() {
   const next = new Map();
   function add(asset, part) {
     if (!part || !playableFrames.get(asset?.path)?.has(part.name)) return;
-    const box = frameBox(asset, part), scale = view.scale;
-    if (scale < .18 || box.width * scale < 64 || box.height * scale < 40) return;
-    const x = view.x + (box.x + box.width) * scale - 6, y = view.y + box.y * scale + 6;
-    if (x < 24 || x > width || y < 0 || y > height - 20) return;
-    next.set(frameKey(asset.path, part.name), { asset, part, x, y });
+    const position = canvasPlayPosition(asset, part);
+    if (position) next.set(frameKey(asset.path, part.name), { asset, part, ...position });
   }
   if (frameFilter === 'all' && !tokenManifest && !inspection && !commentUI?.active()) {
-    add(hoveredElement?.asset, hoveredElement?.part);
+    add(hoveredPlay?.asset, hoveredPlay?.part);
     const item = currentItem();
     add(item, item?.parts.find(p => p.id === selectedForm));
+    const focused = [...floatingPlays.values()].find(entry => entry.button === document.activeElement);
+    if (focused) {
+      const asset = assets.find(item => item.id === focused.asset.id);
+      if (asset) add(asset, playablePart(asset));
+    }
   }
-  for (const [key, button] of floatingPlays) {
-    if (next.has(key) || button === playerInvoker ||
-      (button === document.activeElement && frameFilter === 'all' && !tokenManifest && !moving)) continue;
+  for (const [key, { button }] of floatingPlays) {
+    if (next.has(key) || button === playerInvoker) continue;
     button.remove();
     floatingPlays.delete(key);
   }
-  for (const [key, { asset, part, x, y }] of next) {
-    let button = floatingPlays.get(key);
+  for (const [key, { asset, part, x, y, size, outside }] of next) {
+    let button = floatingPlays.get(key)?.button;
     if (!button) {
       button = playButton(part.name, event => startFramePlayer(asset.path, part.name, event.currentTarget));
       button.addEventListener('pointerdown', event => event.stopPropagation());
       button.addEventListener('dblclick', event => event.stopPropagation());
       button.addEventListener('blur', () => queueMicrotask(updateFramePlay));
       viewport.append(button);
-      floatingPlays.set(key, button);
+      floatingPlays.set(key, { button, asset });
     }
-    const size = Math.min(32, Math.max(20, 24 * Math.sqrt(view.scale)));
-    button.style.cssText = 'left:' + (x - size) + 'px;top:' + y + 'px;--frame-play-size:' + size + 'px';
+    button.style.cssText = 'right:auto;left:' + x + 'px;top:' + y + 'px;--frame-play-size:' + size + 'px';
+    button.toggleAttribute('data-outside', outside);
   }
 }
 function setMotionProjection(projection) {
@@ -1670,17 +1713,18 @@ viewport.addEventListener("pointermove", (e) => {
   const old = pointers.get(e.pointerId);
   if (!old) {
     if (commentUI.active()) {
-      hoveredElement = null;
+      hoveredElement = hoveredPlay = null;
       commentUI.hover(e.clientX, e.clientY, e.altKey);
       updateOutlines();
       return;
     }
     if (e.target.closest('.frame-play')) return;
-    const rect=viewport.getBoundingClientRect();
-    hoveredElement=hitSelection(inspection?[inspection]:assets,(e.clientX-rect.left-view.x)/view.scale,(e.clientY-rect.top-view.y)/view.scale);
+    const rect = viewport.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
+    hoveredElement = hitSelection(inspection ? [inspection] : assets, (x - view.x) / view.scale, (y - view.y) / view.scale);
+    hoveredPlay = playHoverAt(x, y);
     updateOutlines();return;
   }
-  hoveredElement=null;commentUI.hover();updateOutlines();
+  hoveredElement=hoveredPlay=null;commentUI.hover();updateOutlines();
   const before = [...pointers.values()];
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) > 4)
@@ -1709,7 +1753,7 @@ viewport.addEventListener("pointermove", (e) => {
     });
   }
 });
-viewport.addEventListener('pointerleave',()=>{hoveredElement=null;commentUI.hover();updateOutlines()});
+viewport.addEventListener('pointerleave',()=>{hoveredElement=hoveredPlay=null;commentUI.hover();updateOutlines()});
 function up(e) {
   if (!pointers.delete(e.pointerId)) return;
   if (e.type === "pointerup" && !gesture.moved && gesture.button === 0) {

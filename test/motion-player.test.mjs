@@ -158,7 +158,7 @@ test('contract: hotspot hints follow interaction and keep labels outside the tar
 
 test('contract: playable board routes and restores camera, grouped gestures dispatch individually, and text matches committed input only',async t=>{
   const {page,url}=await viewer(t);
-  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
   await page.goto(new URL('/view/layer/modules/asset/modules%2Fproject-switcher.tsx/frame/project-picker',url).href);
   await page.waitForFunction(() => window.__adg.ready && window.__adg.metadataComplete);
   const camera=()=>page.evaluate(()=>window.__adg.view);
@@ -205,6 +205,24 @@ test('contract: playable board routes and restores camera, grouped gestures disp
   await map.getByRole('button', { name: 'Show switcher-open in board' }).click();
   await page.waitForFunction(() => window.__adg.selection.frame === 'switcher-open');
   assert.equal(new URL(page.url()).searchParams.has('view'), false);
+  const floatingPlay = page.getByRole('button', { name: 'Play from switcher-open', exact: true });
+  async function assertOutsideContent(outsideCard) {
+    await page.waitForFunction(() => window.__adg.ready);
+    const button = await floatingPlay.boundingBox();
+    const content = await page.locator('#selection-outline').boundingBox();
+    assert.ok(button && content);
+    assert.ok(button.width >= 20 && button.width <= 32);
+    assert.ok(button.x >= content.x + content.width || button.x + button.width <= content.x ||
+      button.y >= content.y + content.height || button.y + button.height <= content.y);
+    assert.equal(await floatingPlay.evaluate(b => b.hasAttribute('data-outside')), outsideCard);
+  }
+  await page.keyboard.press('1');
+  await assertOutsideContent(false);
+  for (let i = 0; i < 6; i++) await page.keyboard.press('-');
+  await assertOutsideContent(true);
+  await page.keyboard.press('-');
+  await page.keyboard.press('-');
+  await floatingPlay.waitFor({ state: 'detached' });
   await page.keyboard.press('p');
   await player.frameLocator('iframe').getByRole('searchbox').waitFor();
   await player.locator('[data-control=current]').filter({hasText:/^switcher-open$/}).waitFor({state:'attached'});

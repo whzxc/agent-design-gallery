@@ -114,11 +114,11 @@ function FilterPicker({ filter, expanded }: { filter: FrameFilter; expanded: boo
   </div>;
 }
 
-function FramePlay({ name, zoom = 1 }: { name: string; zoom?: number }) {
-  const size = Math.min(32, Math.max(20, 24 * Math.sqrt(zoom))) / zoom;
+function FramePlay({ name, zoom = 1, outside = false }: { name: string; zoom?: number; outside?: boolean }) {
+  const size = (zoom === 1 ? 26 : Math.min(32, Math.max(20, 24 * Math.sqrt(zoom)))) / zoom;
   return <button aria-label={`Play from ${name}`} type="button"
     class="absolute grid place-items-center rounded-field bg-surface text-text shadow-float"
-    style={{ top: 6 / zoom, right: 6 / zoom, width: size, height: size }}>
+    style={{ top: outside ? -size - 4 / zoom : 4 / zoom, right: outside ? 0 : 4 / zoom, width: size, height: size }}>
     <Icon name="play" size={size * .55} />
   </button>;
 }
@@ -133,7 +133,7 @@ function BoardFrameCard({ name, badge, source = false, hovered = false }: { name
   return <article class="overflow-hidden rounded-card border border-border bg-surface">
     <div class="relative grid h-[148px] place-items-center bg-surface-sunken">
       <div class="scale-[.68]"><SwitcherPreview name={name} /></div>
-      {hovered && <FramePlay name={name} />}
+      {hovered && <FramePlay name={name} outside />}
     </div>
     <div class="px-[10px] pt-2">
       <h4 class="text-body leading-[18px] font-semibold">{name}</h4>
@@ -289,11 +289,9 @@ function FilteredBoard({ filter, menuOpen, sinceVisit }: { filter: FrameFilter; 
         <BoardChapter width={1680} number={2} layer="Modules" title="Project access" sourceCount={3} frameCount={16}>
           <BoardSection title="project-switcher" path="modules/project-switcher.tsx" modified="Nov 7, 13:24">
             {switcherFrames.map(({ name, open }) => (
-              <SpecimenWell key={name} name={name} note={hubNotes.switcher} span={open ? 6 : 3}>
-                <div class="relative">
-                  <SwitcherPreview name={name} />
-                  {!menuOpen && name === 'project-picker' && <FramePlay name={name} zoom={scale} />}
-                </div>
+              <SpecimenWell key={name} name={name} note={hubNotes.switcher} span={open ? 6 : 3}
+                overlay={!menuOpen && name === 'project-picker' ? <FramePlay name={name} zoom={scale} /> : undefined}>
+                <SwitcherPreview name={name} />
               </SpecimenWell>
             ))}
           </BoardSection>
