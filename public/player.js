@@ -72,7 +72,8 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     run = false,
     progress = 0,
     speed = 1,
-    spots = false,
+    flashTimer,
+    keyboardHints = false,
     hovered = null,
     committing = false,
     overlay;
@@ -83,6 +84,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   }
   function exit() {
     stop();
+    clearFlash();
     controller.abort();
     active?.paint?.dispose();
     dialog.close();
@@ -113,8 +115,10 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     e.stopPropagation();
     if (e.key === 'Escape' && !panels.length && dispatch(e, 'key', stage?.firstElementChild)) return;
     historyKey(e);
+    revealKeyboardHints();
   });
   dialog.addEventListener('keyup', (e) => e.stopPropagation());
+  dialog.addEventListener('pointerdown', hideKeyboardHints, true);
   control('source').textContent = source
     .split('/')
     .at(-1)
@@ -122,10 +126,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     .replace(/-/g, ' ')
     .replace(/^./, (c) => c.toUpperCase());
   stageHost.addEventListener('click', (event) => {
-    if (event.target === stageHost) {
-      spots = true;
-      hints();
-    }
+    if (event.target === stageHost) flashHints();
   });
   function fail(err) {
     if (signal.aborted) return;
@@ -188,16 +189,34 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       if (el?.dataset.playerTextEntry === 'editable') el.contentEditable = 'plaintext-only';
     }
   }
+  function clearFlash() {
+    clearTimeout(flashTimer);
+    flashTimer = undefined;
+  }
+  function flashHints() {
+    clearFlash();
+    flashTimer = setTimeout(() => {
+      clearFlash();
+      hints();
+    }, 1000);
+    hints();
+  }
+  function revealKeyboardHints() {
+    keyboardHints = true;
+    hints();
+  }
+  function hideKeyboardHints() {
+    keyboardHints = false;
+    hints();
+  }
   function hints() {
     overlay?.remove();
     overlay = null;
     if (!rows.length || busy) return;
-    const chip = actions.querySelector('button:hover,button:focus-visible');
-    const focused = doc.hasFocus() ? doc.activeElement : null;
-    overlay = doc.createElement('div');
-    overlay.inert = true;
-    overlay.setAttribute('aria-hidden', 'true');
-    Object.assign(overlay.style, { position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '2147483647' });
+    const chips = new Set([...actions.querySelectorAll('button:hover,button:focus')].map((b) => b.dataset.edge));
+    const focused = keyboardHints && doc.hasFocus() && doc.activeElement?.matches(':focus-visible')
+      ? doc.activeElement
+      : null;
     const outlined = new Map();
     for (const edge of (active?.to ?? scene)?.edges ?? []) {
       const el = exact(rows, edge.trigger.target);
@@ -205,27 +224,62 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       const targetActive = edge.trigger.target.frame
         ? hovered === el || focused === el
         : el.contains(hovered) || el.contains(focused);
-      if (!(spots || targetActive || chip?.dataset.edge === edge.id)) continue;
-      if (outlined.has(el)) continue;
-      outlined.set(el, edge);
-      const b = el.getBoundingClientRect(),
-        box = doc.createElement('div'),
-        tag = doc.createElement('span');
+      const railActive = chips.has(edge.id);
+      if ((flashTimer !== undefined || targetActive || railActive) && (!outlined.has(el) || railActive))
+        outlined.set(el, edge.label);
+    }
+    if (!outlined.size) return;
+    const { clientWidth: width, clientHeight: height } = doc.documentElement;
+    for (const [el, label] of outlined) {
+      const b = el.getBoundingClientRect();
+      if (!b.width || !b.height || b.right <= 0 || b.bottom <= 0 || b.left >= width || b.top >= height) continue;
+      if (!overlay) {
+        overlay = doc.createElement('div');
+        overlay.dataset.playerHints = '';
+        overlay.inert = true;
+        overlay.setAttribute('aria-hidden', 'true');
+        Object.assign(overlay.style, {
+          position: 'fixed', inset: '0', overflow: 'hidden', pointerEvents: 'none', zIndex: '2147483647'
+        });
+        doc.body.append(overlay);
+      }
+      const box = doc.createElement('div'), tag = doc.createElement('span');
       Object.assign(box.style, {
         position: 'absolute',
-        left: b.x + 'px',
-        top: b.y + 'px',
+        left: b.left + 'px',
+        top: b.top + 'px',
         width: b.width + 'px',
         height: b.height + 'px',
-        outline: '2px dashed var(--accent)',
-        boxSizing: 'border-box'
+        outline: '2px dashed var(--accent)'
       });
-      Object.assign(tag.style, { background: 'var(--surface)', color: 'var(--text)', font: '11px system-ui' });
-      tag.textContent = edge.label;
+      const gap = 4;
+      Object.assign(tag.style, {
+        position: 'absolute',
+        width: 'max-content',
+        maxWidth: Math.max(0, width - 2 * gap) + 'px',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        padding: '2px 4px',
+        background: 'var(--surface)',
+        color: 'var(--text)',
+        font: '11px system-ui'
+      });
+      tag.textContent = label;
       box.append(tag);
       overlay.append(box);
+      const measured = tag.getBoundingClientRect();
+      const above = b.top - gap - measured.height, below = b.bottom + gap;
+      const top = above >= gap ? above : below;
+      if (top < gap || top + measured.height > height - gap || width <= 2 * gap) {
+        tag.remove();
+        continue;
+      }
+      const left = Math.max(gap, Math.min(b.left, width - gap - measured.width));
+      tag.style.left = left - b.left + 'px';
+      tag.style.top = top - b.top + 'px';
     }
-    if (overlay.childElementCount) doc.body.append(overlay);
   }
   let actionFrame, actionsBusy;
   function drawActions(dest) {
@@ -337,6 +391,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     const el = exact(rows, target) ?? stage.firstElementChild;
     if (el.tabIndex < 0 && !el.hasAttribute('tabindex')) el.tabIndex = -1;
     committing = true;
+    keyboardHints = false;
     try {
       el.focus({ preventScroll: true });
     } finally {
@@ -389,7 +444,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   }
   async function begin(edge, seek = null, restore = null) {
     busy = true;
-    spots = false;
+    clearFlash();
     hovered = null;
     overlay?.remove();
     status.textContent = '';
@@ -462,7 +517,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     active = null;
     last = null;
     progress = 0;
-    spots = false;
+    clearFlash();
     busy = true;
     status.textContent = '';
     scene = entry.scene;
@@ -633,10 +688,8 @@ export async function openPlayer({ source, frame, theme, invoker }) {
         const hits = edges.filter(
           (x) => exact(rows, x.trigger.target)?.contains(e.target) && !x.trigger.target.frame
         );
-        if (!hits.length) {
-          spots = true;
-          hints();
-        } else if (!hits.some((x) => x.trigger.on === 'input'))
+        if (!hits.length) flashHints();
+        else if (!hits.some((x) => x.trigger.on === 'input'))
           (actions.closest('[hidden]') ? control('flow') : actions.querySelector('[data-edge="' + CSS.escape(hits[0].id) + '"]'))?.focus();
       }
     });
@@ -649,6 +702,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
         e.preventDefault();
     });
     doc.addEventListener('scroll', hints, true);
+    doc.defaultView.addEventListener('resize', hints);
     for (const [name, input] of [
       ['pointerover', 'hover'],
       ['focusin', 'focus'],
@@ -667,6 +721,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
             if (button && !e.repeat && !e.isComposing && !composing &&
                 ['Enter', ' '].includes(e.key) && dispatch(e, 'click', button)) return;
             historyKey(e);
+            revealKeyboardHints();
           }
           if (
             !busy &&
@@ -688,6 +743,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     doc.addEventListener(
       'pointerdown',
       (e) => {
+        hideKeyboardHints();
         if (active) e.preventDefault();
       },
       true

@@ -369,9 +369,6 @@ function FlowPlayer({ moment }: { moment: PlayerMoment }) {
         <Switcher current={terminal ? instances[0] : projects[0]} kind={terminal ? 'instance' : 'project'}
           open={!rest && !terminal} empty={instant} />
       </div>
-      {rest && <div class="absolute left-[563px] top-[209px] h-8 w-60 outline-2 outline-dashed outline-accent">
-        <span class="align-top bg-surface text-[11px]">Open project switcher</span>
-      </div>}
       {flowOpen && <aside class="absolute top-[68px] right-5 w-[350px] rounded-panel border border-border bg-surface shadow-float">
         <div class="p-5">
           <p class={smallHeading}>Current frame</p>

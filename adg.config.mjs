@@ -69,13 +69,7 @@ async function readyPlayback(page, name) {
   const scene = player.frameLocator('iframe');
   const picker = scene.locator('[data-adg-id=picker]');
   await picker.waitFor();
-  if (name === 'flow-at-rest') {
-    await player
-      .frameLocator('iframe')
-      .locator('body')
-      .click({ position: { x: 2, y: 2 } });
-    return;
-  }
+  if (name === 'flow-at-rest') return;
   if (['flow-playing', 'flow-paused'].includes(name)) {
     const time = new Date('2025-01-01T00:00:00Z');
     await page.clock.install({ time });

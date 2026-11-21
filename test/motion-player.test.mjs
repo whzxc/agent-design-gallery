@@ -102,6 +102,60 @@ test('contract: player entry and Escape restore focus one layer at a time', asyn
   assert.ok(await invoker.evaluate(b => b === document.activeElement));
 });
 
+test('contract: hotspot hints follow interaction and keep labels outside the target and inside the stage', async t => {
+  const { page, url } = await viewer(t);
+  await page.goto(url);
+  const invoker = page.getByRole('button', { name: 'Play from project-picker', exact: true });
+  await invoker.focus();
+  await page.keyboard.press('Enter');
+  const player = page.getByRole('dialog', { name: 'Play transitions' });
+  const iframe = player.locator('iframe');
+  const scene = iframe.contentFrame();
+  const picker = scene.locator('[data-adg-id=picker]');
+  const hints = scene.locator('[data-player-hints]');
+  const label = hints.getByText('Open project switcher', { exact: true });
+  await picker.waitFor();
+  assert.ok(await picker.evaluate(el => el === el.ownerDocument.activeElement));
+  assert.ok(await hints.isHidden());
+
+  const stage = await iframe.boundingBox();
+  const empty = { x: stage.x + 8, y: stage.y + 8 };
+  await picker.hover();
+  await label.waitFor();
+  const above = await label.boundingBox();
+  const target = await picker.boundingBox();
+  assert.ok(above.y + above.height <= target.y);
+  assert.equal(above.x, target.x);
+  await page.mouse.move(empty.x, empty.y);
+  await hints.waitFor({ state: 'hidden' });
+
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await label.waitFor();
+  const flow = player.getByRole('button', { name: 'Flow', exact: true });
+  await flow.click();
+  const action = player.getByRole('button', { name: 'Open project switcher · Click “Atlas”', exact: true });
+  await action.hover();
+  await label.waitFor();
+  await page.mouse.move(empty.x, empty.y);
+  await hints.waitFor({ state: 'hidden' });
+  await action.focus();
+  await label.waitFor();
+  await flow.click();
+
+  // A target at the upper-right stage edge has room for a label only below it.
+  await picker.evaluate(el => Object.assign(el.style, { position: 'fixed', top: '0', left: 'calc(100vw - 36px)' }));
+  const edge = await picker.boundingBox();
+  await page.mouse.move(edge.x + 10, edge.y + 10);
+  await label.waitFor();
+  const below = await label.boundingBox();
+  assert.ok(below.y >= edge.y + edge.height);
+  assert.ok(below.x >= stage.x && below.x + below.width <= stage.x + stage.width);
+  await page.mouse.click(empty.x, empty.y);
+  await label.waitFor();
+  await hints.waitFor({ state: 'hidden' });
+});
+
 test('contract: playable board routes and restores camera, grouped gestures dispatch individually, and text matches committed input only',async t=>{
   const {page,url}=await viewer(t);
   await page.emulateMedia({reducedMotion:'reduce'});
