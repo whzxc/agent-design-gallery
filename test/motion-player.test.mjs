@@ -171,6 +171,9 @@ test('contract: playable board routes and restores camera, grouped gestures disp
   assert.match(page.url(), /[?&]view=playable/);
   assert.equal(await map.locator('.view-frame').count(), 4);
   assert.match(await map.locator('.prototype-map').textContent(), /Type Nova/);
+  const returnLabels = map.locator('.prototype-trigger[aria-label*=" to project-picker · "]');
+  assert.deepEqual(await returnLabels.allTextContents(), ['Click picker · Press Esc', 'Click picker · Press Esc']);
+  assert.equal(await map.locator('.prototype-map > svg > path[data-edge]').count(), 3);
   await page.getByRole('button', { name: 'All frames', exact: true }).click();
   assert.deepEqual(await camera(), before);
   assert.equal(new URL(page.url()).searchParams.has('view'), false);
@@ -227,7 +230,40 @@ test('contract: playable board routes and restores camera, grouped gestures disp
   await player.frameLocator('iframe').getByRole('searchbox').waitFor();
   await player.locator('[data-control=current]').filter({hasText:/^switcher-open$/}).waitFor({state:'attached'});
   await player.getByRole('button', { name: 'Exit to board' }).click();
-  assert.ok(await page.locator('.gallery-viewport').evaluate(el => el === document.activeElement));
+  const viewport = page.locator('.gallery-viewport');
+  assert.ok(await viewport.evaluate(el => el === document.activeElement));
+
+  // Reproduce the clipped card corner behind the top-right toolbar at 278%.
+  await page.keyboard.press('1');
+  await page.waitForFunction(() => window.__adg.ready);
+  await viewport.dispatchEvent('wheel', { ctrlKey: true, deltaY: -Math.log(2.78) / .008, clientX: 640, clientY: 360 });
+  await page.waitForFunction(() => window.__adg.ready);
+  assert.ok(Math.abs((await camera()).scale - 2.78) < .001);
+  const outline = page.locator('#selection-outline');
+  const zoomed = await outline.boundingBox();
+  const viewSize = page.viewportSize();
+  await viewport.dispatchEvent('wheel', { deltaX: zoomed.x + zoomed.width - (viewSize.width - 20), deltaY: zoomed.y - 124 });
+  async function checkVisiblePlay(overlaysContent) {
+    await page.waitForFunction(() => window.__adg.ready);
+    const state = await floatingPlay.evaluate(button => {
+      const rect = button.getBoundingClientRect(), view = document.querySelector('.gallery-viewport').getBoundingClientRect();
+      const touches = box => rect.left < box.right && box.left < rect.right && rect.top < box.bottom && box.top < rect.bottom;
+      return {
+        viewportClear: rect.left >= view.left && rect.top >= view.top && rect.right <= view.right && rect.bottom <= view.bottom,
+        toolbarClear: [...document.querySelectorAll('.floating[role="toolbar"]:not([hidden])')].every(el => !touches(el.getBoundingClientRect())),
+        overlaysContent: touches(document.querySelector('#selection-outline').getBoundingClientRect()),
+        clickable: !!document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)?.closest('.frame-play')
+      };
+    });
+    assert.deepEqual(state, { viewportClear: true, toolbarClear: true, overlaysContent, clickable: true });
+  }
+  await checkVisiblePlay(false);
+  await page.setViewportSize({ width: 500, height: 400 });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.waitForFunction(() => window.__adg.ready);
+  const cropped = await outline.boundingBox();
+  await viewport.dispatchEvent('wheel', { deltaX: cropped.x + 20, deltaY: cropped.y + 20 });
+  await checkVisiblePlay(true);
 });
 
 test('contract: one inert sandbox, deterministic seek and nested frame-coordinate FLIP',async t=>{

@@ -962,7 +962,7 @@ function playablePart(asset) {
   return playableFrames.get(asset?.path)?.has(part?.name) ? part : null;
 }
 
-function canvasPlayPosition(asset, part) {
+function canvasPlayPosition(asset, part, toolbars) {
   const content = frameBox(asset, part), scale = view.scale;
   if (scale < .18 || content.width * scale < 64 || content.height * scale < 40) return;
   const screen = box => ({
@@ -971,7 +971,7 @@ function canvasPlayPosition(asset, part) {
   });
   const card = screen(asset.well ?? content);
   const size = Math.min(32, Math.max(20, 24 * Math.sqrt(scale)));
-  const position = placePlayButton(card, screen(content), size, { width, height });
+  const position = placePlayButton(card, screen(content), size, { width, height }, toolbars());
   if (position) return { ...position, size, card };
 }
 
@@ -983,12 +983,14 @@ function playHoverAt(x, y) {
     return part ? { asset: item, part } : null;
   }
   if (hoveredPlay) {
-    const position = canvasPlayPosition(hoveredPlay.asset, hoveredPlay.part);
+    const position = floatingPlays.get(frameKey(hoveredPlay.asset.path, hoveredPlay.part.name))?.position;
     if (position?.outside) {
       const { card, size } = position;
-      const bridge = position.y < card.y
-        ? { x: position.x, y: position.y, width: size, height: card.y - position.y }
-        : { x: card.x + card.width, y: position.y, width: position.x + size - card.x - card.width, height: size };
+      const edgeX = Math.max(card.x, Math.min(position.x + size / 2, card.x + card.width));
+      const edgeY = Math.max(card.y, Math.min(position.y + size / 2, card.y + card.height));
+      const bridge = { x: Math.min(position.x, edgeX), y: Math.min(position.y, edgeY),
+        width: Math.max(position.x + size, edgeX) - Math.min(position.x, edgeX),
+        height: Math.max(position.y + size, edgeY) - Math.min(position.y, edgeY) };
       if (contains(bridge, x, y)) return hoveredPlay;
     }
   }
@@ -999,9 +1001,12 @@ function playHoverAt(x, y) {
 
 function updateFramePlay() {
   const next = new Map();
+  let toolbars;
+  const visibleToolbars = () => toolbars ??= [...document.querySelectorAll('.floating[role="toolbar"]:not([hidden])')]
+    .map(element => element.getBoundingClientRect()).filter(rect => rect.width && rect.height);
   function add(asset, part) {
     if (!part || !playableFrames.get(asset?.path)?.has(part.name)) return;
-    const position = canvasPlayPosition(asset, part);
+    const position = canvasPlayPosition(asset, part, visibleToolbars);
     if (position) next.set(frameKey(asset.path, part.name), { asset, part, ...position });
   }
   if (frameFilter === 'all' && !tokenManifest && !inspection && !commentUI?.active()) {
@@ -1019,7 +1024,8 @@ function updateFramePlay() {
     button.remove();
     floatingPlays.delete(key);
   }
-  for (const [key, { asset, part, x, y, size, outside }] of next) {
+  for (const [key, position] of next) {
+    const { asset, part, x, y, size, outside } = position;
     let button = floatingPlays.get(key)?.button;
     if (!button) {
       button = playButton(part.name, event => startFramePlayer(asset.path, part.name, event.currentTarget));
@@ -1027,8 +1033,8 @@ function updateFramePlay() {
       button.addEventListener('dblclick', event => event.stopPropagation());
       button.addEventListener('blur', () => queueMicrotask(updateFramePlay));
       viewport.append(button);
-      floatingPlays.set(key, { button, asset });
     }
+    floatingPlays.set(key, { button, asset, position });
     button.style.cssText = 'right:auto;left:' + x + 'px;top:' + y + 'px;--frame-play-size:' + size + 'px';
     button.toggleAttribute('data-outside', outside);
   }

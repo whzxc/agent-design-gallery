@@ -19,18 +19,66 @@ export function playButton(frame, onPlay) {
   return button;
 }
 
-export function placePlayButton(card, content, size, viewport) {
+function intersects(a, b) {
+  return a.x < b.x + b.width && a.x + a.width > b.x &&
+    a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+function nearestPlaySlot(area, anchor, size, blocked) {
+  const maxX = area.x + area.width - size, maxY = area.y + area.height - size;
+  if (maxX < area.x || maxY < area.y) return;
+  // A closest free position is either aligned with the anchor or flush with an edge.
+  const xs = [Math.max(area.x, Math.min(anchor.x, maxX)),
+    ...blocked.flatMap(box => [box.x - size, box.x + box.width])].filter(x => x >= area.x && x <= maxX);
+  const ys = [Math.max(area.y, Math.min(anchor.y, maxY)),
+    ...blocked.flatMap(box => [box.y - size, box.y + box.height])].filter(y => y >= area.y && y <= maxY);
+  let best, distance = Infinity;
+  for (const x of xs) for (const y of ys) {
+    const candidate = { x, y, width: size, height: size };
+    const score = (x - anchor.x) ** 2 + (y - anchor.y) ** 2;
+    if (score >= distance || blocked.some(box => intersects(candidate, box))) continue;
+    best = candidate;
+    distance = score;
+  }
+  return best;
+}
+
+export function placePlayButton(card, content, size, viewport, toolbars = []) {
   const inset = 4;
-  const right = card.x + card.width;
-  const visibleRight = viewport ? Math.min(right, viewport.width) : right;
-  const visibleTop = viewport ? Math.max(card.y, 0) : card.y;
-  const corner = { x: visibleRight - size - inset, y: visibleTop + inset, outside: false };
-  const above = { x: visibleRight - size, y: card.y - size - inset, outside: true };
-  const beside = { x: right + inset, y: visibleTop, outside: true };
-  const visible = ({ x, y }) => !viewport || (x >= 0 && y >= 0 && x + size <= viewport.width && y + size <= viewport.height);
-  if (corner.x >= card.x && corner.y + size <= card.y + card.height &&
-      (corner.x >= content.x + content.width || corner.y + size <= content.y) && visible(corner)) return corner;
-  return [above, beside].find(visible);
+  const right = card.x + card.width, bottom = card.y + card.height;
+  const visibleRight = viewport ? Math.min(right, viewport.width - inset) : right;
+  const visibleTop = viewport ? Math.max(card.y, inset) : card.y;
+  const corner = { x: visibleRight - size - inset, y: visibleTop + inset, width: size, height: size };
+  const above = { ...corner, x: visibleRight - size, y: card.y - size - inset };
+  const beside = { ...corner, x: right + inset, y: visibleTop };
+  const inPadding = corner.x >= card.x && corner.y + size <= bottom && !intersects(corner, content);
+  if (!viewport) return inPadding ? { ...corner, outside: false } : { ...above, outside: true };
+
+  const bounds = { x: inset, y: inset, width: viewport.width - 2 * inset, height: viewport.height - 2 * inset };
+  if (!intersects(card, bounds)) return;
+  const blocked = toolbars.map(box => ({
+    x: box.x - inset, y: box.y - inset, width: box.width + 2 * inset, height: box.height + 2 * inset
+  }));
+  const clear = position => position.x >= bounds.x && position.y >= bounds.y &&
+    position.x + size <= bounds.x + bounds.width && position.y + size <= bounds.y + bounds.height &&
+    !blocked.some(box => intersects(position, box));
+  if (inPadding && clear(corner)) return { ...corner, outside: false };
+  const exterior = [above, beside].find(clear);
+  if (!inPadding && exterior) return { ...exterior, outside: true };
+
+  const clip = (left, top, right, bottom) => {
+    const x = Math.max(bounds.x, left), y = Math.max(bounds.y, top);
+    return { x, y, width: Math.min(bounds.x + bounds.width, right) - x,
+      height: Math.min(bounds.y + bounds.height, bottom) - y };
+  };
+  const safe = nearestPlaySlot(bounds, corner, size, [...blocked, content]);
+  if (safe) return { ...safe, outside: !intersects(safe, card) };
+
+  const visibleContent = clip(content.x, content.y, content.x + content.width, content.y + content.height);
+  const overlay = nearestPlaySlot(visibleContent, {
+    x: visibleContent.x + visibleContent.width - size - inset, y: visibleContent.y + inset
+  }, size, blocked);
+  if (overlay) return { ...overlay, outside: false };
 }
 
 // Work entirely from the indexed edge summaries and measured frame references.
@@ -150,19 +198,15 @@ export function renderPrototype(container, flows, frames, { card, play, title })
       if (!columns.has(rank)) columns.set(rank, []);
       columns.get(rank).push(id);
     }
-    const forward = new Map(), tracks = [];
-    for (const link of flow.links) {
-      const label = triggerLabel(link);
-      const adjacent = flow.ranks.get(link.to) === flow.ranks.get(link.from) + 1;
-      if (!adjacent) {
-        tracks.push({ from: link.from, to: link.to, id: link.id, label, lane: tracks.length });
-        continue;
-      }
-      const pair = frameKey(link.from, link.to);
-      if (!forward.has(pair)) forward.set(pair, { from: link.from, to: link.to, labels: new Set() });
-      forward.get(pair).labels.add(label);
+    const forward = [], tracks = [];
+    for (const edges of groupLinks(flow.links, link => frameKey(link.from, link.to)).values()) {
+      const { from, to, id } = edges[0];
+      const byTrigger = [...edges].sort((a, b) => Number(a.trigger.on === 'key') - Number(b.trigger.on === 'key'));
+      const label = [...new Set(byTrigger.map(triggerLabel).filter(Boolean))].join(' · ');
+      if (flow.ranks.get(to) === flow.ranks.get(from) + 1) forward.push({ from, to, label });
+      else tracks.push({ from, to, id, label, lane: tracks.length });
     }
-    const connections = [...tracks, ...forward.values()];
+    const connections = [...tracks, ...forward];
     const fromColumns = groupLinks(tracks, link => flow.ranks.get(link.from));
     const toColumns = groupLinks(tracks, link => flow.ranks.get(link.to));
     const maxBends = groups => Math.max(0, ...[...groups.values()].map(links => links.length));
@@ -215,7 +259,7 @@ export function renderPrototype(container, flows, frames, { card, play, title })
       arrow.setAttribute('marker-end', `url(#${marker})`);
       if (routed) arrow.dataset.edge = link.id;
       svg.append(arrow);
-      const text = routed ? link.label : [...link.labels].filter(Boolean).join(' · ');
+      const text = link.label;
       const label = boardElement('span', 'prototype-trigger', text);
       label.style.left = (routed ? (fromBend + toBend) / 2 : mid) + 'px';
       label.style.top = (routed ? laneY - 4 : (y + endY) / 2 - 10) + 'px';

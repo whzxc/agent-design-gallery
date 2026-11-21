@@ -151,24 +151,22 @@ const boardAction = 'inline-flex h-(--control-size) items-center gap-[6px] round
 const sourceStyle = 'font-mono text-meta';
 
 function PlayableBoard() {
-  const cards = [['project-picker', 48, 281], ['switcher-open', 498, 281], ['switcher-empty', 948, 154], ['project-picker-instance', 948, 408]] as const;
+  const cards = [['project-picker', 32, 225], ['switcher-open', 482, 225], ['switcher-empty', 932, 98], ['project-picker-instance', 932, 352]] as const;
   const routes = [
-    { d: 'M1196 212H1210V140H484V347H498', x: 847, y: 136, label: 'Click clear search' },
-    { d: 'M746 331H760V112H34V331H48', x: 397, y: 108, label: 'Press Esc' },
-    { d: 'M746 347H768V84H26V347H48', x: 397, y: 80, label: 'Click picker' },
-    { d: 'M1196 228H1218V56H18V363H48', x: 618, y: 52, label: 'Press Esc' },
-    { d: 'M1196 244H1226V28H10V379H48', x: 618, y: 24, label: 'Click picker' },
-    { d: 'M296 355C397 355,397 363,498 363', x: 397, y: 349, label: 'Click picker · Press ↓ · Press ↑' },
-    { d: 'M746 363C847 363,847 228,948 228', x: 847, y: 285.5, label: 'Type Nova' },
-    { d: 'M746 379C847 379,847 482,948 482', x: 847, y: 420.5, label: 'Click live instance' },
+    { d: 'M1180 164H1194V84H468V291H482', x: 831, y: 80, label: 'Click clear search' },
+    { d: 'M730 283H744V56H18V291H32', x: 381, y: 52, label: 'Click picker · Press Esc' },
+    { d: 'M1180 180H1202V28H10V307H32', x: 606, y: 24, label: 'Click picker · Press Esc' },
+    { d: 'M280 299C381 299,381 307,482 307', x: 381, y: 293, label: 'Click picker · Press ↓ · Press ↑' },
+    { d: 'M730 299C831 299,831 172,932 172', x: 831, y: 225.5, label: 'Type Nova' },
+    { d: 'M730 315C831 315,831 426,932 426', x: 831, y: 360.5, label: 'Click live instance' },
   ];
   return <section class={sectionStyle}>
     <header class="flex items-center justify-between">
       <h2 class="text-title font-semibold">project-switcher</h2>
       <button type="button" class={boardAction}><Icon name="play" size={14} />Play flow</button>
     </header>
-    <div class="relative mt-3 h-[646px] overflow-hidden">
-      <svg aria-hidden="true" data-free class="absolute inset-0" width={1236} height={646}>
+    <div class="relative mt-3 h-[590px] overflow-hidden">
+      <svg aria-hidden="true" data-free class="absolute inset-0" width={1212} height={590}>
         <defs><marker id="board-flow-arrow" viewBox="0 0 8 8" refX={7} refY={4} markerWidth={7} markerHeight={7} orient="auto">
           <path d="M0 0L8 4L0 8Z" class="fill-text-tertiary" />
         </marker></defs>
