@@ -3,7 +3,9 @@ export const frameKey = ({ source, frame }) => JSON.stringify([source, frame]);
 // Connectivity is undirected. Direction is retained on the edges for playback.
 export function motionFlows(records, declarations) {
   const incident = new Map(), byFrame = new Map(), members = new Map(), findings = [];
+  const outgoing = new Set();
   for (const { edge } of records) {
+    outgoing.add(frameKey(edge.from));
     for (const ref of [edge.from, edge.to]) {
       const key = frameKey(ref);
       if (!incident.has(key)) incident.set(key, []);
@@ -32,7 +34,7 @@ export function motionFlows(records, declarations) {
     flow.start = flow.frames.find((ref) => !destinations.has(frameKey(ref))) ?? incident.get(key)[0].from;
     members.set(flow, [...edges]);
   }
-  const declared = new Set();
+  const declared = new Set(), ends = new Set();
   for (const { declaration, source, pointer, locations } of declarations) {
     const flow = byFrame.get(frameKey(declaration.start));
     const message = !flow
@@ -47,6 +49,16 @@ export function motionFlows(records, declarations) {
     }
     Object.assign(flow, declaration);
     declared.add(flow);
+    for (const [index, ref] of (declaration.ends ?? []).entries()) {
+      const key = frameKey(ref), at = pointer + '/ends/' + index;
+      const problem = byFrame.get(key) !== flow ? 'An end state must belong to the declared flow.'
+        : outgoing.has(key) ? 'An end state cannot have outgoing transitions.'
+        : ends.has(key) ? 'Declare each end state once.' : null;
+      if (problem) {
+        findings.push({ code: 'MOTION_FLOW_SCHEMA', source, pointer: at, frame: ref.frame,
+          theme: null, message: problem, ...(locations[at] ?? locations[pointer]) });
+      } else ends.add(key);
+    }
   }
   for (const [flow, edges] of members) {
     if (flow.anchor) continue;
@@ -59,5 +71,25 @@ export function motionFlows(records, declarations) {
     }
     flow.triggers = [...triggers.values()];
   }
-  return { byFrame, findings };
+  const deadEnds = new Set([...byFrame.keys()].filter(key => !outgoing.has(key) && !ends.has(key)));
+  return { byFrame, findings, deadEnds };
+}
+
+// Use the first selected incoming edge to locate each dead end in its sidecar.
+export function deadEndFindings(graph, records, strictMotion) {
+  const reported = new Set(), findings = [];
+  for (const { valid, edge, source, pointer, locations } of records) {
+    if (!valid) continue;
+    const ref = edge.to, key = frameKey(ref);
+    if (!graph.deadEnds.has(key) || reported.has(key)) continue;
+    reported.add(key);
+    const at = pointer + '/to';
+    findings.push({
+      code: 'MOTION_FLOW_DEAD_END', source, pointer: at, frame: ref.frame, theme: null,
+      warning: !strictMotion,
+      message: ref.source + '#' + ref.frame + ' has no outgoing transition. Add an action or declare it in the flow’s ends.',
+      ...(locations[at] ?? locations[pointer])
+    });
+  }
+  return findings;
 }

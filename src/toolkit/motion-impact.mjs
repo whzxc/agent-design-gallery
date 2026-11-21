@@ -22,7 +22,9 @@ export async function impactedEdges(views, query, themes, assessments, explain, 
     if (git) {
       kind = !records[0] ? 'added' : !records[1] ? 'removed' : 'changed';
       const declarations = records.map((r, i) => r && canonicalBytes({
-        owner: r.owner, edge: r.edge, flow: r.valid ? views[i].motion.flows.get(frameKey(r.edge.from)) : null
+        owner: r.owner, edge: r.edge,
+        flow: r.valid ? views[i].motion.flows.get(frameKey(r.edge.from)) : null,
+        deadEnd: r.valid && views[i].motion.deadEnds.has(frameKey(r.edge.to))
       }));
       if (declarations[0] !== declarations[1]) reasons.add('declaration');
       const selectors = views.map((v) =>

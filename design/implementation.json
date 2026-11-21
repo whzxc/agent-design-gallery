@@ -19,14 +19,20 @@
     },
     {
       "implementation": {"file":"public/switcher.js","anchor":"else row.href = item.url","symbol":"destination link"},
-      "design":[{"source":"design/modules/project-switcher.tsx","transition":"open-live-instance"}]
+      "design": [
+        {"source": "design/modules/project-switcher.tsx", "transition": "open-live-instance"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "return-to-project"}
+      ]
     },
     {
       "implementation": {"file": "public/switcher.js", "symbol": "open", "anchor": "function open(trigger) {"},
       "design": [
         {"source": "design/modules/project-switcher.tsx", "transition": "open-project-switcher"},
         {"source": "design/modules/project-switcher.tsx", "transition": "open-project-switcher-down"},
-        {"source": "design/modules/project-switcher.tsx", "transition": "open-project-switcher-up"}
+        {"source": "design/modules/project-switcher.tsx", "transition": "open-project-switcher-up"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "open-instance-switcher"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "open-instance-switcher-down"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "open-instance-switcher-up"}
       ]
     },
     {
@@ -35,14 +41,20 @@
         {"source": "design/modules/project-switcher.tsx", "transition": "dismiss-switcher"},
         {"source": "design/modules/project-switcher.tsx", "transition": "toggle-switcher"},
         {"source": "design/modules/project-switcher.tsx", "transition": "dismiss-switcher-filtered"},
-        {"source": "design/modules/project-switcher.tsx", "transition": "toggle-switcher-filtered"}
+        {"source": "design/modules/project-switcher.tsx", "transition": "toggle-switcher-filtered"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "dismiss-instance-switcher"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "toggle-instance-switcher"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "dismiss-instance-switcher-filtered"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "toggle-instance-switcher-filtered"}
       ]
     },
     {
       "implementation": {"file": "public/switcher.js", "symbol": "makeSearchField", "anchor": "function makeSearchField() {"},
       "design": [
         {"source": "design/modules/project-switcher.tsx", "transition": "filter-projects"},
-        {"source": "design/modules/project-switcher.tsx", "transition": "clear-project-filter"}
+        {"source": "design/modules/project-switcher.tsx", "transition": "clear-project-filter"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "filter-instance-projects"},
+        {"source": "design/modules/project-switcher.tsx", "transition": "clear-instance-project-filter"}
       ]
     },
     {

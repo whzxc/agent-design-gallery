@@ -25,6 +25,11 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   dialog.innerHTML = `<header class="play-header"><div><span class="play-project">${icon('route', 17)}<b data-control="source"></b></span>
     <button data-control="settings" aria-controls="play-settings" aria-expanded="false">${icon('settings-2', 15)}Playback settings <span data-control="mode"></span></button></div>
     <nav aria-label="Player controls">
+    <div class="play-navigation">
+    <button data-control="back" aria-keyshortcuts="ArrowLeft" title="Back (←)" disabled>${icon('arrow-left', 14)}Back</button>
+    <button data-control="restart" aria-keyshortcuts="R" title="Restart (R)" disabled>${icon('rotate-ccw', 14)}Restart</button>
+    <span class="play-end" data-control="end-marker" role="status" aria-hidden="true">End of flow</span>
+    </div>
     <button data-control="hotspots" aria-keyshortcuts="H" aria-pressed="false">${icon('scan', 14)}Hotspots</button>
     <button data-control="flow-map" disabled>${icon('map', 14)}Flow map</button>
     <button data-control="flow" aria-controls="play-flow" aria-expanded="false">${icon('route', 14)}Flow</button>
@@ -34,11 +39,9 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     <section class="play-stage" aria-label="Frame preview"></section>
     <aside id="play-flow" class="play-rail" aria-label="Flow" hidden><section><small>Current frame</small><h1 data-control="current" aria-live="polite"></h1>
     <small>Path taken</small><p data-control="path"></p><div class="play-history">
-    <button data-control="back" aria-keyshortcuts="ArrowLeft">${icon('arrow-left', 14)}<span></span></button>
     <button data-control="forward" aria-keyshortcuts="ArrowRight">${icon('chevron-right', 14)}<span></span></button>
-    <button data-control="restart" aria-keyshortcuts="R">${icon('rotate-ccw', 14)}Restart flow</button>
     </div></section>
-    <section><h2 data-control="next">Next actions</h2><p data-control="next-context"></p>
+    <section><h2>Next actions</h2><p data-control="next-context"></p>
     <div class="play-actions" role="group" aria-label="Outgoing actions"></div></section></aside>
     <section id="play-inspector" class="play-dock" aria-label="Transition inspector" hidden><div class="play-transport">
     <div><small data-control="state"></small><h2 data-control="action"></h2><code data-control="endpoints"></code></div>
@@ -53,7 +56,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
   const control = (id) => dialog.querySelector('[data-control="' + id + '"]');
   const stageHost = dialog.querySelector('.play-stage'),
     label = control('current'),
-    status = dialog.querySelector('[role=status]');
+    status = dialog.querySelector(':scope > [role=status]');
   const actions = dialog.querySelector('.play-actions'),
     media = matchMedia('(prefers-reduced-motion: reduce)');
   const controller = new AbortController(),
@@ -320,15 +323,15 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       transition = active ?? last;
     label.textContent = scene?.frame ?? 'Loading…';
     control('path').textContent = [...history.map((h) => h.scene.frame), scene?.frame].filter(Boolean).join(' › ');
-    for (const [id, entry] of [['back', history.at(-1)], ['forward', future.at(-1)]]) {
-      const button = control(id);
-      button.hidden = !entry;
-      button.disabled = busy;
-      button.lastElementChild.textContent = (id === 'back' ? 'Back to ' : 'Forward to ') + (entry?.scene.frame ?? '');
-    }
+    const previous = history.at(-1)?.scene.frame, next = future.at(-1)?.scene.frame;
+    control('back').disabled = busy || (!previous && !active);
+    control('back').title = previous && !active ? 'Back to ' + previous + ' (←)' : 'Back (←)';
+    control('forward').hidden = !next;
+    control('forward').disabled = busy;
+    control('forward').lastElementChild.textContent = next ? 'Forward to ' + next : '';
+    control('end-marker').setAttribute('aria-hidden', String(!scene || !!active || busy || !!scene.edges.length));
     control('restart').disabled = busy;
     flowMap.disabled = busy || !scene?.flow;
-    control('next').textContent = dest && !dest.edges.length ? 'End of flow' : 'Next actions';
     control('next-context').textContent = active
       ? 'Continue from ' + dest.frame
       : dest && !dest.edges.length

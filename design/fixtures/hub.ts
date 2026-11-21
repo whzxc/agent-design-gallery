@@ -126,8 +126,10 @@ export const switcherFrames = [
   { name: 'project-picker', current: projects[0], kind: 'project' },
   { name: 'project-picker-instance', current: instances[0], kind: 'instance' },
   { name: 'switcher-open', current: projects[0], kind: 'project', open: true },
+  { name: 'switcher-open-instance', current: instances[0], kind: 'instance', open: true },
   { name: 'switcher-search', current: instances[0], kind: 'instance', open: true, search: true },
   { name: 'switcher-empty', current: projects[0], kind: 'project', open: true, empty: true },
+  { name: 'switcher-empty-instance', current: instances[0], kind: 'instance', open: true, empty: true },
 ];
 
 export const hubNotes = {

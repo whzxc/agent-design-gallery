@@ -264,7 +264,7 @@ test('contract: flow geometry and presence findings follow strictMotion', t => {
   put(last, `import {Frame} from 'adg';import {Row} from '../components/row';
     export default()=> <Frame name="ready" fixture="ready" capture={{page:true}}><main class="flex gap-2"><button data-adg-id="open">Open</button>
     <Row key="other" name="other"/><Row key="save" name="save"/><span data-adg-id="new">Text</span></main></Frame>;`);
-  const flow = { start: ref(first), anchor: { anchor: 'open' } };
+  const flow = { start: ref(first), anchor: { anchor: 'open' }, ends: [ref(last)] };
   const declaration = phases => put(sidecar, { version: 1, flows: [flow], edges: [{ ...edge, phases }] });
   declaration([]);
   const codes = ['MOTION_UNANIMATED_MOVE', 'MOTION_UNANIMATED_PRESENCE'];
@@ -277,4 +277,34 @@ test('contract: flow geometry and presence findings follow strictMotion', t => {
   declaration([[{ ...track, targets: ['save', 'other'].map(key => ({ part: row + '#Row', key })), properties: ['x'] },
     opacity('exit', 'plain'), opacity('enter', 'new')]]);
   assert.deepEqual(run(['check', '--read-only']).data.findings, []);
+});
+
+test('contract: undeclared dead ends warn or fail under strictMotion and declared ends pass', t => {
+  const { root, put, run, git } = consumer(t);
+  const check = ['check', '--read-only'];
+  const code = 'MOTION_FLOW_DEAD_END';
+  put(last, readFileSync(path.join(root, first), 'utf8'));
+  const { warnings } = run([...check, last]);
+  assert.ok(warnings.some(w => w.code === code && w.message.includes(last + '#ready')));
+  assert.ok(run([...check, '--motion-only']).warnings.some(w => w.code === code));
+  put('adg.config.mjs', options(true));
+  const { findings } = run([...check, last], 1).data;
+  assert.deepEqual(findings.map(f => [f.code, f.frame, f.pointer]), [[code, 'ready', '/edges/0/to']]);
+
+  const declaration = { start: ref(first), anchor: { anchor: 'open' } };
+  const flow = ends => put(sidecar, { version: 1, flows: [{ ...declaration, ends }], edges: [edge] });
+  flow([ref(last)]);
+  assert.deepEqual(run([...check, '--motion-only']).data.findings, []);
+  flow([{ frame: 'ready' }]);
+  assert.ok(run([...check, '--motion-only'], 1).data.findings.some(f =>
+    f.code === 'MOTION_FLOW_SCHEMA' && f.pointer === '/flows/0/ends/0'));
+
+  flow([]);
+  const lastSidecar = last.replace('.tsx', '.motion.json');
+  put(lastSidecar, { version: 1, edges: [{ ...edge, id: 'return', from: ref(last), to: ref(first) }] });
+  git('init', '-q');
+  git('add', '.');
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'closed flow');
+  rmSync(path.join(root, lastSidecar));
+  assert.ok(run([...check, '--impacted', '--base=HEAD'], 1).data.findings.some(f => f.code === code));
 });

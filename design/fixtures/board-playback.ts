@@ -5,7 +5,7 @@ export const playerMoments = [
   ['playing', 'Opening the switcher, 64 ms into its 160 ms transition.'],
   ['paused', 'The reviewer paused at 64 ms. Focus and history still belong to the source frame.'],
   ['completed', 'The committed frame offers the next actions and retains the last transition.'],
-  ['terminal', 'Navigation to the live instance picker, which has no outgoing edges.'],
+  ['terminal', 'A terminal playback fixture shows the end marker alongside Back and Restart.'],
   ['reduced-motion', 'The search example has settled immediately under the system motion preference.'],
   ['settings', 'One grouped speed control and a session motion override.'],
 ] as const;

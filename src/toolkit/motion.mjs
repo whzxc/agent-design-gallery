@@ -175,7 +175,7 @@ export function readMotion(config, files = motionFiles(config)) {
       issue('MOTION_FLOW_SCHEMA', '/flows', 'Expected a flows array.');
     for (const [index, declaration] of (Array.isArray(doc.flows) ? doc.flows : []).entries()) {
       const pointer = '/flows/' + index;
-      if (!fields(declaration, ['start', 'anchor', 'stage']) ||
+      if (!fields(declaration, ['start', 'anchor', 'stage', 'ends']) ||
           !frameRef(declaration.start) || declaration.start.source !== owner ||
           !target(declaration.anchor) || declaration.anchor.frame ||
           (declaration.stage !== undefined && (!fields(declaration.stage, ['width', 'height']) ||
@@ -183,7 +183,16 @@ export function readMotion(config, files = motionFiles(config)) {
         issue('MOTION_FLOW_SCHEMA', pointer, 'Use a start frame in this sidecar’s source, a part or motion anchor, and optional positive stage dimensions.');
         continue;
       }
-      declarations.push({ declaration, source, pointer, locations });
+      let ends;
+      if (declaration.ends !== undefined) {
+        if (!Array.isArray(declaration.ends) || declaration.ends.some(ref =>
+          !fields(ref, ['source', 'frame']) || !frameRef({ source: owner, ...ref }))) {
+          issue('MOTION_FLOW_SCHEMA', pointer + '/ends', 'Use an array of frame references. Omit source for frames in this sidecar’s source.');
+          continue;
+        }
+        ends = declaration.ends.map(ref => ({ source: owner, ...ref }));
+      }
+      declarations.push({ declaration: { ...declaration, ...(ends && { ends }) }, source, pointer, locations });
     }
     doc.edges.forEach((edge, index) => {
       const pointer = '/edges/' + index,
@@ -219,9 +228,9 @@ export function readMotion(config, files = motionFiles(config)) {
           message: 'Duplicate transition ID ' + r.edge.id
         });
       }
-  const { byFrame: flows, findings: flowFindings } = motionFlows(records.filter((r) => r.valid), declarations);
+  const { byFrame: flows, findings: flowFindings, deadEnds } = motionFlows(records.filter((r) => r.valid), declarations);
   findings.push(...flowFindings);
-  return { records, findings, ids, declarations, flows, files: files.map((f) => relative(config, f)) };
+  return { records, findings, ids, declarations, flows, deadEnds, files: files.map((f) => relative(config, f)) };
 }
 
 const cssNumber = '[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[eE][+-]?\\d+)?';

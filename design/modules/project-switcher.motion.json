@@ -19,7 +19,7 @@
       "interrupt": "finish",
       "reduced": "instant",
       "focus": {"target": {"anchor": "current-destination"}},
-      "rememberTrigger": true
+      "rememberTrigger": "replace"
     },
     {
       "id": "open-project-switcher-down",
@@ -33,7 +33,7 @@
       "interrupt": "finish",
       "reduced": "instant",
       "focus": {"target": {"anchor": "current-destination"}},
-      "rememberTrigger": true
+      "rememberTrigger": "replace"
     },
     {
       "id": "open-project-switcher-up",
@@ -47,7 +47,7 @@
       "interrupt": "finish",
       "reduced": "instant",
       "focus": {"target": {"anchor": "current-destination"}},
-      "rememberTrigger": true
+      "rememberTrigger": "replace"
     },
     {
       "id": "filter-projects",
@@ -126,7 +126,8 @@
       "interrupt": "finish",
       "reduced": "instant",
       "focus": "restore-trigger"
-    },{
+    },
+    {
       "id": "open-live-instance",
       "label": "Open live instance",
       "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open"},
@@ -137,7 +138,140 @@
       "phases": [[{"mode": "exit", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
       "interrupt": "finish",
       "reduced": "instant",
-      "focus": {"target": {"anchor":"picker"}}
+      "focus": {"target": {"anchor": "picker"}}
+    },
+    {
+      "id": "open-instance-switcher",
+      "label": "Open project switcher",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker-instance"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open-instance"},
+      "trigger": {"on": "click", "target": {"anchor": "picker"}},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [[{"mode": "enter", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor": "current-destination"}},
+      "rememberTrigger": "replace"
+    },
+    {
+      "id": "open-instance-switcher-down",
+      "label": "Open project switcher",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker-instance"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open-instance"},
+      "trigger": {"on": "key", "target": {"anchor": "picker"}, "key": "ArrowDown"},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [[{"mode": "enter", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor": "current-destination"}},
+      "rememberTrigger": "replace"
+    },
+    {
+      "id": "open-instance-switcher-up",
+      "label": "Open project switcher",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker-instance"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open-instance"},
+      "trigger": {"on": "key", "target": {"anchor": "picker"}, "key": "ArrowUp"},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [[{"mode": "enter", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor": "current-destination"}},
+      "rememberTrigger": "replace"
+    },
+    {
+      "id": "filter-instance-projects",
+      "label": "Search for “Nova”",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open-instance"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty-instance"},
+      "trigger": {"on": "input", "target": {"anchor": "search"}, "value": "Nova"},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [[{"mode": "crossfade", "targets": [{"anchor": "results"}], "properties": ["opacity"]}, {"mode": "enter", "targets": [{"anchor": "clear-search"}], "properties": ["opacity"]}]],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor": "search"}}
+    },
+    {
+      "id": "clear-instance-project-filter",
+      "label": "Clear project search",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty-instance"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open-instance"},
+      "trigger": {"on": "click", "target": {"anchor": "clear-search"}},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [[{"mode": "crossfade", "targets": [{"anchor": "results"}], "properties": ["opacity"]}, {"mode": "exit", "targets": [{"anchor": "clear-search"}], "properties": ["opacity"]}]],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor": "search"}}
+    },
+    {
+      "id": "dismiss-instance-switcher",
+      "label": "Close project switcher",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open-instance"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker-instance"},
+      "trigger": {"on": "key", "target": {"frame": true}, "key": "Escape"},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [[{"mode": "exit", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": "restore-trigger"
+    },
+    {
+      "id": "toggle-instance-switcher",
+      "label": "Close project switcher",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open-instance"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker-instance"},
+      "trigger": {"on": "click", "target": {"anchor": "picker"}},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [[{"mode": "exit", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": "restore-trigger"
+    },
+    {
+      "id": "dismiss-instance-switcher-filtered",
+      "label": "Close project switcher",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty-instance"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker-instance"},
+      "trigger": {"on": "key", "target": {"frame": true}, "key": "Escape"},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [[{"mode": "exit", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": "restore-trigger"
+    },
+    {
+      "id": "toggle-instance-switcher-filtered",
+      "label": "Close project switcher",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-empty-instance"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker-instance"},
+      "trigger": {"on": "click", "target": {"anchor": "picker"}},
+      "duration": "--motion-switcher",
+      "easing": "--ease-switcher",
+      "phases": [[{"mode": "exit", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": "restore-trigger"
+    },
+    {
+      "id": "return-to-project",
+      "label": "Open Atlas",
+      "from": {"source": "design/modules/project-switcher.tsx", "frame": "switcher-open-instance"},
+      "to": {"source": "design/modules/project-switcher.tsx", "frame": "project-picker"},
+      "trigger": {"on": "click", "target": {"anchor": "atlas-project"}},
+      "duration": "--motion-navigation",
+      "easing": "--ease-switcher",
+      "phases": [[{"mode": "exit", "targets": [{"anchor": "menu"}], "properties": ["opacity"]}]],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": {"target": {"anchor": "picker"}}
     }
   ]
 }

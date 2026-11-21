@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {startServer} from '../src/server.mjs';
 import {launch} from '../src/toolkit/browser.mjs';
-import {playerFixtureURL} from '../adg.config.mjs';
+import {endPlayerFixtureAtInstance, playerFixtureURL} from '../adg.config.mjs';
 
 async function viewer(t){
   const state=await mkdtemp(path.join(os.tmpdir(),'adg-player-'));
@@ -66,6 +66,7 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
   await action('dismiss-switcher');await current('project-picker');
   assert.ok(await frame.locator('[data-adg-id="picker"]').evaluate(el=>el===el.ownerDocument.activeElement));
   await page.keyboard.press('ArrowLeft');await current('switcher-open');
+  await frame.locator('[data-adg-frame=switcher-open]').waitFor();
   assert.deepEqual(await picker.boundingBox(), anchor);
   await page.keyboard.press('ArrowRight');await current('project-picker');
   await page.keyboard.press('r');await current('project-picker');
@@ -100,6 +101,73 @@ test('contract: player entry and Escape restore focus one layer at a time', asyn
   await page.keyboard.press('Escape');
   await player.waitFor({state:'detached'});
   assert.ok(await invoker.evaluate(b => b === document.activeElement));
+});
+
+test('contract: toolbar Back and Restart recover a terminal state without moving the stage', async t => {
+  const { page, url } = await viewer(t);
+  await endPlayerFixtureAtInstance(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(url);
+  await page.getByRole('button', { name: 'Play from project-picker', exact: true }).click();
+  const player = page.getByRole('dialog', { name: 'Play transitions' });
+  const scene = player.frameLocator('iframe');
+  const picker = scene.locator('[data-adg-id=picker]');
+  const toolbar = player.getByRole('navigation', { name: 'Player controls' });
+  const back = toolbar.getByRole('button', { name: 'Back', exact: true });
+  const restart = toolbar.getByRole('button', { name: 'Restart', exact: true });
+  const marker = toolbar.getByText('End of flow', { exact: true });
+  const current = frame => player.locator('[data-control=current]').filter({ hasText: new RegExp('^' + frame + '$') })
+    .waitFor({ state: 'attached' });
+  await picker.waitFor();
+  assert.ok(await back.isVisible() && await back.isDisabled());
+  assert.ok(await restart.isEnabled());
+  assert.match(await restart.getAttribute('title'), /\(R\)/);
+  assert.ok(await marker.isHidden());
+  const anchor = await picker.boundingBox();
+  await picker.click();
+  await current('switcher-open');
+  const instance = scene.locator('[data-adg-id=live-instance]');
+  await instance.click();
+  await current('project-picker-instance');
+  assert.ok(await marker.isVisible());
+  const endBox = await marker.boundingBox(), stage = await player.locator('iframe').boundingBox();
+  assert.ok(endBox.y + endBox.height <= stage.y);
+  assert.deepEqual(await picker.boundingBox(), anchor);
+  await back.click();
+  await current('switcher-open');
+  assert.ok(await marker.isHidden());
+  await instance.click();
+  await current('project-picker-instance');
+  await restart.click();
+  await current('project-picker');
+  assert.ok(await back.isDisabled() && await marker.isHidden());
+  assert.equal(await player.locator('[data-control=path]').textContent(), 'project-picker');
+});
+
+test('contract: the instance picker reopens, closes to its own state, and can return to Atlas', async t => {
+  const { page, url } = await viewer(t);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(url);
+  await page.getByRole('button', { name: 'Play from project-picker', exact: true }).click();
+  const player = page.getByRole('dialog', { name: 'Play transitions' });
+  const scene = player.frameLocator('iframe'), picker = scene.locator('[data-adg-id=picker]');
+  const current = frame => scene.locator('[data-adg-frame="' + frame + '"]').waitFor();
+  await picker.click();
+  await scene.locator('[data-adg-id=live-instance]').click();
+  await current('project-picker-instance');
+  const marker = player.getByRole('navigation', { name: 'Player controls' }).getByText('End of flow', { exact: true });
+  assert.ok(await marker.isHidden());
+  await picker.click();
+  await current('switcher-open-instance');
+  await page.keyboard.press('Escape');
+  await current('project-picker-instance');
+  await picker.click();
+  await current('switcher-open-instance');
+  await picker.click();
+  await current('project-picker-instance');
+  await picker.click();
+  await scene.locator('[data-adg-id=atlas-project]').click();
+  await current('project-picker');
 });
 
 test('contract: hotspots are controlled only by a persistent toggle and keep labels outside targets', async t => {
@@ -233,11 +301,12 @@ test('contract: playable board routes and restores camera, grouped gestures disp
   const map = page.getByRole('main', { name: 'Playable' });
   await map.getByRole('heading', { name: 'project-picker-instance' }).waitFor();
   assert.match(page.url(), /[?&]view=playable/);
-  assert.equal(await map.locator('.view-frame').count(), 4);
+  assert.equal(await map.locator('.view-frame').count(), 6);
   assert.match(await map.locator('.prototype-map').textContent(), /Type Nova/);
-  const returnLabels = map.locator('.prototype-trigger[aria-label*=" to project-picker · "]');
+  const returnLabels = map.locator('.prototype-trigger[aria-label^="switcher-"][aria-label*=" to project-picker · "]').filter({ hasText: 'Press Esc' });
   assert.deepEqual(await returnLabels.allTextContents(), ['Click picker · Press Esc', 'Click picker · Press Esc']);
-  assert.equal(await map.locator('.prototype-map > svg > path[data-edge]').count(), 3);
+  assert.equal(await map.locator('.prototype-trigger[aria-label*=" to project-picker-instance · "]').count(), 3);
+  assert.equal(await map.locator('.prototype-trigger[aria-label^="switcher-open-instance to project-picker · "]').count(), 1);
   await page.getByRole('button', { name: 'All frames', exact: true }).click();
   assert.deepEqual(await camera(), before);
   assert.equal(new URL(page.url()).searchParams.has('view'), false);

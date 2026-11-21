@@ -40,12 +40,15 @@ function SwitcherRow({ item, current, kind }: any) {
   );
   const classes = `flex min-w-0 flex-1 items-center gap-3 rounded-row px-[10px] py-3
     ${selected && !closeable ? 'bg-surface-sunken' : ''}`;
+  const anchor = selected ? 'current-destination'
+    : kind === 'instance' && item.stoppable ? 'live-instance'
+    : kind === 'project' && item.id === projects[0].id ? 'atlas-project' : undefined;
   const row = disabled ? (
     <div class={classes} aria-disabled="true">
       {content}
     </div>
   ) : (
-    <a class={classes} aria-label={item.name} data-adg-id={selected ? 'current-destination' : kind === 'instance' && item.stoppable ? 'live-instance' : undefined} href={`/${kind === 'instance' ? 'i' : 'p'}/${item.id}/`}>
+    <a class={classes} aria-label={item.name} data-adg-id={anchor} href={`/${kind === 'instance' ? 'i' : 'p'}/${item.id}/`}>
       {content}
     </a>
   );

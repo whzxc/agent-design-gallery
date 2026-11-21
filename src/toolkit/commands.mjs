@@ -5,6 +5,7 @@ import { availableParallelism } from 'node:os';
 import { motionSummary, motionRows, readMotion } from './motion.mjs';
 import { scanMotion } from './motion-inventory.mjs';
 import { loadMotionPatterns } from './motion-patterns.mjs';
+import { deadEndFindings } from './motion-flows.mjs';
 import { motionEvaluator } from './motion-check.mjs';
 import { sourceMotion } from './motion-css.mjs';
 import { buildSource } from './build.mjs';
@@ -226,6 +227,12 @@ export async function check(config, args = [], options = {}, log = console.log, 
     if (!primary) primary = failure;
     else warnings.push(classifyError(failure).error);
   };
+  const emit = ({source,frame,theme,warning,...problem}) => {
+    if (warning) {
+      warnings.push({code:problem.code,message:source+': '+(problem.transition??frame??'')+(theme?' ('+theme+')':'')+' '+problem.message,next:[]});
+      if (!options.json) log('WARNING '+warnings.at(-1).message);
+    } else add(problem,path.join(config.root,source),frame??null,theme??null);
+  };
   try {
     const motion = session?.views[1].motion ?? readMotion(config);
     if (!args.length && !session) {
@@ -246,7 +253,8 @@ export async function check(config, args = [], options = {}, log = console.log, 
       if (data.motionPatterns.omitted && !options.json)
         log(data.motionPatterns.omitted + ' more motion inventory findings. Use --motion-details for all locations.');
       if (options['motion-only']) {
-        for (const { source, ...finding } of motion.findings) add(finding, path.join(config.root, source));
+        for (const finding of motion.findings) emit(finding);
+        for (const finding of deadEndFindings(motion, motion.records, config.check?.strictMotion)) emit(finding);
         for (const problem of humanProblems) error(problem);
         data.complete = true;
         const message = 'Motion inventory: ' + inventory.animations + ' animation sites, ' + inventory.unmapped +
@@ -273,15 +281,10 @@ export async function check(config, args = [], options = {}, log = console.log, 
     const cssFindings=new Map();
     const scopeFiles = new Set(records.map(r=>r.source));
     const inScope = sidecar => !args.length || scopeFiles.has(sidecar) || data.sources.includes(sidecar.replace(/\.motion\.json$/,'.tsx'));
-    const emit = ({source,frame,theme,warning,...problem}) => {
-      if (warning) {
-        warnings.push({code:problem.code,message:source+': '+(problem.transition??frame??'')+(theme?' ('+theme+')':'')+' '+problem.message,next:[]});
-        if (!options.json) log('WARNING '+warnings.at(-1).message);
-      } else add(problem,path.join(config.root,source),frame??null,theme??null);
-    };
     for (const source of motion.files) if (inScope(source) && !chapterFiles.includes(path.relative(config.design,path.resolve(config.root,source)).replace(/\.motion\.json$/,'.tsx')))
       emit({code:'MOTION_SCHEMA',source,pointer:'',message:'Motion sidecar has no owning TSX entry.',line:1,column:1});
     for (const finding of motion.findings) if(inScope(finding.source)) emit(finding);
+    for (const finding of deadEndFindings(motion, records, config.check?.strictMotion)) emit(finding);
     const tokens = files.length ? loadTokens(config) : null;
     const arch = files.some(file => file.endsWith('.mmd')) ? await import('./arch.mjs') : null;
     let page;

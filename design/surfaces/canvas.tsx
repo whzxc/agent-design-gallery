@@ -151,7 +151,11 @@ const boardAction = 'inline-flex h-(--control-size) items-center gap-[6px] round
 const sourceStyle = 'font-mono text-meta';
 
 function PlayableBoard() {
-  const cards = [['project-picker', 32, 225], ['switcher-open', 482, 225], ['switcher-empty', 932, 98], ['project-picker-instance', 932, 352]] as const;
+  const cards = [
+    ['project-picker', 32, 225], ['switcher-open', 482, 225], ['switcher-empty', 932, 98],
+    ['project-picker-instance', 932, 352], ['switcher-open-instance', 1382, 352],
+    ['switcher-empty-instance', 1832, 352],
+  ] as const;
   const routes = [
     { d: 'M1180 164H1194V84H468V291H482', x: 831, y: 80, label: 'Click clear search' },
     { d: 'M730 283H744V56H18V291H32', x: 381, y: 52, label: 'Click picker · Press Esc' },
@@ -159,26 +163,34 @@ function PlayableBoard() {
     { d: 'M280 299C381 299,381 307,482 307', x: 381, y: 293, label: 'Click picker · Press ↓ · Press ↑' },
     { d: 'M730 299C831 299,831 172,932 172', x: 831, y: 225.5, label: 'Type Nova' },
     { d: 'M730 315C831 315,831 426,932 426', x: 831, y: 360.5, label: 'Click live instance' },
+    { d: 'M1180 426H1382', x: 1281, y: 422, label: 'Click picker · Press ↓ · Press ↑' },
+    { d: 'M1630 426H1832', x: 1731, y: 422, label: 'Type Nova' },
+    { d: 'M2080 408H2098V324H1364V408H1382', x: 1731, y: 320, label: 'Click clear search' },
+    { d: 'M1630 446H1648V298H914V408H932', x: 1281, y: 294, label: 'Click picker · Press Esc' },
+    { d: 'M2080 446H2104V270H906V442H932', x: 1506, y: 266, label: 'Click picker · Press Esc' },
+    { d: 'M1630 466H1660V610H20V327H32', x: 1081, y: 606, label: 'Click Atlas' },
   ];
   return <section class={sectionStyle}>
     <header class="flex items-center justify-between">
       <h2 class="text-title font-semibold">project-switcher</h2>
       <button type="button" class={boardAction}><Icon name="play" size={14} />Play flow</button>
     </header>
-    <div class="relative mt-3 h-[590px] overflow-hidden">
-      <svg aria-hidden="true" data-free class="absolute inset-0" width={1212} height={590}>
-        <defs><marker id="board-flow-arrow" viewBox="0 0 8 8" refX={7} refY={4} markerWidth={7} markerHeight={7} orient="auto">
-          <path d="M0 0L8 4L0 8Z" class="fill-text-tertiary" />
-        </marker></defs>
-        {routes.map(({ d }) =>
-          <path key={d} d={d} marker-end="url(#board-flow-arrow)" stroke-width={1.25} class="fill-none stroke-text-tertiary" />)}
-      </svg>
-      {cards.map(([name, x, y], i) => <div data-free key={name} class="absolute w-[248px]" style={{ left: x, top: y }}>
-        <BoardFrameCard name={name} badge={i === 0 ? 'Start' : undefined} source />
-      </div>)}
-      {routes.map(({ d, x, y, label }) => <span data-free key={d}
-        class="absolute -translate-x-1/2 -translate-y-full rounded-field bg-surface-sunken px-[6px] py-[3px] text-caption whitespace-nowrap"
-        style={{ left: x, top: y }}>{label}</span>)}
+    <div class="mt-3 overflow-x-auto">
+      <div class="relative h-[622px] w-[2120px]">
+        <svg aria-hidden="true" data-free class="absolute inset-0" width={2120} height={622}>
+          <defs><marker id="board-flow-arrow" viewBox="0 0 8 8" refX={7} refY={4} markerWidth={7} markerHeight={7} orient="auto">
+            <path d="M0 0L8 4L0 8Z" class="fill-text-tertiary" />
+          </marker></defs>
+          {routes.map(({ d }) =>
+            <path key={d} d={d} marker-end="url(#board-flow-arrow)" stroke-width={1.25} class="fill-none stroke-text-tertiary" />)}
+        </svg>
+        {cards.map(([name, x, y], i) => <div data-free key={name} class="absolute w-[248px]" style={{ left: x, top: y }}>
+          <BoardFrameCard name={name} badge={i === 0 ? 'Start' : undefined} source />
+        </div>)}
+        {routes.map(({ d, x, y, label }) => <span data-free key={d}
+          class="absolute -translate-x-1/2 -translate-y-full rounded-field bg-surface-sunken px-[6px] py-[3px] text-caption whitespace-nowrap"
+          style={{ left: x, top: y }}>{label}</span>)}
+      </div>
     </div>
   </section>;
 }
@@ -371,7 +383,7 @@ function FlowPlayer({ moment }: { moment: PlayerMoment }) {
   const to = terminal ? instance : instant ? empty : open;
   const current = rest || underway ? picker : to;
   const history = current === picker ? [picker] : current === open ? [picker, open] : [picker, open, current];
-  const flowOpen = moment === 'completed' || terminal;
+  const flowOpen = moment === 'completed';
   const inspectorOpen = underway || moment === 'completed';
   const title = terminal ? 'Open live instance' : instant ? 'Search for “Nova”' : 'Open project switcher';
   return <Canvas {...screen}>
@@ -383,10 +395,15 @@ function FlowPlayer({ moment }: { moment: PlayerMoment }) {
           <button type="button" aria-expanded={settings}
             class="flex h-(--control-size) items-center gap-2 rounded-row bg-surface-sunken px-3 text-body font-semibold">
             <Icon name="settings-2" size={15} />Playback settings
-            <span class="border-l border-border pl-2">{instant ? 'Reduced motion' : '1×'}</span>
+            <span class="w-[9em] border-l border-border pl-2">{instant ? 'Reduced motion' : '1×'}</span>
           </button>
         </Toolbar>
         <Toolbar wide>
+          <div class="flex items-center gap-1">
+            <div class={rest || underway ? 'opacity-50' : ''}><Button form="secondary" icon="arrow-left" label="Back" /></div>
+            <Button form="secondary" icon="rotate-ccw" label="Restart" />
+            <span class={`whitespace-nowrap text-meta text-text-secondary ${terminal ? '' : 'invisible'}`}>End of flow</span>
+          </div>
           <button type="button" aria-pressed={hotspots}
             class={`flex h-(--control-size) items-center gap-2 rounded-row px-3 text-body font-semibold ${hotspots ? 'bg-accent text-on-accent' : 'bg-surface-sunken'}`}>
             <Icon name="scan" size={14} />Hotspots
@@ -411,21 +428,16 @@ function FlowPlayer({ moment }: { moment: PlayerMoment }) {
           <p class={smallHeading}>Current frame</p>
           <h1 class="mt-2 font-mono text-[22px] leading-7 font-semibold">{current}</h1>
           <div class="mt-5"><p class={`mb-2 ${smallHeading}`}>Path taken</p><PathTaken frames={history} /></div>
-          <div class="mt-3 flex flex-wrap gap-1">
-            <Button form="secondary" icon="arrow-left" label={`Back to ${history[history.length - 2]}`} />
-            <Button form="secondary" icon="rotate-ccw" label="Restart flow" />
-          </div>
         </div>
         <div class="border-t border-border p-5">
-          <h2 class="text-title font-semibold">{terminal ? 'End of flow' : 'Next actions'}</h2>
-          {terminal ? <p class="mt-2 text-body text-text-secondary">No outgoing actions from this frame.</p> :
-            <div class="mt-3 flex flex-col gap-2">
+          <h2 class="text-title font-semibold">Next actions</h2>
+          <div class="mt-3 flex flex-col gap-2">
               {nextActions.open.map(([label, ...gestures]) => <div key={label} class="rounded-field border border-border px-3 py-[10px]">
                 <strong class="block text-body">{label}</strong>
                 <div class="mt-1 flex flex-wrap gap-1">{gestures.map(gesture =>
                   <Button key={gesture} form="secondary" label={gesture} />)}</div>
               </div>)}
-            </div>}
+          </div>
         </div>
       </aside>}
       {inspectorOpen && <div class="absolute bottom-5 left-5 w-[640px]">

@@ -17,6 +17,16 @@ const fixtureStates = {
   [comments.commentCanvas.fixture]: { ...states['scope-layer'], sidebar: false, camera: 'origin', origin: [48, 100], scale: 2 },
 };
 export const playerFixtureURL='/?asset=modules%2Fproject-switcher.tsx&frame=project-picker';
+// Exercise player chrome for a final state independently of the switcher’s real return actions.
+export async function endPlayerFixtureAtInstance(page) {
+  await page.route(url => url.pathname.endsWith('/api/play') &&
+    url.searchParams.get('scene') === '1' && url.searchParams.get('frame') === 'project-picker-instance', async route => {
+    const response = await route.fetch();
+    const endpoint = await response.json();
+    await route.fulfill({ response, json: { ...endpoint, edges: [] } });
+  });
+}
+
 export const playbackFixture = (name) => /^(?:recent-updates-|flow-|board-play-|board-playable-|board-frame-filters$)/.test(name);
 export const playbackURL = (name) =>
   name.startsWith('flow-') ? playerFixtureURL : '/?fixture=' + encodeURIComponent(name);
@@ -66,6 +76,7 @@ async function readyPlayback(page, name) {
     }
     return;
   }
+  if (name === 'flow-terminal') await endPlayerFixtureAtInstance(page);
   await page.getByRole('button', { name: 'Play from project-picker', exact: true }).click();
   const player = page.locator('#motion-player');
   const scene = player.frameLocator('iframe');
@@ -107,9 +118,9 @@ async function readyPlayback(page, name) {
     await player.frameLocator('iframe').getByRole('searchbox').fill('Nova');
     await current('switcher-empty');
   }
-  if (['flow-completed', 'flow-terminal'].includes(name)) {
+  if (name === 'flow-completed') {
     await player.locator('[data-control=flow]').click();
-    if (name === 'flow-completed') await player.locator('[data-control=inspector]').click();
+    await player.locator('[data-control=inspector]').click();
   }
   if (name === 'flow-settings') await player.locator('[data-control=settings]').click();
 }
