@@ -12,6 +12,12 @@ ADG uses the Float direction: a dotted canvas fills the window, neutral rounded 
 
 The review platform is macOS at 1440 × 900 (`en-US`, `UTC`), plus 390 × 844 phone forms for the resident hub home and project switcher. `adg.config.mjs` requires ADG `>=0.15.0` and enables `check.strictLayers` and `check.lifecycle`.
 
+## Motion adoption (proposed)
+
+Start with the project switcher's picker, open menu and filtered empty state. Keep its frames static and author edges when the player lands. The player extends the existing Float toolbar and reuses its controls, selection treatment and keyboard navigation. Implement inside that direction and sync the player forms in the same round. A separate visual proposal would be warranted by a change of direction; these controls fit the current one. See the [board playback contract](design-toolkit.md#board-playback).
+
+The contract probe used the built `project-picker`, `switcher-open` and `switcher-empty` frames at `e1083b5`. Opening paired both origin roots with two of eleven destination roots. Filtering paired seven of eight destination roots from eleven origin roots. The three old `MenuItem` instances shared an owner; one remained. A build-only variant keyed Home and the two section headings by role, pairing all eight destination roots. Reuse JSX keys for this adoption.
+
 ## Layers and declared forms
 
 Sources follow strict downward layer order (`components` → `modules` → `surfaces`) and are grouped into viewer chapters by `design/gallery.json`:

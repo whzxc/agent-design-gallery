@@ -1428,7 +1428,7 @@ both themes, all fields and full depth. Select one subtree with `--part=<definin
 `--expand` and `--state-dir` are supported. There is no public audit option. Exit 0 means completed observation (including no
 text/part matches), and exit 2 means invalid/incomplete execution; inspect never exits 1.
 
-The finite schema-version-1 envelope contains `inspectVersion:1`, `identityVersion:1`, `complete`, `mode`, selection,
+The finite schema-version-2 envelope contains `inspectVersion:1`, `identityVersion:1`, `complete`, `mode`, selection,
 catalog/frame metadata, shared `tables`, `partInstances`, matches, limitations, coverage and phase timings.
 The exact data types are in [inspect.d.ts](../src/toolkit/inspect.d.ts). Default detail uses `encoding:"compact"`:
 `baselineTheme` and `baseline` hold the first requested theme; `delta` contains only observed second-theme changes.
@@ -1505,6 +1505,30 @@ reuses exact-document/environment observations when eligible. Dynamic/external r
 The internal [live verification harness](../tooling/inspect-audit.mjs) compares expanded public scenes with fresh
 DOM/style/Range and AX reads. It is used by tests and acceptance, including box, inherited-style, token-scope and
 missing-theme corruption cases; its findings and counters are not part of inspect's public schema or exits.
+
+## Frame transition queries (proposed)
+
+Milestone 7 keeps the v2 envelope, required data and exits for each command. All four add optional `data.motion: {count: number}` only for a nonempty selection of unique edges. Count an ID once across causes, frames, instances and themes. No edge catalog, endpoint scene, occurrence evidence or timeline is appended to ordinary successful responses. Incomplete responses retain observed counts with `complete:false`. Existing frame and proof counts keep their units.
+
+| Command | Selection and drill-down |
+| --- | --- |
+| `check` | Count incident edges evaluated for the selected sources. Add `transition` (edge ID) and `pointer` to located motion findings when available. Report sidecar path, frame and theme only as applicable. Deduplicate equivalent failures across themes; identify the differing theme on theme-specific errors. `check --transitions` adds sorted `edges:[{id,proposed?}]` to `data.motion` for the selection. Ordinary findings and incomplete execution keep exits 1 and 2. |
+| `inspect` | Count incident edges in the catalog or selected frame; a subtree selector narrows to its resolved targets. `inspect <source> --frame=<name> --transitions` requests only incident `{id,from,to,input,proposed?}` rows (self-loop once), without observing and serializing a scene for that new mode. `inspect --transition=<id>` returns the single normalized edge, resolved timings per distinct theme, match/enter/exit/ambiguous counts, fallback, focus, binding availability and unsupported effects. Use `--explain` on that ID for target keys, pairs and track times. |
+| `owner` | Count edges whose active behavior binding matches the requested implementation file or region. For a whole-source reverse lookup, count the bound edges owned by that source. For an exported part, count bound edges that target that exact defining part. A token lookup counts referencing edges, including aliases. Text/color evidence keeps its existing frame semantics. `owner --transition=<id>` is a new exclusive selector returning that edge's active implementation selectors/locations and mapping findings, even if neither endpoint has a changed pixel. `owner --file=<path> --transitions` or `owner --token=<name> --transitions` additionally lists matching IDs once. |
+| `impact` | Count edges touched by changed sidecars or behavior bindings, endpoint changes in either revision, involved part instances, and referenced timing tokens/aliases. `impact --base=<rev> --transitions` (also valid with existing hypothetical selectors) adds `edges:[{id,kind}]` to `data.motion`; `kind` is added, changed, removed or candidate. `--explain` adds direct or inherited reasons per edge. A motion-only change schedules edge review/check even when all static frame rows are proven identical. Edge candidates never confer pixel equality, timing parity or permission to skip a later operation. |
+
+Exact ID queries use one project-wide ID and return actionable unknown-ID errors (exit 2). List requests sort by ID, return an empty list on no match, and keep `count:0` in explicit motion detail. For the two new inspect modes use `mode:"transitions"|"transition"`, plus `motionVersion:1` under `data`; all new query flags require a supporting CLI. Default catalogs, frame identities, reverse bindings and theme compaction keep their existing representations. The review receipt adds optional `motion:{added,changed,removed}` under `data`; the artifact carries cards and samples.
+
+**Wire-size probe.** Current CLI at `e1083b5` on ARC `e5d2254`, default detail and themes, compact UTF-8 stdout including its newline. Each command completed successfully. The last column serializes its real envelope with one hypothetical in-scope edge (`"motion":{"count":1}`). It measures the proposed encoding, with no implementation or authored ARC edges implied.
+
+| ARC query (all with `--json`) | Current bytes | One-edge model, bytes |
+| --- | ---: | ---: |
+| `check design/surfaces/layers.tsx --read-only` | 323 | 344 |
+| `inspect design/surfaces/layers.tsx --frame=workspace-fit` | 38,883 | 38,904 |
+| `owner --part=design/surfaces/layers.tsx` | 2,773 | 2,794 |
+| `impact --source=design/surfaces/layers.tsx` | 1,351 | 1,372 |
+
+The modeled default adds 21 bytes per command for a single-digit count and zero for no edges. More edges change only the digit count on success. Re-measure actual serialized envelopes on this consumer at implementation time, including a broad selection, a multi-theme finding and opt-in detail. Duplicating tracks per theme or endpoint would scale with the graph and repeat the CLI response-size problem.
 
 ## Comments
 

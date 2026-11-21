@@ -173,6 +173,25 @@ The consumer's governance document records owners and project-specific acceptanc
 
 ADG checks source structure, rendered frames, import direction and implementation bindings. Reviewers assess placement, frame admission, fidelity and image budgets, and delete assets without a binding.
 
+## Transition ownership and lifecycle (proposed)
+
+Milestone 7 adds one optional [motion sidecar](design-toolkit.md#frame-transitions-proposed) beside the source owning the trigger frame. A link names frame data and introduces no TSX import. All production endpoints must be existing configured TSX frames. Paths use the configured layer order.
+
+| Declaring layer | Admitted edge |
+| --- | --- |
+| Component | Between two forms in its own source, for a reusable control interaction. |
+| Module | Between states of its own feature entry. A sibling internal file cannot declare edges. |
+| Surface | Between full layouts in its own source or another surface in the same project. Model cross-feature navigation here only when each layout independently qualifies as a surface frame. |
+| Tokens, artwork, fixtures, boards, studies, architecture | No production edge ownership. |
+
+Use motion tokens in both themes for every authored timing value. Add a semantic duration or easing only when the project needs that role. Keep intermediate samples generated. Additional frames still require a distinct reachable appearance.
+
+An edge without `proposed` is current. It connects current frames and names a reachable action. For projects with implementation counterparts, bind that behavior to its implementation handler or motion owner. In the proposed **version 2** of `implementation.json`, a mapping's `design` array additionally accepts `{"source":"design/surfaces/layers.tsx","transition":"workspace-show-settings"}`. This is an exact edge target, exclusive of `part` and `frames`. Existing implementation selectors, including symbols and anchors, keep their semantics. Many edges may share a handler. Version 1 remains readable with its strict schema. Upgrade the map version when adding an edge binding and set the project's ADG version requirement to a release supporting it. Endpoint bindings alone cannot attest that the action exists.
+
+A proposed edge has a nonempty `proposed` review scope and can connect two current frames. Every proposed endpoint must share the edge's scope. A current edge cannot enter or leave a proposal. Approval starts implementation. Once the action exists, bind it and remove its marker in the same change, along with any graduating endpoints. Rejected proposals, removed actions and incident edges of deleted frames retire in that change. On a rename or move, update all references and the binding together and retain the edge ID for the same action. On replacement, retire the old ID. Apply the existing lifecycle opt-in to *missing* bindings. Validate declared bindings whenever a map exists. Libraries without an implementation may omit the map.
+
+**Alternatives considered.** A project-wide flow manifest splits local changes from their source. JSX callbacks and pairing by frame order cannot describe a reusable, reviewable data edge. Peer module imports would weaken feature boundaries. A board-owned graph would give a derived chapter a second authoring role. Inferring current behavior from both endpoint bindings keeps removed actions alive. The sidecar, layer rule and explicit behavior binding address these separately.
+
 ## Crop and part frames
 
 Extract a part by reusing its defining component/function in the owning module or
