@@ -1,13 +1,14 @@
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
-import { parse as parseJs } from '@babel/parser';
+import { parse as parseJs, parseExpression } from '@babel/parser';
 import { generate, parse as parseCss, walk } from 'css-tree';
 import { parseFragment } from 'parse5';
 import scss from 'postcss-scss';
 import { loadMotionPatterns, motionPatternFile } from './motion-patterns.mjs';
 import { readMotion } from './motion.mjs';
 import { relative } from './project.mjs';
+import { classScanner, markupClass, possibleClasses } from './motion-classes.mjs';
 
 const extension = /\.(?:[cm]?[jt]sx?|css|scss|vue|html?)$/i;
 const excluded = new Set(['node_modules','vendor','dist','build','out','coverage','output','test','tests','__tests__']);
@@ -20,6 +21,7 @@ const jsxMotion = new Set(['layout','layoutId','animate','whileHover','whileTap'
 const importsFromMotion = /^(?:motion(?:\/(?:react(?:-client)?|mini))?|framer-motion)$/;
 const motionExports = new Set(['AnimatePresence','animate','useAnimate','useSpring','spring']);
 const possibleMotion = /animat|transition|keyframes|framer-motion|['"]motion(?:\/|['"])|spring|data-/i;
+const possibleScript = text => possibleMotion.test(text) || possibleClasses.test(text);
 const keyframes = /^(?:-webkit-)?keyframes$/i;
 const reducedTiming = (query, value) => /prefers-reduced-motion:\s*reduce/.test(query) &&
   /^(?:0(?:\.0+)?m?s|0?\.01ms)$/.test(value);
@@ -100,10 +102,11 @@ const callbackNode = init => init?.type === 'CallExpression' &&
   (keyName(init.callee) === 'useCallback' || member(init.callee) && property(init.callee) === 'useCallback')
   ? init.arguments[0] : init;
 
-function scanJs(source, lang, record, problem, firstLine = 1) {
+function scanJs(source, lang, record, problem, dynamic, firstLine = 1) {
   const ts = /[cm]?tsx?$/.test(lang);
   const plugins = [...(ts ? ['typescript'] : []), ...(!ts || lang === 'tsx' ? ['jsx'] : [])], bindings = new Map();
   const { program, errors } = parseJs(source, { sourceType: 'unambiguous', plugins, errorRecovery: true, startLine: firstLine });
+  const classes = classScanner(record, dynamic, program.body);
   for (const error of errors) problem(error.message, error.loc?.line);
   for (const node of program.body) if (node.type === 'ImportDeclaration' && importsFromMotion.test(node.source.value)) {
     for (const specifier of node.specifiers) bindings.set(specifier.local.name,
@@ -145,6 +148,7 @@ function scanJs(source, lang, record, problem, firstLine = 1) {
       if (binding(node.name) === 'AnimatePresence') add('motion:AnimatePresence');
       for (const attr of node.attributes) {
         const name = keyName(attr.name);
+        if (name === 'class' || name === 'className') classes.expression(attr.value, scopes);
         if (motionTag(node.name) && jsxMotion.has(name) && attr.value?.expression?.value !== false)
           record('motion:' + name, attr.loc.start.line, scopes);
         if (typeof name === 'string' && name.startsWith('data-')) record('attribute:' + name, attr.loc.start.line, scopes, false);
@@ -154,6 +158,7 @@ function scanJs(source, lang, record, problem, firstLine = 1) {
       inMotion ||= motionTag(node.name);
     }
     if (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') {
+      classes.call(node, scopes);
       const name = binding(node.callee);
       if (motionExports.has(name) && name !== 'AnimatePresence') add('motion:' + name);
       if (member(node.callee)) {
@@ -176,10 +181,12 @@ function scanJs(source, lang, record, problem, firstLine = 1) {
       let template = node.quasis[0].value.raw;
       for (const [index, part] of node.quasis.slice(1).entries())
         template += 'var(--dynamic)' + '\n'.repeat(part.loc.start.line - node.quasis[index].loc.end.line) + part.value.raw;
-      if (/<style\b/i.test(template)) {
-        scanMarkup(template, false, (match, at, within = [], required) =>
-          record(match, line + at - 1, [...scopes, ...within], required),
-          (message, at) => problem(message, at ? line + at - 1 : line), { interpolated: node.expressions.length > 0 });
+      if (/<style\b|<[a-z][^>]*\bclass\s*=/i.test(template)) {
+        scanMarkup(template, false, (match, at, within = [], required, parameters) =>
+          record(match, line + at - 1, [...scopes, ...within], required, parameters),
+          (message, at) => problem(message, at ? line + at - 1 : line),
+          (at, within = []) => dynamic(line + at - 1, [...scopes, ...within]),
+          { interpolated: node.expressions.length > 0 });
       } else if (/@(?:-webkit-)?keyframes\s|\b(?:animation|transition)\s*[-:]/i.test(template) && template.includes('{'))
         scanCss(template, record, problem, line, undefined, scopes);
     }
@@ -203,8 +210,9 @@ function scanJs(source, lang, record, problem, firstLine = 1) {
     if (loops.has(callback)) record('web:requestAnimationFrame', line, scopes);
 }
 
-function scanMarkup(source, vue, record, problem, { interpolated = false } = {}) {
+function scanMarkup(source, vue, record, problem, dynamic, { interpolated = false } = {}) {
   const tree = parseFragment(source, { sourceCodeLocationInfo: true });
+  const classes = classScanner(record, dynamic);
   function visit(node) {
     const tag = node.tagName;
     const at = node.sourceCodeLocation;
@@ -235,13 +243,22 @@ function scanMarkup(source, vue, record, problem, { interpolated = false } = {})
         else problem('Unsupported style syntax: ' + (lang ?? type) + '.', at.startLine);
       } else if (lang && !/^(?:[cm]?[jt]sx?)$/.test(lang)) {
         problem('Unsupported script syntax: ' + lang + '.', at.startLine);
-      } else if (possibleMotion.test(body) && (!type || /^(?:module|(?:text|application)\/(?:java|ecma)script)$/.test(type))) {
-        scanJs(body, lang ?? 'js', record, problem, firstLine);
+      } else if (possibleScript(body) && (!type || /^(?:module|(?:text|application)\/(?:java|ecma)script)$/.test(type))) {
+        scanJs(body, lang ?? 'js', record, problem, dynamic, firstLine);
       }
     }
     const inline = attr('style');
     if (inline && possibleMotion.test(inline))
       scanCss(inline, record, problem, at.attrs?.style?.startLine ?? at.startLine, 'declarationList');
+    for (const { name, value } of node.attrs ?? []) {
+      const line = at?.attrs?.[name]?.startLine ?? at?.startLine;
+      if (line === undefined) continue;
+      if (name === 'class') markupClass(value, line, record, dynamic, interpolated);
+      if (vue && (name === ':class' || name === 'v-bind:class')) {
+        try { classes.expression(parseExpression(value, { plugins: ['typescript'], startLine: line })); }
+        catch (error) { problem(error.message, error.loc?.line ?? line); }
+      }
+    }
     for (const child of node.content?.childNodes ?? node.childNodes ?? []) visit(child);
   }
   visit(tree);
@@ -288,9 +305,18 @@ export function scanMotion(config, catalog = loadMotionPatterns(config), graph =
     }
     const full = path.join(root, name);
     const sites = new Map();
-    const record = (match, line, within = [], required = true) => {
+    const record = (match, line, within = [], required = true, parameters) => {
       const key = JSON.stringify([match, line, within]);
-      if (!sites.has(key) || required) sites.set(key, { match, line, within, required });
+      if (!sites.has(key) || required) sites.set(key, { match, line, within, required, parameters });
+    };
+    const dynamicLines = new Set();
+    const dynamic = (line, within = []) => {
+      const key = JSON.stringify([line, within]);
+      if (mappedOnly || dynamicLines.has(key)) return;
+      dynamicLines.add(key);
+      issues.push({ code: 'MOTION_DYNAMIC_CLASS', source: name, line, column: null,
+        message: 'Could not resolve a class expression statically.',
+        ...(within.length && { within: within.at(-1) }) });
     };
     let failed = false;
     const problem = (message, line = null) => {
@@ -305,33 +331,32 @@ export function scanMotion(config, catalog = loadMotionPatterns(config), graph =
       }
       const source = new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(full));
       const lang = path.extname(name).slice(1).toLowerCase();
-      if (['vue','html','htm'].includes(lang)) scanMarkup(source, lang === 'vue', record, problem);
-      else if (possibleMotion.test(source)) {
-        if (lang === 'css') scanCss(source, record, problem);
-        else if (lang === 'scss') scanStylesheet(source, record);
-        else scanJs(source, lang, record, problem);
-      }
+      if (['vue','html','htm'].includes(lang)) scanMarkup(source, lang === 'vue', record, problem, dynamic);
+      else if (lang === 'css') { if (possibleMotion.test(source)) scanCss(source, record, problem); }
+      else if (lang === 'scss') { if (possibleMotion.test(source)) scanStylesheet(source, record); }
+      else if (possibleScript(source)) scanJs(source, lang, record, problem, dynamic);
     } catch (error) {
       problem(error.reason ?? error.message, error.line ?? error.loc?.line);
     }
     const refs = mappings.get(name) ?? [];
-    for (const { match, line, within, required } of sites.values()) {
+    for (const { match, line, within, required, parameters } of sites.values()) {
+      const details = parameters?.length ? { parameters } : {};
       const matches = ref => ref.match === match && (!ref.within || within.includes(ref.within));
       const hits = refs.filter(matches);
       if (!hits.length && required) {
         const exclusion = exclusions.get(name)?.find(matches);
         if (exclusion) {
-          ignored.push({ source: name, line, match, ...(exclusion.within && { within: exclusion.within }), reason: exclusion.reason });
+          ignored.push({ source: name, line, match, ...details, ...(exclusion.within && { within: exclusion.within }), reason: exclusion.reason });
           continue;
         }
         unmapped++;
         if (!mappedOnly) issues.push({ code: 'MOTION_UNMAPPED', source: name, line, column: null,
           message: 'Map ' + match + (within.length ? ' within ' + within.at(-1) : '') + ' to a motion pattern.',
-          match, ...(within.length && { within: within.at(-1) }) });
+          match, ...details, ...(within.length && { within: within.at(-1) }) });
       }
       if (required || hits.length) animations++;
       for (const ref of hits) ref.hits++;
-      for (const id of new Set(hits.map(ref => ref.id))) consumers.get(id).push({ type: 'code', source: name, line, match });
+      for (const id of new Set(hits.map(ref => ref.id))) consumers.get(id).push({ type: 'code', source: name, line, match, ...details });
     }
   }
   for (const [file, refs] of mappings) for (const ref of refs) if (!ref.hits)

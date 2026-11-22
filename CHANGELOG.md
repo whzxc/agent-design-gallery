@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.8
+
+- Inventory Tailwind motion in class strings, JSX and Vue bindings, and class helpers. Use exact `tailwind:` locators for mappings and exclusions, with unresolved class expressions reported separately.
+
 ## 0.17.7
 
 - Match nested motion sidecars to their TSX sources on Windows. Keep portable path keys in motion coverage, implementation mappings, impact queries and recent-frame history.

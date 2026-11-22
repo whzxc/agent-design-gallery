@@ -317,7 +317,15 @@ from the inventory. For CSS these are `keyframes:<name>` and
 `style:<property>`. Use `vue:Transition` or `vue:TransitionGroup` for Vue
 components. Append `:<name>` when the component declares a static `name`.
 Use `web:animate` for an element animation and `web:requestAnimationFrame`
-for a recurring frame callback. Optional links for JSX hooks and custom spring
+for a recurring frame callback. Tailwind class lists use `tailwind:` followed
+by their distinct motion utilities in lexical order, separated by spaces.
+For example, use `tailwind:data-[state=open]:animate-in data-[state=open]:fade-in-0`
+for an entry class list or `tailwind:hover:transition-[color,box-shadow]`
+for a hover transition. Keep the full variant prefixes. The scanner reports
+`duration-*`, `ease-*`, `delay-*` and motion-disabling overrides such as
+`motion-reduce:animate-none` as parameters of the same site. Parameters
+alone produce no motion site and are omitted from its locator.
+Optional links for JSX hooks and custom spring
 methods use `attribute:data-…` and `call:spring`. Narrow a JS/TS match with
 `within` and the enclosing named declaration. Each mapped code location, explicitly
 listed frame, and pattern-backed edge is one place. Open a card's usage
@@ -352,6 +360,16 @@ components and inline scripts. A named callback that schedules itself through
 `requestAnimationFrame` contributes its initial and recurring scheduling
 sites. One-shot scheduling is outside that rule. SCSS selectors, declarations
 and keyframes are read as authored, without evaluating Sass.
+The Tailwind pass reads static JSX `class` and `className` values, HTML and
+Vue classes, Vue class bindings, and class arguments to `cn()`, `clsx()`
+and `cva()`. It reads complete utilities in template literals and finite
+literal branches, and checks the `cva()` base, variant and compound class
+lists independently. Supported motion families include transitions,
+animations, and fade, zoom, slide and spin entry and exit utilities.
+It reports unresolved class expressions separately from known motion sites.
+They appear as warnings in `adg check` and as adoption findings for
+implementation sources in `adg motion --coverage`. Coverage JSON lists
+their locations and the timing parameters observed for each unmapped group.
 Generated output, dependencies and test sources are outside the inventory.
 Source symlinks are reported as unscanned without following them. Each unreadable
 or partially parsed candidate file appears in the unscanned count.

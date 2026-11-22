@@ -53,7 +53,7 @@ const idPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const tokenPattern = /^--[\w-]+$/;
 const portable = value => typeof value === 'string' && value.split('/').every(part => part && part !== '.' && part !== '..' && !/[\\:\x00-\x1f]/.test(part));
 const locator = ref => object(ref) && portable(ref.file) &&
-  typeof ref.match === 'string' && /^(?:css|keyframes|motion|style|attribute|web|call|vue):.+$/.test(ref.match) &&
+  typeof ref.match === 'string' && /^(?:css|keyframes|motion|style|attribute|web|call|vue|tailwind):.+$/.test(ref.match) &&
   (ref.within === undefined || (typeof ref.within === 'string' && ref.within.trim()));
 export const motionPatternFile = 'motion-patterns.json';
 
