@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.11
+
+- Load project art stylesheets and their embedded fonts in the Playable sandbox and offline transition playback.
+
 ## 0.17.10
 
 - Embed linked art stylesheets and their data fonts in standalone review previews, with shared bytes and revision-local font selection.

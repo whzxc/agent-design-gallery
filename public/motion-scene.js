@@ -1,4 +1,8 @@
+import { embeddedArtStylesheet } from './art-styles.js';
+
 export const nativeTextEntry = 'textarea,input:is(:not([type]),[type="text" i],[type="search" i],[type="email" i],[type="tel" i],[type="url" i],[type="password" i])';
+
+const paintGuard = '*,*::before,*::after {animation:none!important;transition:none!important;caret-color:transparent!important} [data-player-text-entry]:read-write {caret-color:auto!important}';
 
 // Only the viewer writes to the document. Parse in an inert template before attachment.
 export async function createStage(parent) {
@@ -6,7 +10,7 @@ export async function createStage(parent) {
   frame.title = 'Transition specimen';
   frame.setAttribute('sandbox', 'allow-same-origin');
   const loaded = new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }));
-  frame.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'"><style></style><body></body>`;
+  frame.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'; frame-src 'none'"><style></style><style>${paintGuard}</style><body></body>`;
   parent.append(frame);
   await loaded;
   return frame;
@@ -16,6 +20,16 @@ export async function mountScene(doc, endpoint, theme, { parent = doc.body, offs
   const template = doc.createElement('template');
   template.innerHTML = endpoint.html;
   const fragment = template.content;
+  const artwork = [];
+  for (const link of fragment.querySelectorAll('link[rel="stylesheet" i]:not([disabled])')) {
+    const css = embeddedArtStylesheet(link.getAttribute('href'));
+    if (css === null) continue;
+    const style = doc.createElement('style');
+    style.textContent = css;
+    style.media = link.media;
+    style.dataset.stageArt = '';
+    artwork.push(style);
+  }
   for (const el of fragment.querySelectorAll(
     'script,style,meta,base,link,iframe,frame,object,embed,portal,fencedframe,foreignObject,template,audio,video,animate,animateTransform,animateMotion,set'
   ))
@@ -58,9 +72,10 @@ export async function mountScene(doc, endpoint, theme, { parent = doc.body, offs
     }
   }
   doc.documentElement.dataset.theme = theme;
-  doc.head.querySelector('style').textContent =
-    endpoint.css +
-    '\n*,*::before,*::after {animation:none!important;transition:none!important;caret-color:transparent!important} [data-player-text-entry]:read-write {caret-color:auto!important}';
+  const main = doc.head.querySelector('style');
+  main.textContent = endpoint.css;
+  for (const style of doc.head.querySelectorAll('style[data-stage-art]')) style.remove();
+  main.after(...artwork);
   const stage = doc.createElement('div');
   stage.dataset.adgFrame = endpoint.frame;
   Object.assign(stage.style, {

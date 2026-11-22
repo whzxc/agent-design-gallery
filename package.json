@@ -1,6 +1,6 @@
 {
   "name": "@whzxc/agent-design-gallery",
-  "version": "0.17.10",
+  "version": "0.17.11",
   "description": "Local TSX design toolkit and SVG viewer",
   "type": "module",
   "license": "MIT",

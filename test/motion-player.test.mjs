@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {startServer} from '../src/server.mjs';
@@ -497,6 +497,37 @@ test('contract: one inert sandbox, deterministic seek and nested frame-coordinat
   assert.deepEqual(result.phases,[[0.2,0],[0,0.25],[0,0.8]]);
   assert.equal(result.sandbox,'allow-same-origin');assert.equal(result.href,'about:srcdoc');
   assert.equal(result.contexts,0);assert.equal(result.link,false);assert.deepEqual(requests,[]);
+});
+
+test('contract: the Playable sandbox loads only embedded art sheets and replaces them on scene changes', async t => {
+  const {page,url} = await viewer(t);
+  const fonts = await Promise.all(['wide','narrow'].map(async name =>
+    (await readFile(new URL('../fixtures/review-font/' + name + '.woff2', import.meta.url))).toString('base64')));
+  const network = [];
+  page.on('request', request => { if (request.url().includes('/fixture-external.css')) network.push(request.url()); });
+  await page.goto(url);
+  const samples = await page.evaluate(async fonts => {
+    const {createStage,mountScene} = await import('./motion-scene.js');
+    const iframe = await createStage(document.body);
+    const doc = iframe.contentDocument;
+    try {
+      const widths = [];
+      for (const [i, font] of fonts.entries()) {
+        const css = '@font-face{font-family:Probe;src:url(data:font/woff2;base64,' + font +
+          ')} .target{display:inline-block;font:20px Probe,sans-serif;animation:spin 1s infinite}';
+        const href = i ? 'data:text/css;charset=utf-8,' + encodeURIComponent(css) : 'data:text/css;base64,' + btoa(css);
+        const stage = await mountScene(doc, {frame:'test', css:'', html:
+          '<main><link rel="stylesheet" href="' + href + '"><link rel="stylesheet" href="/fixture-external.css"><span class="target">AA</span></main>'}, 'light');
+        const element = stage.querySelector('.target');
+        const faces = await doc.fonts.load('20px Probe', 'AA');
+        widths.push({width:element.getBoundingClientRect().width, faces:faces.map(face => face.status),
+          animation:doc.defaultView.getComputedStyle(element).animationName, links:doc.querySelectorAll('link').length});
+      }
+      return widths;
+    } finally { iframe.remove(); }
+  }, fonts);
+  assert.deepEqual(samples, [40,24].map(width => ({width, faces:['loaded'], animation:'none', links:0})));
+  assert.deepEqual(network, []);
 });
 
 test('contract: presence tracks seek distance, scale and opacity together', async t => {

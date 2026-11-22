@@ -16,6 +16,7 @@ export const viewerFiles = {
   '/comments.js': 'comments.js', '/comments.css': 'comments.css', '/comment-anchors.js': 'comment-anchors.js', '/context-menu.js': 'context-menu.js',
   '/player.js': 'player.js', '/player.css': 'player.css', '/motion-identity.js': 'motion-identity.js',
   '/motion-flow.js': 'motion-flow.js', '/motion-scene.js': 'motion-scene.js', '/motion-paint.js': 'motion-paint.js',
+  '/art-styles.js': 'art-styles.js',
   '/view-boards.js': 'view-boards.js', '/view-boards.css': 'view-boards.css',
   '/recent-updates.js': 'recent-updates.js', '/view-route.js': 'view-route.js',
 };

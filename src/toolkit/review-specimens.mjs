@@ -1,15 +1,13 @@
 import * as css from 'css-tree';
 import { parseFragment, serialize } from 'parse5';
+import { embeddedArtStylesheet } from '../../public/art-styles.js';
 
 function embeddedStylesheet(node) {
   if (node.tagName !== 'link' || node.attrs.some(attr => attr.name === 'disabled') ||
       node.attrs.find(attr => attr.name === 'rel')?.value.toLowerCase() !== 'stylesheet') return null;
   const href = node.attrs.find(attr => attr.name === 'href');
-  const data = /^data:text\/css(?:;charset=[\w-]+)?(;base64)?,(.*)$/is.exec(href?.value);
-  if (!data) return null;
-  try {
-    return { href, text: data[1] ? Buffer.from(data[2], 'base64').toString('utf8') : decodeURIComponent(data[2]) };
-  } catch { return null; }
+  const text = embeddedArtStylesheet(href?.value);
+  return text === null ? null : { href, text };
 }
 
 export function compileSpecimens({ built, theme, inlineArt = false }) {
