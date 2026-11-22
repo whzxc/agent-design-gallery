@@ -18,6 +18,7 @@ import { loadImplementationMap, validateImplementationMap } from './implementati
 import { withImpacted } from './impact-selection.mjs';
 import { mappingFacts, frameOwners } from './source-facts.mjs';
 import { resolveThemes, systemTheme } from './theme.mjs';
+import { withPaintOcclusion } from './paint-occlusion.mjs';
 
 function frameStructure(frame) {
   return frame.html
@@ -35,7 +36,7 @@ function frameOwnsPart(frame, source, part) {
 function proposedFrame(source, frame) {
   return frame.proposed ? { source, frame: frame.name, scope: frame.proposed } : null;
 }
-export function inspectFrame(tokenNames) {
+export const inspectFrame = withPaintOcclusion(function inspectFrame(paintOcclusion, tokenNames) {
   const frame = document.querySelector('[data-adg-frame]'), box = frame.getBoundingClientRect(), problems = new Map();
   const add = (code, message) => problems.set(message, {code, message, line:null, column:null});
   if (frame.children.length !== 1 || [...frame.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) add('FRAME_ROOT_INVALID', 'Frame needs exactly one root element');
@@ -61,7 +62,7 @@ export function inspectFrame(tokenNames) {
   }
   sample.remove();
   const outside = r => r.left < box.left - 1 || r.right > box.right + 1 || r.top < box.top - 1 || r.bottom > box.bottom + 1;
-  const styles = new Map(), bounds = new Map(), effects = new Map();
+  const styles = new Map(), bounds = new Map();
   const style = el => { if (!styles.has(el)) styles.set(el,getComputedStyle(el)); return styles.get(el); };
   const rectFor = el => { if (!bounds.has(el)) bounds.set(el,el.getBoundingClientRect()); return bounds.get(el); };
   const intersect = (a,b) => ({left:Math.max(a.left,b.left),right:Math.min(a.right,b.right),top:Math.max(a.top,b.top),bottom:Math.min(a.bottom,b.bottom)});
@@ -83,25 +84,8 @@ export function inspectFrame(tokenNames) {
     }
     return visible;
   };
-  const opaqueEffects = el => {
-    if (!el) return true;
-    if (!effects.has(el)) {
-      const s=style(el);
-      effects.set(el,Number(s.opacity)===1 && s.filter==='none' && s.clipPath==='none' &&
-        s.maskImage==='none' && s.mixBlendMode==='normal' && opaqueEffects(el.parentElement));
-    }
-    return effects.get(el);
-  };
-  const opaqueColor = value => {
-    // Float16 canvas alpha rounds near-opaque colors up to 1. Read an explicit
-    // computed alpha before using canvas normalization for opaque color syntax.
-    if (value.startsWith('rgba(') || value.includes('/')) {
-      const alpha=value.match(/(?:,|\/)\s*([\d.e+-]+)(%)?\s*\)$/i);
-      return !!alpha && Number(alpha[1])===(alpha[2]?100:1);
-    }
-    return normalize(value)[3]===1;
-  };
-  const lines = [], covers = [];
+  const paint = paintOcclusion(style, value => normalize(value)[3]);
+  const lines = [];
   for (const el of [frame, ...frame.querySelectorAll('*')]) {
     const s = style(el), r = rectFor(el);
     if (['STYLE','SCRIPT'].includes(el.tagName.toUpperCase())) add('MARKUP_FORBIDDEN', `Forbidden <${el.tagName.toLowerCase()}> in output`);
@@ -114,11 +98,7 @@ export function inspectFrame(tokenNames) {
     if (s.display === 'none' || s.visibility === 'hidden' || r.width === 0 || r.height === 0) continue;
     const visibleBox=clipped(r,el.parentElement);
     if (nonempty(visibleBox) && outside(visibleBox)) add('FRAME_OVERFLOW', 'Content overflows the frame');
-    // A border-box background has the same rounded hit shape as its element.
-    // Other background clips/masks cannot establish rectangular opaque coverage.
-    if (el instanceof HTMLElement && s.backgroundClip==='border-box' && opaqueColor(s.backgroundColor) && opaqueEffects(el)) {
-      covers.push({el,rect:intersect(visibleBox,box)});
-    }
+    paint.addCover(el, intersect(visibleBox, box));
     if (!el.closest('[data-brand]')) {
       const paints = [s.color, s.backgroundColor];
       for (const side of ['Top','Right','Bottom','Left']) if (parseFloat(s[`border${side}Width`]) > 0) paints.push(s[`border${side}Color`]);
@@ -151,42 +131,7 @@ export function inspectFrame(tokenNames) {
       }
     }
   }
-  // Hit testing omits inert and pointer-events:none content, though it still paints.
-  // Normalize only the text/cover nodes after validating authored styles, then
-  // restore their exact attributes so inspection has no lasting DOM changes.
-  const restored = [], inert = [];
-  for (let el=frame;el;el=el.parentElement) if (el.hasAttribute('inert')) inert.push([el,el.getAttribute('inert')]);
-  for (const el of frame.querySelectorAll('[inert]')) inert.push([el,el.getAttribute('inert')]);
-  for (const [el] of inert) el.removeAttribute('inert');
-  for (const el of new Set([...lines.map(line=>line.el),...covers.map(cover=>cover.el)])) {
-    if (style(el).pointerEvents==='none') {
-      restored.push([el,el.getAttribute('style')]);el.style.setProperty('pointer-events','auto','important');
-    }
-  }
-  const hits = new Map();
-  const paintStack = (x,y) => {
-    const key=`${x},${y}`;
-    if (!hits.has(key)) hits.set(key,document.elementsFromPoint(x,y));
-    return hits.get(key);
-  };
-  const occluded = (el,rect) => {
-    const dx=Math.min(.01,(rect.right-rect.left)/100),dy=Math.min(.01,(rect.bottom-rect.top)/100);
-    const points=[[rect.left+dx,rect.top+dy],[rect.right-dx,rect.top+dy],
-      [rect.left+dx,rect.bottom-dy],[rect.right-dx,rect.bottom-dy],[(rect.left+rect.right)/2,(rect.top+rect.bottom)/2]];
-    return covers.some(cover => {
-      if (cover.el.contains(el) || cover.rect.left>rect.left || cover.rect.right<rect.right ||
-          cover.rect.top>rect.top || cover.rect.bottom<rect.bottom) return false;
-      const samples=points.map(([x,y])=>{
-        const stack=paintStack(x,y);return [stack.indexOf(el),stack.indexOf(cover.el)];
-      });
-      // The SAME convex background must hit every corner. Rounded controls can
-      // omit their text owner at an edge, so establish paint order where both
-      // elements hit; absence alone is never evidence that the text is behind.
-      return samples.every(([subject,foreground])=>foreground>=0 && (subject<0 || foreground<subject)) &&
-        samples.some(([subject,foreground])=>subject>=0 && foreground<subject);
-    });
-  };
-  try {
+  paint.read(frame, lines.map(line => line.el), occluded => {
     for (let i=0;i<lines.length;i++) for(let j=i+1;j<lines.length;j++) {
       const a=lines[i], b=lines[j];
       // Each Range belongs to a direct text node; an ancestor's own text and a
@@ -196,17 +141,9 @@ export function inspectFrame(tokenNames) {
       if (overlap.right-overlap.left>1 && overlap.bottom-overlap.top>2 &&
           !occluded(a.el,overlap) && !occluded(b.el,overlap)) add('TEXT_OVERLAP', `Text overlaps: ${a.label} / ${b.label}`);
     }
-  } finally {
-    for (const [el,authored] of restored) {
-      // Flush a CSSOM-created attribute before removing it (Chromium creates it lazily).
-      el.getAttribute('style');
-      if (authored===null) el.removeAttribute('style');
-      else el.setAttribute('style',authored);
-    }
-    for (const [el,authored] of inert) el.setAttribute('inert',authored);
-  }
+  });
   return [...problems.values()];
-}
+});
 export async function check(config, args = [], options = {}, log = console.log, error = console.error, { launchBrowser = launch, session } = {}) {
   if (options.impacted && !session) return withImpacted(config, args, options, 'check', selected =>
     check(config, args, options, log, error, { launchBrowser, session: selected }));

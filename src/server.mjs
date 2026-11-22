@@ -32,7 +32,7 @@ import { tokenBoard } from './boards/token-board.mjs';
 import { loadMotionPatterns, motionPatternFile } from './toolkit/motion-patterns.mjs';
 import { motionCodeExcerpt, scanMotion } from './toolkit/motion-inventory.mjs';
 import { sourceRelationships } from '../public/relationships.js';
-import { resolveScope } from '../public/assets.js';
+import { assetLayer, resolveScope } from '../public/assets.js';
 const digest = value => createHash('sha256').update(value).digest('hex');
 const tokenFile = 'tokens.css';
 function tokenSourcePath(directory, project) {
@@ -134,6 +134,17 @@ export async function startServer({
       };
     });
     return motionEdges;
+  }
+  function playableLayers(assets, edges, sourcePrefix) {
+    const byPath = new Map(assets.map(asset => [asset.path, assetLayer(asset)]));
+    const prefix = sourcePrefix ? sourcePrefix + '/' : '';
+    const layer = ref => ref.source.startsWith(prefix) && byPath.get(ref.source.slice(prefix.length));
+    const playable = new Set();
+    for (const { from, to } of edges) {
+      const start = layer(from);
+      if (start && start === layer(to)) playable.add(start);
+    }
+    return [...playable];
   }
   const overlayStores = new Map(), overlayHashes = new Set();
   let resettingOverlays = false;
@@ -378,7 +389,11 @@ export async function startServer({
       if(changedMotion.size) {
         await indexMotion(project,base,changedMotion,sidecars);
         revision++;
-        emit({ revision, motionSources: [...changedMotion], motionFrames, motionEdges: boardMotionEdges(nextCode) });
+        const edges = boardMotionEdges(nextCode);
+        const assets = [...next.values()].filter(asset => !isFeatureInternal(asset.path, nextSources));
+        const sourcePrefix = path.relative(project.root, base).split(path.sep).join('/');
+        emit({ revision, motionSources: [...changedMotion], motionFrames, motionEdges: edges,
+          playableLayers: playableLayers(assets, edges, sourcePrefix) });
       }
       const stamps=[...new Set([...files.keys(),...next.keys()])].filter(name=>files.get(name)?.stamp!==next.get(name)?.stamp);
       const grouping=JSON.stringify(groups)!==JSON.stringify(nextGroups);
@@ -497,7 +512,16 @@ export async function startServer({
       const result = { ...data, scope: 'tokens', layers, assets: [] };
       return applyFixtureManifest(result, url.searchParams.get('fixture'));
     }
-    const scoped=resolveScope(data,sources,desired === 'tokens' ? 'default' : desired);
+    let scoped = resolveScope(data, sources, desired === 'tokens' ? 'default' : desired);
+    if (data.motionEdges?.length) {
+      data.playableLayers = playableLayers(data.assets, data.motionEdges, data.sourcePrefix);
+      if (desired === 'default' && !fixtureScope && !url.searchParams.has('strict') &&
+          url.searchParams.get('view') === 'playable' && data.playableLayers.length &&
+          !data.playableLayers.some(name => scoped.scope === 'layer:' + name)) {
+        const scope = data.playableLayers.length === 1 ? 'layer:' + data.playableLayers[0] : 'all';
+        scoped = resolveScope(data, sources, scope);
+      }
+    }
     if (url.searchParams.has('strict') && desired !== scoped.scope) throw Error('Design link target does not exist.');
     Object.assign(data,scoped);
     let base;

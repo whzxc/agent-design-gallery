@@ -323,6 +323,22 @@ test('contract: the player stage follows the board theme and Flow map focuses th
   assert.equal(await board.locator('button:focus').getAttribute('aria-label'), 'Play flow from project-picker');
 });
 
+test('contract: Playable opens where flows exist and links there from an explicitly empty scope', async t => {
+  const { page, url } = await viewer(t);
+  const playable = page.getByRole('main', { name: 'Playable' });
+  const launch = playable.getByRole('button', { name: 'Play flow from project-picker', exact: true });
+  await page.goto(new URL('/?view=playable', url).href);
+  await launch.waitFor();
+  assert.equal(await page.getByRole('tab', { name: 'Modules', exact: true }).getAttribute('aria-selected'), 'true');
+
+  await page.goto(new URL('/view/layer/components?view=playable', url).href);
+  assert.equal(await page.getByRole('tab', { name: 'Components', exact: true }).getAttribute('aria-selected'), 'true');
+  await playable.getByRole('link', { name: 'Open playable flows in Modules' }).click();
+  await launch.waitFor();
+  assert.equal(await page.getByRole('tab', { name: 'Modules', exact: true }).getAttribute('aria-selected'), 'true');
+  assert.equal(new URL(page.url()).searchParams.get('view'), 'playable');
+});
+
 test('contract: playable board routes and restores camera, grouped gestures dispatch individually, and text matches committed input only',async t=>{
   const {page,url}=await viewer(t);
   await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });

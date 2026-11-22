@@ -924,6 +924,12 @@ function renderFrameView() {
       const status = boardElement('p', 'view-board-status', manifest?.loading ? 'Loading frames…' : 'No playable frames in this scope.');
       status.setAttribute('role', 'status');
       viewContent.replaceChildren(status);
+      if (!manifest?.loading) for (const layer of manifest?.playableLayers ?? []) {
+        const scope = 'layer:' + layer;
+        const link = boardElement('a', 'view-board-action', 'Open playable flows in ' + scopeLabel(scope));
+        link.href = viewURL(location.href, scope);
+        viewContent.append(link);
+      }
     }
   }
   if (focus?.label && document.activeElement === document.body) {
@@ -2594,6 +2600,7 @@ async function refresh(force = false) {
   try {
     if (routeError) throw routeError;
     const query=new URLSearchParams({context:metadataContext(),theme:effectiveTheme,scope:scopeRequest});
+    if (frameFilter === 'playable') query.set('view', 'playable');
     if (strictRoute) query.set('strict', '1');
     if (onlyFrame) query.set('frame', onlyFrame);
     if (!manifest) query.set('initial', '1');
@@ -2638,6 +2645,7 @@ if ((tokenManifest || manifest) && !isUnauthorized()) {
       if (manifest) {
         manifest.motionFrames = data.motionFrames;
         manifest.motionEdges = data.motionEdges;
+        manifest.playableLayers = data.playableLayers;
         manifest.revision = data.revision;
       }
       setMotionProjection(data.motionFrames);

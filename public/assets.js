@@ -240,11 +240,12 @@ export function scopeTarget(scope) {
   return separator < 0 ? undefined : scope.slice(separator + 1);
 }
 
+export const assetLayer = asset => asset.layer ?? (asset.path.includes('/') ? asset.path.split('/')[0] : 'Design');
+
 export function resolveScope(data, layers, requested) {
-  const layerOf = asset => asset.layer ?? (asset.path.includes('/') ? asset.path.split('/')[0] : 'Design');
   const layerAssets = new Map(layers.map(layer => [layer, []]));
   for (const asset of data.assets) {
-    const layer = layerOf(asset);
+    const layer = assetLayer(asset);
     if (!layerAssets.has(layer)) layerAssets.set(layer, []);
     layerAssets.get(layer).push(asset);
   }

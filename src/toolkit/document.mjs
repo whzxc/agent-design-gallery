@@ -1,11 +1,18 @@
-export function implementationTexts(root, clip) {
+import { withPaintOcclusion } from './paint-occlusion.mjs';
+
+export const implementationTexts = withPaintOcclusion(function implementationTexts(paintOcclusion, root, clip) {
   const bounds = root.getBoundingClientRect();
   const origin = clip ? { left: clip.x - scrollX, top: clip.y - scrollY, right: clip.x - scrollX + clip.width, bottom: clip.y - scrollY + clip.height } : bounds;
-  const texts = [];
+  const measured = [];
+  const styles = new Map();
+  const computed = el => {
+    if (!styles.has(el)) styles.set(el, getComputedStyle(el));
+    return styles.get(el);
+  };
   const measure = document.createElement('canvas').getContext('2d');
   const visible = owner => {
     for (let el = owner, child = null; el; child = el, el = el.parentElement) {
-      const style = getComputedStyle(el);
+      const style = computed(el);
       if (el.hasAttribute('hidden') || style.display === 'none' || style.visibility === 'hidden' ||
           style.visibility === 'collapse' || style.opacity === '0') return false;
       if (el.localName === 'details' && !el.open &&
@@ -21,16 +28,16 @@ export function implementationTexts(root, clip) {
   const inside = (box, owner) => {
     let left = origin.left, right = origin.right, top = origin.top, bottom = origin.bottom;
     for (let el = owner; el; el = el.parentElement) {
-      const style = getComputedStyle(el), bounds = el.getBoundingClientRect();
+      const style = computed(el), bounds = el.getBoundingClientRect();
       if (/(hidden|clip|auto|scroll)/.test(style.overflowX)) { left = Math.max(left, bounds.left); right = Math.min(right, bounds.right); }
       if (/(hidden|clip|auto|scroll)/.test(style.overflowY)) { top = Math.max(top, bounds.top); bottom = Math.min(bottom, bounds.bottom); }
     }
     return box.left >= left - 0.5 && box.right <= right + 0.5 && (box.top + box.bottom) / 2 >= top && (box.top + box.bottom) / 2 <= bottom;
   };
-  const push = (text, box, owner, style = getComputedStyle(owner), leadingSpace = false) => {
+  const push = (text, box, owner, style = computed(owner), leadingSpace = false) => {
     if (!inside(box, owner)) return;
-    texts.push({ text, x: box.left - origin.left, y: box.top - origin.top, width: box.right - box.left, height: box.bottom - box.top,
-      space: (measure.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`, measure.measureText(' ').width), leadingSpace, anchor: style.textAlign === 'center' ? 'middle' : style.textAlign === 'right' ? 'end' : 'start', fill: style.color, size: style.fontSize, weight: style.fontWeight, family: style.fontFamily });
+    measured.push({ box, owner, row: { text, x: box.left - origin.left, y: box.top - origin.top, width: box.right - box.left, height: box.bottom - box.top,
+      space: (measure.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`, measure.measureText(' ').width), leadingSpace, anchor: style.textAlign === 'center' ? 'middle' : style.textAlign === 'right' ? 'end' : 'start', fill: style.color, size: style.fontSize, weight: style.fontWeight, family: style.fontFamily } });
   };
   const linesFor = node => {
     const result=[];
@@ -82,6 +89,20 @@ export function implementationTexts(root, clip) {
     const top = input.tagName === 'TEXTAREA' ? rect.top + parseFloat(box.borderTopWidth) + parseFloat(box.paddingTop) : rect.top + rect.height / 2 - height / 2;
     push(content, { left, right: left + canvas.measureText(content).width, top, bottom: top + height }, input, style);
   }
+  const paint = paintOcclusion(computed), layers = new Set();
+  for (const el of document.body.querySelectorAll('*')) {
+    const { position } = computed(el);
+    if (position !== 'sticky' && position !== 'fixed') continue;
+    layers.add(el);
+    for (const child of el.querySelectorAll('*')) layers.add(child);
+  }
+  for (const el of layers) {
+    const box = el.getBoundingClientRect();
+    if (box.right > origin.left && box.left < origin.right && box.bottom > origin.top && box.top < origin.bottom)
+      paint.addCover(el, box);
+  }
+  const texts = paint.read(document.body, measured.map(item => item.owner), occluded => measured
+    .filter(({ owner, box }) => !occluded(owner, box)).map(({ row }) => row));
   const merged = [];
   for (const item of texts.sort((a,b) => a.y - b.y || a.x - b.x)) {
     const previous = merged.findLast(p => Math.abs(p.y + p.height/2 - item.y - item.height/2) < 1 && item.x >= p.x + p.width - .5 && item.x - p.x - p.width <= Math.max(p.space, item.space, item.leadingSpace ? 6 : 0) + .1);
@@ -89,4 +110,4 @@ export function implementationTexts(root, clip) {
     else merged.push({...item});
   }
   return { box: { x: origin.left + scrollX, y: origin.top + scrollY, width: origin.right - origin.left, height: origin.bottom - origin.top }, texts: merged };
-}
+});

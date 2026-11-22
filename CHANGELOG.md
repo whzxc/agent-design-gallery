@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.4
+
+- Compare omits text fully covered by an opaque sticky or fixed layer and retains visible overlaps.
+- Playable opens a scope with flows when the default is empty and links to flows from explicitly empty scopes.
+- Stabilize the browser refresh and Recent Updates cache tests by waiting for the applied edit and pinning the fixture runtime.
+
 ## 0.17.3
 
 - Play pattern distance and scale with entry and exit opacity. The inspector identifies parameters that the discrete player omits.

@@ -354,6 +354,36 @@ test('contract: compare extracts rendered disclosure text and excludes hidden an
   } finally { await browser.close(); }
 });
 
+test('contract: compare excludes only text fully covered by an opaque sticky or fixed layer in front', async () => {
+  const browser = await launch();
+  try {
+    const page = await browser.newPage();
+    const read = async () => (await page.locator('#panel').evaluate(implementationTexts)).texts.map(row => row.text);
+    await page.setContent(`<!doctype html><style>
+      body {margin:0;font:16px/20px monospace}
+      #panel {width:220px;height:100px;overflow:auto}
+      header {position:sticky;top:0;z-index:1;height:40px;background:white;pointer-events:none}
+      .row {height:40px}
+    </style><div id="panel"><header>Heading</header><div class="row">Under header</div>
+      <div class="row">Visible row</div><div class="row"></div></div>`);
+    await page.locator('#panel').evaluate(panel => panel.scrollTop = 40);
+    assert.deepEqual(await read(), ['Heading', 'Visible row']);
+    assert.equal(await page.locator('header').getAttribute('style'), null);
+    await page.locator('header').evaluate(el => el.style.background = 'rgba(255,255,255,.99)');
+    assert.ok((await read()).includes('Under header'), 'translucent cover leaves text visible');
+    await page.locator('header').evaluate(el => { el.style.background = 'white'; el.style.width = '40px'; });
+    assert.ok((await read()).includes('Under header'), 'partial cover leaves text visible');
+
+    await page.setContent(`<!doctype html><style>body{margin:0;font:16px/20px monospace}</style>
+      <div id="panel" style="position:relative;z-index:0;width:220px;height:80px"><div>Under fixed</div><div>Visible row</div></div>
+      <div inert id="cover" style="position:fixed;inset:0 auto auto 0;width:220px;height:20px;background:white;z-index:1"></div>`);
+    assert.deepEqual(await read(), ['Visible row'], 'fixed layer can live outside the capture region');
+    assert.equal(await page.locator('#cover').getAttribute('inert'), '');
+    await page.locator('#cover').evaluate(el => el.style.zIndex = '-1');
+    assert.deepEqual(await read(), ['Under fixed', 'Visible row'], 'layer behind the text cannot cover it');
+  } finally { await browser.close(); }
+});
+
 test('compare reads centered clipped labels and one value or placeholder per text field', async () => {
   const browser = await launch();
   try {
