@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "flows": [
+    {
+      "start": { "source": "design/modules/task/index.tsx", "frame": "pending" },
+      "anchor": { "anchor": "complete-task" },
+      "ends": [{ "frame": "complete" }]
+    }
+  ],
+  "edges": [
+    {
+      "id": "complete-task",
+      "label": "Complete task",
+      "from": { "source": "design/modules/task/index.tsx", "frame": "pending" },
+      "to": { "source": "design/modules/task/index.tsx", "frame": "complete" },
+      "trigger": { "on": "click", "target": { "anchor": "complete-task" } },
+      "duration": "--motion-fast",
+      "easing": "--ease-standard",
+      "phases": [[{ "mode": "enter", "targets": [{ "anchor": "status" }], "properties": ["opacity"] }]],
+      "interrupt": "finish",
+      "reduced": "instant",
+      "focus": "frame"
+    }
+  ]
+}

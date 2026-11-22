@@ -1,0 +1,31 @@
+name: Windows smoke
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  motion-sidecar:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: node node_modules/playwright/cli.js install chromium
+      - name: Check the nested motion sidecar
+        working-directory: fixtures/windows-motion-smoke
+        shell: pwsh
+        run: |
+          $result = node ../../src/cli.mjs check --read-only --transitions --json
+          Write-Output $result
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $data = ($result | ConvertFrom-Json).data
+          if (($data.summary.sources -ne 1) -or ($data.motion.edges.id -notcontains 'complete-task')) {
+            throw 'ADG did not check the nested source and its transition.'
+          }

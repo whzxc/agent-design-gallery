@@ -1,0 +1,13 @@
+:root {
+  --font-ui: system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --canvas: #ffffff;
+  --text: #171717;
+  --motion-fast: 120ms;
+  --ease-standard: ease-in-out;
+}
+
+:root[data-theme="dark"] {
+  --canvas: #171717;
+  --text: #ffffff;
+}
