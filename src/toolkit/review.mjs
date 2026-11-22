@@ -116,7 +116,7 @@ function buildHtmlReview(model, data, built, theme, locate, format, target) {
   const selected = embed ? selectEmbedEntries(model, comparisons, data.review.groups) : allEntries;
 
   function render(entries, motion) {
-    const { compileFrame, assets } = compileSpecimens({ built, theme });
+    const { compileFrame, assets } = compileSpecimens({ built, theme, inlineArt: !embed });
     const cards = entries.map((entry, index) => {
       const row = comparisons.get(identity(entry));
       const changed = entry.status === 'changed';

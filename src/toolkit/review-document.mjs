@@ -43,13 +43,15 @@ export function reviewDocument(report, { properties, styles, templates }) {
   const playback = report.motion ? report.motion.script + '\nreviewPlayback.mountReport();' : '';
   const script = `(${mountPreviews.toString()})();` + playback;
   const hash = createHash('sha256').update(script).digest('base64');
+  const framed = cards.some(card => card.before?.framed || card.after?.framed);
+  const framesPolicy = report.motion ? "frame-src 'self' about:; " : framed ? 'frame-src about:; ' : '';
   const metadata = JSON.stringify(cards.map(({ before, after, difference }) => ({ before, after, difference: Boolean(difference) })));
   return `<!doctype html>
 <html lang="en" data-theme="${theme}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; img-src data:; font-src data:; ${report.motion ? "frame-src 'self' about:; " : ''}base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; img-src data:; font-src data:; ${framesPolicy}base-uri 'none'; form-action 'none'">
   <title>${escape(title)} · Design review</title>
   <style>${cssText(properties.join('\n'))}${documentStyles}${report.motion ? motionStyle : ''}</style>
 </head>
@@ -148,6 +150,7 @@ function mountPreviews() {
   const data = JSON.parse(document.getElementById('review-data').textContent);
   const cards = [...document.querySelectorAll('[data-card]')];
   const sheetCache = new Map();
+  const frameReady = new WeakMap();
   const pending = new Set();
   const zoom = document.getElementById('frame-zoom');
   const modes = document.getElementById('zoom-modes');
@@ -156,24 +159,50 @@ function mountPreviews() {
   const zoomScale = document.getElementById('zoom-scale');
   const zoomNames = { compare: 'Compare', before: 'Before', after: 'After', difference: 'Difference' };
   let activeZoom;
+  const styleTemplate = index => document.getElementById('style-' + index);
+  function framedSpecimen(host, preview, body) {
+    // Font faces are document-scoped in Chromium. Give each revision its own
+    // document so faces with the same family name keep their original bytes.
+    for (const link of body.content.querySelectorAll('link[data-review-style]')) {
+      const style = styleTemplate(link.dataset.reviewStyle).content.firstElementChild.cloneNode(true);
+      if (link.hasAttribute('media')) style.media = link.media;
+      link.replaceWith(style);
+    }
+    host.title = 'Frame preview';
+    host.tabIndex = -1;
+    host.setAttribute('sandbox', 'allow-same-origin');
+    host.style.border = '0';
+    host.style.pointerEvents = 'none';
+    frameReady.set(host, new Promise(resolve => host.addEventListener('load', resolve, { once: true })).then(async () => {
+      const doc = host.contentDocument;
+      if (doc) await Promise.allSettled([doc.fonts.ready, ...[...doc.images].map(image => image.decode())]);
+    }));
+    const policy = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src 'none'; base-uri 'none'; form-action 'none'";
+    host.srcdoc = `<!doctype html><html data-theme="${document.documentElement.dataset.theme}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}">${styleTemplate(preview.style).innerHTML}</head><body>${body.innerHTML}</body></html>`;
+  }
   function specimen(preview) {
-    const host = document.createElement('div');
+    const host = document.createElement(preview.framed ? 'iframe' : 'div');
     host.className = 'specimen';
     const width = Math.ceil(preview.width), height = Math.ceil(preview.height);
     host.style.width = width + 'px';
     host.style.height = height + 'px';
+    const body = document.getElementById('frame-' + preview.template);
+    if (preview.framed) {
+      framedSpecimen(host, preview, body.cloneNode(true));
+      return host;
+    }
     for (const [unit, value] of Object.entries({ vw: width, vh: height, vmin: Math.min(width, height), vmax: Math.max(width, height) })) {
       host.style.setProperty('--review-' + unit, value / 100 + 'px');
     }
     if (!sheetCache.has(preview.style)) {
       const sheet = new CSSStyleSheet();
-      const css = document.getElementById('style-' + preview.style).content.firstElementChild.textContent;
+      const css = styleTemplate(preview.style).content.firstElementChild.textContent;
       sheet.replaceSync('review-document,review-body{display:block}review-document{min-height:100%}' + css);
       sheetCache.set(preview.style, sheet);
     }
     const root = host.attachShadow({ mode: 'open' });
     root.adoptedStyleSheets = [sheetCache.get(preview.style)];
-    root.append(document.getElementById('frame-' + preview.template).content.cloneNode(true));
+    root.append(body.content.cloneNode(true));
     return host;
   }
 
@@ -213,6 +242,7 @@ function mountPreviews() {
       const side = pane.dataset.side;
       if (!preview[side]) continue;
       const plane = makePlane(index, side);
+      if (frameReady.has(plane.firstElementChild)) decodes.push(frameReady.get(plane.firstElementChild));
       const images = plane.firstElementChild.shadowRoot?.querySelectorAll('img') ?? plane.querySelectorAll('img');
       decodes.push(...[...images].map(image => image.decode()));
       pane.querySelector('.stage').prepend(plane);

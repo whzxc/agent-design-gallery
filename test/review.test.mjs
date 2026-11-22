@@ -262,3 +262,65 @@ export default () => [
   const settledHtml = await readFile(settled.data.indexPath, 'utf8');
   assert.match(settledHtml, /No added, removed, moved, or changed frames/);
 });
+
+test('contract: standalone review embeds artwork styles and isolates revision-local font faces offline', async t => {
+  const project = await mkdtemp(path.join(tmpdir(), 'adg-review-font-'));
+  t.after(() => rm(project, { recursive: true, force: true }));
+  const write = (file, text) => writeFile(path.join(project, file), text);
+  await mkdir(path.join(project, 'design', 'components'), { recursive: true });
+  await mkdir(path.join(project, 'design', 'art'));
+  await write('adg.config.mjs', 'export default {};');
+  await write('design/tokens.css', starterTokens);
+  const fonts = await Promise.all(['wide', 'narrow'].map(async name =>
+    (await readFile(new URL('../fixtures/review-font/' + name + '.woff2', import.meta.url))).toString('base64')));
+  const css = font => `
+    @font-face { font-family: "ADG Review Probe"; src: url(data:font/woff2;base64,${font}); }
+    .font-probe { display: inline-block; font: 20px "ADG Review Probe", sans-serif; color: rgb(42, 43, 44); }
+  `;
+  await write('design/art/font.css', css(fonts[0]));
+  await write('design/components/card.tsx', `
+    import { Frame } from 'adg';
+    import sheet from '../art/font.css?url';
+    export default () => ['one', 'two'].map(name => <Frame name={name} width={100} height={50}>
+      <div><link rel="stylesheet" href={sheet}/><span class="font-probe">AA</span></div>
+    </Frame>);
+  `);
+  const git = (...args) => execFileSync('git', ['-C', project, ...args]);
+  git('init', '-q');
+  git('add', '.');
+  git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'base');
+  await write('design/art/font.css', css(fonts[1]));
+
+  let stdout = '';
+  const code = await main(['review', '--base=HEAD', '--json', '--theme=light'], project,
+    { stdout: chunk => { stdout += chunk; }, stderr: () => {}, exit: () => {} });
+  assert.equal(code, 0, stdout);
+  const { data } = JSON.parse(stdout);
+  assert.equal(data.counts.changed, 2);
+  const document = await readFile(data.path, 'utf8');
+  for (const font of fonts) assert.equal(document.split(font).length, 2, 'Store each font once across multiple frames');
+  assert.match(document, /style-src 'unsafe-inline'; img-src data:; font-src data:;/);
+
+  const browser = await launch();
+  try {
+    const page = await browser.newPage({ offline: true, viewport: { width: 1000, height: 760 } });
+    const network = [], errors = [];
+    page.on('request', request => { if (/^https?:/.test(request.url())) network.push(request.url()); });
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(pathToFileURL(data.path).href);
+    const card = page.locator('[data-card][data-frame="one"]');
+    await card.locator('[data-side="after"] iframe').waitFor();
+    for (const [side, width] of [['before', 40], ['after', 24]]) {
+      const text = card.frameLocator('[data-side="' + side + '"] iframe').locator('.font-probe');
+      const observed = await text.evaluate(async element => {
+        const doc = element.ownerDocument;
+        const faces = await doc.fonts.load('20px "ADG Review Probe"', element.textContent);
+        return { width: element.getBoundingClientRect().width,
+          color: doc.defaultView.getComputedStyle(element).color, faces: faces.map(face => face.status) };
+      });
+      assert.deepEqual(observed, { width, color: 'rgb(42, 43, 44)', faces: ['loaded'] });
+    }
+    assert.deepEqual(network, []);
+    assert.deepEqual(errors, []);
+  } finally { await browser.close(); }
+});

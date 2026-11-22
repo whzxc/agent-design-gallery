@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.10
+
+- Embed linked art stylesheets and their data fonts in standalone review previews, with shared bytes and revision-local font selection.
+
 ## 0.17.9
 
 - Scan authored string and template literals for Tailwind motion candidates, including variant maps. Remove unresolved class-expression findings.
