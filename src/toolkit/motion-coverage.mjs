@@ -27,8 +27,6 @@ function report(data, summary, log) {
       row(source + ':' + locations + more + ' ' + match + (within ? ' within ' + within : ''));
     }
   }
-  for (const {source, line, within, message} of data.dynamicClasses)
-    row(source + ':' + line + ' ' + message + (within ? ' Within ' + within + '.' : ''));
   if (omitted || data.unmapped.some(({groups}) => groups.some(({lines}) => lines.length > 16)))
     log((omitted ? omitted + ' more groups. ' : '') + 'Use --json for all locations.');
 }
@@ -43,15 +41,13 @@ export function motionCoverage(config, log) {
   const inventory = scanMotion(config, catalog, graph);
   const design = relative(config, config.design);
   const files = new Map();
-  const unscanned = [], dynamicClasses = [];
+  const unscanned = [];
   const implementation = source => !design || !source.startsWith(design + '/');
   let unmappedSites = 0;
   for (const issue of inventory.issues) {
     const {source, code, line, match, within} = issue;
     if (code === 'MOTION_SCAN_FAILED') unscanned.push({ source, line, message: issue.message });
-    if (!implementation(source)) continue;
-    if (code === 'MOTION_DYNAMIC_CLASS') dynamicClasses.push({ source, line, ...(within && { within }), message: issue.message });
-    if (code !== 'MOTION_UNMAPPED') continue;
+    if (code !== 'MOTION_UNMAPPED' || !implementation(source)) continue;
     if (!files.has(source)) files.set(source, new Map());
     const groups = files.get(source), key = JSON.stringify([match, within]);
     if (!groups.has(key)) groups.set(key, { match, ...(within && { within }), lines: [] });
@@ -91,18 +87,16 @@ export function motionCoverage(config, log) {
   const ignored = inventory.ignored.filter(site => implementation(site.source));
   const data = {
     summary: { unmappedSites, fallbackRoles: fallbackRoles.length, unlabeledEdges: unlabeledEdges.length,
-      incompleteFlows: incompleteFlows.length, unscannedFiles: unscanned.length, ignoredSites: ignored.length,
-      dynamicClasses: dynamicClasses.length },
+      incompleteFlows: incompleteFlows.length, unscannedFiles: unscanned.length, ignoredSites: ignored.length },
     unmapped: [...files].map(([source, groups]) => ({ source, groups: [...groups.values()] })),
-    fallbackRoles, unlabeledEdges, incompleteFlows, unscanned, ignored, dynamicClasses,
+    fallbackRoles, unlabeledEdges, incompleteFlows, unscanned, ignored,
   };
   const summary = 'Motion coverage: ' + unmappedSites + ' unmapped implementation sites, ' + fallbackRoles.length +
     ' default roles, ' + unlabeledEdges.length + ' unlabeled edges, ' + incompleteFlows.length + ' incomplete flows, ' +
-    unscanned.length + ' unscanned files, ' + ignored.length + ' ignored sites, ' +
-    dynamicClasses.length + ' unresolved class expressions.';
+    unscanned.length + ' unscanned files, ' + ignored.length + ' ignored sites.';
   report(data, summary, log);
   if (unscanned.length) throw new CliError('SOURCE_BUILD_FAILED', summary, { data, humanReported: true });
-  if (unmappedSites || fallbackRoles.length || unlabeledEdges.length || incompleteFlows.length || dynamicClasses.length) {
+  if (unmappedSites || fallbackRoles.length || unlabeledEdges.length || incompleteFlows.length) {
     throw new CliError('MOTION_COVERAGE_FAILED', summary, { data, humanReported: true });
   }
   return { data };

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.9
+
+- Scan authored string and template literals for Tailwind motion candidates, including variant maps. Remove unresolved class-expression findings.
+
 ## 0.17.8
 
 - Inventory Tailwind motion in class strings, JSX and Vue bindings, and class helpers. Use exact `tailwind:` locators for mappings and exclusions, with unresolved class expressions reported separately.

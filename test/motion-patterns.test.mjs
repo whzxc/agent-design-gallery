@@ -213,7 +213,7 @@ test('contract: coverage groups exact locations, audits used defaults and flow d
   const first = coverage('--json');
   assert.equal(first.status, 1);
   assert.equal(first.error.code, 'MOTION_COVERAGE_FAILED');
-  assert.deepEqual(first.data.summary, {unmappedSites: 2, fallbackRoles: 2, unlabeledEdges: 1, incompleteFlows: 1, unscannedFiles: 0, ignoredSites: 0, dynamicClasses: 0});
+  assert.deepEqual(first.data.summary, {unmappedSites: 2, fallbackRoles: 2, unlabeledEdges: 1, incompleteFlows: 1, unscannedFiles: 0, ignoredSites: 0});
   assert.deepEqual(first.data.unmapped, [{source: 'widget.css', groups: [{match: 'css:.widget', lines: [1, 2]}]}]);
   assert.deepEqual(first.data.fallbackRoles.map(row => row.role), ['duration-base', 'easing-enter']);
   assert.equal(first.data.unlabeledEdges[0].id, edge.id);
@@ -237,7 +237,7 @@ test('contract: coverage groups exact locations, audits used defaults and flow d
   const clean = coverage('--json');
   assert.equal(clean.status, 0);
   assert.equal(clean.ok, true);
-  assert.deepEqual(clean.data.summary, {unmappedSites: 0, fallbackRoles: 0, unlabeledEdges: 0, incompleteFlows: 0, unscannedFiles: 0, ignoredSites: 0, dynamicClasses: 0});
+  assert.deepEqual(clean.data.summary, {unmappedSites: 0, fallbackRoles: 0, unlabeledEdges: 0, incompleteFlows: 0, unscannedFiles: 0, ignoredSites: 0});
   assert.equal(coverage('--css', '--json').status, 2);
 
   write('design/motion-patterns.json', {version: 2});
@@ -325,26 +325,27 @@ function measure() {
   assert.ok(data.ignored.every(row => row.reason === 'Samples layout in a test harness.'));
 });
 
-test('contract: Tailwind class expressions share exact locators, timing parameters and exclusions', t => {
+test('contract: authored Tailwind literals share locators, parameters and exclusions across coverage and Tokens', t => {
   const { root, design, write } = fixture(t);
   write('adg.config.mjs', 'export default {}');
   write('widget.tsx', [
     "import cx from 'clsx';",
     "const button = cva('transition-colors duration-150', {",
     "  variants: { state: { open: 'data-[state=open]:animate-in data-[state=open]:fade-in-0 zoom-in-95' } },",
-    "  compoundVariants: [{ state: 'animate-key', class: 'animate-out slide-out-to-top-2' }],",
-    "  defaultVariants: { state: 'animate-selection' },",
+    "  compoundVariants: [{ state: 'closed', class: 'animate-out slide-out-to-top-2' }],",
+    "  defaultVariants: { state: 'closed' },",
     "});",
-    "function Widget() { return <><div className={cn('hover:transition-[color,box-shadow]', 'delay-75 motion-reduce:transition-none', ['ease-in'])}/>",
+    "function Widget() { return <><div className={cn('hover:transition-[color,box-shadow] delay-75 motion-reduce:transition-none ease-in', className)}/>",
     "  <div className={cx({ 'animate-spin': busy })}/>",
-    "  <div class={`[&:hover]:transition-transform ${busy ? 'animate-pulse' : ''} duration-300`}/>",
+    "  <div class={`[&:hover]:transition-transform${busy ? ' animate-pulse' : ' fade-out-0'} duration-300`}/>",
     "  <div className={`animate-${kind} transition-opacity`}/>",
-    "  <div className='[&_.animate-spin]:text-red-500 duration-200' title='animate-spin'/>",
+    "  <div className='[&_.animate-spin]:text-red-500 duration-200' title='Loading'/>",
     "  <div className='ease-out transition-opacity'/></>; }",
   ].join('\n'));
-  write('opaque.tsx', 'export const Row = () => <div className={runtimeClass}/>;');
+  write('opaque.tsx', 'export const Row = () => <div className={`timeline-fold ${className} ${small ? "btn-sm" : ""}`}/>;');
+  write('variants.ts', "export const variants = { open: 'animate-in fade-in', closed: 'hidden' };");
   write('index.html', '<div class="animate-[sweep_1s_linear] duration-300"></div>');
-  write('Widget.vue', '<template><div :class="[active && \'transition-transform\', \'delay-75\']"/></template>');
+  write('Widget.vue', '<template><div :class="[active && \'transition-transform delay-75\']"/></template>');
   const config = {root, design};
   const transition = 'tailwind:hover:transition-[color,box-shadow]';
   write('design/motion-patterns.json', {version: 1, ignore: [
@@ -364,17 +365,23 @@ test('contract: Tailwind class expressions share exact locators, timing paramete
   const result = spawnSync(process.execPath, [cli, 'motion', '--coverage', '--json'], {cwd:root, encoding:'utf8'});
   assert.equal(result.status, 1);
   const { data } = JSON.parse(result.stdout);
-  assert.deepEqual(data.dynamicClasses.map(({source, line}) => [source, line]), [['opaque.tsx', 1], ['widget.tsx', 10]]);
+  assert.ok(!Object.hasOwn(data, 'dynamicClasses') && !Object.hasOwn(data.summary, 'dynamicClasses'));
   assert.equal(data.summary.unscannedFiles, 0);
   assert.equal(data.summary.ignoredSites, 1);
   const byFile = Object.fromEntries(data.unmapped.map(({source, groups}) => [source, groups]));
   assert.deepEqual(byFile['widget.tsx'].map(({match, lines}) => [match, lines]), [
     ['tailwind:data-[state=open]:animate-in data-[state=open]:fade-in-0 zoom-in-95', [3]],
     ['tailwind:animate-out slide-out-to-top-2', [4]],
-    ['tailwind:[&:hover]:transition-transform animate-pulse', [9]],
+    ['tailwind:[&:hover]:transition-transform', [9]],
+    ['tailwind:animate-pulse', [9]],
+    ['tailwind:fade-out-0', [9]],
     ['tailwind:transition-opacity', [10, 12]],
   ]);
   assert.deepEqual(byFile['widget.tsx'].at(-1).parameters, ['ease-out']);
+  assert.deepEqual(byFile['widget.tsx'][2].parameters, ['duration-300']);
+  assert.ok(byFile['widget.tsx'].every(group => group.lines.every(line => line < 7) || group.within === 'Widget'));
+  assert.deepEqual(byFile['variants.ts'], [{match:'tailwind:animate-in fade-in', within:'variants', lines:[1]}]);
+  assert.equal(byFile['opaque.tsx'], undefined);
   assert.deepEqual(byFile['Widget.vue'], [{match:'tailwind:transition-transform', lines:[1], parameters:['delay-75']}]);
   assert.deepEqual(byFile['index.html'], [{match:'tailwind:animate-[sweep_1s_linear]', lines:[1], parameters:['duration-300']}]);
 });

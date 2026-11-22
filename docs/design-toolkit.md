@@ -317,7 +317,7 @@ from the inventory. For CSS these are `keyframes:<name>` and
 `style:<property>`. Use `vue:Transition` or `vue:TransitionGroup` for Vue
 components. Append `:<name>` when the component declares a static `name`.
 Use `web:animate` for an element animation and `web:requestAnimationFrame`
-for a recurring frame callback. Tailwind class lists use `tailwind:` followed
+for a recurring frame callback. Tailwind sites use `tailwind:` followed
 by their distinct motion utilities in lexical order, separated by spaces.
 For example, use `tailwind:data-[state=open]:animate-in data-[state=open]:fade-in-0`
 for an entry class list or `tailwind:hover:transition-[color,box-shadow]`
@@ -360,16 +360,15 @@ components and inline scripts. A named callback that schedules itself through
 `requestAnimationFrame` contributes its initial and recurring scheduling
 sites. One-shot scheduling is outside that rule. SCSS selectors, declarations
 and keyframes are read as authored, without evaluating Sass.
-The Tailwind pass reads static JSX `class` and `className` values, HTML and
-Vue classes, Vue class bindings, and class arguments to `cn()`, `clsx()`
-and `cva()`. It reads complete utilities in template literals and finite
-literal branches, and checks the `cva()` base, variant and compound class
-lists independently. Supported motion families include transitions,
-animations, and fade, zoom, slide and spin entry and exit utilities.
-It reports unresolved class expressions separately from known motion sites.
-They appear as warnings in `adg check` and as adoption findings for
-implementation sources in `adg motion --coverage`. Coverage JSON lists
-their locations and the timing parameters observed for each unmapped group.
+The Tailwind pass extracts complete motion candidates from each authored
+string literal, the static parts of each template literal, and markup class
+attributes. Class helpers, variant maps and literal branches follow the
+same rule. Each literal or template has its own locator. Keep timing
+utilities in the same literal or template to include them in that site's
+parameters. Coverage JSON lists timing parameters for each unmapped group.
+Runtime values and prop forwarding require no evaluation. When a candidate
+spells a non-motion identifier or label, record the reason with the standard
+`ignore` locator.
 Generated output, dependencies and test sources are outside the inventory.
 Source symlinks are reported as unscanned without following them. Each unreadable
 or partially parsed candidate file appears in the unscanned count.
