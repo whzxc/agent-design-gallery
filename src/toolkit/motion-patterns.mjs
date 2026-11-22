@@ -216,14 +216,10 @@ export function patternEdge(edge, catalog, issue) {
     issue('MOTION_PATTERN_INVALID', '/pattern', 'This pattern needs continuous, ambient or stagger behavior beyond a discrete edge.');
     return edge;
   }
-  if (selected.interrupt !== 'finish' || selected.reduced !== 'instant') {
-    issue('MOTION_PATTERN_INVALID', '/pattern', 'A discrete edge requires finish interruption and instant reduced motion.');
-    return edge;
-  }
   const parameters = patternParameters(selected, direction);
   const duration = parameters.spring ? parameters.spring + '-duration' : parameters.duration;
   const easing = parameters.spring ?? parameters.easing;
-  return { ...fields, duration, easing, interrupt: 'finish', reduced: 'instant', phases: [[{
+  return { ...fields, duration, easing, interrupt: selected.interrupt, reduced: selected.reduced, phases: [[{
     mode, properties, targets: ref.targets,
     ...(mode === 'enter' && parameters.fromOpacity !== undefined ? { fromOpacity: parameters.fromOpacity } : {}),
   }]] };

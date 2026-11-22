@@ -30,7 +30,7 @@ function target(value) {
   );
 }
 
-function validateShape(e, issue) {
+function validateShape(e, issue, { patternBacked } = {}) {
   if (
     !fields(e, [
       'id',
@@ -65,8 +65,11 @@ function validateShape(e, issue) {
     (t.on === 'key' ? !(text(t.key) || t.key === ' ') : t.key !== undefined)
   )
     issue('MOTION_SCHEMA', '/trigger', 'Choose an input and a unique target; key takes a key and input takes an exact string value.');
-  if (e.interrupt !== 'finish') issue('MOTION_SCHEMA', '/interrupt', 'Version 1 requires finish.');
-  if (e.reduced !== 'instant') issue('MOTION_REDUCED_MISSING', '/reduced', 'Declare the instant fallback.');
+  // Pattern policies describe runtime behavior and are validated by the catalog.
+  if (!patternBacked) {
+    if (e.interrupt !== 'finish') issue('MOTION_SCHEMA', '/interrupt', 'Version 1 requires finish.');
+    if (e.reduced !== 'instant') issue('MOTION_REDUCED_MISSING', '/reduced', 'Declare the instant fallback.');
+  }
   if (
     !['frame', 'preserve', 'restore-trigger'].includes(e.focus) &&
     !(fields(e.focus, ['target']) && target(e.focus.target))
@@ -204,7 +207,7 @@ export function readMotion(config, files = motionFiles(config), { allowMissingFl
       };
       const pattern = edge?.pattern;
       const resolved = pattern === undefined ? edge : patternEdge(edge, catalog ??= loadMotionPatterns(config), report);
-      if (!problems.length) validateShape(resolved, report);
+      if (!problems.length) validateShape(resolved, report, { patternBacked: pattern !== undefined });
       const record = { source, owner, edge: resolved, pointer, locations, valid: problems.length === 0,
         ...(pattern === undefined ? {} : { pattern }) };
       records.push(record);

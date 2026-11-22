@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.2
+
+- Preserve runtime interruption and reduced-motion policies on pattern-backed edges and describe the discrete player's fallback in the inspector.
+- Show authored action labels on the Playable map and reserve space for the Flow rail so the specimen remains interactive.
+
 ## 0.17.1
 
 - Extend motion coverage and Tokens board usage to Vue, SCSS and HTML, plus element animations and recurring animation-frame callbacks. Report unscanned files and support reasoned exclusions for non-motion sites.

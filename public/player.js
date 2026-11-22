@@ -48,6 +48,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     <div><button data-control="pause">Pause transition</button><button data-control="replay">${icon('rotate-ccw', 14)}Replay transition</button></div></div>
     <div class="play-clock"><span>0 ms</span><input data-control="seek" type="range" min="0" max="100" step="1" value="0" aria-label="Transition progress">
     <span data-control="end"></span></div><p data-control="instant"></p>
+    <p data-control="policy"></p>
     <footer><span data-control="duration"></span><span data-control="easing"></span><b data-control="elapsed"></b></footer></section>
     <small role="status"></small>`;
   document.head.append(link);
@@ -355,6 +356,12 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       control('seek').disabled = busy || reduced() || !!edge.unsupported;
       dialog.querySelector('.play-clock').hidden = instant;
       control('instant').textContent = instant ? 'Applied instantly · 0 ms' : '';
+      const playback = [];
+      if (edge.interrupt !== 'finish')
+        playback.push('Runtime interruption: ' + edge.interrupt + '. The player finishes the current transition before the next action.');
+      if (edge.reduced !== 'instant')
+        playback.push('Runtime reduced motion: ' + edge.reduced + '. The player shows the destination immediately in reduced motion.');
+      control('policy').textContent = playback.join(' ');
       control('duration').textContent = 'Duration  ' + edge.duration + ' · ' + edge.timings['/duration'] + ' ms';
       control('easing').textContent = 'Easing  ' + edge.easing + ' · ' + edge.timings['/easing'];
       control('end').textContent = transition.duration + ' ms';

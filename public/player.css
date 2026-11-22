@@ -15,13 +15,14 @@
 }
 #motion-player[open] {
   display: grid;
-  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
+  grid-template: "header header" auto "stage rail" minmax(0, 1fr) / minmax(0, 1fr) auto;
   overflow: hidden;
 }
 #motion-player [hidden] {
   display: none !important;
 }
 .play-header {
+  grid-area: header;
   padding: 12px 20px;
   display: flex;
   justify-content: space-between;
@@ -96,6 +97,7 @@
   border-left: 1px solid var(--border);
 }
 .play-stage {
+  grid-area: stage;
   background: var(--canvas);
   min-height: 0;
   min-width: 0;
@@ -108,13 +110,12 @@
   border: 0;
 }
 .play-rail {
-  position: absolute;
-  grid-area: 2/1;
-  z-index: 2;
-  top: 0;
-  right: 20px;
-  width: min(350px, calc(100% - 40px));
+  box-sizing: border-box;
+  grid-area: rail;
+  align-self: start;
+  width: clamp(250px, 27vw, 350px);
   max-height: calc(100% - 20px);
+  margin-right: 20px;
   overflow: auto;
 }
 .play-rail section,
@@ -206,7 +207,7 @@
 }
 .play-settings {
   position: absolute;
-  grid-area: 2/1;
+  grid-area: stage;
   width: min(296px, 90vw);
   left: 184px;
   top: 0;
@@ -242,6 +243,16 @@
   right: 20px;
   background: var(--surface);
   padding: 4px;
+}
+@media (max-width: 800px) {
+  #motion-player[open] {
+    grid-template: "header" auto "stage" minmax(0, 1fr) "rail" auto / minmax(0, 1fr);
+  }
+  .play-rail {
+    width: auto;
+    max-height: min(38dvh, 280px);
+    margin: 0 8px 8px;
+  }
 }
 @media (max-width: 700px) {
   .play-header {

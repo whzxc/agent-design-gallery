@@ -201,18 +201,18 @@ function PlayableBoard() {
     ['project-picker-instance', 940, 464], ['switcher-open-instance', 1390, 337], ['switcher-empty-instance', 1840, 337],
   ] as const;
   const routes = [
-    { d: 'M1188 276 H1202 V196 H476 V403 H490', x: 839, y: 192, label: 'Click clear search' },
-    { d: 'M738 395 H752 V168 H26 V395 H40', x: 389, y: 164, label: 'Click picker · Press Esc' },
-    { d: 'M1188 292 H1210 V140 H18 V411 H40', x: 614, y: 136, label: 'Click picker · Press Esc' },
-    { d: 'M2088 403 H2102 V112 H1376 V403 H1390', x: 1739, y: 108, label: 'Click clear search' },
-    { d: 'M1638 395 H1652 V84 H926 V522 H940', x: 1289, y: 80, label: 'Click picker · Press Esc' },
-    { d: 'M2088 419 H2110 V56 H918 V538 H940', x: 1514, y: 52, label: 'Click picker · Press Esc' },
-    { d: 'M1638 411 H1660 V28 H10 V427 H40', x: 835, y: 24, label: 'Click atlas project' },
-    { d: 'M288 411 C389 411,389 419,490 419', x: 389, y: 405, label: 'Click picker · Press ↓ · Press ↑' },
-    { d: 'M738 411 C839 411,839 284,940 284', x: 839, y: 338, label: 'Type Nova' },
-    { d: 'M738 427 C839 427,839 554,940 554', x: 839, y: 481, label: 'Click live instance' },
-    { d: 'M1188 538 C1289 538,1289 419,1390 419', x: 1289, y: 469, label: 'Click picker · Press ↓ · Press ↑' },
-    { d: 'M1638 427 C1739 427,1739 411,1840 411', x: 1739, y: 409, label: 'Type Nova' },
+    { d: 'M1188 276 H1202 V196 H476 V403 H490', x: 839, y: 192, label: 'Clear project search' },
+    { d: 'M738 395 H752 V168 H26 V395 H40', x: 389, y: 164, label: 'Close project switcher' },
+    { d: 'M1188 292 H1210 V140 H18 V411 H40', x: 614, y: 136, label: 'Close project switcher' },
+    { d: 'M2088 403 H2102 V112 H1376 V403 H1390', x: 1739, y: 108, label: 'Clear project search' },
+    { d: 'M1638 395 H1652 V84 H926 V522 H940', x: 1289, y: 80, label: 'Close project switcher' },
+    { d: 'M2088 419 H2110 V56 H918 V538 H940', x: 1514, y: 52, label: 'Close project switcher' },
+    { d: 'M1638 411 H1660 V28 H10 V427 H40', x: 835, y: 24, label: 'Open Atlas' },
+    { d: 'M288 411 C389 411,389 419,490 419', x: 389, y: 405, label: 'Open project switcher' },
+    { d: 'M738 411 C839 411,839 284,940 284', x: 839, y: 338, label: 'Search for “Nova”' },
+    { d: 'M738 427 C839 427,839 554,940 554', x: 839, y: 481, label: 'Open live instance' },
+    { d: 'M1188 538 C1289 538,1289 419,1390 419', x: 1289, y: 469, label: 'Open project switcher' },
+    { d: 'M1638 427 C1739 427,1739 411,1840 411', x: 1739, y: 409, label: 'Search for “Nova”' },
   ];
   return <section class={sectionStyle}>
     <header class="flex items-center justify-between">
@@ -474,7 +474,7 @@ function FlowPlayer({ moment }: { moment: PlayerMoment }) {
           <PlayerButton icon="log-out" label="Exit to board" />
         </nav>
       </header>
-      <div aria-hidden={underway ? "true" : undefined} class="absolute left-[493px] top-[179px] p-6 leading-normal">
+      <div aria-hidden={underway ? "true" : undefined} class={`absolute top-[179px] p-6 leading-normal ${flowOpen ? 'left-[308px]' : 'left-[493px]'}`}>
         <Switcher current={terminal ? instances[0] : projects[0]} kind={terminal ? 'instance' : 'project'}
           open={!rest && !terminal} empty={instant} menuClass={underway ? 'opacity-[0.58]' : undefined} />
       </div>

@@ -63,7 +63,7 @@ function Widget() {
     pattern: {id: 'fade', targets: [{anchor: 'widget'}]},
   }] });
   write('design/motion-patterns.json', {version: 1, patterns: {
-    fade: { parameters: {spring: '--motion-spring-test'}, consumers: [
+    fade: { interrupt: 'retarget', reduced: 'static', parameters: {spring: '--motion-spring-test'}, consumers: [
       {file: 'widget.css', match: 'css:.widget'}, {file: 'widget.css', match: 'keyframes:appear'},
       {file: 'widget.tsx', match: 'motion:layout', within: 'Widget'},
       {file: 'widget.tsx', match: 'motion:AnimatePresence'},
@@ -74,8 +74,8 @@ function Widget() {
   const catalog = loadMotionPatterns(config), graph = readMotion(config);
   assert.deepEqual(graph.findings, []);
   const {edge} = graph.records[0];
-  assert.equal(edge.interrupt, 'finish');
-  assert.equal(edge.reduced, 'instant');
+  assert.equal(edge.interrupt, 'retarget');
+  assert.equal(edge.reduced, 'static');
   assert.equal(edge.phases[0][0].mode, 'enter');
   assert.equal(resolveMotionToken(parseTokens(tokens), 'dark', edge.duration, 'duration').value, 250);
   assert.equal(resolveMotionToken(parseTokens(tokens), 'dark', edge.easing, 'easing').value, springEasing(0));

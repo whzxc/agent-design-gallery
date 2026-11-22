@@ -198,7 +198,7 @@ Each edge supplies `phases` (possibly empty). Each declared phase and track targ
 
 Never guess between remaining candidates by text, position, DOM index, or a frame-local inspect ID. Fade ambiguous implicit candidates and expose their counts. An ambiguous explicit target invalidates that edge. Nested pairs measure in frame coordinates. Apply a child's residual transform after its parent's transform, or draw isolated, non-overlapping paint layers. A child inherits parent motion exactly once. A changed text run keeps a matched container's geometry and crossfades old and new text in place. Avoid glyph morphing, stretching text with the shell and announcing both copies to assistive technology. A zero-sized, clipped or non-invertible box falls back to an opacity transition with a limitation in edge detail.
 
-**Interruption, focus and coverage.** The required `interrupt:"finish"` policy settles immediately at the destination and dispatches the latest eligible input there once. During a transition, only destination hotspots participate in this policy. Exiting play always cancels. `reduced:"instant"` is explicit and required in v1. It skips duration, fades and geometry interpolation and commits the same destination and focus outcome. Switching reduced motion on during playback settles immediately.
+**Interruption, focus and coverage.** For an edge with handwritten phases, declare `interrupt:"finish"` and `reduced:"instant"`. The player settles immediately at the destination before dispatching the latest eligible input there once. During a transition, only destination hotspots participate in this policy. Exiting play always cancels. Reduced playback skips duration, fades and geometry interpolation and commits the same destination and focus outcome. Switching reduced motion on during playback settles immediately.
 
 `focus` is one of `{"target":Target}`, `"frame"`, `"preserve"` or `"restore-trigger"`. Apply at commit. Preserve resolves the previously focused identity in the destination. Restore uses the latest opening or switching trigger recorded on entry to the active layer, consuming that record on close. Edges that open or replace a layer declare `rememberTrigger:true`; nested openings push a record and replacements use `rememberTrigger:"replace"`. A missing historical target falls back to the exposed underlying frame root. An explicit focus target must resolve and accept focus (a heading may use `tabindex="-1"`). Playback owns history in memory.
 
@@ -329,8 +329,12 @@ The edge still owns its ID, endpoints, trigger and focus. If omitted,
 `direction` uses the pattern's action. Fade entry/exit and crossfade compile to
 opacity tracks. Discrete resize/reflow, slide and spring pop compile to
 matched geometry tracks with authored endpoints. Spring pop uses width and
-height to represent scale. The discrete player supports `finish` with
-`instant` reduction. Follow, live avoidance, stagger and ambient effects
+height to represent scale. Pattern-backed edges retain the runtime policy
+declared by the pattern. The discrete player finishes the current edge before
+running the next action for every interruption policy. In reduced motion it
+commits the destination immediately, including when that destination is the
+resting state for a `static` pattern. The inspector indicates when playback
+uses a different policy from the runtime. Follow, live avoidance, stagger and ambient effects
 belong to live specimens and runtime code. Existing handwritten phases
 continue to work.
 
@@ -414,7 +418,7 @@ When absent, derive the name from the trigger and the accessible name of its tar
 
 ### Board playback
 
-TSX specimens with outgoing edges offer a caption **Play** and a selected-frame Float shortcut. See [frame filters](boards.md#frame-filters) for discovery. Keep selection, scope, zoom, camera and invoking control for return. Open the player on the selected frame with the stage taking the available space. The Flow toggle reveals the committed frame, visited path, and outgoing actions. Group edges by authored label, or by destination when unlabeled. Put the action name first and give every gesture its own keyboard-accessible button. While a transition runs, identify the destination whose actions can interrupt it. Measure the flow members when playback opens to establish a fixed stage. Board specimens keep their existing atlas previews. When the current frame has no outgoing action, an End of flow marker appears beside Restart in the toolbar. Cross-source edges stay inside the player.
+TSX specimens with outgoing edges offer a caption **Play** and a selected-frame Float shortcut. See [frame filters](boards.md#frame-filters) for discovery. Keep selection, scope, zoom, camera and invoking control for return. Open the player on the selected frame with the stage taking the available space. The Flow toggle reveals the committed frame, visited path, and outgoing actions in a rail beside the stage, or below it on narrow screens. Use the authored action name on the map and in the player, falling back to the trigger text. Group player actions by authored label, or by destination when unlabeled. Put the action name first and give every gesture its own keyboard-accessible button. While a transition runs, identify the destination whose actions can interrupt it. Measure the flow members when playback opens to establish a fixed stage. Board specimens keep their existing atlas previews. When the current frame has no outgoing action, an End of flow marker appears beside Restart in the toolbar. Cross-source edges stay inside the player.
 
 The trusted viewer controls one live `sandbox="allow-same-origin"` frame without script permission. Use inert built HTML and its own theme stylesheet. Measure First, retain inert paint for exits, swap to Last in the same document, wait for fonts and image readiness, measure and animate. Isolate styles from the other endpoint when retaining paint. Suppress native link navigation, form submission and editing outside declared text-entry targets. Enable only plain-text entry for an input edge. Prevent child browsing contexts, network loads and navigation out of the built frame. The parent owns listeners, timeline, hit testing and focus. Ghosts are inert, hidden from accessibility and never receive input. Dispose of ghosts, listeners and animation handles on settle, cancel or exit. No camera work depends on player layout.
 

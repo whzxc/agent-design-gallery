@@ -106,7 +106,7 @@ See the [transition contract](design-toolkit.md#frame-transitions), [ownership](
 
 ## 8. Review and architecture
 
-- **Possible `retarget` interrupt mode.** When a switch interrupts a running edge, ARC immediately retargets to the newly requested destination. ADG v1 supports only `interrupt:"finish"`, which settles the current edge before dispatching the new input. Consider `retarget` for a later contract revision.
+- **Possible `retarget` interrupt mode.** When a switch interrupts a running edge, ARC immediately retargets to the newly requested destination. A motion pattern can declare the runtime's retarget policy today. The discrete player settles the current edge before dispatching the new input. Consider previewing live retarget behavior in a later revision.
 - **Implementation motion sampling (later).** Sample real timing via the consumer compare adapter's fixtures. List differences from the declared timeline for review. This adds no acceptance gate.
 - Architecture owners: from a code path to the diagrams whose sidecar owners match it, so a review can tell whether a
   change needs a diagram update.

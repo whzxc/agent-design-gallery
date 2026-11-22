@@ -136,12 +136,13 @@ export function prototypeFlows(edges, frames, relative) {
 }
 
 function triggerLabel({ trigger, label }) {
+  if (label) return label;
   const { on, key, value, target } = trigger;
   const name = typeof target === 'string' ? target.replace(/.*#/, '').replace(/[-_]/g, ' ') : '';
   const action = { click: 'Click', hover: 'Hover over', focus: 'Focus' }[on];
   if (on === 'input') return 'Type ' + (value || name);
   if (on === 'key') return 'Press ' + ({ Escape: 'Esc', ArrowUp: '↑', ArrowDown: '↓', ' ': 'Space' }[key] ?? key);
-  return name ? action + ' ' + name : label || action;
+  return name ? action + ' ' + name : action;
 }
 
 const cardWidth = 248, cardHeight = 230, rowGap = 24;

@@ -25,7 +25,10 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
   // Stretch the authored clock to make interruption observable under a busy test runner.
   await page.route('**/api/play?*',async route=>{
     const response=await route.fetch(), data=await response.json();
-    for(const edge of data.edges??[])edge.timings['/duration']=3000;
+    for(const edge of data.edges??[]) {
+      edge.timings['/duration']=3000;
+      if (edge.id === 'open-project-switcher') Object.assign(edge, { interrupt: 'retarget', reduced: 'static' });
+    }
     await route.fulfill({json:data});
   });
   await page.goto(url);
@@ -47,13 +50,15 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
   const anchor = await picker.boundingBox();
   await picker.click();
   await player.locator('[data-control=inspector]').click();
+  await player.getByText(/Runtime interruption: retarget.*finishes the current transition/).waitFor();
+  await player.getByText(/Runtime reduced motion: static.*shows the destination immediately/).waitFor();
   await player.getByRole('button',{name:'Pause transition',exact:true}).click();
   await seek.focus();await page.keyboard.press('End');
   assert.equal(await seek.inputValue(),'100');
   await current('project-picker → switcher-open');
   assert.deepEqual(await picker.boundingBox(), anchor);
   await player.locator('[data-control=flow]').click();
-  assert.deepEqual(await picker.boundingBox(), anchor);
+  const besideRail = await picker.boundingBox();
   assert.equal(await frame.locator('[data-adg-id="current-destination"]').evaluate(el=>el===el.ownerDocument.activeElement),false);
   await player.getByRole('button',{name:'Resume transition',exact:true}).click();await current('switcher-open');
   assert.ok(await frame.locator('[data-adg-id="current-destination"]').evaluate(el=>el===el.ownerDocument.activeElement));
@@ -69,12 +74,37 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
   assert.ok(await frame.locator('[data-adg-id="picker"]').evaluate(el=>el===el.ownerDocument.activeElement));
   await page.keyboard.press('ArrowLeft');await current('switcher-open');
   await frame.locator('[data-adg-frame=switcher-open]').waitFor();
-  assert.deepEqual(await picker.boundingBox(), anchor);
+  assert.deepEqual(await picker.boundingBox(), besideRail);
   await page.keyboard.press('ArrowRight');await current('project-picker');
   await page.keyboard.press('r');await current('project-picker');
   assert.equal(await player.locator('[data-control=path]').textContent(), 'project-picker');
   await player.getByRole('button',{name:'Exit to board',exact:true}).click();
   assert.deepEqual(await board(),before);assert.ok(await invoker.evaluate(el=>el===document.activeElement));
+});
+
+test('contract: the Flow rail leaves the specimen clickable at laptop and narrow widths', async t => {
+  const { page, url } = await viewer(t);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(url);
+  await page.getByRole('button', { name: 'Play from project-picker', exact: true }).click();
+  const player = page.getByRole('dialog', { name: 'Play transitions' });
+  const scene = player.frameLocator('iframe');
+  const picker = scene.locator('[data-adg-id=picker]');
+  await picker.waitFor();
+  await player.getByRole('button', { name: 'Flow', exact: true }).click();
+  const rail = player.getByRole('complementary', { name: 'Flow' });
+  const stage = player.locator('iframe');
+  for (const width of [1280, 760]) {
+    await page.setViewportSize({ width, height: 720 });
+    const specimen = await stage.boundingBox(), actions = await rail.boundingBox();
+    assert.ok(specimen.width > 0 && specimen.height > 0);
+    assert.ok(specimen.x + specimen.width <= actions.x || specimen.y + specimen.height <= actions.y);
+    await picker.click();
+    await rail.getByRole('heading', { name: 'switcher-open', exact: true }).waitFor();
+    await player.getByRole('button', { name: 'Restart', exact: true }).click();
+    await rail.getByRole('heading', { name: 'project-picker', exact: true }).waitFor();
+  }
 });
 
 test('contract: player entry and Escape restore focus one layer at a time', async t => {
@@ -293,6 +323,14 @@ test('contract: the player stage follows the board theme and Flow map focuses th
 test('contract: playable board routes and restores camera, grouped gestures dispatch individually, and text matches committed input only',async t=>{
   const {page,url}=await viewer(t);
   await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
+  await page.route('**/manifest?*', async route => {
+    const response = await route.fetch();
+    const data = await response.json();
+    for (const edge of data.motionEdges ?? []) {
+      if (edge.id === 'filter-instance-projects') delete edge.label;
+    }
+    await route.fulfill({ response, json: data });
+  });
   await page.goto(new URL('/view/layer/modules/asset/modules%2Fproject-switcher.tsx/frame/project-picker',url).href);
   await page.waitForFunction(() => window.__adg.ready && window.__adg.metadataComplete);
   const camera=()=>page.evaluate(()=>window.__adg.view);
@@ -304,9 +342,10 @@ test('contract: playable board routes and restores camera, grouped gestures disp
   await map.getByRole('heading', { name: 'project-picker-instance' }).waitFor();
   assert.match(page.url(), /[?&]view=playable/);
   assert.equal(await map.locator('.view-frame').count(), 6);
+  assert.match(await map.locator('.prototype-map').textContent(), /Search for “Nova”/);
   assert.match(await map.locator('.prototype-map').textContent(), /Type Nova/);
-  const returnLabels = map.locator('.prototype-trigger[aria-label^="switcher-"][aria-label*=" to project-picker · "]').filter({ hasText: 'Press Esc' });
-  assert.deepEqual(await returnLabels.allTextContents(), ['Click picker · Press Esc', 'Click picker · Press Esc']);
+  const returnLabels = map.locator('.prototype-trigger[aria-label^="switcher-"][aria-label*=" to project-picker · "]').filter({ hasText: 'Close project switcher' });
+  assert.deepEqual(await returnLabels.allTextContents(), ['Close project switcher', 'Close project switcher']);
   assert.equal(await map.locator('.prototype-trigger[aria-label*=" to project-picker-instance · "]').count(), 3);
   assert.equal(await map.locator('.prototype-trigger[aria-label^="switcher-open-instance to project-picker · "]').count(), 1);
   await page.getByRole('button', { name: 'All frames', exact: true }).click();
