@@ -1,14 +1,14 @@
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
-import { parse as parseJs } from '@babel/parser';
+import { parse as parseJs, parseExpression } from '@babel/parser';
 import { generate, parse as parseCss, walk } from 'css-tree';
 import { parseFragment } from 'parse5';
 import scss from 'postcss-scss';
 import { loadMotionPatterns, motionPatternFile } from './motion-patterns.mjs';
 import { readMotion } from './motion.mjs';
 import { relative } from './project.mjs';
-import { possibleTailwind, scanTailwind } from './motion-classes.mjs';
+import { bindClassNames, classContexts, possibleTailwind, scanTailwind } from './motion-classes.mjs';
 
 const extension = /\.(?:[cm]?[jt]sx?|css|scss|vue|html?)$/i;
 const excluded = new Set(['node_modules','vendor','dist','build','out','coverage','output','test','tests','__tests__']);
@@ -102,10 +102,11 @@ const callbackNode = init => init?.type === 'CallExpression' &&
   (keyName(init.callee) === 'useCallback' || member(init.callee) && property(init.callee) === 'useCallback')
   ? init.arguments[0] : init;
 
-function scanJs(source, lang, record, problem, firstLine = 1) {
+function scanJs(source, lang, record, problem, firstLine = 1, classExpressions = []) {
   const ts = /[cm]?tsx?$/.test(lang);
   const plugins = [...(ts ? ['typescript'] : []), ...(!ts || lang === 'tsx' ? ['jsx'] : [])], bindings = new Map();
   const { program, errors } = parseJs(source, { sourceType: 'unambiguous', plugins, errorRecovery: true, startLine: firstLine });
+  const classes = classContexts(program.body);
   for (const error of errors) problem(error.message, error.loc?.line);
   for (const node of program.body) if (node.type === 'ImportDeclaration' && importsFromMotion.test(node.source.value)) {
     for (const specifier of node.specifiers) bindings.set(specifier.local.name,
@@ -122,31 +123,39 @@ function scanJs(source, lang, record, problem, firstLine = 1) {
     if (['motion','m','Reorder'].includes(binding(node))) return true;
     return node?.type === 'JSXMemberExpression' && motionTag(node.object);
   };
-  const frameCalls = [];
-  function visit(node, scopes = [], inMotion = false, inStyle = false, lexical = null, active = null) {
+  const frameCalls = [], classUses = [], classCalls = [], literals = [];
+  let programScope;
+  function visit(node, scopes = [], inMotion = false, inStyle = false, lexical = null, active = null, parent = null) {
     if (typeof node?.type !== 'string') return;
     const scope = /^(?:FunctionDeclaration|ClassDeclaration|VariableDeclarator|ObjectMethod|ClassMethod)$/.test(node.type)
       ? keyName(node.id ?? node.key) : null;
     if (typeof scope === 'string') scopes = [...scopes, scope];
     const { start: { line } } = node.loc;
     const add = match => record(match, line, scopes);
-    if (node.type === 'FunctionDeclaration' && node.id) lexical.names.set(node.id.name, node);
+    if (node.type === 'FunctionDeclaration' && node.id) {
+      lexical.names.set(node.id.name, node);
+      bindClassNames(lexical, node.id);
+    }
+    if (node.type === 'VariableDeclarator') bindClassNames(lexical, node.id, parent.kind === 'const' ? node.init : null);
     if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier') {
       const callback = callbackNode(node.init);
       lexical.names.set(node.id.name, functionNode.test(callback?.type) ? callback : null);
     }
     if (node.type === 'BlockStatement' || node.type === 'Program' || functionNode.test(node.type)) {
-      lexical = { parent: lexical, names: new Map() };
+      lexical = { parent: lexical, names: new Map(), constants: new Map() };
+      if (node.type === 'Program') programScope = lexical;
       if (functionNode.test(node.type)) {
         active = node;
         if (node.id) lexical.names.set(node.id.name, node);
         for (const param of node.params) if (param.type === 'Identifier') lexical.names.set(param.name, null);
+        for (const param of node.params) bindClassNames(lexical, param);
       }
     }
     if (node.type === 'JSXOpeningElement') {
       if (binding(node.name) === 'AnimatePresence') add('motion:AnimatePresence');
       for (const attr of node.attributes) {
         const name = keyName(attr.name);
+        if (name === 'class' || name === 'className') classUses.push({node:attr.value, lexical});
         if (motionTag(node.name) && jsxMotion.has(name) && attr.value?.expression?.value !== false)
           record('motion:' + name, attr.loc.start.line, scopes);
         if (typeof name === 'string' && name.startsWith('data-')) record('attribute:' + name, attr.loc.start.line, scopes, false);
@@ -156,6 +165,7 @@ function scanJs(source, lang, record, problem, firstLine = 1) {
       inMotion ||= motionTag(node.name);
     }
     if (node.type === 'CallExpression' || node.type === 'OptionalCallExpression') {
+      classCalls.push({node, lexical});
       const name = binding(node.callee);
       if (motionExports.has(name) && name !== 'AnimatePresence') add('motion:' + name);
       if (member(node.callee)) {
@@ -169,36 +179,44 @@ function scanJs(source, lang, record, problem, firstLine = 1) {
     }
     if (node.type === 'ObjectProperty') {
       const name = keyName(node.key), value = node.value;
+      if (name === 'class' || name === 'className') classUses.push({node:value, lexical});
       if (name === 'type' && value?.value === 'spring') record('motion:spring', line, scopes, inMotion || (bindings.size > 0 && scopes.some(name => /spring|transition/i.test(name))));
       if (typeof name === 'string' && cssMotion.test(name.replace(/[A-Z]/g, letter => '-' + letter.toLowerCase())) &&
           (typeof value?.value === 'string' ? !none.test(value.value) : inStyle || value?.type === 'TemplateLiteral'))
         add('style:' + name);
     }
-    if (node.type === 'StringLiteral')
-      scanTailwind([{ text: node.value, line }], record, scopes);
+    if (node.type === 'StringLiteral') literals.push({node, scopes, parts:[{text:node.value, line}]});
     if (node.type === 'TemplateLiteral') {
       let template = node.quasis[0].value.raw;
       for (const [index, part] of node.quasis.slice(1).entries())
         template += 'var(--dynamic)' + '\n'.repeat(part.loc.start.line - node.quasis[index].loc.end.line) + part.value.raw;
-      scanTailwind(node.quasis.map(part => ({
+      const hasClasses = /<[a-z][^>]*\bclass\s*=/i.test(template);
+      if (!hasClasses) literals.push({node, scopes, parts:node.quasis.map(part => ({
         text: part.value.cooked ?? part.value.raw, line: part.loc.start.line,
-      })), record, scopes);
-      if (/<style\b/i.test(template)) {
+      }))});
+      if (hasClasses || /<style\b/i.test(template)) {
         scanMarkup(template, false, (match, at, within = [], required, parameters) =>
           record(match, line + at - 1, [...scopes, ...within], required, parameters),
           (message, at) => problem(message, at ? line + at - 1 : line),
-          { interpolated: node.expressions.length > 0, scanClasses: false });
+          { interpolated: node.expressions.length > 0 });
       } else if (/@(?:-webkit-)?keyframes\s|\b(?:animation|transition)\s*[-:]/i.test(template) && template.includes('{'))
         scanCss(template, record, problem, line, undefined, scopes);
     }
     inStyle ||= node.type === 'JSXAttribute' && keyName(node.name) === 'style';
     for (const [key, child] of Object.entries(node)) {
       if (['loc','comments','tokens','errors','leadingComments','trailingComments','innerComments'].includes(key)) continue;
-      if (Array.isArray(child)) child.forEach(item => visit(item, scopes, inMotion, inStyle, lexical, active));
-      else visit(child, scopes, inMotion, inStyle, lexical, active);
+      if (Array.isArray(child)) child.forEach(item => visit(item, scopes, inMotion, inStyle, lexical, active, node));
+      else visit(child, scopes, inMotion, inStyle, lexical, active, node);
     }
   }
   visit(program);
+  for (const node of classExpressions) {
+    classUses.push({node, lexical:programScope});
+    visit(node, [], false, false, programScope);
+  }
+  for (const {node, lexical} of classUses) classes.mark(node, lexical);
+  for (const {node, lexical} of classCalls) if (classes.helper(node.callee, lexical)) classes.mark(node, lexical);
+  for (const {node, scopes, parts} of literals) scanTailwind(parts, record, scopes, classes.has(node));
   for (const call of frameCalls) {
     for (let scope = call.lexical; scope; scope = scope.parent) {
       if (!scope.names.has(call.name)) continue;
@@ -211,8 +229,9 @@ function scanJs(source, lang, record, problem, firstLine = 1) {
     if (loops.has(callback)) record('web:requestAnimationFrame', line, scopes);
 }
 
-function scanMarkup(source, vue, record, problem, { interpolated = false, scanClasses = true } = {}) {
+function scanMarkup(source, vue, record, problem, { interpolated = false } = {}) {
   const tree = parseFragment(source, { sourceCodeLocationInfo: true });
+  const scripts = [], classExpressions = [];
   function visit(node) {
     const tag = node.tagName;
     const at = node.sourceCodeLocation;
@@ -243,8 +262,9 @@ function scanMarkup(source, vue, record, problem, { interpolated = false, scanCl
         else problem('Unsupported style syntax: ' + (lang ?? type) + '.', at.startLine);
       } else if (lang && !/^(?:[cm]?[jt]sx?)$/.test(lang)) {
         problem('Unsupported script syntax: ' + lang + '.', at.startLine);
-      } else if (possibleScript(body) && (!type || /^(?:module|(?:text|application)\/(?:java|ecma)script)$/.test(type))) {
-        scanJs(body, lang ?? 'js', record, problem, firstLine);
+      } else if (!type || /^(?:module|(?:text|application)\/(?:java|ecma)script)$/.test(type)) {
+        if (vue) scripts.push({body, lang:lang ?? 'js', firstLine, setup:attr('setup') !== undefined});
+        else if (possibleScript(body)) scanJs(body, lang ?? 'js', record, problem, firstLine);
       }
     }
     const inline = attr('style');
@@ -253,15 +273,23 @@ function scanMarkup(source, vue, record, problem, { interpolated = false, scanCl
     for (const { name, value } of node.attrs ?? []) {
       const line = at?.attrs?.[name]?.startLine ?? at?.startLine;
       if (line === undefined) continue;
-      if (name === 'class' && scanClasses) scanTailwind([{ text: value, line }], record);
-      if (vue && (name === ':class' || name === 'v-bind:class') && possibleScript(value)) {
-        try { scanJs('(' + value + ')', 'ts', record, problem, line); }
+      if (name === 'class') {
+        const text = interpolated ? value.replaceAll(/\S*var\(--dynamic\)\S*/g, '') : value;
+        scanTailwind([{text, line}], record, [], true);
+      }
+      if (vue && (name === ':class' || name === 'v-bind:class') && value.trim()) {
+        try { classExpressions.push(parseExpression(value, {plugins:['typescript'], startLine:line})); }
         catch (error) { problem(error.message, error.loc?.line ?? line); }
       }
     }
     for (const child of node.content?.childNodes ?? node.childNodes ?? []) visit(child);
   }
   visit(tree);
+  if (!scripts.length && classExpressions.length) scanJs('', 'ts', record, problem, 1, classExpressions);
+  const bindings = scripts.find(script => script.setup) ?? scripts[0];
+  for (const script of scripts)
+    if (possibleScript(script.body) || script === bindings && classExpressions.length)
+      scanJs(script.body, script.lang, record, problem, script.firstLine, script === bindings ? classExpressions : []);
 }
 
 export function scanMotion(config, catalog = loadMotionPatterns(config), graph = readMotion(config), { mappedOnly = false } = {}) {
@@ -270,7 +298,7 @@ export function scanMotion(config, catalog = loadMotionPatterns(config), graph =
   const issues = [], ignored = [];
   const issue = (code, source, message, line = null) => issues.push({ code, source, message, line, column: null });
   const mappings = new Map();
-  const exclusions = new Map();
+  const exclusions = new Map(), matchedExclusions = new Set(), unscanned = new Set();
   for (const ref of catalog.ignore ?? []) {
     if (!exclusions.has(ref.file)) exclusions.set(ref.file, []);
     exclusions.get(ref.file).push(ref);
@@ -301,6 +329,7 @@ export function scanMotion(config, catalog = loadMotionPatterns(config), graph =
     // cannot be opened as that name on Windows.
     if (path.sep === '\\' && name.includes('\\')) {
       if (!mappedOnly) issue('MOTION_SCAN_FAILED', name, 'Git source path contains a literal backslash.');
+      unscanned.add(name);
       continue;
     }
     const full = path.join(root, name);
@@ -312,6 +341,7 @@ export function scanMotion(config, catalog = loadMotionPatterns(config), graph =
     let failed = false;
     const problem = (message, line = null) => {
       if (!failed && !mappedOnly) issue('MOTION_SCAN_FAILED', name, 'Could not fully scan source: ' + message.split('\n')[0], line);
+      unscanned.add(name);
       failed = true;
     };
     try {
@@ -334,8 +364,10 @@ export function scanMotion(config, catalog = loadMotionPatterns(config), graph =
       const details = parameters?.length ? { parameters } : {};
       const matches = ref => ref.match === match && (!ref.within || within.includes(ref.within));
       const hits = refs.filter(matches);
+      const skipped = exclusions.get(name)?.filter(matches) ?? [];
+      for (const exclusion of skipped) matchedExclusions.add(exclusion);
       if (!hits.length && required) {
-        const exclusion = exclusions.get(name)?.find(matches);
+        const [exclusion] = skipped;
         if (exclusion) {
           ignored.push({ source: name, line, match, ...details, ...(exclusion.within && { within: exclusion.within }), reason: exclusion.reason });
           continue;
@@ -357,7 +389,12 @@ export function scanMotion(config, catalog = loadMotionPatterns(config), graph =
     unused++;
     issue('MOTION_UNUSED', declaration, 'Pattern ' + id + ' has no consumers.');
   }
-  return { consumers, issues, animations, unmapped, unused, ignored };
+  const staleIgnores = mappedOnly ? [] : (catalog.ignore ?? []).filter(ref =>
+    !matchedExclusions.has(ref) && !unscanned.has(ref.file));
+  for (const {file, match, within} of staleIgnores)
+    issue('MOTION_IGNORE_STALE', declaration, 'Ignore no longer matches a site: ' + file + ' ' + match +
+      (within ? ' within ' + within : '') + '.');
+  return { consumers, issues, animations, unmapped, unused, ignored, staleIgnores };
 }
 
 export function motionCodeExcerpt(config, catalog, source, line) {

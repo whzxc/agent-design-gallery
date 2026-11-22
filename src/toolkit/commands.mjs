@@ -179,10 +179,11 @@ export async function check(config, args = [], options = {}, log = console.log, 
         animations: inventory.animations, unmapped: inventory.unmapped, unused: inventory.unused,
         unscannedFiles: inventory.issues.filter(issue => issue.code === 'MOTION_SCAN_FAILED').length,
         ignoredSites: inventory.ignored.length,
+        staleIgnores: inventory.staleIgnores.length,
         findings: inventory.issues.length, omitted: inventory.issues.length - issues.length,
       };
       for (const { source, ...issue } of issues) {
-        if (config.check?.strictMotion) add(issue, path.join(config.root, source));
+        if (config.check?.strictMotion && issue.code !== 'MOTION_IGNORE_STALE') add(issue, path.join(config.root, source));
         else {
           const message = source + (issue.line ? ':' + issue.line : '') + ': ' + issue.message;
           warnings.push({ code: issue.code, message, next: [] });
@@ -198,7 +199,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
         data.complete = true;
         const message = 'Motion inventory: ' + inventory.animations + ' animation sites, ' + inventory.unmapped +
           ' unmapped, ' + inventory.unused + ' unused patterns, ' + data.motionPatterns.unscannedFiles + ' unscanned files, ' +
-          data.motionPatterns.ignoredSites + ' ignored sites.';
+          data.motionPatterns.ignoredSites + ' ignored sites, ' + inventory.staleIgnores.length + ' stale ignores.';
         log(message);
         if (data.findings.length) throw new CliError('CHECK_FAILED', message, { data, warnings, humanReported: true });
         return { data, warnings };

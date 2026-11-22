@@ -6,22 +6,7 @@
     {"file": "public/motion-specimens.js", "match": "web:animate", "within": "follow", "reason": "Runs the interactive Follow specimen from its catalog parameters."},
     {"file": "public/motion-specimens.js", "match": "web:animate", "within": "installMotionSpecimens", "reason": "Demonstrates sibling insertion within the Avoid Reflow specimen."},
     {"file": "tooling/benchmark.mjs", "match": "web:requestAnimationFrame", "reason": "Samples frame timing in a performance benchmark."},
-    {"file": "tooling/perf-recent.mjs", "match": "web:requestAnimationFrame", "within": "clock", "reason": "Samples readiness and layout timing in a performance benchmark."},
-    {"file": "adg.config.mjs", "match": "tailwind:transition", "within": "readyPlayback", "reason": "Names player status text in the comparison fixture."},
-    {"file": "fixtures/review-motion.mjs", "match": "tailwind:transition", "within": "prepareMotionCompare", "reason": "Names the Git fixture change."},
-    {"file": "design/surfaces/canvas.tsx", "match": "tailwind:transition", "within": "TransitionInspector", "reason": "Labels the controls and status of the inspector specimen."},
-    {"file": "public/player.js", "match": "tailwind:transition", "within": "openPlayer", "reason": "Labels prototype controls and playback status."},
-    {"file": "src/cli.mjs", "match": "tailwind:transition", "reason": "Declares and validates the transition query option."},
-    {"file": "src/toolkit/arch-overlay.mjs", "match": "tailwind:transition", "within": "edges", "reason": "Names an architecture graph edge kind."},
-    {"file": "src/toolkit/implementation-map.mjs", "match": "tailwind:transition", "reason": "Reads and validates the implementation mapping field."},
-    {"file": "src/toolkit/motion-css.mjs", "match": "tailwind:transition", "within": "check", "reason": "Matches CSS declaration names during motion linting."},
-    {"file": "src/toolkit/motion-css.mjs", "match": "tailwind:transition-property", "within": "check", "reason": "Matches the CSS property name during motion linting."},
-    {"file": "src/toolkit/motion-inventory.mjs", "match": "tailwind:transition", "within": "component", "reason": "Matches the Vue component tag name."},
-    {"file": "src/toolkit/motion-patterns.mjs", "match": "tailwind:transition", "reason": "Names the motion pattern schema kind."},
-    {"file": "src/toolkit/motion-queries.mjs", "match": "tailwind:transition", "within": "transitionQuery", "reason": "Names and validates the transition query mode."},
-    {"file": "src/toolkit/motion.mjs", "match": "tailwind:transition", "within": "readMotion", "reason": "Describes a duplicate edge ID in a diagnostic."},
-    {"file": "src/toolkit/review-motion.mjs", "match": "tailwind:transition", "within": "revision", "reason": "Describes an invalid review edge in a diagnostic."},
-    {"file": "src/toolkit/review-sheet.mjs", "match": "tailwind:transition", "reason": "Labels transition cards in generated review text."}
+    {"file": "tooling/perf-recent.mjs", "match": "web:requestAnimationFrame", "within": "clock", "reason": "Samples readiness and layout timing in a performance benchmark."}
   ],
   "patterns": {
     "busy-spinner": {

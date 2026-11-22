@@ -360,10 +360,12 @@ components and inline scripts. A named callback that schedules itself through
 `requestAnimationFrame` contributes its initial and recurring scheduling
 sites. One-shot scheduling is outside that rule. SCSS selectors, declarations
 and keyframes are read as authored, without evaluating Sass.
-The Tailwind pass extracts complete motion candidates from each authored
-string literal, the static parts of each template literal, and markup class
-attributes. Class helpers, variant maps and literal branches follow the
-same rule. Each literal or template has its own locator. Keep timing
+The Tailwind pass extracts complete motion candidates from class attributes
+and `cn`, `clsx`, `cva`, `tv` and `twMerge` arguments. It follows local
+constants, array and object values, and literal branches in those positions.
+Other authored strings qualify when they read as class lists with at least
+two class-like tokens, including a motion utility. Each literal or template
+has its own locator. Keep timing
 utilities in the same literal or template to include them in that site's
 parameters. Coverage JSON lists timing parameters for each unmapped group.
 Runtime values and prop forwarding require no evaluation. When a candidate
@@ -388,7 +390,9 @@ top-level `ignore` array in `motion-patterns.json`:
 Use the same locator fields as a code consumer and supply a nonempty reason.
 A mapped site remains a pattern consumer. Exclusions apply to observed sites,
 so they cannot clear an unscanned file. Coverage JSON records ignored locations
-and their reasons.
+and their reasons. A completed scan reports unmatched exclusions as
+`staleIgnores` in coverage and as `MOTION_IGNORE_STALE` warnings in
+`adg check`. Unscanned files defer this determination.
 
 Mappings are checked against observed locations. Explicitly declared patterns
 with zero consumers produce a finding. The shared built-ins are available even

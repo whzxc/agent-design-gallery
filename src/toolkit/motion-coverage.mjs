@@ -27,6 +27,8 @@ function report(data, summary, log) {
       row(source + ':' + locations + more + ' ' + match + (within ? ' within ' + within : ''));
     }
   }
+  for (const {file, match, within} of data.staleIgnores)
+    row('Stale ignore: ' + file + ' ' + match + (within ? ' within ' + within : ''));
   if (omitted || data.unmapped.some(({groups}) => groups.some(({lines}) => lines.length > 16)))
     log((omitted ? omitted + ' more groups. ' : '') + 'Use --json for all locations.');
 }
@@ -87,13 +89,15 @@ export function motionCoverage(config, log) {
   const ignored = inventory.ignored.filter(site => implementation(site.source));
   const data = {
     summary: { unmappedSites, fallbackRoles: fallbackRoles.length, unlabeledEdges: unlabeledEdges.length,
-      incompleteFlows: incompleteFlows.length, unscannedFiles: unscanned.length, ignoredSites: ignored.length },
+      incompleteFlows: incompleteFlows.length, unscannedFiles: unscanned.length, ignoredSites: ignored.length,
+      staleIgnores: inventory.staleIgnores.length },
     unmapped: [...files].map(([source, groups]) => ({ source, groups: [...groups.values()] })),
-    fallbackRoles, unlabeledEdges, incompleteFlows, unscanned, ignored,
+    fallbackRoles, unlabeledEdges, incompleteFlows, unscanned, ignored, staleIgnores: inventory.staleIgnores,
   };
   const summary = 'Motion coverage: ' + unmappedSites + ' unmapped implementation sites, ' + fallbackRoles.length +
     ' default roles, ' + unlabeledEdges.length + ' unlabeled edges, ' + incompleteFlows.length + ' incomplete flows, ' +
-    unscanned.length + ' unscanned files, ' + ignored.length + ' ignored sites.';
+    unscanned.length + ' unscanned files, ' + ignored.length + ' ignored sites, ' +
+    inventory.staleIgnores.length + ' stale ignores.';
   report(data, summary, log);
   if (unscanned.length) throw new CliError('SOURCE_BUILD_FAILED', summary, { data, humanReported: true });
   if (unmappedSites || fallbackRoles.length || unlabeledEdges.length || incompleteFlows.length) {

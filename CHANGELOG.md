@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.12
+
+- Disambiguate single Tailwind utilities by class context and report stale motion inventory ignores.
+
 ## 0.17.11
 
 - Load project art stylesheets and their embedded fonts in the Playable sandbox and offline transition playback.

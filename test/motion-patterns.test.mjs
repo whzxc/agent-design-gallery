@@ -213,7 +213,7 @@ test('contract: coverage groups exact locations, audits used defaults and flow d
   const first = coverage('--json');
   assert.equal(first.status, 1);
   assert.equal(first.error.code, 'MOTION_COVERAGE_FAILED');
-  assert.deepEqual(first.data.summary, {unmappedSites: 2, fallbackRoles: 2, unlabeledEdges: 1, incompleteFlows: 1, unscannedFiles: 0, ignoredSites: 0});
+  assert.deepEqual(first.data.summary, {unmappedSites: 2, fallbackRoles: 2, unlabeledEdges: 1, incompleteFlows: 1, unscannedFiles: 0, ignoredSites: 0, staleIgnores: 0});
   assert.deepEqual(first.data.unmapped, [{source: 'widget.css', groups: [{match: 'css:.widget', lines: [1, 2]}]}]);
   assert.deepEqual(first.data.fallbackRoles.map(row => row.role), ['duration-base', 'easing-enter']);
   assert.equal(first.data.unlabeledEdges[0].id, edge.id);
@@ -237,7 +237,7 @@ test('contract: coverage groups exact locations, audits used defaults and flow d
   const clean = coverage('--json');
   assert.equal(clean.status, 0);
   assert.equal(clean.ok, true);
-  assert.deepEqual(clean.data.summary, {unmappedSites: 0, fallbackRoles: 0, unlabeledEdges: 0, incompleteFlows: 0, unscannedFiles: 0, ignoredSites: 0});
+  assert.deepEqual(clean.data.summary, {unmappedSites: 0, fallbackRoles: 0, unlabeledEdges: 0, incompleteFlows: 0, unscannedFiles: 0, ignoredSites: 0, staleIgnores: 0});
   assert.equal(coverage('--css', '--json').status, 2);
 
   write('design/motion-patterns.json', {version: 2});
@@ -345,7 +345,8 @@ test('contract: authored Tailwind literals share locators, parameters and exclus
   write('opaque.tsx', 'export const Row = () => <div className={`timeline-fold ${className} ${small ? "btn-sm" : ""}`}/>;');
   write('variants.ts', "export const variants = { open: 'animate-in fade-in', closed: 'hidden' };");
   write('index.html', '<div class="animate-[sweep_1s_linear] duration-300"></div>');
-  write('Widget.vue', '<template><div :class="[active && \'transition-transform delay-75\']"/></template>');
+  write('Widget.vue', "<template><div :class=\"[transitionStyle, active && 'animate-spin']\"/></template>\n" +
+    "<script setup>const transitionStyle = 'transition-transform delay-75';</script>");
   const config = {root, design};
   const transition = 'tailwind:hover:transition-[color,box-shadow]';
   write('design/motion-patterns.json', {version: 1, ignore: [
@@ -382,6 +383,50 @@ test('contract: authored Tailwind literals share locators, parameters and exclus
   assert.ok(byFile['widget.tsx'].every(group => group.lines.every(line => line < 7) || group.within === 'Widget'));
   assert.deepEqual(byFile['variants.ts'], [{match:'tailwind:animate-in fade-in', within:'variants', lines:[1]}]);
   assert.equal(byFile['opaque.tsx'], undefined);
-  assert.deepEqual(byFile['Widget.vue'], [{match:'tailwind:transition-transform', lines:[1], parameters:['delay-75']}]);
+  assert.deepEqual(byFile['Widget.vue'], [
+    {match:'tailwind:transition-transform', within:'transitionStyle', lines:[2], parameters:['delay-75']},
+    {match:'tailwind:animate-spin', lines:[1]},
+  ]);
   assert.deepEqual(byFile['index.html'], [{match:'tailwind:animate-[sweep_1s_linear]', lines:[1], parameters:['duration-300']}]);
+});
+
+test('contract: class context disambiguates lone utilities and coverage exposes only proven stale ignores', t => {
+  const { root, write } = fixture(t);
+  write('adg.config.mjs', 'export default { check: { strictMotion: true } };');
+  write('tooling.ts', [
+    "function cssIssues(property) { return property === 'transition' || property === 'transition-duration'; }",
+    "const result = report('Local transition persistence unavailable');",
+    "const option = syntaxTree['transition'];",
+    "const menu = { kind: 'zoom-in', alternate: 'zoom-out' };",
+    "type Command = 'zoom-in' | 'zoom-out';",
+  ].join('\n'));
+  write('classes.tsx', [
+    "import { twMerge as merge } from 'tailwind-merge';",
+    "import { tv } from 'tailwind-variants';",
+    "const combine = merge;",
+    "const singleton = 'transition';",
+    "const classes = { busy: 'animate-spin', rest: 'block' };",
+    "const variant = tv({base: 'transition-colors', variants: {enter: {yes: 'zoom-in'}}});",
+    "function Trigger({className}) { return <button className={combine([singleton, classes[state], className])}/>; }",
+    "function Shadow({singleton}) { const isolated = 'animate-bounce'; return <div className={singleton}/>; }",
+  ].join('\n'));
+  write('unscanned.scss', '.broken { animation: appear');
+  const stale = [
+    {file:'tooling.ts', match:'tailwind:transition', within:'cssIssues', reason:'CSS property lookup.'},
+    {file:'tooling.ts', match:'tailwind:zoom-in', reason:'Command identifier.'},
+  ];
+  const mapped = {file:'classes.tsx', match:'tailwind:transition', within:'singleton'};
+  write('design/motion-patterns.json', {version:1, ignore:[
+    ...stale, {...mapped, reason:'Former exclusion.'},
+    {file:'unscanned.scss', match:'css:.broken', reason:'Cannot evaluate this locator while parsing fails.'},
+  ], patterns:{fade:{consumers:[mapped]}}});
+  const result = spawnSync(process.execPath, [cli, 'motion', '--coverage', '--json'], {cwd:root, encoding:'utf8'});
+  assert.equal(result.status, 2);
+  const {data} = JSON.parse(result.stdout);
+  assert.deepEqual(data.staleIgnores, stale);
+  assert.equal(data.summary.staleIgnores, 2);
+  assert.equal(data.summary.unscannedFiles, 1);
+  assert.deepEqual(data.unmapped.map(({source, groups}) => [source, groups.map(({match, lines}) => [match, lines])]), [
+    ['classes.tsx', [['tailwind:animate-spin',[5]], ['tailwind:transition-colors',[6]], ['tailwind:zoom-in',[6]]]],
+  ]);
 });
