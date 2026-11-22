@@ -168,7 +168,9 @@ export function scanMotion(config, catalog = loadMotionPatterns(config), graph =
         if (required || hits.length) animations++;
         if (!hits.length && required) {
           unmapped++;
-          if (!mappedOnly) issue('MOTION_UNMAPPED', name, 'Map ' + match + (within.length ? ' within ' + within.at(-1) : '') + ' to a motion pattern.', line);
+          if (!mappedOnly) issues.push({ code: 'MOTION_UNMAPPED', source: name, line, column: null,
+            message: 'Map ' + match + (within.length ? ' within ' + within.at(-1) : '') + ' to a motion pattern.',
+            match, ...(within.length && { within: within.at(-1) }) });
         }
         for (const ref of hits) ref.hits++;
         for (const id of new Set(hits.map(ref => ref.id))) consumers.get(id).push({ type: 'code', source: name, line, match });

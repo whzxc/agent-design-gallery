@@ -347,6 +347,14 @@ The consumer keeps:
 
 Choose local filenames that fit the project. Link this toolkit standard instead of copying its generic rules into every consumer's governance documents.
 
+## Adopting motion
+
+1. **Inventory (design only).** Run `adg motion --coverage` from the consumer root. Map project tokens to motion roles, declare project patterns and variants in `design/motion-patterns.json`, and map the implementation sites to them. Keep unused built-ins grouped on the Tokens board. Name the adopted patterns in the project's own vocabulary so the library reads like the product. This round is done when coverage reports zero unmapped implementation sites and zero ADG defaults for roles the project uses.
+2. **One pilot flow.** Pick a frequent, contained interaction with a stable anchor. Compare its frames against the implementation and sync any design-source drift before authoring the flow. Keep the flow within one screen composition. Author the states and edges, name each edge for the action the user takes, and declare the flow's anchor and ends. Give each state a next action, a reset path, or a declared end. Bind the current edges to their implementation owners and enable `check.strictMotion`. This round is done when `adg check` is clean and the flow plays end to end on the Playable board.
+3. **Runtime alignment.** List the implementation gaps exposed by the flow and bring them to the project owner. This round is done when the owner has reviewed the gaps and any approved runtime changes have been implemented and verified. Begin runtime changes only after the owner approves them.
+
+See the [motion patterns, transitions and flow syntax](design-toolkit.md#frame-transitions).
+
 ## Architecture assets
 
 Keep one Mermaid diagram per `.mmd` file in the configured project-root `arch`

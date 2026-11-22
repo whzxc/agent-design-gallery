@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.0
+
+- Add `adg motion --coverage` to find unmapped implementation motion, ADG role defaults in use, unlabeled edges, and incomplete flow declarations during adoption.
+
 ## 0.16.0
 
 - Add declarative frame transitions (`<stem>.motion.json`) with check/inspect/owner/impact CLI support (`--transitions`), interactive board playback and prototype stage, and offline transition playback and filmstrips in `adg review`.

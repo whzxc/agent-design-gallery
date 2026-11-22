@@ -598,6 +598,7 @@ Apply these composition rules when authoring a frame or evaluating a layout deci
 ## Commands
 
 ```sh
+adg motion --coverage [--json]
 adg [open] [directory] [--port=<n>] [--no-open] [--state-dir=<path>]
 adg init
 adg check [source...] [--read-only]
@@ -616,6 +617,7 @@ A first argument that names a command runs it; any other argument is a directory
 
 - `init` creates `adg.config.mjs` requiring `>=0.5.0`, required tokens, production source directories, fixtures/art, editor configuration and ignore entries. A fresh library gets `components/example.tsx`, `modules/example.tsx`, `surfaces/example.tsx` and `fixtures/example.ts`: one runnable downward composition with frame name `default` in each source. Explicit source names are used in place of the defaults. Existing source libraries or an existing example fixture receive no demo assets. Authored files are preserved, generated declarations are refreshed, missing ignore entries are appended, and created/skipped files are listed. It creates no study or empty studies directory.
 - `check` checks import direction and the named sources' frames, or all sources. `check.strictLayers` and `check.lifecycle` opt in to same-layer and implementation lifecycle findings; `adg init` enables both. `--read-only` skips generated type declarations and HTML build files; it runs the same import and both-theme frame checks without changing consumer files.
+- `motion --coverage` runs a read-only adoption audit from the project root without rendering frames. It uses the [static motion inventory](#motion-tokens-and-patterns) to group unmapped implementation sites by file and match, and reports default roles used by active patterns or edges, unlabeled edges, and connected flows missing an anchor or declared ends. Declare an empty ends array for a flow where every state has an outgoing edge. Text displays up to 32 groups and 16 lines per match. Use `--json` for every location. Exit 0 means clean, 1 means findings, and 2 means invalid configuration or an incomplete scan. See [Adopting motion](asset-rules.md#adopting-motion).
 - `render` writes `output/design/<path>/<frame>-light.png` and `-dark.png` at the given scale, for every frame or the one named.
 - `compare` compares one frame; its flags override the frame's `fixture` and `capture`.
 - `owner --part` reverses a design part or whole source to active implementation bindings, including resolved selector files and regions.
@@ -625,7 +627,7 @@ A first argument that names a command runs it; any other argument is a directory
 
 Each design capture in `render` and `compare` uses a fresh page and browser context, including between themes, so PNG bytes are independent of frame order. `render` reuses one Chromium process for the batch, runs up to four captures concurrently within the available CPU parallelism, and closes each page after capture. Console output follows source, frame and theme order.
 
-Source arguments are paths under the design directory, with or without `design/` and `.tsx`. Exit codes are 0 for success, 1 when `check`, `compare` or `diff` found problems, and 2 for a usage, configuration or environment error, with one line on stderr naming the fix.
+Source arguments are paths under the design directory, with or without `design/` and `.tsx`. Exit codes are 0 for success, 1 when `check`, `compare`, `diff` or `motion --coverage` found problems, and 2 for a usage, configuration or environment error, with one line on stderr naming the fix.
 
 ## Impact and selective commands
 

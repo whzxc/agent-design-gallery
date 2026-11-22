@@ -15,7 +15,7 @@ const usage = {
   serve: '[--port=4310] [--state-dir=<path>] [--print-key | --rotate-key]',
   service: 'install|uninstall|status|logs|migrate [--state-dir=<path>] [--port=4310] [--public-origin=<origin>]',
   root: 'add <dir> [--depth=2] | remove <dir> | list | scan [dir] [--state-dir=<path>]',
-  motion: '[--css | --json]',
+  motion: '[--css | --coverage [--json] | --json]',
   migrate: '[project]', init: '', check: '[source...] [--transitions] [--read-only] [--motion-only] [--motion-details] [--impacted --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--state-dir=<path>] [--explain]]', render: '[source...] [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--base=<rev>] [--impacted [--state-dir=<path>] [--explain]]',
   compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] [--no-screenshots] | --all',
   diff: '[source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--impacted [--state-dir=<path>] [--explain]]',
@@ -25,7 +25,7 @@ const usage = {
   impact: '[--transitions] (--source=<path>... [--part=<name>] | --token=<name>... | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --base=<rev> [--head=<rev>]) [--theme=both|light|dark] [--explain] [--state-dir=<path>] [--json]',
 };
 const details = {
-  motion: 'Export project motion tokens and raw spring parameters. --css emits a token stylesheet with generated linear() springs.',
+  motion: 'Export project motion tokens and raw spring parameters. --css emits a token stylesheet with generated linear() springs. --coverage audits motion adoption without building frames. Exit 0 clean, 1 findings, 2 invalid or incomplete.',
   comments: 'List open project comment threads by default, or read, reply to or resolve a thread by number, #number or ID. Run from the project directory.',
   migrate: 'Rename a project configuration and runtime imports, update editor paths and ignore entries, remove old generated files and regenerate declarations. Refuses mixed config names; safe to run again.',
   serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes. --print-key prints the key and exits; --rotate-key rotates the running hub key and exits. Forwarded data requests require a header or query key; direct-local requests are exempt.',
@@ -69,7 +69,7 @@ export function parseCli(args, env = process.env) {
   if (command === 'open' || command === 'link') options.tokens = { type: 'boolean' };
   if (command === 'check') for (const name of ['read-only','motion-only','motion-details']) options[name] = { type: 'boolean' };
   if (command === 'compare') options['no-screenshots'] = { type: 'boolean' };
-  if (command === 'motion') options.css = { type: 'boolean' };
+  if (command === 'motion') for (const name of ['css','coverage']) options[name] = { type: 'boolean' };
   if (['render', 'check', 'diff'].includes(command)) { options.impacted = { type: 'boolean' }; options.explain = { type: 'boolean' }; }
   if (command === 'owner' || command === 'inspect') options.contains = { type: 'boolean' };
   if (['inspect','owner','impact','check'].includes(command)) options.transitions = {type:'boolean'};
@@ -87,7 +87,8 @@ export function parseCli(args, env = process.env) {
   const { values, positionals } = parsed;
   if (globalJson) values.json = true;
   if (!values.help && !values.version) {
-    if (command === 'motion' && (positionals.length || values.css && values.json)) throw new CliError('USAGE_INVALID', 'Choose --css or --json.');
+    if (command === 'motion' && (positionals.length || values.css && (values.json || values.coverage)))
+      throw new CliError('USAGE_INVALID', 'Choose --css, --json, or --coverage [--json].');
     if (command === 'check' && ((values['motion-only'] && (positionals.length || values.impacted || values.transitions)) ||
         (values['motion-details'] && (positionals.length || values.impacted))))
       throw new CliError('USAGE_INVALID', 'Motion inventory flags apply to a whole-project check.');
@@ -252,6 +253,7 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
     return { data };
   }
   if (command === 'motion') {
+    if (values.coverage) return (await import('./toolkit/motion-coverage.mjs')).motionCoverage(config, values.json ? () => {} : output.log);
     const { loadMotionPatterns, patternParameters } = await import('./toolkit/motion-patterns.mjs');
     const { motionTokenCss } = await import('./toolkit/motion-primitives.mjs');
     const { tokens, springs, patterns } = loadMotionPatterns(config);

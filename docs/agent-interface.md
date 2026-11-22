@@ -1309,6 +1309,27 @@ LaunchAgent references. Later failure retains that data with `complete:false`;
 `MIGRATION_REFERENCES_REMAIN` warning. Migration never returns key contents. Service
 actions are supported only on macOS and are finite even when they start a resident hub.
 
+### Motion coverage
+
+`adg motion --coverage --json` returns the v2 envelope with command `motion`.
+Exit 1 retains the full result in `data` with `MOTION_COVERAGE_FAILED`. Exit 0
+returns the same shape with zero counts. Exit 2 means the audit could not
+complete. Each source path is project-relative and each line number is one-based.
+
+```ts
+type MotionCoverageData = {
+  summary: { unmappedSites: number; fallbackRoles: number; unlabeledEdges: number; incompleteFlows: number };
+  unmapped: { source: string; groups: { match: string; within?: string; lines: number[] }[] }[];
+  fallbackRoles: { role: string; token: string; patterns: string[] }[];
+  unlabeledEdges: { source: string; line: number; id: string }[];
+  incompleteFlows: { start: { source: string; frame: string }; missing: ("anchor" | "ends")[] }[];
+};
+```
+
+Counts cover all findings. Repeated inventory matches share a source and
+group record. Unused built-ins do not contribute default roles. The token
+export returned by `adg motion --json` retains its existing shape.
+
 ### Link, help and version
 
 ```ts

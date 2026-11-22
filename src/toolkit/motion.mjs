@@ -136,7 +136,7 @@ export function motionFiles(config) {
   return visit(config.design).sort();
 }
 
-export function readMotion(config, files = motionFiles(config)) {
+export function readMotion(config, files = motionFiles(config), { allowMissingFlowAnchor = false } = {}) {
   const records = [],
     declarations = [],
     findings = [],
@@ -177,7 +177,8 @@ export function readMotion(config, files = motionFiles(config)) {
       const pointer = '/flows/' + index;
       if (!fields(declaration, ['start', 'anchor', 'stage', 'ends']) ||
           !frameRef(declaration.start) || declaration.start.source !== owner ||
-          !target(declaration.anchor) || declaration.anchor.frame ||
+          (!(allowMissingFlowAnchor && declaration.anchor === undefined) &&
+            (!target(declaration.anchor) || declaration.anchor.frame)) ||
           (declaration.stage !== undefined && (!fields(declaration.stage, ['width', 'height']) ||
             ![declaration.stage.width, declaration.stage.height].every((value) => Number.isFinite(value) && value > 0)))) {
         issue('MOTION_FLOW_SCHEMA', pointer, 'Use a start frame in this sidecar’s source, a part or motion anchor, and optional positive stage dimensions.');

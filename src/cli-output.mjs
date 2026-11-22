@@ -68,6 +68,7 @@ export const errorCatalog = {
   AUTH_REQUIRED: [2, 'compare', 'Retry after providing fixture access.'],
   IO_FAILED: [2, 'help', 'Repair access to the reported path before retrying.'],
   MOTION_EDGE_NOT_FOUND: [2, 'motion-check', 'List motion edges with adg check --transitions --read-only --json.'],
+  MOTION_COVERAGE_FAILED: [1, 'motion-coverage', 'Repeat the motion adoption audit after addressing findings.'],
   INTERNAL_ERROR: [2, 'version', 'Record the runtime version with the diagnostic.'],
 };
 
@@ -118,6 +119,7 @@ export function nextActions(code, context = {}) {
   const state = context.stateDirectory ? ['--state-dir', context.stateDirectory] : [];
   let argv;
   switch (recovery) {
+    case 'motion-coverage': argv = ['adg','motion','--coverage','--json']; break;
     case 'motion-check': argv = ['adg','check','--transitions','--read-only','--json']; break;
     case 'check': argv = ['adg', 'check', '--read-only', '--json', ...(context.positionals?.length && context.command === 'check' ? ['--', ...context.positionals] : [])]; break;
     case 'install': argv = ['npm', 'install', '-g', '@whzxc/agent-design-gallery']; break;

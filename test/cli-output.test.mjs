@@ -161,7 +161,7 @@ function parseAction(action) {
 }
 
 test('all catalog codes have stable exits, exact recovery argv and parser-valid ADG actions', () => {
-  assert.equal(Object.keys(errorCatalog).length, 57);
+  assert.equal(Object.keys(errorCatalog).length, 58);
   for (const removed of ['CONFIG_LOAD_FAILED', 'GIT_REPOSITORY_REQUIRED', 'GIT_BASE_NOT_FOUND', 'GIT_READ_FAILED']) assert.equal(Object.hasOwn(errorCatalog, removed), false);
   for (const code of Object.keys(errorCatalog)) {
     assert.match(code, /^[A-Z][A-Z_]+$/);
@@ -171,7 +171,7 @@ test('all catalog codes have stable exits, exact recovery argv and parser-valid 
       positionals: ['surfaces/demo'], values: { frame: 'default', click: ['Open panel', 'Continue'], viewport: '800x600' },
     });
     assert.equal(failure.error.code, code);
-    assert.equal(failure.exitCode, ['CHECK_FAILED', 'COMPARE_FAILED', 'DIFF_FAILED'].includes(code) ? 1 : 2);
+    assert.equal(failure.exitCode, ['CHECK_FAILED', 'COMPARE_FAILED', 'DIFF_FAILED', 'MOTION_COVERAGE_FAILED'].includes(code) ? 1 : 2);
     assert.equal(failure.data, data);
     assert.ok(failure.error.next.length > 0);
     failure.error.next.forEach(parseAction);

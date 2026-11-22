@@ -102,6 +102,8 @@ See the [transition contract](design-toolkit.md#frame-transitions), [ownership](
 3. **Offline review (ADG done).** Review added, removed and changed edge IDs with revision-local playback, normalized seek, deterministic filmstrips and a compact motion receipt. The project switcher exercises duration and action-label changes with identical endpoint paint.
    **ARC adoption for round 3 (in progress).** Author and bind current dialog/panel entry and exit and centered replacement, including trigger history, focus and reduced motion. Supply stable slot keys, named anchors, timing tokens and reachable endpoint frames. ARC adopted the two-sided center-slot replacement and is implementing it. Graduate its proposed edge with the ARC implementation commit. ARC keeps a single desktop slot.
 
+**Consumer adoption workflow (done).** Use the [three-round motion guide](asset-rules.md#adopting-motion) and `adg motion --coverage` to inventory patterns and audit pilot flows.
+
 ## 8. Review and architecture
 
 - **Possible `retarget` interrupt mode.** When a switch interrupts a running edge, ARC immediately retargets to the newly requested destination. ADG v1 supports only `interrupt:"finish"`, which settles the current edge before dispatching the new input. Consider `retarget` for a later contract revision.

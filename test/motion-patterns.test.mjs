@@ -177,3 +177,59 @@ test('contract: roles require an authored token of the right type and variants p
   rejects({patterns: {custom: {extends: 'fade', interrupt: 'retarget'}}}, /only parameter overrides/);
   rejects({patterns: {custom: {extends: 'unknown'}}}, /must extend a built-in/);
 });
+
+test('contract: coverage groups exact locations, audits used defaults and flow declarations, and exits 1, 0 or 2', t => {
+  const { root, write } = fixture(t);
+  write('adg.config.mjs', 'export default {}');
+  write('widget.css', '.widget {transition: opacity 100ms}\n.widget {transition: opacity 200ms}');
+  write('design/specimen.css', '.specimen {transition: opacity 100ms}');
+  const closed = {source: 'design/widget.tsx', frame: 'closed'};
+  const open = {...closed, frame: 'open'};
+  const edge = {
+    id: 'show-widget', from: closed, to: open,
+    trigger: {on: 'click', target: {anchor: 'toggle'}}, focus: 'frame',
+    pattern: {id: 'fade', targets: [{anchor: 'widget'}]},
+  };
+  const manifest = 'design/widget.motion.json';
+  write(manifest, {version: 1, edges: [edge]});
+  function coverage(...args) {
+    const result = spawnSync(process.execPath, [cli, 'motion', '--coverage', ...args], {cwd: root, encoding: 'utf8'});
+    if (!args.includes('--json')) return result;
+    assert.equal(result.stderr, '');
+    return { status: result.status, ...JSON.parse(result.stdout) };
+  }
+  const first = coverage('--json');
+  assert.equal(first.status, 1);
+  assert.equal(first.error.code, 'MOTION_COVERAGE_FAILED');
+  assert.deepEqual(first.data.summary, {unmappedSites: 2, fallbackRoles: 2, unlabeledEdges: 1, incompleteFlows: 1});
+  assert.deepEqual(first.data.unmapped, [{source: 'widget.css', groups: [{match: 'css:.widget', lines: [1, 2]}]}]);
+  assert.deepEqual(first.data.fallbackRoles.map(row => row.role), ['duration-base', 'easing-enter']);
+  assert.equal(first.data.unlabeledEdges[0].id, edge.id);
+  assert.deepEqual(first.data.incompleteFlows, [{start: closed, missing: ['anchor', 'ends']}]);
+  const human = coverage();
+  assert.equal(human.status, 1);
+  assert.match(human.stdout, /^widget\.css:1,2 css:\.widget$/m);
+
+  write('design/tokens.css', tokens.replace('--text: #222;', '--text: #222;\n  --project-time: 100ms;\n  --project-ease: ease;'));
+  write('design/motion-patterns.json', {version: 1, roles: {
+    'duration-base': '--project-time', 'duration-fast': '--project-time',
+    'easing-enter': '--project-ease', 'easing-exit': '--project-ease',
+  }, patterns: {fade: {consumers: [{file: 'widget.css', match: 'css:.widget'}]}}});
+  const labeled = {...edge, label: 'Open widget'};
+  const flow = {start: closed, ends: [{frame: 'open'}]};
+  write(manifest, {version: 1, edges: [labeled], flows: [flow]});
+  const partial = coverage('--json');
+  assert.equal(partial.status, 1, partial.error?.message);
+  assert.deepEqual(partial.data.incompleteFlows, [{start: closed, missing: ['anchor']}]);
+  write(manifest, {version: 1, edges: [labeled], flows: [{...flow, anchor: {anchor: 'widget'}}]});
+  const clean = coverage('--json');
+  assert.equal(clean.status, 0);
+  assert.equal(clean.ok, true);
+  assert.deepEqual(clean.data.summary, {unmappedSites: 0, fallbackRoles: 0, unlabeledEdges: 0, incompleteFlows: 0});
+  assert.equal(coverage('--css', '--json').status, 2);
+
+  write('design/motion-patterns.json', {version: 2});
+  const invalid = coverage('--json');
+  assert.equal(invalid.status, 2);
+  assert.equal(invalid.error.code, 'CONFIG_INVALID');
+});

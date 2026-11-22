@@ -16,6 +16,14 @@ const roleDefaults = {
   'scale-small': '--motion-scale-small',
   'stagger-small': '--motion-stagger-small',
 };
+
+export function fallbackMotionRoles(catalog, values) {
+  const uses = new Set(values);
+  return Object.entries(roleDefaults).filter(([role, token]) => role === 'spring-small'
+    ? (uses.has(token) || uses.has(token + '-duration')) &&
+      ['-duration', '-bounce'].some(suffix => catalog.defaultTokens.has(token + suffix))
+    : uses.has(token) && catalog.defaultTokens.has(token));
+}
 const timing = { duration: 'duration-base', easing: 'easing-enter' };
 const exit = { duration: 'duration-fast', easing: 'easing-exit' };
 const distance = 'distance-small';
