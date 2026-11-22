@@ -313,11 +313,22 @@ test('TSX board specimens retain frame sizes, exact previews, notes, caches and 
       throw Error('Imported source did not invalidate its dependent');
     },result.version);
     const rebuilt=await(await fetch(new URL('/asset/components%2Fforms.tsx?theme=light',server.url))).json();assert.equal(rebuilt.frames[0].width,901);
-    await page.waitForFunction(()=>window.__adg.ready && window.__adg.metadataComplete);
-    const beforeGrowth=await page.evaluate(()=>({items:window.__adg.items,revision:window.__adg.revision,view:window.__adg.view}));
+    // The server can rebuild before the browser applies that revision. Bind each
+    // snapshot to the corresponding edit so a late resize cannot satisfy growth.
+    async function appliedForms(widths, afterRevision = 0) {
+      const state = await page.waitForFunction(({ widths, afterRevision }) => {
+        const { ready, metadataComplete, revision, items, view } = window.__adg;
+        if (!ready || !metadataComplete || revision <= afterRevision) return false;
+        const forms = items.filter(item => item.path === 'components/forms.tsx');
+        if (forms.length !== widths.length || forms.some((item, i) => item.width !== widths[i])) return false;
+        return { items, revision, view };
+      }, { widths, afterRevision });
+      try { return await state.jsonValue(); }
+      finally { await state.dispose(); }
+    }
+    const beforeGrowth = await appliedForms([901, 700, 500]);
     await writeFile(path.join(directory,'scenes/sizes.tsx'),'export const widths=Array(87).fill(600);');
-    await page.waitForFunction(revision=>window.__adg.ready && window.__adg.metadataComplete && window.__adg.revision>revision,beforeGrowth.revision);
-    const grown=await page.evaluate(()=>({items:window.__adg.items,view:window.__adg.view}));
+    const grown = await appliedForms(Array(87).fill(600), beforeGrowth.revision);
     assert.deepEqual(grown.view,beforeGrowth.view,'geometry refresh must retain the camera');
     const grownForms=grown.items.filter(a=>a.path==='components/forms.tsx');
     assert.equal(grownForms.length,87);

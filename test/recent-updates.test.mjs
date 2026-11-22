@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { mkdtemp, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { startServer } from '../src/server.mjs';
 import { starterTokens } from '../src/toolkit/project.mjs';
 import { launch } from '../src/toolkit/browser.mjs';
@@ -11,6 +12,20 @@ import { launch } from '../src/toolkit/browser.mjs';
 test('contract: period net changes, working-tree generations and visit ancestry through the viewer', async t => {
   const dir = await mkdtemp(path.join(tmpdir(),'adg-recent-'));
   const root = path.join(dir,'project'), design = path.join(root,'design'), stateDirectory = path.join(dir,'state');
+  let server;
+  t.after(async () => {
+    try { await server?.close(); }
+    finally { await rm(dir, { recursive: true, force: true }); }
+  });
+  // Visual workers fingerprint the runtime files on each request. Keep those
+  // inputs fixed for the cold and warm requests even while the checkout is edited.
+  const runtime = path.join(dir, 'runtime');
+  const checkout = path.resolve(import.meta.dirname, '..');
+  await mkdir(runtime);
+  await Promise.all(['src', 'public', 'package.json'].map(name =>
+    cp(path.join(checkout, name), path.join(runtime, name), { recursive: true })));
+  await symlink(path.join(checkout, 'node_modules'), path.join(runtime, 'node_modules'), 'junction');
+  const { startServer: startFixtureServer } = await import(pathToFileURL(path.join(runtime, 'src/server.mjs')));
   const modules = path.join(design,'modules');
   await mkdir(modules,{recursive:true});
   const frame = (name, text) => `<Frame name="${name}" width={100} height={50}><div>${text}</div></Frame>`;
@@ -63,8 +78,7 @@ test('contract: period net changes, working-tree generations and visit ancestry 
   const baseline = git('status','--porcelain'), tree = git('write-tree');
   // Include enough generated frames for a second page without testing incidental markup.
   await put('batch', ...Array.from({ length: 24 }, (_, i) => frame('batch-' + i, 'Batch')));
-  const server = await startServer({directory:design,stateDirectory,port:0,readOnly:true});
-  t.after(async()=>{await server.close();await rm(dir,{recursive:true,force:true});});
+  server = await startFixtureServer({directory:design,stateDirectory,port:0,readOnly:true});
   const url = new URL('api/recent-updates',server.url);
   url.search = new URLSearchParams({day:+new Date('2026-11-21'),week:+new Date('2026-11-16')});
   const get = async () => (await fetch(url)).json();
