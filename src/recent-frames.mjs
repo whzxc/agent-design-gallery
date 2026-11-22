@@ -1,7 +1,7 @@
 import { lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { isSourcePath, isFeatureInternal, sourceFeature } from './toolkit/project.mjs';
+import { isSourcePath, isFeatureInternal, sourceFeature, relative } from './toolkit/project.mjs';
 import { dirtyGeneration, git, visitRange, visitRevision } from './recent-history.mjs';
 
 import { gitBlobs } from './toolkit/git-blobs.mjs';
@@ -87,8 +87,8 @@ function revisionTrees(repository, paths, head, changes) {
 }
 
 function designPaths(config, repository) {
-  const design = path.relative(repository, config.design);
-  const arch = config.archDirectory && path.relative(repository, config.archDirectory);
+  const design = relative({root:repository}, config.design);
+  const arch = config.archDirectory && relative({root:repository}, config.archDirectory);
   const paths = [...new Set([design || '.', ...(arch ? [arch] : [])])];
   const specs = config.sources.map(dir => ':(glob)' + path.posix.join(design, dir, '**/*.tsx'));
   if (arch) for (const ext of ['mmd', 'md']) specs.push(':(glob)' + path.posix.join(arch, '**/*.' + ext));
@@ -114,15 +114,18 @@ async function diffSources({ config, repository, trees, commit, before, after, c
   const { frameOwners } = await import('./toolkit/source-facts.mjs');
   const origins = captureFrameOrigins();
   const changed = commit.files.map(file => path.join(repository, file));
+  const designPath = file => relative({root:config.design}, file);
   const current = trees.files(after), original = trees.files(before);
   const rows = [];
   const mayMove = candidates.some(source => !after.has(path.join(repository, source)));
   let compared = 0;
   async function compare(source) {
-    const file = path.join(repository, source), relative = path.relative(config.design, file);
+    const file = path.join(repository, source), feature = sourceFeature(designPath(file), config.sources);
     const timestamp = commit.times?.get(source) ?? commit.time;
-    const direct = changed.filter(name => name === file || (isSourcePath(path.relative(config.design, name), config.sources) &&
-      sourceFeature(path.relative(config.design, name), config.sources) === sourceFeature(relative, config.sources)));
+    const direct = changed.filter(name => {
+      const key = designPath(name);
+      return name === file || isSourcePath(key, config.sources) && sourceFeature(key, config.sources) === feature;
+    });
     if (!before.has(file) && !after.has(file)) return [];
     if (source.endsWith('.mmd')) {
       if (exactFrame && exactFrame !== 'default') return [];
@@ -221,8 +224,8 @@ export async function recentFrames({ config, state, offset, week, latest, scope,
   let trees;
   try {
     const { paths, specs, candidate } = designPaths(config, repository);
-    const projectPath = file => path.relative(root, path.join(repository, file));
-    const designPath = file => path.relative(config.design, path.join(repository, file));
+    const projectPath = file => relative({root}, path.join(repository, file));
+    const designPath = file => relative({root:config.design}, path.join(repository, file));
     const shown = new Set(visible);
     const allowed = file => scope === 'all' || shown.has(designPath(file)) || shown.has(projectPath(file)) ||
       (scope?.startsWith('layer:') && designPath(file).startsWith(scope.slice(6) + '/')) ||

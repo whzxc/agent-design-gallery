@@ -146,6 +146,11 @@ export function motionFiles(config) {
   return visit(config.design).sort();
 }
 
+export function unownedMotionSidecars(config, sourceFiles, sidecars, paths = path) {
+  const owners = new Set(sourceFiles.map(file => relative(config, file, paths)));
+  return sidecars.filter(source => !owners.has(source.replace(/\.motion\.json$/, '.tsx')));
+}
+
 export function readMotion(config, files = motionFiles(config), { allowMissingFlowAnchor = false } = {}) {
   const records = [],
     declarations = [],

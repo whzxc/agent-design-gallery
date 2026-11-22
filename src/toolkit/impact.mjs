@@ -156,7 +156,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
     let rows;
     if (inputs) {
       const renames = inputs.changes.filter(change => change.status === 'renamed').map(change => ({
-        before: slash(path.relative(inputs.projectPrefix || '.', change.before)), after: slash(path.relative(inputs.projectPrefix || '.', change.after)) }));
+        before: path.posix.relative(inputs.projectPrefix || '.', change.before), after: path.posix.relative(inputs.projectPrefix || '.', change.after) }));
       rows = matchDiffFrames(allSources, previous.facts, current.facts, renames);
     } else rows = allSources.flatMap(source => current.facts.get(source).frames.map(frame => ({ source, frame: frame.name, status: 'current', matchKind: null, matchCandidates: [], before: null, after: frame })));
     data.coverage.expectedRows = rows.length * themes.length;
@@ -239,7 +239,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
         const knownDependencies = new Set(views.flatMap(view => [...view.facts.values()].flatMap(facts => facts.dependencies)));
         const mapMatches = name => views.some(view => view.map.mappings.some(mapping => selectorMatches(mapping.implementation, name)));
         for (const change of inputs.changes) {
-          const names = [change.before, change.after].filter(Boolean).map(name => slash(path.relative(inputs.projectPrefix || '.', name)));
+          const names = [change.before, change.after].filter(Boolean).map(name => path.posix.relative(inputs.projectPrefix || '.', name));
           const is = predicate => names.some(predicate);
           let role;
           if (is(name => views.some(view => relative(view.config, path.join(view.config.design, 'tokens.css')) === name))) role = 'token';
@@ -258,7 +258,7 @@ export async function impact(config, values, { log = console.log, openIndex = op
           for (const view of views) {
             const repositoryName = view.side === 'before' ? change.before : change.after ?? (['implementation', 'mapping'].includes(role) ? change.before : null);
             if (!repositoryName) continue;
-            const name = slash(path.relative(inputs.projectPrefix || '.', repositoryName)), options = { pathIndexes: [pathIndex] };
+            const name = path.posix.relative(inputs.projectPrefix || '.', repositoryName), options = { pathIndexes: [pathIndex] };
             if (role === 'token') {
               const other = view === current ? previous : current;
               for (const item of view.tokens) {

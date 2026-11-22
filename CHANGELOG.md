@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.7
+
+- Match nested motion sidecars to their TSX sources on Windows. Keep portable path keys in motion coverage, implementation mappings, impact queries and recent-frame history.
+
 ## 0.17.6
 
 - Keep a viewer's generated cache out of source discovery when its state directory lives inside the design tree.

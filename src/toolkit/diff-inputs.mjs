@@ -11,7 +11,7 @@ import { CliError, asCliError, withHumanOutputMapping } from '../cli-output.mjs'
 
 const environmentFiles = ['package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb'];
 const slash = value => value.split(path.sep).join('/');
-const outside = value => value === '..' || value.startsWith(`..${path.sep}`) || path.isAbsolute(value);
+const outside = (value, paths = path) => value === '..' || value.startsWith(`..${paths.sep}`) || paths.isAbsolute(value);
 const frameKey = ({ source, frame }) => JSON.stringify([source, frame]);
 
 async function optionalBytes(file) {
@@ -202,7 +202,7 @@ export async function prepareDiffInputs(config, args = [], options = {}) {
     const inputs = await revisionChanges(base, target?.revision);
     const projectPath = name => name === null ? null : slash(path.relative(root, path.join(base.root, name)));
     const changes = inputs.map(change => ({...change, before:projectPath(change.before), after:projectPath(change.after)}));
-    const renames = changes.filter(c => c.status === 'renamed' && !outside(c.before) && !outside(c.after));
+    const renames = changes.filter(c => c.status === 'renamed' && !outside(c.before, path.posix) && !outside(c.after, path.posix));
     const changed = new Set(changes.flatMap(change => [change.before, change.after]).filter(Boolean));
     const configFiles = await Promise.all([before, after].map(async side =>
       (await configInputFiles(side.config)).map(file => relative(side.config, file))));

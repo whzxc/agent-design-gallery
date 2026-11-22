@@ -2,7 +2,7 @@ import { labelResolver } from './motion-label.mjs';
 import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { availableParallelism } from 'node:os';
-import { motionSummary, motionRows, readMotion } from './motion.mjs';
+import { motionSummary, motionRows, readMotion, unownedMotionSidecars } from './motion.mjs';
 import { scanMotion } from './motion-inventory.mjs';
 import { loadMotionPatterns } from './motion-patterns.mjs';
 import { deadEndFindings } from './motion-flows.mjs';
@@ -205,7 +205,8 @@ export async function check(config, args = [], options = {}, log = console.log, 
       }
     }
     const directories = sourceDirectories(config);
-    const chapterFiles = listSources(config.design, directories).map(file => path.relative(config.design, file).split(path.sep).join('/'));
+    const chapterSources = listSources(config.design, directories);
+    const chapterFiles = chapterSources.map(file => relative({root:config.design}, file));
     const chapters = chapterWarnings(chapterFiles, readGroups(config.design, directories), directories);
     warnings.push(...chapters);
     if (!options.json) for (const warning of chapters) log(`WARNING ${warning.message}`);
@@ -221,7 +222,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
     const cssFindings=new Map();
     const scopeFiles = new Set(records.map(r=>r.source));
     const inScope = sidecar => !args.length || scopeFiles.has(sidecar) || data.sources.includes(sidecar.replace(/\.motion\.json$/,'.tsx'));
-    for (const source of motion.files) if (inScope(source) && !chapterFiles.includes(path.relative(config.design,path.resolve(config.root,source)).replace(/\.motion\.json$/,'.tsx')))
+    for (const source of unownedMotionSidecars(config, chapterSources, motion.files)) if (inScope(source))
       emit({code:'MOTION_SCHEMA',source,pointer:'',message:'Motion sidecar has no owning TSX entry.',line:1,column:1});
     for (const finding of motion.findings) if(inScope(finding.source)) emit(finding);
     for (const finding of deadEndFindings(motion, records, config.check?.strictMotion)) emit(finding);
@@ -286,9 +287,8 @@ export async function check(config, args = [], options = {}, log = console.log, 
     for(const finding of cssFindings.values())emit(finding);
     let validatedMap = null;
     if (mapping.present) {
-      const { listSources } = await import('./project.mjs');
       validatedMap = await validateImplementationMap(config, mapping, {
-        sources: listSources(config.design, sourceDirectories(config)).map(file => relative(config, file)),
+        sources: chapterSources.map(file => relative(config, file)),
         selected: args.length ? [...new Set([...data.sources,...records.map(r=>r.owner)])] : undefined,
         getBuild: source => {
           if (failedSources.has(source)) throw failedSources.get(source);

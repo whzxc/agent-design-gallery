@@ -211,7 +211,7 @@ export function selectSources(config, args = [], { write = true, additional = []
     return file;
   });
 }
-export const relative = (config, file) => path.relative(config.root, file).split(path.sep).join('/');
+export const relative = (config, file, paths = path) => paths.relative(config.root, file).split(paths.sep).join('/');
 export function loadTokens(config) {
   try { return parseTokens(readFileSync(path.join(config.design, 'tokens.css'), 'utf8')); }
   catch (error) { throw new CliError('TOKENS_INVALID', `${error.message}; fix design/tokens.css or run adg init`, { cause: error }); }

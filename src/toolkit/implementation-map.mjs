@@ -6,13 +6,13 @@ import { indexDigest } from './index-store.mjs';
 import { mappingFacts } from './source-facts.mjs';
 import { readMotion, edgeId } from './motion.mjs';
 import { jsonLocations } from './json-locations.mjs';
+import { relative } from './project.mjs';
 
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const keys = (value, allowed) => object(value) && Object.keys(value).every(key => allowed.includes(key));
 const nonempty = value => typeof value === 'string' && !!value.trim();
 const missing = error => ['ENOENT', 'ENOTDIR'].includes(error.code);
 const inside = (root, file) => { const rel = path.relative(root, file); return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel); };
-const rel = (config, file) => path.relative(config.root, file).split(path.sep).join('/');
 const invalid = message => { throw new CliError('OWNER_MAP_INVALID', message); };
 
 export function parseImplementationMap(text) {
@@ -41,9 +41,9 @@ export function parseImplementationMap(text) {
 export async function loadImplementationMap(config) {
   const file = path.join(config.design, 'implementation.json');
   let text;
-  try { text = await readFile(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return { file, source: rel(config, file), present: false, mappings: [] }; throw error; }
+  try { text = await readFile(file, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return { file, source: relative(config, file), present: false, mappings: [] }; throw error; }
   if (!inside(await realpath(config.root), await realpath(file))) invalid('implementation.json resolves outside the project.');
-  return { ...parseImplementationMap(text), file, source: rel(config, file), present: true, inputHash: indexDigest(text), locations: jsonLocations(text) };
+  return { ...parseImplementationMap(text), file, source: relative(config, file), present: true, inputHash: indexDigest(text), locations: jsonLocations(text) };
 }
 
 /** Expands only the selector prefix; escaping symlinks are rejected, not followed. */
@@ -52,7 +52,7 @@ export async function implementationFiles(config, selector) {
   const output = path.resolve(root, path.relative(config.root, config.output ?? path.join(config.root, 'output/design')));
   const excluded = file => path.relative(root, file).split(path.sep).some(p => ['.git', 'node_modules', '.adg'].includes(p)) || inside(output, file);
   const check = async file => {
-    if (!inside(root, await realpath(file))) invalid(`Implementation selector resolves outside the project: ${rel(config, file)}.`);
+    if (!inside(root, await realpath(file))) invalid(`Implementation selector resolves outside the project: ${relative(config, file)}.`);
     return stat(file);
   };
   if (selector.file) {
@@ -72,7 +72,7 @@ export async function implementationFiles(config, selector) {
       seen.add(physical);
       for (const entry of await readdir(file)) await visit(path.join(file, entry));
     } else if (info.isFile()) {
-      const name = path.relative(root, file).split(path.sep).join('/');
+      const name = relative({root}, file);
       if (!pattern || pattern.test(name)) files.push(name);
     }
   }
@@ -127,7 +127,7 @@ export async function validateImplementationMap(config, map, { sources, selected
         frames = built.frames.filter(frame => !target.frames || target.frames.includes(frame.name));
         for (const name of target.frames ?? []) if (!built.frames.some(frame => frame.name === name)) { report('OWNER_FRAME_MISSING', targetPointer, selector, target, `Missing frame ${name}.`, [], name); valid = false; }
         if (target.part && (built.parts ?? []).includes(target.part)) {
-          const matches = frame => frame.owners.some(owner => rel(config, path.join(config.design, owner.source)) === target.source && owner.export === target.part);
+          const matches = frame => frame.owners.some(owner => relative(config, path.join(config.design, owner.source)) === target.source && owner.export === target.part);
           if (target.frames) for (const frame of frames) if (!matches(frame)) { report('OWNER_PART_FRAME_MISMATCH', targetPointer, selector, target, `Explicit frame ${frame.name} does not contain ${target.part}.`, [], frame.name); valid = false; }
           frames = frames.filter(matches);
         }

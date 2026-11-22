@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { flowLayout } from '../public/motion-flow.js';
 import { starterTokens } from '../src/toolkit/project.mjs';
+import { unownedMotionSidecars } from '../src/toolkit/motion.mjs';
 
 const cli=fileURLToPath(new URL('../src/cli.mjs',import.meta.url));
 const first='design/surfaces/first.tsx', last='design/surfaces/last.tsx', row='design/components/row.tsx';
@@ -43,6 +44,14 @@ function consumer(t){
   put('design/implementation.json',map);edges([edge]);
   return {root,put,run,edges,git};
 }
+
+test('contract: Windows source paths own POSIX sidecar keys in the same feature folder', () => {
+  const paths = path.win32, root = 'D:\\a\\plugin\\plugin';
+  const owner = 'design/modules/waterfall/index.motion.json';
+  const orphan = 'design/modules/other/index.motion.json';
+  const files = [paths.join(root, 'design/modules/waterfall/index.tsx')];
+  assert.deepEqual(unownedMotionSidecars({ root }, files, [owner, orphan], paths), [orphan]);
+});
 
 test('contract: keyed frames, scoped bindings, timing aliases and Git edge queries through the CLI',t=>{
   const {root,put,run,edges,git}=consumer(t);

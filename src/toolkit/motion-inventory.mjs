@@ -7,12 +7,12 @@ import { parseFragment } from 'parse5';
 import scss from 'postcss-scss';
 import { loadMotionPatterns, motionPatternFile } from './motion-patterns.mjs';
 import { readMotion } from './motion.mjs';
+import { relative } from './project.mjs';
 
 const extension = /\.(?:[cm]?[jt]sx?|css|scss|vue|html?)$/i;
 const excluded = new Set(['node_modules','vendor','dist','build','out','coverage','output','test','tests','__tests__']);
 const codeFile = name => extension.test(name) && !/\.(?:d\.ts|(?:spec|test)\.[cm]?[jt]sx?)$/.test(name) &&
   !name.split('/').some(part => part.startsWith('.') || excluded.has(part));
-const sourcePath = (config, name) => path.relative(config.root, name).split(path.sep).join('/');
 const keyName = node => node?.name ?? node?.value;
 const none = /^(?:none|initial|unset|inherit|revert(?:-layer)?|0(?:m?s)?)(?:\s*!important)?$/i;
 const cssMotion = /^(?:-webkit-)?(?:animation|transition)(?:-[a-z-]+)?$/i;
@@ -33,7 +33,7 @@ function codeFiles(config) {
     const visit = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
       if (entry.name.startsWith('.') || excluded.has(entry.name)) return [];
       const full = path.join(directory, entry.name);
-      return entry.isDirectory() ? visit(full) : [sourcePath(config, full)];
+      return entry.isDirectory() ? visit(full) : [relative(config, full)];
     });
     return visit(config.root).filter(codeFile).sort();
   }
@@ -248,7 +248,7 @@ function scanMarkup(source, vue, record, problem, { interpolated = false } = {})
 }
 
 export function scanMotion(config, catalog = loadMotionPatterns(config), graph = readMotion(config), { mappedOnly = false } = {}) {
-  const declaration = sourcePath(config, path.join(config.design, motionPatternFile));
+  const declaration = relative(config, path.join(config.design, motionPatternFile));
   const consumers = new Map([...catalog.patterns.keys()].map(id => [id, []]));
   const issues = [], ignored = [];
   const issue = (code, source, message, line = null) => issues.push({ code, source, message, line, column: null });
@@ -276,9 +276,16 @@ export function scanMotion(config, catalog = loadMotionPatterns(config), graph =
   }
   // Check never follows symlinks or scans ignored/untracked dependencies.
   const root = realpathSync(config.root);
+  const tokens = relative(config, path.join(config.design, 'tokens.css'));
   let animations = 0, unmapped = 0, unused = 0;
   for (const name of mappedOnly ? [...mappings.keys()].filter(codeFile).sort() : codeFiles(config)) {
-    if (name === sourcePath(config, path.join(config.design, 'tokens.css'))) continue;
+    if (name === tokens) continue;
+    // Git paths already use slashes. A literal backslash in a Git name
+    // cannot be opened as that name on Windows.
+    if (path.sep === '\\' && name.includes('\\')) {
+      if (!mappedOnly) issue('MOTION_SCAN_FAILED', name, 'Git source path contains a literal backslash.');
+      continue;
+    }
     const full = path.join(root, name);
     const sites = new Map();
     const record = (match, line, within = [], required = true) => {

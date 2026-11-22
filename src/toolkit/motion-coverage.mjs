@@ -1,9 +1,9 @@
-import path from 'node:path';
 import { CliError } from '../cli-output.mjs';
 import { frameKey } from './motion-flows.mjs';
 import { scanMotion } from './motion-inventory.mjs';
 import { fallbackMotionRoles, loadMotionPatterns, patternParameters } from './motion-patterns.mjs';
 import { readMotion, timingRefs, transformRefs } from './motion.mjs';
+import { relative } from './project.mjs';
 
 function report(data, summary, log) {
   log(summary);
@@ -39,7 +39,7 @@ export function motionCoverage(config, log) {
     throw new CliError('CONFIG_INVALID', source + ':' + line + ': ' + message);
   }
   const inventory = scanMotion(config, catalog, graph);
-  const design = path.relative(config.root, config.design).split(path.sep).join('/');
+  const design = relative(config, config.design);
   const files = new Map();
   const unscanned = [];
   const implementation = source => !design || !source.startsWith(design + '/');
