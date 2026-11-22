@@ -194,6 +194,8 @@ This example specifies the two-sided center-slot replacement adopted by ARC. It 
 
 Each edge supplies `phases` (possibly empty). Each declared phase and track target list is nonempty. Unclaimed owner roots use smart matching with the edge tokens at time zero. Paired boxes FLIP from First to Last, unpaired roots enter or exit with opacity. Unstamped descendants travel with the nearest root. A track claims its target for the edge and defines all its motion, suppressing implicit animation there. Changed properties outside its list take the destination value at track start. An explicit opacity subtree track owns its descendant paint as one unit. Overlapping writers of the same property or independent tracks inside such a subtree are invalid. Hold the source before a delayed track and its destination after completion. Edge length includes implicit tracks that visibly change. An unchanged matched root contributes no duration. Easing is shared by the axes of a geometry track. Geometry for a retained shell follows the admitted endpoint sizes; an unexpected center shift in a same-slot pilot is a layout review finding.
 
+**Cuts.** Use an optional edge-level list such as `"instant": [{"anchor":"results-list"}]` when a target changes position or size at the start of the edge. Each selector resolves once in both endpoints. A cut shows the destination box and paint for the whole subtree from time zero, with no interpolation or fade. Cuts add no time and satisfy strict motion coverage for their subtrees. A cut subtree cannot overlap another cut or contain a timed target. The inspector lists the cut targets.
+
 **Identity and paint.** Read the ordered `data-adg-owners` stack on each rendered root (design-relative source and export, normalized to project paths). A forwarded root bearing several owners supplies one visual and one ordered identity. A track may address any member. First match equal owner stacks with explicit scoped JSX keys from `data-adg-keys` on the stamped root or its keyed ancestor. Preserve key type (nonempty string or finite number), defining owner, the chain of keyed instance scopes and the emitted fragment root discriminator. A key within an ambiguous repeated parent needs a stable parent scope. A local anchor identifies a region inside that instance. Multi-root output whose roots can reorder needs individual semantic root keys. For unkeyed roots, pair unique equal stacks within the nearest already-paired ancestor, starting with unique frame-wide stacks and refining scopes until stable. An explicitly different key always prevents a pair. Reordering list rows requires stable item IDs, with a role or slot when the same record occurs twice. A physical slot keeps its key while its content identity changes.
 
 Never guess between remaining candidates by text, position, DOM index, or a frame-local inspect ID. Fade ambiguous implicit candidates and expose their counts. An ambiguous explicit target invalidates that edge. Nested pairs measure in frame coordinates. Apply a child's residual transform after its parent's transform, or draw isolated, non-overlapping paint layers. A child inherits parent motion exactly once. A changed text run keeps a matched container's geometry and crossfades old and new text in place. Avoid glyph morphing, stretching text with the shell and announcing both copies to assistive technology. A zero-sized, clipped or non-invertible box falls back to an opacity transition with a limitation in edge detail.
@@ -325,7 +327,7 @@ to open the Motion section directly.
 A version 1 sidecar edge may replace `duration`, `easing`, `phases`,
 `interrupt` and `reduced` with
 `"pattern": {"id": "fade", "direction": "enter", "targets": [{"anchor": "panel"}]}`.
-The edge still owns its ID, endpoints, trigger and focus. If omitted,
+The edge still owns its ID, endpoints, trigger, focus and optional `instant` cuts. If omitted,
 `direction` uses the pattern's action. Fade entry/exit and crossfade compile to
 opacity tracks. Discrete resize/reflow, slide and spring pop can use matched
 geometry tracks with authored endpoints. Entry and exit patterns with distance
@@ -469,7 +471,7 @@ Validate the selected sources' incident edges, including the remote endpoint of 
 | `MOTION_FLOW_SCHEMA` | Declare at most one start and anchor per connected component, in the start frame’s sidecar. |
 | `MOTION_FLOW_DEAD_END` | Add an outgoing product action or declare the endpoint in the flow’s `ends`. |
 | `MOTION_FLOW_ANCHOR`, `MOTION_FLOW_STAGE` | Resolve the same anchor in each frame, keep its dimensions stable, and reserve room for the aligned union. |
-| `MOTION_UNANIMATED_MOVE`, `MOTION_UNANIMATED_PRESENCE` | Animate changed axes with a position track. Give one-sided anchors and owner roots an enter or exit track, which may cover an entire subtree. Use a crossfade for a declared content replacement. |
+| `MOTION_UNANIMATED_MOVE`, `MOTION_UNANIMATED_PRESENCE` | Animate changed axes with a position track or declare an `instant` cut for a deliberate jump. Give one-sided anchors and owner roots an enter or exit track, which may cover an entire subtree. Use a crossfade for a declared content replacement. |
 
 The flow geometry and composition findings warn by default and become errors with `check.strictMotion: true`. Position checks use the aligned stage coordinates.
 

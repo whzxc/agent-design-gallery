@@ -41,6 +41,7 @@ function validateShape(e, issue, { patternBacked } = {}) {
       'duration',
       'easing',
       'phases',
+      'instant',
       'interrupt',
       'reduced',
       'focus',
@@ -88,6 +89,8 @@ function validateShape(e, issue, { patternBacked } = {}) {
     )
   )
     issue('MOTION_SCHEMA', '/unsupported', 'Name each unsupported effect and its reason.');
+  if (e.instant !== undefined && !(Array.isArray(e.instant) && e.instant.length && e.instant.every(target)))
+    issue('MOTION_SCHEMA', '/instant', 'Declare a nonempty list of cut targets.');
   if (!Array.isArray(e.phases)) {
     issue('MOTION_SCHEMA', '/phases', 'Declare a phase array.');
     return;

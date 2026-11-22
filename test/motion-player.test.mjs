@@ -538,3 +538,46 @@ test('contract: presence tracks seek distance, scale and opacity together', asyn
   assert.deepEqual(values.enter, [[20, 24, 97, 0], [20, 27, 98.5, 0.5], [20, 30, 100, 1], [20, 27, 98.5, 0.5]]);
   assert.deepEqual(values.exit, [[20, 30, 100, 1], [20, 27, 98.5, 0.5], [20, 24, 97, 0], [20, 27, 98.5, 0.5]]);
 });
+
+test('contract: cuts paint only destination geometry and content while a sibling animates', async t => {
+  const { page, url } = await viewer(t);
+  await page.goto(url);
+  const result = await page.evaluate(async () => {
+    const { createStage, mountScene, observeScene } = await import('./motion-scene.js');
+    const { preparePaint } = await import('./motion-paint.js');
+    const iframe = await createStage(document.body), doc = iframe.contentDocument;
+    const owner = name => "data-adg-owners='" + JSON.stringify([{ source: 'parts.tsx', export: name }]) + "'";
+    const endpoint = after => ({
+      frame: 'test', design: 'design', css: 'body{margin:0}',
+      html: `<main><div data-adg-id="range" style="position:absolute;left:${after ? 80 : 0}px;width:30px;height:10px">Range</div>
+        <div data-adg-id="rows" ${owner('Rows')} style="position:absolute;top:${after ? 60 : 20}px;width:${after ? 100 : 80}px;height:30px;opacity:${after ? 0.8 : 0.4}">
+          <span data-adg-id="row" ${owner('Row')}>${after ? 'New row' : 'Old row'}</span>
+        </div></main>`,
+    });
+    const from = observeScene(await mountScene(doc, endpoint(false), 'light'), 'design', true);
+    const stage = await mountScene(doc, endpoint(true), 'light');
+    const paint = preparePaint(stage, from, observeScene(stage, 'design', true), {
+      phases: [[{ mode: 'match', targets: [{ anchor: 'range' }], properties: ['x'] }]],
+      instant: [{ anchor: 'rows' }],
+      timings: { '/duration': 160, '/easing': 'linear' },
+    });
+    const roots = [...doc.body.lastElementChild.shadowRoot.children];
+    const rowPaint = roots.filter(root => /(?:Old|New) row/.test(root.shadowRoot.textContent));
+    const range = roots.find(root => root.shadowRoot.textContent === 'Range');
+    const samples = [0, 0.25, 0.75, 0.25].map(progress => {
+      paint.seek(progress);
+      return {
+        rangeX: range.getBoundingClientRect().x,
+        rows: rowPaint.map(root => {
+          const { y, width } = root.getBoundingClientRect();
+          return [y, width, Number(root.style.opacity), root.shadowRoot.textContent.trim()];
+        }),
+      };
+    });
+    paint.dispose();
+    iframe.remove();
+    return { duration: paint.duration, samples };
+  });
+  assert.equal(result.duration, 160);
+  assert.deepEqual(result.samples, [0, 20, 60, 20].map(rangeX => ({ rangeX, rows: [[60, 100, 0.8, 'New row']] })));
+});

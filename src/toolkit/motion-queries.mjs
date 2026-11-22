@@ -15,6 +15,7 @@ async function labeled(config,records) {
 export function targetsFor(edge, side) {
   return [
     ...(side === 'from' ? [edge.trigger.target] : edge.focus.target ? [edge.focus.target] : []),
+    ...(edge.instant ?? []),
     ...edge.phases
       .flat()
       .filter((track) => side === 'from' || track.mode !== 'exit')

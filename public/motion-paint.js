@@ -45,6 +45,12 @@ export function preparePaint(stage, from, to, edge, pin) {
         .map((r) => r.i)
     );
   const subtrees = { from: new Set(), to: new Set() };
+  for (const target of edge.instant ?? []) {
+    const left = unique(from, target), right = unique(to, target);
+    add(left, right, 'cut', [], defaultTime);
+    subtrees.from.add(left.i);
+    subtrees.to.add(right.i);
+  }
   edge.phases.forEach((phase, i) => {
     let length = 0;
     phase.forEach((t, j) => {
@@ -85,7 +91,9 @@ export function preparePaint(stage, from, to, edge, pin) {
   }
   if (pin) {
     const left = candidates(from, pin), right = candidates(to, pin);
-    if (left.length === 1 && right.length === 1 && !oldClaim.has(left[0].i) && !newClaim.has(right[0].i))
+    if (left.length === 1 && right.length === 1 &&
+        !oldClaim.has(left[0].i) && !newClaim.has(right[0].i) &&
+        !excluded.from.has(left[0].i) && !excluded.to.has(right[0].i))
       implicit(left[0], right[0], 'match');
   }
   for (const pair of pairs)
@@ -202,7 +210,7 @@ export function preparePaint(stage, from, to, edge, pin) {
   };
   for (const t of tracks) {
     const { left, right } = t;
-    if (left) {
+    if (left && t.mode !== 'cut') {
       t.old = picture(from, left, oldRoots);
       t.oldAlpha = alpha(from, left);
     }
@@ -287,8 +295,12 @@ export function preparePaint(stage, from, to, edge, pin) {
       stage.style.opacity = fraction === 1 ? original : '0';
       layer.style.visibility = fraction === 1 ? 'hidden' : 'visible';
       for (const t of tracks) {
-        const { left, right, mode } = t,
-          time = Object.values(t.props)[0] ?? defaultTime;
+        const { left, right, mode } = t;
+        if (mode === 'cut') {
+          draw(t.next, right.box, right.box, t.newAlpha);
+          continue;
+        }
+        const time = Object.values(t.props)[0] ?? defaultTime;
         const p = progress(t.props.opacity ?? time, ms),
           started = ms >= time.start;
         if (mode === 'match' && left && right) {

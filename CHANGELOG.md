@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.5
+
+- Declare instant cuts alongside timed tracks, including pattern-backed edges. Strict check recognizes the cut and the Playable inspector lists its targets.
+
 ## 0.17.4
 
 - Compare omits text fully covered by an opaque sticky or fixed layer and retains visible overlaps.

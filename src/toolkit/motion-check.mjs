@@ -245,6 +245,27 @@ export function motionEvaluator(
       }
       const claims = { from: [], to: [] },
         tracks = [];
+      function claim(side, current, pointer) {
+        const { row, subtree, mode, props } = current;
+        const ancestors = chain(rows[side], row);
+        for (const prev of claims[side]) {
+          if (
+            prev.row === row
+              ? mode === 'cut' || prev.mode === 'cut' || props.some((prop) => prev.props.includes(prop))
+              : (prev.subtree && ancestors.includes(prev.row)) ||
+                (subtree && chain(rows[side], prev.row).includes(row))
+          )
+            issue('MOTION_TRACK_CONFLICT', pointer, 'Overlapping motion claims on ' + side + ' endpoint.', theme);
+        }
+        claims[side].push(current);
+      }
+      for (const [i, target] of (e.instant ?? []).entries()) {
+        const pointer = '/instant/' + i;
+        for (const side of ['from', 'to']) {
+          const row = resolve(side, target, pointer);
+          if (row) claim(side, { row, subtree: true, mode: 'cut' }, pointer);
+        }
+      }
       let start = 0;
       for (const [i, phase] of e.phases.entries()) {
         let length = 0;
@@ -266,18 +287,7 @@ export function motionEvaluator(
                 row = resolve(side, target, p);
               if (!row) continue;
               found[side] = row;
-              const subtree = track.mode !== 'match',
-                ancestors = chain(rows[side], row);
-              for (const prev of claims[side]) {
-                if (
-                  prev.row === row
-                    ? track.properties.some((v) => prev.props.includes(v))
-                    : (prev.subtree && ancestors.includes(prev.row)) ||
-                      (subtree && chain(rows[side], prev.row).includes(row))
-                )
-                  issue('MOTION_TRACK_CONFLICT', p, 'Overlapping track claims on ' + side + ' endpoint.', theme);
-              }
-              claims[side].push({ row, subtree, mode: track.mode, props: track.properties, duration });
+              claim(side, { row, subtree: track.mode !== 'match', mode: track.mode, props: track.properties, duration }, p);
             }
             if (
               track.mode === 'match' &&
@@ -357,7 +367,7 @@ function checkComposition(rows, pairs, excluded, claims, positions, issue) {
     if (axes.length) issue('MOTION_UNANIMATED_MOVE', identity(left) + ' moves on ' + axes.join('/') + ' without a position track.');
   };
   const replaced = (side, row) => excluded[side].has(row.i) &&
-    !claims[side].some((claim) => claim.subtree && claim.row === row);
+    !claims[side].some((claim) => claim.subtree && claim.mode !== 'cut' && claim.row === row);
   for (const pair of pairs) {
     const left = rows.from[pair.from], right = rows.to[pair.to];
     if (!replaced('from', left) && !replaced('to', right)) compare(left, right);

@@ -279,6 +279,32 @@ test('contract: flow geometry and presence findings follow strictMotion', t => {
   assert.deepEqual(run(['check', '--read-only']).data.findings, []);
 });
 
+test('contract: strict motion recognizes cuts alongside a pattern and rejects competing claims', t => {
+  const { put, run } = consumer(t);
+  put('adg.config.mjs', options(true));
+  put('design/motion-patterns.json', { version: 1, patterns: {
+    move: { kind: 'layout', action: 'reflow', effect: 'slide', properties: ['x'], interrupt: 'retarget', reduced: 'instant',
+      parameters: { duration: '--duration', easing: '--ease' } },
+  } });
+  const { duration, easing, phases, interrupt, reduced, ...base } = edge;
+  const timed = { anchor: 'save' }, cut = { anchor: 'other' };
+  const declare = instant => put(sidecar, {
+    version: 1, flows: [{ start: ref(first), anchor: { anchor: 'open' }, ends: [ref(last)] }],
+    edges: [{ ...base, pattern: { id: 'move', targets: [timed] }, instant }],
+  });
+  const check = ['check', '--read-only'];
+  declare([cut]);
+  assert.deepEqual(run(check).data.findings, []);
+  declare();
+  const uncovered = run(check, 1).data.findings;
+  assert.deepEqual(uncovered.map(f => f.code), ['MOTION_UNANIMATED_MOVE']);
+  assert.match(uncovered[0].message, /#other/);
+  declare([timed, { anchor: 'missing' }]);
+  const invalid = run(check, 1).data.findings;
+  assert.ok(invalid.some(f => f.code === 'MOTION_TRACK_CONFLICT'));
+  assert.ok(invalid.some(f => f.code === 'MOTION_TARGET_MISSING' && f.pointer.endsWith('/instant/1')));
+});
+
 test('contract: undeclared dead ends warn or fail under strictMotion and declared ends pass', t => {
   const { root, put, run, git } = consumer(t);
   const check = ['check', '--read-only'];

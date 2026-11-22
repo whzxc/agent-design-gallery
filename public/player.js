@@ -367,6 +367,8 @@ export async function openPlayer({ source, frame, theme, invoker }) {
           ...(scale === undefined ? [] : ['Scale: ' + scale]),
         ];
       })))];
+      for (const { anchor, frame, part, key } of edge.instant ?? [])
+        effects.push('Cut: ' + (anchor ? '#' + anchor : frame ? 'Frame' : part + (key === undefined ? '' : ' [' + key + ']')));
       effects.push(...(edge.playbackOmissions ?? []).map(reason => 'Omitted: ' + reason));
       control('effect').textContent = effects.join(' · ');
       const playback = [];
