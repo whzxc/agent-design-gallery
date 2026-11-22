@@ -228,3 +228,13 @@ test('secrets and terminal control codes are sanitized in diagnostics, warnings,
   assert.doesNotMatch(entry.stdout, /adg_a{64}/);
 });
 
+
+test('review embed target resolves explicit choice, host declaration and legacy default', () => {
+  const args = ['review', '--base=HEAD', '--format=embed'];
+  assert.equal(parseCli(args, {}).values.target, 'antigravity');
+  assert.equal(parseCli(args, { ADG_EMBED_TARGET: 'codex' }).values.target, 'codex');
+  assert.equal(parseCli([...args, '--target=antigravity'], { ADG_EMBED_TARGET: 'codex' }).values.target, 'antigravity');
+  assert.throws(() => parseCli(args, { ADG_EMBED_TARGET: 'unknown' }), { code: 'USAGE_INVALID' });
+  assert.throws(() => parseCli(['review', '--base=HEAD', '--target=codex'], {}), { code: 'USAGE_INVALID' });
+  assert.equal(parseCli(['review', '--base=HEAD'], { ADG_EMBED_TARGET: 'codex' }).values.target, undefined);
+});

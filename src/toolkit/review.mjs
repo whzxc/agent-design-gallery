@@ -87,6 +87,7 @@ async function observeUnchanged(session, theme) {
 }
 
 const maxEmbedCards = 8;
+const codexEmbedByteLimit = 1_000_000;
 
 function selectEmbedEntries(model, comparisons, groups) {
   const byId = new Map([...model.sections.added, ...model.sections.changed].map(entry => [identity(entry), entry]));
@@ -108,35 +109,50 @@ function selectEmbedEntries(model, comparisons, groups) {
   return selected;
 }
 
-function buildHtmlReview(model, data, built, theme, locate, format = 'html') {
-  const { compileFrame, assets } = compileSpecimens({ built, theme });
+function buildHtmlReview(model, data, built, theme, locate, format, target) {
   const comparisons = new Map(data.comparisons.filter(row => row.theme === theme).map(row => [identity(row), row]));
   const allEntries = [...model.sections.added, ...model.sections.changed];
-  const selected = format === 'embed' ? selectEmbedEntries(model, comparisons, data.review.groups) : allEntries;
-  const omitted = allEntries.length - selected.length;
-  const cards = selected.map((entry, index) => {
-    const row = comparisons.get(identity(entry));
-    const changed = entry.status === 'changed';
-    const before = changed ? compileFrame(row.before, row.beforeSize, 'before') : null;
-    const after = compileFrame(row.after, row.afterSize, 'after');
-    const difference = format === 'embed' ? null : (changed ? entry.themes.find(item => item.theme === theme)?.images.difference : null);
-    return { index, source: entry.source, frame: entry.frame, status: entry.status, change: entry.change, origin: locate(entry),
-      previousOrigin: entry.previousSource && locate(row.before), before, after, difference, differentPixels: row.pixels?.differentPixels,
-      proposed: row?.proposed ?? null, note: row?.note?.after ?? row?.note?.before ?? null };
-  });
-  const report = { title: model.label, theme, base: model.base.sha, head: model.current.head, counts: model.counts, cards, omitted,
-    groups: data.review.groups, removed: model.sections.removed.map(entry => ({ ...entry, origin: locate(entry, true) })),
-    motion: model.motion, moved: model.movePairs.map(({ before, after }) => ({ before: locate(before, true), after: locate(after) })), failures: model.failures };
-  return format === 'embed' ? reviewEmbedDocument(report, assets()) : reviewDocument(report, assets());
+  const embed = format === 'embed';
+  const selected = embed ? selectEmbedEntries(model, comparisons, data.review.groups) : allEntries;
+
+  function render(entries, motion) {
+    const { compileFrame, assets } = compileSpecimens({ built, theme });
+    const cards = entries.map((entry, index) => {
+      const row = comparisons.get(identity(entry));
+      const changed = entry.status === 'changed';
+      const before = changed ? compileFrame(row.before, row.beforeSize, 'before') : null;
+      const after = compileFrame(row.after, row.afterSize, 'after');
+      const difference = !embed && changed ? entry.themes.find(item => item.theme === theme)?.images.difference : null;
+      return { index, source: entry.source, frame: entry.frame, status: entry.status, change: entry.change, origin: locate(entry),
+        previousOrigin: entry.previousSource && locate(row.before), before, after, difference, differentPixels: row.pixels?.differentPixels,
+        proposed: row?.proposed ?? null, note: row?.note?.after ?? row?.note?.before ?? null };
+    });
+    const report = { title: model.label, theme, base: model.base.sha, head: model.current.head, counts: model.counts, cards,
+      omitted: allEntries.length - entries.length, omittedMotion: motion ? 0 : model.motion?.cards.length ?? 0,
+      groups: data.review.groups, removed: model.sections.removed.map(entry => ({ ...entry, origin: locate(entry, true) })),
+      motion, moved: model.movePairs.map(({ before, after }) => ({ before: locate(before, true), after: locate(after) })), failures: model.failures };
+    return embed ? reviewEmbedDocument(report, assets(), target) : reviewDocument(report, assets());
+  }
+
+  let document = render(selected, model.motion);
+  if (target !== 'codex' || Buffer.byteLength(document) < codexEmbedByteLimit) return document;
+  if (model.motion) document = render(selected, null);
+  for (let count = selected.length; count > 0 && Buffer.byteLength(document) >= codexEmbedByteLimit; count--) {
+    document = render(selected.slice(0, count - 1), null);
+  }
+  return Buffer.byteLength(document) < codexEmbedByteLimit ? document
+    : '<p>The review exceeds the Codex embed size limit. Generate the full review with <code>--format=html</code>.</p>';
 }
 
 /** Generate a standalone, single-theme review without starting a viewer. */
 export async function review(config, values, { log = console.log } = {}) {
   const started = performance.now();
   const format = values.format ?? 'html';
+  const target = format === 'embed' ? (values.target ?? 'antigravity') : undefined;
   const htmlLike = format === 'html' || format === 'embed';
   const [theme] = resolveThemes(values.theme ?? 'system');
-  const destination = path.resolve(config.root, values.out ?? path.join(config.output, format === 'embed' ? 'review-embed.html' : `review.${format}`));
+  const filename = target === 'codex' ? 'review-codex-embed.html' : target ? 'review-embed.html' : `review.${format}`;
+  const destination = path.resolve(config.root, values.out ?? path.join(config.output, filename));
   let locate;
   if (htmlLike) {
     const projectURL = values['viewer-url'] ?? await hubProjectURL(config.root);
@@ -184,14 +200,14 @@ export async function review(config, values, { log = console.log } = {}) {
         await browser.close();
       }
     } else {
-      await writeFile(temporary, buildHtmlReview(model, data, built, theme, locate, format));
+      await writeFile(temporary, buildHtmlReview(model, data, built, theme, locate, format, target));
     }
     ({ size: bytes } = await stat(temporary));
     await rename(temporary, destination);
   } finally {
     await rm(temporary, { force: true });
   }
-  const result = { path: destination, format, base: model.base, current: model.current, theme, counts: model.counts, groups: data.review.groups,
+  const result = { path: destination, format, ...(target ? { target } : {}), base: model.base, current: model.current, theme, counts: model.counts, groups: data.review.groups,
     mode: values.exact ? 'exact' : 'hybrid', structureMatches: skipped.size, pixelComparisons: data.summary.comparisons,
     complete: model.complete, failures: model.failures, bytes, generationMs: performance.now() - started };
   if (model.motion) {

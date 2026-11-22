@@ -30,6 +30,7 @@
         "modules/inspector.tsx",
         "modules/comments.tsx",
         "modules/review.tsx",
+        "modules/review-embed.tsx",
         "modules/shortcuts.tsx",
         "modules/tokens.tsx"
       ]

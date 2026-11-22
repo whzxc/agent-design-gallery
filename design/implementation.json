@@ -397,7 +397,7 @@
       "design": [
         { "source": "design/modules/review.tsx", "part": "ReviewHeader" },
         { "source": "design/modules/review.tsx", "part": "ReviewLayout" },
-        { "source": "design/surfaces/review.tsx" }
+        { "source": "design/surfaces/review.tsx", "frames": ["report", "motion", "enlarged"] }
       ]
     },
     {
@@ -407,6 +407,24 @@
     {
       "implementation": { "file": "src/toolkit/review-document.mjs", "symbol": "mountPreviews", "anchor": "function mountPreviews(" },
       "design": [{ "source": "design/modules/review.tsx", "part": "ReviewZoom" }]
+    },
+    {
+      "implementation": { "file": "src/toolkit/review-embed-document.mjs", "symbol": "reviewEmbedDocument" },
+      "design": [
+        { "source": "design/modules/review-embed.tsx", "part": "EmbedReview" },
+        { "source": "design/surfaces/review.tsx", "frames": ["embed-codex", "embed-antigravity"] }
+      ]
+    },
+    {
+      "implementation": { "file": "src/toolkit/review-embed-document.mjs", "symbol": "cardHtml", "anchor": "function cardHtml(" },
+      "design": [{ "source": "design/modules/review-embed.tsx", "part": "EmbedFrameCard" }]
+    },
+    {
+      "implementation": { "file": "src/toolkit/review-embed-document.mjs", "symbol": "mountEmbed", "anchor": "function mountEmbed(" },
+      "design": [
+        { "source": "design/modules/review-embed.tsx", "part": "EmbedReviewDetail" },
+        { "source": "design/surfaces/review.tsx", "frames": ["embed-enlarged"] }
+      ]
     },
     {
       "implementation": { "file": "public/switcher.js", "symbol": "updateSwitcherLabels" },

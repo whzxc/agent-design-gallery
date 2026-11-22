@@ -18,10 +18,10 @@ async function fixture(t, options) {
   const network = [], errors = [];
   page.on('request', r => { if (/^https?:/.test(r.url())) network.push(r.url()); });
   page.on('pageerror', error => errors.push(error.message));
-  async function generate(expectedExit = 0) {
+  async function generate(expectedExit = 0, format = 'html') {
     let stdout = '';
     const out = path.join(dir, 'review.html');
-    const exit = await main(['review', '--json', '--base=HEAD', '--theme=light', '--out=' + out], fixture.project,
+    const exit = await main(['review', '--json', '--base=HEAD', '--theme=light', '--format=' + format, '--out=' + out], fixture.project,
       { stdout: v => { stdout += v; }, stderr() {}, exit() {} });
     assert.equal(exit, expectedExit, stdout);
     await page.goto(pathToFileURL(out).href);
@@ -62,6 +62,11 @@ test('review contract: a duration-token edit survives static equality and suppor
   assert.deepEqual(f.network, []);
   await f.generate();
   assert.deepEqual(await samples(), first);
+  assert.deepEqual((await f.generate(0, 'embed')).motion, receipt.motion);
+  const embedded = await page.locator('.motion-strip img').evaluateAll(images => images.map(image => image.src));
+  assert.deepEqual(embedded, first);
+  assert.deepEqual(f.errors, []);
+  assert.deepEqual(f.network, []);
 });
 
 test('review contract: resolved alias changes are inherited and coalesce with direct edits', async t => {

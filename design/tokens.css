@@ -42,6 +42,7 @@
   --surface-section: #f5f5f3;
   --surface-sunken: #f1f1ee;
   --border: #e2e2de;
+  --review-well: #edf0f4;
 
   /* Text and accents */
   --text: #1c1c1a;
@@ -66,6 +67,7 @@
   --surface-section: #191919;
   --surface-sunken: #2a2a2a;
   --border: #2d2d2d;
+  --review-well: #151922;
   --text: #efefed;
   --text-secondary: #a8a8a4;
   --text-tertiary: #85857f;

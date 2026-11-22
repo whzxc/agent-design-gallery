@@ -834,12 +834,17 @@ the consumer's normal approval process.
 
 ```sh
 adg review --base=<rev> --json
-adg review --base=<rev> --format=embed --json
+adg review --base=<rev> --format=embed --target=codex --json
+adg review --base=<rev> --format=embed --target=antigravity --json
 adg review --base=<rev> --format=png --json
 adg review --base=<rev> --theme=dark --out=/path/to/run/review.html --viewer-url=https://gallery.example/p/project/
 ```
 
-Use the commit where the task started as `--base`. Share the artifact at `data.path`. HTML is the default and suits frame-by-frame review and approvals. `--format=embed` generates a compact inline HTML widget (`<configured output>/review-embed.html`) designed for embedding inside agent chats or opening in a browser tab with stacked frame cards, live light/dark switching, a Before/After curtain slider, and click-to-enlarge zoom inspection; it omits pixel-difference PNGs and caps stacked cards to 8 prioritized frames (proposed, added, direct, then inherited representatives/outliers), directing overflow to `--format=html`. The default path is `<configured output>/review.html`, `<configured output>/review-embed.html`, or `<configured output>/review.png`. A relative `--out` resolves from the project root and its extension must match the format (`.html` for `html` and `embed`, `.png` for `png`). Both formats default to the macOS system theme or light on other platforms. Regenerate the report when its design inputs change.
+Use the commit where the task started as `--base`. Share the artifact at `data.path`. HTML is the default at `<configured output>/review.html` and suits frame-by-frame review and approvals. PNG defaults to `<configured output>/review.png`. A relative `--out` resolves from the project root and its extension must match the format (`.html` for `html` and `embed`, `.png` for `png`). Reviews default to the macOS system theme or light on other platforms. Regenerate the report when its design inputs change.
+
+Both embed targets use stacked frame cards with an icon toolbar, light/dark controls, a Before/After slider by default, split view and an enlarged inspector. `--target=codex` emits an HTML fragment at `<configured output>/review-codex-embed.html`; use its path in the Codex visualization reference. When the chat host supports it, **Use this frame in Codex** opens a follow-up with the project, frame source, frame name and base commit. `--target=antigravity` emits a complete HTML document at `<configured output>/review-embed.html`. An explicit target overrides `ADG_EMBED_TARGET`. With neither set, embed uses Antigravity.
+
+Embed omits pixel-difference PNGs and caps stacked cards at 8 prioritized frames (proposed, added, direct, then inherited representatives and outliers). Codex fragments stay under 1 MB, omitting motion strips first and then lower-priority cards when needed. Use `--format=html` for the full review.
 
 The HTML opens directly in a browser and needs no running viewer. Its full-width cards are organized into Added, Direct changes, Inherited changes, Removed and Moved. Added frames display After. Changed frames display Before, After and Difference in aligned panes. Before and After show the compiled frames on a solid preview well. ADG's injected capture backdrop is transparent so authored surfaces and controls keep their own paint. Previews mount near the viewport, and collapsed group members mount after expansion. Click **Enlarge** or a preview to inspect the comparison or one pane, fit it or view it at 100%. Click an available source breadcrumb and frame title to open that frame in the viewer. The link comes from the registered hub or an explicit `--viewer-url`. Use the board for comments.
 
