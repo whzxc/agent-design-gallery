@@ -333,6 +333,27 @@ test('compare ignores aria-hidden on the capture target and ancestors but exclud
   } finally { await browser.close(); }
 });
 
+test('contract: compare extracts rendered disclosure text and excludes hidden and zero-size subtrees', async () => {
+  const browser = await launch();
+  try {
+    const page = await browser.newPage();
+    await page.setContent(`<style>[hidden] {display:block}</style>
+      <section><details><summary><span>Sort</span></summary>
+        <div>Created</div><input placeholder="Option filter">
+      </details>
+      <div hidden>Hidden attribute</div>
+      <div style="display:none">No display</div>
+      <div style="visibility:hidden"><span style="visibility:visible">Hidden subtree</span></div>
+      <div style="position:relative;width:0;height:0"><span style="position:absolute;white-space:nowrap">Zero size</span></div>
+      <div style="display:contents"><div>Visible content</div></div></section>`);
+    const read = async () => (await page.locator('section').evaluate(implementationTexts)).texts.map(row => row.text);
+    assert.deepEqual(await read(), ['Sort', 'Visible content']);
+    assert.deepEqual((await page.locator('details > div').evaluate(implementationTexts)).texts, []);
+    await page.locator('summary').click();
+    assert.deepEqual(await read(), ['Sort', 'Created', 'Option filter', 'Visible content']);
+  } finally { await browser.close(); }
+});
+
 test('compare reads centered clipped labels and one value or placeholder per text field', async () => {
   const browser = await launch();
   try {

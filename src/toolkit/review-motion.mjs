@@ -2,7 +2,7 @@ import { canonicalBytes } from './impact-proof.mjs';
 import { relative } from './project.mjs';
 import { parseTokens } from './tokens.mjs';
 import { playbackEdge } from './play-endpoint.mjs';
-import { timingRefs } from './motion.mjs';
+import { timingRefs, transformRefs } from './motion.mjs';
 import { assetStore, withFilmstrip } from './review-filmstrip.mjs';
 
 const equal = (a, b) => canonicalBytes(a) === canonicalBytes(b);
@@ -58,7 +58,8 @@ function revision(view, side, store, failures, theme) {
       const to = await endpoint(edge.to);
       source = owner;
       const resolved = playbackEdge(edge, from.frame, tokens, theme, design);
-      const timings = Object.fromEntries(timingRefs(edge).map(({ name, pointer }) => [name, resolved.timings[pointer]]));
+      const timings = Object.fromEntries([...timingRefs(edge), ...transformRefs(edge)].map(({ name, pointer }) =>
+        [name, resolved.timings[pointer] ?? resolved.transforms?.[pointer]]));
       return { from: from.hash, to: to.hash, edge: resolved,
         endpointStatus: [from.frame.proposed, to.frame.proposed].map(v => v ?? 'current'), timings };
     } catch (error) {

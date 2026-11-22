@@ -4,9 +4,16 @@ export function implementationTexts(root, clip) {
   const texts = [];
   const measure = document.createElement('canvas').getContext('2d');
   const visible = owner => {
-    for (let el = owner; el; el = el.parentElement) {
+    for (let el = owner, child = null; el; child = el, el = el.parentElement) {
       const style = getComputedStyle(el);
-      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+      if (el.hasAttribute('hidden') || style.display === 'none' || style.visibility === 'hidden' ||
+          style.visibility === 'collapse' || style.opacity === '0') return false;
+      if (el.localName === 'details' && !el.open &&
+          (!child || child !== el.querySelector(':scope > summary'))) return false;
+      if (style.display !== 'contents') {
+        const { width, height } = el.getBoundingClientRect();
+        if (width <= 0 || height <= 0) return false;
+      }
     }
     const hidden = owner.closest('[aria-hidden="true"]');
     return (!hidden || hidden === root || !root.contains(hidden)) && !owner.closest('script, style, .sr-only');

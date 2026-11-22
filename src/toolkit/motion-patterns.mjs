@@ -2,7 +2,7 @@ import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { CliError } from '../cli-output.mjs';
 import { parseTokens } from './tokens.mjs';
-import { milliseconds, motionPrimitives, tokenValue, validMotionEasing } from './motion-primitives.mjs';
+import { milliseconds, motionPrimitives, motionTransformValue, tokenValue, validMotionEasing } from './motion-primitives.mjs';
 
 const roleDefaults = {
   'duration-base': '--adg-motion-base',
@@ -77,8 +77,8 @@ function validParameter(primitives, theme, key, token) {
     case 'spring': return Object.hasOwn(primitives.springs[theme], token);
     case 'duration':
     case 'stagger': return Number.isFinite(milliseconds(value));
-    case 'distance': return /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%)$/.test(value ?? '');
-    case 'scale': return /^\+?(?:\d+(?:\.\d+)?|\.\d+)$/.test(value ?? '') && Number.isFinite(Number(value));
+    case 'distance':
+    case 'scale': return motionTransformValue(key, value) !== null;
     default: return validMotionEasing(value);
   }
 }
@@ -195,11 +195,12 @@ export function patternEdge(edge, catalog, issue) {
     issue('MOTION_PATTERN_INVALID', '/pattern', 'Choose a declared pattern, optional enter/exit/replace direction and explicit targets.');
     return edge;
   }
-  if (['phases','duration','easing','interrupt','reduced'].some(key => Object.hasOwn(fields, key))) {
+  if (['phases','duration','easing','interrupt','reduced','playbackOmissions'].some(key => Object.hasOwn(fields, key))) {
     issue('MOTION_PATTERN_INVALID', '/pattern', 'A pattern supplies phases, timing, interrupt and reduced motion.');
     return edge;
   }
   const direction = ref.direction ?? selected.action;
+  const parameters = patternParameters(selected, direction);
   let mode, properties;
   if (selected.kind === 'layout' || selected.effect === 'slide' || selected.effect === 'pop') {
     if (!['layout','transition'].includes(selected.kind) || selected.action === 'avoid') {
@@ -216,11 +217,37 @@ export function patternEdge(edge, catalog, issue) {
     issue('MOTION_PATTERN_INVALID', '/pattern', 'This pattern needs continuous, ambient or stagger behavior beyond a discrete edge.');
     return edge;
   }
-  const parameters = patternParameters(selected, direction);
+  const playbackOmissions = [];
+  const transform = {};
+  const presence = selected.kind === 'transition' && ['enter', 'exit'].includes(direction);
+  if (parameters.distance) {
+    const x = selected.properties.includes('x'), y = selected.properties.includes('y');
+    if (!presence) playbackOmissions.push('Distance offset requires an entry or exit effect.');
+    else if (x && y) playbackOmissions.push('Distance offset needs a single axis.');
+    else Object.assign(transform, { distance: parameters.distance, axis: x ? 'x' : 'y' });
+  }
+  if (parameters.scale) {
+    if (presence) transform.scale = parameters.scale;
+    else playbackOmissions.push('Scale factor requires an entry or exit effect.');
+  }
+  if (transform.distance || transform.scale) {
+    mode = direction;
+    properties = [
+      ...(selected.properties.includes('opacity') || direction === 'enter' && parameters.fromOpacity !== undefined ? ['opacity'] : []),
+      ...(transform.distance ? ['translate'] : []),
+      ...(transform.scale ? ['scale'] : []),
+    ];
+  }
+  if (parameters.stagger) playbackOmissions.push('Stagger is outside the discrete player contract.');
+  if (parameters.fromOpacity !== undefined && mode !== 'enter')
+    playbackOmissions.push('Starting opacity requires an entry effect.');
   const duration = parameters.spring ? parameters.spring + '-duration' : parameters.duration;
   const easing = parameters.spring ?? parameters.easing;
-  return { ...fields, duration, easing, interrupt: selected.interrupt, reduced: selected.reduced, phases: [[{
+  const track = {
     mode, properties, targets: ref.targets,
+    ...(Object.keys(transform).length && { transform }),
     ...(mode === 'enter' && parameters.fromOpacity !== undefined ? { fromOpacity: parameters.fromOpacity } : {}),
-  }]] };
+  };
+  return { ...fields, duration, easing, interrupt: selected.interrupt, reduced: selected.reduced,
+    ...(playbackOmissions.length && { playbackOmissions }), phases: [[track]] };
 }

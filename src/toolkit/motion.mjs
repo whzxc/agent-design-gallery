@@ -7,7 +7,7 @@ import { portablePath } from './owner-locators.mjs';
 import { motionFlows } from './motion-flows.mjs';
 import { relative } from './project.mjs';
 import { loadMotionPatterns, patternEdge } from './motion-patterns.mjs';
-import { motionPrimitives } from './motion-primitives.mjs';
+import { motionPrimitives, motionTransformValue } from './motion-primitives.mjs';
 
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const fields = (value, allowed) => object(value) && Object.keys(value).every((key) => allowed.includes(key));
@@ -46,7 +46,8 @@ function validateShape(e, issue, { patternBacked } = {}) {
       'focus',
       'rememberTrigger',
       'proposed',
-      'unsupported'
+      'unsupported',
+      ...(patternBacked ? ['playbackOmissions'] : [])
     ])
   )
     issue('MOTION_SCHEMA', '', 'Use only version 1 edge fields.');
@@ -100,7 +101,8 @@ function validateShape(e, issue, { patternBacked } = {}) {
     phase.forEach((track, j) => {
       const p = at + '/' + j;
       if (
-        !fields(track, ['targets', 'properties', 'mode', 'duration', 'easing', 'fromOpacity']) ||
+        !fields(track, ['targets', 'properties', 'mode', 'duration', 'easing', 'fromOpacity',
+          ...(patternBacked ? ['transform'] : [])]) ||
         !modes.includes(track.mode) ||
         !Array.isArray(track.targets) ||
         !track.targets.length ||
@@ -116,9 +118,11 @@ function validateShape(e, issue, { patternBacked } = {}) {
         issue('MOTION_SCHEMA', p + '/fromOpacity', 'Only enter accepts a starting opacity in [0,1].');
       const props = track.properties,
         allowed = track.mode === 'match' ? ['x', 'y', 'width', 'height', 'opacity'] : ['opacity'];
+      if (track.transform?.distance) allowed.push('translate');
+      if (track.transform?.scale) allowed.push('scale');
       if (
         !Array.isArray(props) ||
-        !props.length ||
+        (!props.length && !(patternBacked && e.playbackOmissions?.length)) ||
         props.some((prop) => !allowed.includes(prop)) ||
         new Set(props).size !== props.length
       )
@@ -255,7 +259,8 @@ function validEasing(raw) {
 
 const expandedTokens = new WeakMap();
 export function resolveMotionToken(tokens, theme, name, kind) {
-  if (typeof name === 'string' && /^(--adg-motion-|--motion-spring-)/.test(name)) {
+  const transform = kind === 'distance' || kind === 'scale';
+  if (transform || typeof name === 'string' && /^(--adg-motion-|--motion-spring-)/.test(name)) {
     if (!expandedTokens.has(tokens)) expandedTokens.set(tokens, motionPrimitives(tokens).tokens);
     tokens = expandedTokens.get(tokens);
   }
@@ -272,6 +277,7 @@ export function resolveMotionToken(tokens, theme, name, kind) {
       key = alias[1];
       continue;
     }
+    if (transform) return { names, value: motionTransformValue(kind, raw) };
     if (kind === 'duration') {
       const time = /^(\+?(?:\d+(?:\.\d+)?|\.\d+))(ms|s)$/i.exec(raw);
       const ms = time ? Number(time[1]) * (time[2].toLowerCase() === 's' ? 1000 : 1) : NaN;
@@ -291,6 +297,13 @@ export function timingRefs(edge) {
       .filter((kind) => !pointer || Object.hasOwn(scope, kind))
       .map((kind) => ({ pointer: pointer + '/' + kind, kind, name: scope[kind] }))
   );
+}
+
+export function transformRefs(edge) {
+  return edge.phases.flatMap((phase, i) => phase.flatMap(({ transform }, j) =>
+    ['distance', 'scale'].filter(kind => transform?.[kind]).map(kind => ({
+      pointer: '/phases/' + i + '/' + j + '/transform/' + kind, kind, name: transform[kind]
+    }))));
 }
 
 export function motionSummary(data, rows, expanded = false) {

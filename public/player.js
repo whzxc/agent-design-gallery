@@ -48,7 +48,7 @@ export async function openPlayer({ source, frame, theme, invoker }) {
     <div><button data-control="pause">Pause transition</button><button data-control="replay">${icon('rotate-ccw', 14)}Replay transition</button></div></div>
     <div class="play-clock"><span>0 ms</span><input data-control="seek" type="range" min="0" max="100" step="1" value="0" aria-label="Transition progress">
     <span data-control="end"></span></div><p data-control="instant"></p>
-    <p data-control="policy"></p>
+    <p data-control="effect"></p><p data-control="policy"></p>
     <footer><span data-control="duration"></span><span data-control="easing"></span><b data-control="elapsed"></b></footer></section>
     <small role="status"></small>`;
   document.head.append(link);
@@ -356,6 +356,19 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       control('seek').disabled = busy || reduced() || !!edge.unsupported;
       dialog.querySelector('.play-clock').hidden = instant;
       control('instant').textContent = instant ? 'Applied instantly · 0 ms' : '';
+      const effects = [...new Set(edge.phases.flatMap((phase, i) => phase.flatMap(({ transform }, j) => {
+        if (!transform) return [];
+        const path = '/phases/' + i + '/' + j + '/transform/';
+        const distance = edge.transforms[path + 'distance'], scale = edge.transforms[path + 'scale'];
+        const offset = distance && (transform.axis === 'y'
+          ? (distance.startsWith('-') ? distance.slice(1) : '−' + distance) : distance);
+        return [
+          ...(offset ? ['Translate ' + transform.axis.toUpperCase() + ': ' + offset] : []),
+          ...(scale === undefined ? [] : ['Scale: ' + scale]),
+        ];
+      })))];
+      effects.push(...(edge.playbackOmissions ?? []).map(reason => 'Omitted: ' + reason));
+      control('effect').textContent = effects.join(' · ');
       const playback = [];
       if (edge.interrupt !== 'finish')
         playback.push('Runtime interruption: ' + edge.interrupt + '. The player finishes the current transition before the next action.');

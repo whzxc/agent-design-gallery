@@ -31,6 +31,13 @@ export function milliseconds(value) {
   return match ? Number(match[1]) * (match[2] === 's' ? 1000 : 1) : NaN;
 }
 
+export function motionTransformValue(kind, raw) {
+  const number = Number.parseFloat(raw);
+  if (!Number.isFinite(number)) return null;
+  if (kind === 'distance') return /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:px|rem|em|%)$/.test(raw) ? raw : null;
+  return /^\+?(?:\d+(?:\.\d+)?|\.\d+)$/.test(raw) ? number : null;
+}
+
 export function validMotionEasing(value) {
   if (!value) return false;
   const linear = /^linear\(([^()]*)\)$/i.exec(value);

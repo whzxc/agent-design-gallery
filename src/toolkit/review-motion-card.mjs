@@ -13,7 +13,8 @@ export function motionCard(card, index, assets) {
     if (!side) return '';
     const edge = side.edge;
     const label = name === 'before' ? 'Before' : 'After';
-    const fallback = [side.fallback, ...(edge.unsupported ?? []).map(u => u.effect + ' · ' + u.reason)].filter(Boolean);
+    const fallback = [side.fallback, ...(edge.playbackOmissions ?? []).map(reason => 'Omitted: ' + reason),
+      ...(edge.unsupported ?? []).map(u => u.effect + ' · ' + u.reason)].filter(Boolean);
     return `<section class="motion-side"><h4>${label} · ${esc(edge.label ?? card.id)}</h4>
       <div>${esc(edge.gesture ?? edge.trigger?.on)} · ${esc(target(edge.trigger?.target))} · ${edge.proposed ? 'Proposed · ' + esc(edge.proposed) : 'Current'}</div>
       <code>${esc(ref(edge.from))} → ${esc(ref(edge.to))}</code>

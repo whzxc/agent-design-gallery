@@ -27,7 +27,9 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
     const response=await route.fetch(), data=await response.json();
     for(const edge of data.edges??[]) {
       edge.timings['/duration']=3000;
-      if (edge.id === 'open-project-switcher') Object.assign(edge, { interrupt: 'retarget', reduced: 'static' });
+      if (edge.id === 'open-project-switcher') Object.assign(edge, {
+        interrupt: 'retarget', reduced: 'static', playbackOmissions: ['Stagger is outside the discrete player contract.'],
+      });
     }
     await route.fulfill({json:data});
   });
@@ -52,6 +54,7 @@ test('contract: switcher keyboard actions, seek without focus commit, finish int
   await player.locator('[data-control=inspector]').click();
   await player.getByText(/Runtime interruption: retarget.*finishes the current transition/).waitFor();
   await player.getByText(/Runtime reduced motion: static.*shows the destination immediately/).waitFor();
+  await player.getByText('Omitted: Stagger is outside the discrete player contract.', { exact: true }).waitFor();
   await player.getByRole('button',{name:'Pause transition',exact:true}).click();
   await seek.focus();await page.keyboard.press('End');
   assert.equal(await seek.inputValue(),'100');
@@ -478,4 +481,44 @@ test('contract: one inert sandbox, deterministic seek and nested frame-coordinat
   assert.deepEqual(result.phases,[[0.2,0],[0,0.25],[0,0.8]]);
   assert.equal(result.sandbox,'allow-same-origin');assert.equal(result.href,'about:srcdoc');
   assert.equal(result.contexts,0);assert.equal(result.link,false);assert.deepEqual(requests,[]);
+});
+
+test('contract: presence tracks seek distance, scale and opacity together', async t => {
+  const { page, url } = await viewer(t);
+  await page.goto(url);
+  const values = await page.evaluate(async () => {
+    const { createStage, mountScene, observeScene } = await import('./motion-scene.js');
+    const { preparePaint } = await import('./motion-paint.js');
+    const iframe = await createStage(document.body), doc = iframe.contentDocument;
+    const endpoint = show => ({
+      frame: 'test', design: 'design', css: 'body{margin:0}',
+      html: '<main>' + (show ? '<div data-adg-id="menu" style="position:absolute;left:20px;top:30px;width:100px;height:50px">Menu</div>' : '') + '</main>',
+    });
+    const before = observeScene(await mountScene(doc, endpoint(false), 'light'), 'design', true);
+    const stage = await mountScene(doc, endpoint(true), 'light');
+    const after = observeScene(stage, 'design', true);
+    const track = { targets: [{ anchor: 'menu' }], properties: ['opacity', 'translate', 'scale'],
+      transform: { axis: 'y', distance: '--lift', scale: '--scale' } };
+    function sample(from, to, mode) {
+      const paint = preparePaint(stage, from, to, {
+        phases: [[{ ...track, mode }]],
+        timings: { '/duration': 160, '/easing': 'linear' },
+        transforms: { '/phases/0/0/transform/distance': '6px', '/phases/0/0/transform/scale': 0.97 },
+      });
+      const layer = doc.body.lastElementChild.shadowRoot;
+      const root = [...layer.children].find(node => node.shadowRoot?.textContent === 'Menu');
+      const samples = [0, 0.5, 1, 0.5].map(progress => {
+        paint.seek(progress);
+        const { x, y, width } = root.getBoundingClientRect();
+        return [x, y, width, Number(root.style.opacity)];
+      });
+      paint.dispose();
+      return samples;
+    }
+    const result = { enter: sample(before, after, 'enter'), exit: sample(after, before, 'exit') };
+    iframe.remove();
+    return result;
+  });
+  assert.deepEqual(values.enter, [[20, 24, 97, 0], [20, 27, 98.5, 0.5], [20, 30, 100, 1], [20, 27, 98.5, 0.5]]);
+  assert.deepEqual(values.exit, [[20, 30, 100, 1], [20, 27, 98.5, 0.5], [20, 24, 97, 0], [20, 27, 98.5, 0.5]]);
 });

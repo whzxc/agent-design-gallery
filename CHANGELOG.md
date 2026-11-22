@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.3
+
+- Play pattern distance and scale with entry and exit opacity. The inspector identifies parameters that the discrete player omits.
+- Exclude closed disclosure contents and hidden or zero-size subtrees from both sides of text comparison.
+
 ## 0.17.2
 
 - Preserve runtime interruption and reduced-motion policies on pattern-backed edges and describe the discrete player's fallback in the inspector.

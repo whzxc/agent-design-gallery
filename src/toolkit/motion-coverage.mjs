@@ -3,7 +3,7 @@ import { CliError } from '../cli-output.mjs';
 import { frameKey } from './motion-flows.mjs';
 import { scanMotion } from './motion-inventory.mjs';
 import { fallbackMotionRoles, loadMotionPatterns, patternParameters } from './motion-patterns.mjs';
-import { readMotion, timingRefs } from './motion.mjs';
+import { readMotion, timingRefs, transformRefs } from './motion.mjs';
 
 function report(data, summary, log) {
   log(summary);
@@ -71,7 +71,7 @@ export function motionCoverage(config, log) {
   const unlabeledEdges = [];
   for (const {edge, source, pointer, locations, pattern} of graph.records) {
     if (!edge.label) unlabeledEdges.push({ source, line: locations[pointer].line, id: edge.id });
-    recordRoles(timingRefs(edge).map(ref => ref.name), pattern?.id);
+    recordRoles([...timingRefs(edge), ...transformRefs(edge)].map(ref => ref.name), pattern?.id);
   }
   const incompleteFlows = [];
   for (const flow of new Set(graph.flows.values())) {

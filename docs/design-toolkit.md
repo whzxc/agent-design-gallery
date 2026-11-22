@@ -327,9 +327,14 @@ A version 1 sidecar edge may replace `duration`, `easing`, `phases`,
 `"pattern": {"id": "fade", "direction": "enter", "targets": [{"anchor": "panel"}]}`.
 The edge still owns its ID, endpoints, trigger and focus. If omitted,
 `direction` uses the pattern's action. Fade entry/exit and crossfade compile to
-opacity tracks. Discrete resize/reflow, slide and spring pop compile to
-matched geometry tracks with authored endpoints. Spring pop uses width and
-height to represent scale. Pattern-backed edges retain the runtime policy
+opacity tracks. Discrete resize/reflow, slide and spring pop can use matched
+geometry tracks with authored endpoints. Entry and exit patterns with distance
+or scale animate those transforms on the presence track alongside any opacity
+change. A distance uses an explicit `x` or `y` property when present and
+defaults to a vertical lift for `transform`. A positive distance offsets the
+paint right for `x` and up for `y`. Scale uses the top-left corner. The
+transition inspector lists resolved transforms and any parameters that the
+discrete edge cannot represent. Pattern-backed edges retain the runtime policy
 declared by the pattern. The discrete player finishes the current edge before
 running the next action for every interruption policy. In reduced motion it
 commits the destination immediately, including when that destination is the
@@ -1108,7 +1113,7 @@ entries. Saving the working tree refreshes both paths through the existing watch
 
 `compare` builds the frame and renders it in Chromium beside the implementation in the fixture's theme, locale, time zone and clock. The capture comes from the frame's `capture`, overridden by flags. A page capture sets the viewport and clips the page at `origin` with the frame's size; `region` captures the element with role `region` or `dialog` and that accessible name; `selector` captures the first element matching a CSS selector. Each click activates the first visible control with that exact accessible name among buttons, radios, tabs, checkboxes, switches, menu items, options and links. After the clicks, `compare` waits until the captured texts and their boxes stay unchanged for 300ms, up to 5s.
 
-Both sides are read the same way. The reader takes one text per rendered line, including the placeholders of empty fields, and skips text clipped outside the captured element. Adjacent texts on one line with less than one space between them read as one text. `aria-hidden` on the capture target and its ancestors is ignored; `aria-hidden` subtrees inside it are skipped. Texts pair by content, and repeated texts pair with the nearest position first. Positions are relative to the frame's shell and to the captured element. It reports anchored-edge, vertical-center and width differences above 2px, plus texts missing from either side. It does not compare shapes, so review the overlay as well.
+Both sides are read the same way. A closed disclosure contributes its summary only. Hidden, zero-size and CSS-invisible subtrees are excluded. The reader takes one text per rendered line, including the placeholders of empty fields, and skips text clipped outside the captured element. Adjacent texts on one line with less than one space between them read as one text. `aria-hidden` on the capture target and its ancestors is ignored; `aria-hidden` subtrees inside it are skipped. Texts pair by content, and repeated texts pair with the nearest position first. Positions are relative to the frame's shell and to the captured element. It reports anchored-edge, vertical-center and width differences above 2px, plus texts missing from either side. It does not compare shapes, so review the overlay as well.
 
 `output/design/compare/<source>-<frame>-<fixture>/` receives `design.png`, `implementation.png`, `overlay.png`, `report.json` and `index.html`. `report.json` records `settled: false` when the texts did not settle; that is an incomplete evaluation and exits 2. Completed text/position differences exit 1. Missing targets and adapter, browser or capture failures exit 2. Under `--json`, both single and all modes return `data.comparisons`, `skipped`, aggregate `summary`, completed artifact paths and `complete`; a failed batch retains observed results with `complete: false`. Empty selections exit 0 with `EMPTY_SELECTION`. Treat them as a review list, not a zero gate. Missing or extra texts, wrong order or grouping, and one offset shared by many texts point to real defects, such as a lost font rule or a leftover border. An isolated offset of a few pixels can stay.
 

@@ -2,7 +2,7 @@ import { edgePresentation } from './motion-label.mjs';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { frameKey, motionFlows } from './motion-flows.mjs';
-import { readMotion, resolveMotionToken, timingRefs } from './motion.mjs';
+import { readMotion, resolveMotionToken, timingRefs, transformRefs } from './motion.mjs';
 import { relative, loadTokens } from './project.mjs';
 import { CliError } from '../cli-output.mjs';
 
@@ -59,8 +59,11 @@ export async function playEndpoint(config, root, source, frame, theme, build, gr
 }
 
 export function playbackEdge(edge, endpoint, tokens, theme, design) {
-  const timings = Object.fromEntries(timingRefs(edge).map(({ pointer, name, kind }) =>
+  const resolve = refs => Object.fromEntries(refs.map(({ pointer, name, kind }) =>
     [pointer, resolveMotionToken(tokens, theme, name, kind).value]));
-  if (Object.values(timings).includes(null)) throw Error('Unresolved timing on ' + edge.id + '. Run adg check.');
-  return { ...edge, ...edgePresentation(edge, endpoint.html, design), authoredLabel: !!edge.label, timings };
+  const timings = resolve(timingRefs(edge)), transforms = resolve(transformRefs(edge));
+  if ([...Object.values(timings), ...Object.values(transforms)].includes(null))
+    throw Error('Unresolved motion token on ' + edge.id + '. Run adg check.');
+  return { ...edge, ...edgePresentation(edge, endpoint.html, design), authoredLabel: !!edge.label, timings,
+    ...(Object.keys(transforms).length && { transforms }) };
 }

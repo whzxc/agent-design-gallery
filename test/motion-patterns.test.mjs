@@ -10,6 +10,7 @@ import { motionCards } from '../src/boards/motion-board.mjs';
 import { loadMotionPatterns, patternParameters } from '../src/toolkit/motion-patterns.mjs';
 import { motionCodeExcerpt, scanMotion } from '../src/toolkit/motion-inventory.mjs';
 import { readMotion, resolveMotionToken } from '../src/toolkit/motion.mjs';
+import { playbackEdge } from '../src/toolkit/play-endpoint.mjs';
 import { parseTokens } from '../src/toolkit/tokens.mjs';
 
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url));
@@ -63,7 +64,10 @@ function Widget() {
     pattern: {id: 'fade', targets: [{anchor: 'widget'}]},
   }] });
   write('design/motion-patterns.json', {version: 1, patterns: {
-    fade: { interrupt: 'retarget', reduced: 'static', parameters: {spring: '--motion-spring-test'}, consumers: [
+    fade: { interrupt: 'retarget', reduced: 'static', parameters: {
+      spring: '--motion-spring-test', distance: '--motion-distance-small', scale: '--motion-scale-small',
+      stagger: '--motion-stagger-small',
+    }, consumers: [
       {file: 'widget.css', match: 'css:.widget'}, {file: 'widget.css', match: 'keyframes:appear'},
       {file: 'widget.tsx', match: 'motion:layout', within: 'Widget'},
       {file: 'widget.tsx', match: 'motion:AnimatePresence'},
@@ -77,6 +81,14 @@ function Widget() {
   assert.equal(edge.interrupt, 'retarget');
   assert.equal(edge.reduced, 'static');
   assert.equal(edge.phases[0][0].mode, 'enter');
+  assert.deepEqual(edge.phases[0][0].properties, ['opacity', 'translate', 'scale']);
+  assert.equal(edge.phases[0][0].transform.axis, 'y');
+  assert.match(edge.playbackOmissions.join(' '), /Stagger/);
+  const scene = playbackEdge(edge, { html: '' }, parseTokens(tokens), 'dark', 'design');
+  assert.deepEqual(scene.transforms, {
+    '/phases/0/0/transform/distance': '20px',
+    '/phases/0/0/transform/scale': 0.85,
+  });
   assert.equal(resolveMotionToken(parseTokens(tokens), 'dark', edge.duration, 'duration').value, 250);
   assert.equal(resolveMotionToken(parseTokens(tokens), 'dark', edge.easing, 'easing').value, springEasing(0));
   const inventory = scanMotion(config, catalog, graph);

@@ -7,7 +7,7 @@ import path from 'node:path';
 import { loadFrame } from './browser.mjs';
 import { buildSource } from './build.mjs';
 import { listSources, relative, loadTokens, sourceDirectories, isFeatureInternal } from './project.mjs';
-import { resolveMotionToken, timingRefs } from './motion.mjs';
+import { resolveMotionToken, timingRefs, transformRefs } from './motion.mjs';
 
 // Runs inside the frame observation page. Indexes are local to this one observation.
 function observe({ design, nativeTextEntry }) {
@@ -183,10 +183,12 @@ export function motionEvaluator(
     for (const [i, u] of (e.unsupported ?? []).entries())
       issue('MOTION_UNSUPPORTED', '/unsupported/' + i, u.effect + ': ' + u.reason, null, true);
     for (const theme of themes) {
-      const times = {};
-      for (const { pointer, kind, name } of timingRefs(e)) {
-        times[pointer] = resolveMotionToken(tokens, theme, name, kind).value;
-        if (times[pointer] === null)
+      const times = {}, transforms = {};
+      for (const { pointer, kind, name } of [...timingRefs(e), ...transformRefs(e)]) {
+        const value = resolveMotionToken(tokens, theme, name, kind).value;
+        if (kind === 'duration' || kind === 'easing') times[pointer] = value;
+        else transforms[pointer] = value;
+        if (value === null)
           issue(
             'MOTION_TOKEN',
             pointer,
@@ -331,7 +333,8 @@ export function motionEvaluator(
           theme,
           true
         );
-      detail.themes[theme] = { timings: times, tracks, targets: resolved, ...implicit };
+      detail.themes[theme] = { timings: times, ...(Object.keys(transforms).length && { transforms }),
+        tracks, targets: resolved, ...implicit };
     }
     if (detail.themes.dark && JSON.stringify(detail.themes.light) === JSON.stringify(detail.themes.dark))
       detail.themes.dark = { sameAs: 'light' };

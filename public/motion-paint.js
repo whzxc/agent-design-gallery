@@ -25,10 +25,10 @@ export function preparePaint(stage, from, to, edge, pin) {
   const defaultTime = { start: 0, duration: edge.timings['/duration'], easing: edge.timings['/easing'] };
   let start = 0,
     total = 0;
-  function add(left, right, mode, props, time, fromOpacity) {
+  function add(left, right, mode, props, time, fromOpacity, transform) {
     let track = mode === 'match' && tracks.find((t) => t.mode === 'match' && t.left === left && t.right === right);
     if (!track) {
-      track = { left, right, mode, props: {}, fromOpacity };
+      track = { left, right, mode, props: {}, fromOpacity, transform };
       tracks.push(track);
     }
     for (const prop of props) track.props[prop] = time;
@@ -58,7 +58,8 @@ export function preparePaint(stage, from, to, edge, pin) {
       for (const target of t.targets) {
         const left = t.mode === 'enter' && !candidates(from, target).length ? null : unique(from, target);
         const right = t.mode === 'exit' ? null : unique(to, target);
-        add(left, right, t.mode, t.properties, time, t.fromOpacity);
+        const transform = t.transform && resolveTransform(t.mode === 'exit' ? left : right, t.transform, path);
+        add(left, right, t.mode, t.properties, time, t.fromOpacity, transform);
         if (t.mode !== 'match') {
           if (left) subtrees.from.add(left.i);
           if (right) subtrees.to.add(right.i);
@@ -252,6 +253,28 @@ export function preparePaint(stage, from, to, edge, pin) {
     node.style.transform = 'translate(' + box[0] + 'px,' + box[1] + 'px) scale(' + sx + ',' + sy + ')';
     node.style.opacity = String(Math.min(1, Math.max(0, opacity)));
   }
+  function resolveTransform(row, track, path) {
+    const axis = track.axis === 'x' ? 0 : 1;
+    const distance = edge.transforms[path + '/transform/distance'];
+    let translation = 0;
+    if (distance) {
+      const number = Number.parseFloat(distance);
+      const pixels = distance.endsWith('%') ? number * row.localSize[axis] / 100
+        : distance.endsWith('rem') ? number * Number.parseFloat(doc.defaultView.getComputedStyle(doc.documentElement).fontSize)
+        : distance.endsWith('em') ? number * Number.parseFloat(row.paint.style.fontSize) : number;
+      translation = (axis === 0 ? 1 : -1) * pixels;
+    }
+    return { axis, translation, scale: edge.transforms[path + '/transform/scale'] ?? 1 };
+  }
+  function offsetBox(row, transform, amount) {
+    if (!transform) return row.box;
+    const box = [...row.box];
+    box[transform.axis] += transform.translation * amount;
+    const scale = blend(1, transform.scale, amount);
+    box[2] *= scale;
+    box[3] *= scale;
+    return box;
+  }
   return {
     duration: total,
     boundaries,
@@ -296,14 +319,18 @@ export function preparePaint(stage, from, to, edge, pin) {
               }
           }
         } else {
-          if (left) draw(t.old, left.box, left.box, t.oldAlpha * (mode === 'enter' ? Number(!started) : 1 - p));
+          if (left) {
+            const box = mode === 'exit' ? offsetBox(left, t.transform, p) : left.box;
+            const alpha = mode === 'enter' ? Number(!started) : t.props.opacity ? 1 - p : Number(p < 1);
+            draw(t.old, left.box, box, t.oldAlpha * alpha);
+          }
           if (right) {
             const first = (t.fromOpacity ?? 0) * (t.right.opacity ? t.newAlpha / t.right.opacity : 1);
             draw(
               t.next,
               right.box,
-              right.box,
-              mode === 'match' ? t.newAlpha : started ? blend(first, t.newAlpha, p) : 0
+              mode === 'enter' ? offsetBox(right, t.transform, 1 - p) : right.box,
+              mode === 'match' || (started && !t.props.opacity) ? t.newAlpha : started ? blend(first, t.newAlpha, p) : 0
             );
           }
         }

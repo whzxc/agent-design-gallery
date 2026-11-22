@@ -3,7 +3,7 @@ import path from 'node:path';
 import { CliError } from '../cli-output.mjs';
 import { listSources, relative, selectSources, sourceDirectories, loadTokens } from './project.mjs';
 import { loadImplementationMap, validateImplementationMap } from './implementation-map.mjs';
-import { readMotion, motionRows, motionSummary, resolveMotionToken, timingRefs } from './motion.mjs';
+import { readMotion, motionRows, motionSummary, resolveMotionToken, timingRefs, transformRefs } from './motion.mjs';
 import { motionEvaluator } from './motion-check.mjs';
 import { buildSource } from './build.mjs';
 import { launch } from './browser.mjs';
@@ -22,7 +22,7 @@ export function targetsFor(edge, side) {
   ];
 }
 export function usesTiming(edge, tokens, names, themes) {
-  return timingRefs(edge).some((ref) =>
+  return [...timingRefs(edge), ...transformRefs(edge)].some((ref) =>
     themes.some((theme) => resolveMotionToken(tokens, theme, ref.name, ref.kind).names.some((name) => names.includes(name)))
   );
 }
