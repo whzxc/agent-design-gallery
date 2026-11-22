@@ -1,5 +1,6 @@
 import { motionCard, motionStyle } from './review-motion-card.mjs';
 import { renderReviewFailures } from './diff-document.mjs';
+import { renderCaptureExemptions } from './capture-exemptions.mjs';
 import { browserTask, readyResources } from './browser.mjs';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => (
@@ -91,6 +92,7 @@ ${section('changed', 'Transition changes', motion.filter(e => priority.has(e)), 
   `<div data-priority="${priority.get(e)}">${motionCard(e, priority.get(e), review.motion.assets)}</div>`)}
 ${section('removed', 'Removed', removed, entry => `<li data-list-entry>${name(entry, designDirs.before)}</li>`, 'ul')}
 ${section('moved', 'Moved', moved, ({ before, after }) => `<li data-list-entry>${name(before, designDirs.before)} → ${name(after, designDirs.after)}</li>`, 'ul')}
+${renderCaptureExemptions(review.captureExemptions)}
 <footer data-motion-more="${omittedMotion}" data-more="${more}"${more ? '' : ' hidden'}>${more ? `+${more} more in the full review${omittedMotion ? ' · ' + omittedMotion + ' transition cards omitted' : ''}` : ''}</footer>
 </body></html>`;
 }

@@ -18,7 +18,20 @@ const invalid = message => { throw new CliError('OWNER_MAP_INVALID', message); }
 export function parseImplementationMap(text) {
   let value;
   try { value = JSON.parse(text); } catch { invalid('Invalid implementation.json JSON; repair the mapping file.'); }
-  if (!keys(value, ['version', 'mappings']) || ![1,2].includes(value.version) || !Array.isArray(value.mappings)) invalid('implementation.json needs version 1 or 2 and a mappings array.');
+  if (!keys(value, ['version', 'mappings', 'captureExemptions']) || ![1,2].includes(value.version) || !Array.isArray(value.mappings)) invalid('implementation.json needs version 1 or 2 and a mappings array.');
+  if (value.captureExemptions !== undefined) {
+    if (!Array.isArray(value.captureExemptions)) invalid('/captureExemptions: use an array of exact frame exemptions.');
+    const seen = new Set();
+    for (const [index, entry] of value.captureExemptions.entries()) {
+      const pointer = '/captureExemptions/' + index;
+      if (!keys(entry, ['source', 'frame', 'reason']) || !portablePath(entry.source) || !entry.source.endsWith('.tsx') ||
+        !nonempty(entry.frame) || !nonempty(entry.reason))
+        invalid(pointer + ': use an exact TSX source and frame with a nonempty reason.');
+      const key = JSON.stringify([entry.source, entry.frame]);
+      if (seen.has(key)) invalid(pointer + ': duplicate capture exemption for this frame.');
+      seen.add(key);
+    }
+  }
   value.mappings.forEach((mapping, index) => {
     const pointer = `/mappings/${index}`, fail = reason => invalid(`${pointer}: ${reason}`);
     if (!keys(mapping, ['implementation', 'design']) || !Array.isArray(mapping.design) || !mapping.design.length) fail('use an implementation selector and nonempty design bindings.');

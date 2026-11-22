@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { escape } from './html.mjs';
 import { Icon } from './runtime.mjs';
+import { renderCaptureExemptions } from './capture-exemptions.mjs';
 
 const stylesForEmbed = readFileSync(new URL('./review-embed.css', import.meta.url), 'utf8');
 const cssText = value => value.replace(/<\/style/gi, '<\\/style');
@@ -86,6 +87,7 @@ export function reviewEmbedDocument(report, { properties, styles, templates }, t
     `<li><code>${escape(f.source)}</code> (${escape(f.side)}): ${escape(f.message)}</li>`).join('')}</ul></section>` : ''}
   ${cards.length || motion?.cards.length ? `<div class="cards">${cards.map((card, index) => cardHtml(card, index, codex)).join('')}${(motion?.cards ?? []).map(motionCardHtml).join('')}</div>`
     : `<div class="empty">${report.omitted || report.omittedMotion ? 'Open the full HTML review for previews.' : 'No changed frames.'}</div>`}
+  ${renderCaptureExemptions(report.captureExemptions)}
   <p data-handoff-status role="status" hidden></p>
   <dialog id="embed-zoom" aria-labelledby="embed-zoom-title">
     <header class="zoom-heading">

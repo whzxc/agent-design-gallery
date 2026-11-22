@@ -155,7 +155,9 @@ async function compareFrame(config, file, definition, options, data, { launchBro
       if (adapter.texts) {
         const additional = await adapterCall(adapter, 'texts', app), box = result.box;
         if (!Array.isArray(additional) || additional.some(t => typeof t.text !== 'string' || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(t[key])))) throw new CliError('CONFIG_INVALID', 'compare.texts must return text boxes in page coordinates; fix adg.config.mjs');
-        result.texts.push(...additional.filter(t => t.x >= box.x && t.y >= box.y && t.x + t.width <= box.x + box.width && t.y + t.height <= box.y + box.height).map(t => ({ ...t, x: t.x - box.x, y: t.y - box.y })));
+        result.texts.push(...additional.filter(t => t.x >= box.x && t.y >= box.y && t.x + t.width <= box.x + box.width && t.y + t.height <= box.y + box.height).map(t => ({
+          ...t, order: undefined, x: t.x - box.x, y: t.y - box.y,
+        })));
       }
       return result;
     }, clock);

@@ -15,6 +15,7 @@ import { launch, loadFrame, browserTask } from './browser.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
 import { commandFailure, cleanup, emptySelection } from './results.mjs';
 import { loadImplementationMap, validateImplementationMap } from './implementation-map.mjs';
+import { captureExemptionKey, inspectCaptureExemptions } from './capture-exemptions.mjs';
 import { withImpacted } from './impact-selection.mjs';
 import { mappingFacts, frameOwners } from './source-facts.mjs';
 import { resolveThemes, systemTheme } from './theme.mjs';
@@ -332,6 +333,23 @@ export async function check(config, args = [], options = {}, log = console.log, 
     if (config.check?.importDirection !== false) for (const { source, target, from, to, sameLayer, featureBoundary } of importDirectionViolations(graph, sourceDirectories(config), { strictLayers: config.check?.strictLayers === true })) {
       add({ code: 'IMPORT_DIRECTION', message: `import ${target} violates import direction (${from} -> ${to}); ${featureBoundary ? (sameLayer ? 'module files may import only within their own feature folder' : 'surfaces must import a module feature through its index.tsx') : sameLayer ? 'same-layer imports are allowed only in the lowest layer' : 'import from the same or a lower layer in sources'}`, line: null, column: null }, path.join(config.design, source));
     }
+    const exemptFrames = new Set();
+    if (mapping.captureExemptions?.length) {
+      const exemptions = inspectCaptureExemptions(config, mapping, {
+        sources: chapterSources.map(file => relative(config, file)), built: session?.views[1].built ?? allBuilt,
+        bindings: validatedMap.bindings, selected: session?.sources ?? (args.length ? data.sources : undefined),
+      });
+      const stale = exemptions.findings.filter(finding => finding.code === 'OWNER_CAPTURE_EXEMPTION_STALE');
+      data.captureExemptions = exemptions.active;
+      data.summary.captureExemptions = exemptions.active.length;
+      data.summary.staleCaptureExemptions = stale.length;
+      for (const entry of exemptions.active) {
+        exemptFrames.add(captureExemptionKey(entry));
+        log(`CAPTURE EXEMPT ${entry.source}#${entry.frame} (${entry.reason})`);
+      }
+      for (const finding of exemptions.findings) emit({ ...finding, warning: finding.code === 'OWNER_CAPTURE_EXEMPTION_STALE' });
+      log(`Capture exemptions: ${exemptions.active.length} active, ${stale.length} stale.`);
+    }
     if (config.check?.lifecycle === true && mapping.present && validatedMap) {
       const production = sourceDirectories(config).filter(name => name !== 'studies');
       const top = production.at(-1);
@@ -346,7 +364,10 @@ export async function check(config, args = [], options = {}, log = console.log, 
           if (layer !== top && !hasBinding(source, part) && !frames.some(frame => frame.proposed)) add({ code: 'OWNER_PART_UNBOUND', message: `Exported part ${part} has no implementation binding or proposed frame; add a binding or mark a review frame with proposed`, line: null, column: null }, path.join(config.root, source));
         }
         if (layer === top && !hasBinding(source)) add({ code: 'OWNER_SURFACE_UNBOUND', message: `Surface source has no whole-source implementation binding; add a binding without part`, line: null, column: null }, path.join(config.root, source));
-        if (layer === top) for (const frame of built.frames) if (!frame.proposed && (!frame.fixture || !frame.capture)) add({ code: 'OWNER_SURFACE_FRAME_UNCAPTURED', message: `Surface frame ${frame.name} needs fixture and capture or a proposed review scope; add both metadata fields or proposed`, line: null, column: null }, path.join(config.root, source), frame.name);
+        if (layer === top) for (const frame of built.frames) {
+          if (frame.proposed || (frame.fixture && frame.capture) || exemptFrames.has(captureExemptionKey({ source, frame: frame.name }))) continue;
+          add({ code: 'OWNER_SURFACE_FRAME_UNCAPTURED', message: `Surface frame ${frame.name} needs fixture and capture, a reasoned capture exemption, or a proposed review scope`, line: null, column: null }, path.join(config.root, source), frame.name);
+        }
       }
     }
     if (config.check?.singleConsumer !== false) {

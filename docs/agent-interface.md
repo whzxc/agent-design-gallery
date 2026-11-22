@@ -1143,7 +1143,9 @@ retained with `complete:false`. `--read-only` skips generated declarations and b
 | `IMPORT_DIRECTION` | Source imports a higher production layer, crosses module feature folders, or targets a feature-internal file from a surface when `check.strictLayers` is enabled |
 | `OWNER_PART_UNBOUND` | Exported production part below the top layer has no implementation binding and no proposed frame; add a binding or mark a review frame with `proposed` |
 | `OWNER_SURFACE_UNBOUND` | Top-layer surface has no whole-source implementation binding; add a binding without `part` |
-| `OWNER_SURFACE_FRAME_UNCAPTURED` | Current surface frame lacks fixture or capture metadata; add both fields or mark it `proposed` |
+| `OWNER_SURFACE_FRAME_UNCAPTURED` | Current surface frame lacks a capture pair or a valid capture exemption |
+| `OWNER_CAPTURE_EXEMPTION_INVALID` | An exemption targets a proposed or non-surface frame, or has no valid whole-source binding covering the frame |
+| `OWNER_CAPTURE_EXEMPTION_STALE` | Warning that an exempt frame is gone or now declares fixture or capture metadata; remove the exemption |
 | `SINGLE_CONSUMER_COMPONENT` | Lowest-layer export has fewer than two distinct higher-layer consumers; move it to its feature or add another feature consumer |
 | `FRAME_ROOT_INVALID` | Frame does not have exactly one root element |
 | `MARKUP_FORBIDDEN` | Forbidden style/script element or event/className attribute |

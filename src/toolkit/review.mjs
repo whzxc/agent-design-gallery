@@ -19,6 +19,8 @@ import { observeFrame } from './review-observation.mjs';
 import { renderReviewSheet } from './review-sheet.mjs';
 import { compileSpecimens } from './review-specimens.mjs';
 import { resolveThemes } from './theme.mjs';
+import { inspectCaptureExemptions } from './capture-exemptions.mjs';
+import { validateImplementationMap } from './implementation-map.mjs';
 
 const identity = ({ source, frame }) => JSON.stringify([source, frame]);
 const abbreviations = { adg: 'ADG', ai: 'AI', api: 'API', hpc: 'HPC', html: 'HTML', llm: 'LLM', macos: 'macOS', mcp: 'MCP', pdf: 'PDF', scnet: 'SCNet', ui: 'UI' };
@@ -130,7 +132,8 @@ function buildHtmlReview(model, data, built, theme, locate, format, target) {
     const report = { title: model.label, theme, base: model.base.sha, head: model.current.head, counts: model.counts, cards,
       omitted: allEntries.length - entries.length, omittedMotion: motion ? 0 : model.motion?.cards.length ?? 0,
       groups: data.review.groups, removed: model.sections.removed.map(entry => ({ ...entry, origin: locate(entry, true) })),
-      motion, moved: model.movePairs.map(({ before, after }) => ({ before: locate(before, true), after: locate(after) })), failures: model.failures };
+      motion, moved: model.movePairs.map(({ before, after }) => ({ before: locate(before, true), after: locate(after) })), failures: model.failures,
+      captureExemptions: model.captureExemptions };
     return embed ? reviewEmbedDocument(report, assets(), target) : reviewDocument(report, assets());
   }
 
@@ -182,6 +185,15 @@ export async function review(config, values, { log = console.log } = {}) {
       session.scheduled = scheduled;
     }
     model.motion = await reviewMotion(session, candidates, model, result.data.comparisons, theme);
+    const current = session.views[1];
+    if (current.map.captureExemptions?.length) {
+      const selected = [...new Set(current.map.captureExemptions.map(({ source }) => source))].filter(source => current.built.has(source));
+      const sources = current.index.inventory.tsx;
+      const { bindings } = await validateImplementationMap(current.config, current.map, {
+        sources, selected, getBuild: source => current.built.get(source),
+      });
+      model.captureExemptions = inspectCaptureExemptions(current.config, current.map, { sources, built: current.built, bindings }).active;
+    }
     if (model.failures.length) model.complete = false;
     if (model.motion) result.data.motion = { count: model.motion.cards.length };
     return result;
@@ -210,6 +222,10 @@ export async function review(config, values, { log = console.log } = {}) {
   const result = { path: destination, format, ...(target ? { target } : {}), base: model.base, current: model.current, theme, counts: model.counts, groups: data.review.groups,
     mode: values.exact ? 'exact' : 'hybrid', structureMatches: skipped.size, pixelComparisons: data.summary.comparisons,
     complete: model.complete, failures: model.failures, bytes, generationMs: performance.now() - started };
+  if (model.captureExemptions?.length) {
+    result.captureExemptions = model.captureExemptions;
+    result.counts.captureExemptions = model.captureExemptions.length;
+  }
   if (model.motion) {
     result.motion = { added: 0, changed: 0, removed: 0 };
     for (const card of model.motion.cards) result.motion[card.kind]++;
@@ -217,6 +233,7 @@ export async function review(config, values, { log = console.log } = {}) {
   if (!values.json) {
     log(`${destination}\n${result.counts.added} added, ${result.counts.changed} changed, ${result.counts.removed} removed, ${result.counts.moved} moved.`);
     if (result.motion) log(`Transitions: ${result.motion.added} added, ${result.motion.changed} changed, ${result.motion.removed} removed.`);
+    if (result.captureExemptions) log(`Capture exemptions: ${result.captureExemptions.length}.`);
   }
   if (!result.complete) throw new CliError('SOURCE_BUILD_FAILED', 'Review contains source build failures.', { data: result, warnings });
   return { data: result, warnings };

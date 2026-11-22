@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.14
+
+- Allow reasoned, frame-specific lifecycle capture exemptions for bound production surfaces and show them in check and review.
+- Pair repeated compare text in document order, using nearest positions to resolve unequal counts.
+
 ## 0.17.13
 
 - Add tokenized start delays to motion patterns, specimens and Playable transitions.

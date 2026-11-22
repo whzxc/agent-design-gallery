@@ -108,6 +108,29 @@ A `Frame` is one declared form of a component or surface.
 
 A frame contains exactly one root element, its shell. `compare` measures design positions from the shell's top-left. The frame paints `var(--canvas)` behind the shell.
 
+#### Capture exemptions
+
+When a current production surface cannot be captured faithfully, declare an
+exemption for its exact frame in the top-level `captureExemptions` array of
+`design/implementation.json` (version 1 or 2). Projects using this field need
+`requires: '>=0.17.14'`. For example:
+
+```json
+{
+  "source": "design/surfaces/desktop.tsx",
+  "frame": "system-dialog",
+  "reason": "The fnOS window manager owns the dialog chrome outside the renderer."
+}
+```
+
+An exemption needs a nonempty reason and an active whole-source binding covering
+the frame. It satisfies the lifecycle capture requirement for that frame only.
+`check` rejects proposed frames and invalid bindings, and warns when the frame
+is removed or gains fixture or capture metadata. Remove stale exemptions and
+complete any new capture declarations. `check` lists the active reasons and
+counts active and stale exemptions separately. Review artifacts list active
+exemptions and their reasons, including for metadata-only changes.
+
 ### Icon
 
 `<Icon name="<lucide-name>" />` renders Lucide geometry in `currentColor` with a 1.75px rendered stroke. `size` defaults to 16; `class` passes through.
@@ -1156,7 +1179,7 @@ entries. Saving the working tree refreshes both paths through the existing watch
 
 `compare` builds the frame and renders it in Chromium beside the implementation in the fixture's theme, locale, time zone and clock. The capture comes from the frame's `capture`, overridden by flags. A page capture sets the viewport and clips the page at `origin` with the frame's size; `region` captures the element with role `region` or `dialog` and that accessible name; `selector` captures the first element matching a CSS selector. Each click activates the first visible control with that exact accessible name among buttons, radios, tabs, checkboxes, switches, menu items, options and links. After the clicks, `compare` waits until the captured texts and their boxes stay unchanged for 300ms, up to 5s.
 
-Both sides are read the same way. A closed disclosure contributes its summary only. Hidden, zero-size and CSS-invisible subtrees are excluded. Compare excludes fully covered text beneath an opaque sticky or fixed layer when hit testing proves paint order. Partially covered text remains checked. The reader takes one text per rendered line, including the placeholders of empty fields, and skips text clipped outside the captured element. Adjacent texts on one line with less than one space between them read as one text. `aria-hidden` on the capture target and its ancestors is ignored; `aria-hidden` subtrees inside it are skipped. Texts pair by content, and repeated texts pair with the nearest position first. Positions are relative to the frame's shell and to the captured element. It reports anchored-edge, vertical-center and width differences above 2px, plus texts missing from either side. It does not compare shapes, so review the overlay as well.
+Both sides are read the same way. A closed disclosure contributes its summary only. Hidden, zero-size and CSS-invisible subtrees are excluded. Compare excludes fully covered text beneath an opaque sticky or fixed layer when hit testing proves paint order. Partially covered text remains checked. The reader takes one text per rendered line, including the placeholders of empty fields, and skips text clipped outside the captured element. Adjacent texts on one line with less than one space between them read as one text. `aria-hidden` on the capture target and its ancestors is ignored; `aria-hidden` subtrees inside it are skipped. Texts pair by exact content. Repeated texts pair in document order. When counts differ, compare chooses the nearest order-preserving pairing and reports the remaining occurrences as missing or extra. Supplemental texts follow DOM texts in the order returned by the adapter. Positions are relative to the frame's shell and to the captured element. It reports anchored-edge, vertical-center and width differences above 2px, plus texts missing from either side. It does not compare shapes, so review the overlay as well.
 
 `output/design/compare/<source>-<frame>-<fixture>/` receives `design.png`, `implementation.png`, `overlay.png`, `report.json` and `index.html`. `report.json` records `settled: false` when the texts did not settle; that is an incomplete evaluation and exits 2. Completed text/position differences exit 1. Missing targets and adapter, browser or capture failures exit 2. Under `--json`, both single and all modes return `data.comparisons`, `skipped`, aggregate `summary`, completed artifact paths and `complete`; a failed batch retains observed results with `complete: false`. Empty selections exit 0 with `EMPTY_SELECTION`. Treat them as a review list, not a zero gate. Missing or extra texts, wrong order or grouping, and one offset shared by many texts point to real defects, such as a lost font rule or a leftover border. An isolated offset of a few pixels can stay.
 

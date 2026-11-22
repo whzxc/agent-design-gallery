@@ -1,5 +1,6 @@
 import { motionCard, motionStyle } from './review-motion-card.mjs';
 import { createHash } from 'node:crypto';
+import { renderCaptureExemptions } from './capture-exemptions.mjs';
 
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -75,6 +76,7 @@ export function reviewDocument(report, { properties, styles, templates }) {
         <div class="section-body">${html()}</div>
       </section>`).join('')}
       ${sections.length ? '' : '<p>No changed frames.</p>'}
+      ${renderCaptureExemptions(report.captureExemptions)}
     </main>
   </div>
   <dialog id="frame-zoom" aria-labelledby="zoom-title">

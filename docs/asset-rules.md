@@ -148,7 +148,7 @@ A gap is an element without an asset, or an asset unable to express a required f
 
 A production asset is either current or proposed. There are no other states.
 
-- **Current**: the part has an implementation binding, and each of its frames shows a state the implementation reaches. A surface frame also declares the `fixture` and `capture` that reach it.
+- **Current**: the part has an implementation binding, and each of its frames shows a state the implementation reaches. A surface frame declares the `fixture` and `capture` that reach it, or a [reasoned capture exemption](design-toolkit.md#capture-exemptions) when a faithful capture is unavailable.
 - **Proposed**: a new frame or part under active review, marked with the Frame `proposed` property that names its review scope. It has no binding yet.
 
 Approval of a proposal starts its implementation. When it is implemented, remove the
