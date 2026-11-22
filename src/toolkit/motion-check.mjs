@@ -266,7 +266,7 @@ export function motionEvaluator(
           if (row) claim(side, { row, subtree: true, mode: 'cut' }, pointer);
         }
       }
-      let start = 0;
+      let start = times['/delay'] ?? 0;
       for (const [i, phase] of e.phases.entries()) {
         let length = 0;
         for (const [j, track] of phase.entries()) {

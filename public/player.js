@@ -377,7 +377,8 @@ export async function openPlayer({ source, frame, theme, invoker }) {
       if (edge.reduced !== 'instant')
         playback.push('Runtime reduced motion: ' + edge.reduced + '. The player shows the destination immediately in reduced motion.');
       control('policy').textContent = playback.join(' ');
-      control('duration').textContent = 'Duration  ' + edge.duration + ' · ' + edge.timings['/duration'] + ' ms';
+      control('duration').textContent = 'Duration  ' + edge.duration + ' · ' + edge.timings['/duration'] + ' ms' +
+        (edge.delay ? ' · Delay ' + edge.delay + ' · ' + edge.timings['/delay'] + ' ms' : '');
       control('easing').textContent = 'Easing  ' + edge.easing + ' · ' + edge.timings['/easing'];
       control('end').textContent = transition.duration + ' ms';
       clock();

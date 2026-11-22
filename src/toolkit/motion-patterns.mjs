@@ -46,8 +46,9 @@ const basePatterns = {
   }, { interrupt: 'cancel' }),
 };
 const effects = new Set([...Object.values(basePatterns).map(pattern => pattern.effect), 'aurora', 'shimmer', 'spin']);
+const ambientEffects = new Set(['aurora', 'shimmer', 'pulse', 'spin']);
 const actions = { transition: ['enter', 'exit', 'replace'], layout: ['resize', 'reflow', 'avoid'], continuous: ['follow'], ambient: ['loop'] };
-const parameterKeys = new Set(['duration', 'easing', 'spring', 'distance', 'scale', 'stagger', 'fromOpacity']);
+const parameterKeys = new Set(['duration', 'delay', 'minDuration', 'maxDuration', 'easing', 'spring', 'distance', 'scale', 'stagger', 'fromOpacity']);
 const object = value => value && typeof value === 'object' && !Array.isArray(value);
 const idPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const tokenPattern = /^--[\w-]+$/;
@@ -76,6 +77,9 @@ function validParameter(primitives, theme, key, token) {
   switch (key) {
     case 'spring': return Object.hasOwn(primitives.springs[theme], token);
     case 'duration':
+    case 'delay':
+    case 'minDuration':
+    case 'maxDuration':
     case 'stagger': return Number.isFinite(milliseconds(value));
     case 'distance':
     case 'scale': return motionTransformValue(key, value) !== null;
@@ -153,6 +157,16 @@ export function loadMotionPatterns(config, authored) {
     for (const direction of ['enter', 'exit']) {
       const resolved = patternParameters(pattern, direction);
       if (!resolved.spring && !(resolved.duration && resolved.easing)) invalid(id + ' requires duration and easing or a spring.');
+      if (resolved.minDuration || resolved.maxDuration) {
+        if (pattern.kind !== 'ambient' || !ambientEffects.has(pattern.effect))
+          invalid(id + ' can declare a duration range only for ambient patterns with aurora, shimmer, pulse or spin.');
+        if (!resolved.minDuration || !resolved.maxDuration || !resolved.duration)
+          invalid(id + ' needs minDuration and maxDuration alongside a representative duration.');
+        for (const theme of ['light', 'dark']) {
+          const time = key => milliseconds(tokenValue(primitives.tokens, theme, resolved[key]));
+          if (time('minDuration') > time('maxDuration')) invalid(id + ' has minDuration greater than maxDuration in ' + theme + '.');
+        }
+      }
     }
     patterns.set(id, pattern);
   }
@@ -195,7 +209,7 @@ export function patternEdge(edge, catalog, issue) {
     issue('MOTION_PATTERN_INVALID', '/pattern', 'Choose a declared pattern, optional enter/exit/replace direction and explicit targets.');
     return edge;
   }
-  if (['phases','duration','easing','interrupt','reduced','playbackOmissions'].some(key => Object.hasOwn(fields, key))) {
+  if (['phases','duration','delay','easing','interrupt','reduced','playbackOmissions'].some(key => Object.hasOwn(fields, key))) {
     issue('MOTION_PATTERN_INVALID', '/pattern', 'A pattern supplies phases, timing, interrupt and reduced motion.');
     return edge;
   }
@@ -249,5 +263,6 @@ export function patternEdge(edge, catalog, issue) {
     ...(mode === 'enter' && parameters.fromOpacity !== undefined ? { fromOpacity: parameters.fromOpacity } : {}),
   };
   return { ...fields, duration, easing, interrupt: selected.interrupt, reduced: selected.reduced,
+    ...(parameters.delay && { delay: parameters.delay }),
     ...(playbackOmissions.length && { playbackOmissions }), phases: [[track]] };
 }

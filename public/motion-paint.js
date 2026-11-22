@@ -22,8 +22,10 @@ export function preparePaint(stage, from, to, edge, pin) {
   layer.setAttribute('aria-hidden', 'true');
   Object.assign(layer.style, { position: 'fixed', inset: '0', pointerEvents: 'none', overflow: 'hidden' });
   const sheet = layer.attachShadow({ mode: 'open' });
-  const defaultTime = { start: 0, duration: edge.timings['/duration'], easing: edge.timings['/easing'] };
-  let start = 0,
+  const delay = edge.timings['/delay'] ?? 0;
+  if (delay) boundaries.push(delay);
+  const defaultTime = { start: delay, duration: edge.timings['/duration'], easing: edge.timings['/easing'] };
+  let start = delay,
     total = 0;
   function add(left, right, mode, props, time, fromOpacity, transform) {
     let track = mode === 'match' && tracks.find((t) => t.mode === 'match' && t.left === left && t.right === right);
@@ -87,7 +89,7 @@ export function preparePaint(stage, from, to, edge, pin) {
       left.opacity !== right.opacity ||
       left.box.some((v, i) => v !== right.box[i])
     )
-      total = Math.max(total, defaultTime.duration);
+      total = Math.max(total, delay + defaultTime.duration);
   }
   if (pin) {
     const left = candidates(from, pin), right = candidates(to, pin);
@@ -226,6 +228,11 @@ export function preparePaint(stage, from, to, edge, pin) {
     if (t.next) sheet.append(t.next.host);
     t.text = [];
     if (t.mode === 'match' && t.old && t.next && !t.flat) {
+      if (delay) {
+        // The interpolation copies below replace some text with detached glyphs.
+        t.hold = picture(from, left, oldRoots);
+        sheet.insertBefore(t.hold.host, t.next.host);
+      }
       for (const key of new Set([...t.old.runs.keys(), ...t.next.runs.keys()])) {
         const a = t.old.runs.get(key),
           b = t.next.runs.get(key);
@@ -309,6 +316,17 @@ export function preparePaint(stage, from, to, edge, pin) {
             draw(t.next, right.box, right.box, t.newAlpha * p);
             continue;
           }
+          if (t.hold) {
+            draw(t.hold, left.box, left.box, started ? 0 : t.oldAlpha);
+            if (!started) {
+              draw(t.next, right.box, right.box, 0);
+              for (const run of t.text) {
+                if (run.old) run.old.style.opacity = '0';
+                if (run.next) run.next.style.opacity = '0';
+              }
+              continue;
+            }
+          }
           const box = right.box.map((v, i) =>
             blend(left.box[i], v, t.props[properties[i]] ? progress(t.props[properties[i]], ms) : Number(started))
           );
@@ -342,7 +360,7 @@ export function preparePaint(stage, from, to, edge, pin) {
               t.next,
               right.box,
               mode === 'enter' ? offsetBox(right, t.transform, 1 - p) : right.box,
-              mode === 'match' || (started && !t.props.opacity) ? t.newAlpha : started ? blend(first, t.newAlpha, p) : 0
+              (mode === 'match' && !delay) || (started && !t.props.opacity) ? t.newAlpha : started ? blend(first, t.newAlpha, p) : 0
             );
           }
         }

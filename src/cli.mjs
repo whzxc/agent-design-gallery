@@ -25,7 +25,7 @@ const usage = {
   impact: '[--transitions] (--source=<path>... [--part=<name>] | --token=<name>... | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --base=<rev> [--head=<rev>]) [--theme=both|light|dark] [--explain] [--state-dir=<path>] [--json]',
 };
 const details = {
-  motion: 'Export project motion tokens and raw spring parameters. --css emits a token stylesheet with generated linear() springs. --coverage audits motion adoption without building frames. Exit 0 clean, 1 findings, 2 invalid or incomplete.',
+  motion: 'Export project motion tokens, raw spring parameters and ambient duration ranges. --css emits a token stylesheet with generated linear() springs. --coverage audits motion adoption without building frames. Exit 0 clean, 1 findings, 2 invalid or incomplete.',
   comments: 'List open project comment threads by default, or read, reply to or resolve a thread by number, #number or ID. Run from the project directory.',
   migrate: 'Rename a project configuration and runtime imports, update editor paths and ignore entries, remove old generated files and regenerate declarations. Refuses mixed config names; safe to run again.',
   serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes. --print-key prints the key and exits; --rotate-key rotates the running hub key and exits. Forwarded data requests require a header or query key; direct-local requests are exempt.',
@@ -255,7 +255,7 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
   if (command === 'motion') {
     if (values.coverage) return (await import('./toolkit/motion-coverage.mjs')).motionCoverage(config, values.json ? () => {} : output.log);
     const { loadMotionPatterns, patternParameters } = await import('./toolkit/motion-patterns.mjs');
-    const { motionTokenCss } = await import('./toolkit/motion-primitives.mjs');
+    const { milliseconds, motionTokenCss, tokenValue } = await import('./toolkit/motion-primitives.mjs');
     const { tokens, springs, patterns } = loadMotionPatterns(config);
     if (values.css) {
       output.log(motionTokenCss(tokens).trimEnd());
@@ -264,7 +264,21 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
     const used = new Set([...patterns.values()].flatMap(pattern => ['enter', 'exit'].flatMap(direction => Object.values(patternParameters(pattern, direction)))));
     const names = Object.fromEntries([...tokens.light].filter(([name]) => used.has(name) || /^--(?:adg-motion|motion)-/.test(name)).map(([name, value]) =>
       [name, { light: value, ...(tokens.dark.has(name) ? { dark: tokens.dark.get(name) } : {}) }]));
-    const data = { tokens: names, springs };
+    const durationRanges = {};
+    for (const [id, pattern] of patterns) {
+      for (const direction of ['enter', 'exit']) {
+        const { minDuration, maxDuration } = patternParameters(pattern, direction);
+        if (!minDuration) continue;
+        (durationRanges[id] ??= {})[direction] = {
+          minDuration, maxDuration,
+          ...Object.fromEntries(['light', 'dark'].map(theme => [theme, {
+            min: milliseconds(tokenValue(tokens, theme, minDuration)),
+            max: milliseconds(tokenValue(tokens, theme, maxDuration)),
+          }])),
+        };
+      }
+    }
+    const data = { tokens: names, springs, durationRanges };
     if (!values.json) output.log(JSON.stringify(data, null, 2));
     return { data };
   }

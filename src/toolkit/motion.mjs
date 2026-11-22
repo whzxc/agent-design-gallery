@@ -48,7 +48,7 @@ function validateShape(e, issue, { patternBacked } = {}) {
       'rememberTrigger',
       'proposed',
       'unsupported',
-      ...(patternBacked ? ['playbackOmissions'] : [])
+      ...(patternBacked ? ['delay', 'playbackOmissions'] : [])
     ])
   )
     issue('MOTION_SCHEMA', '', 'Use only version 1 edge fields.');
@@ -300,11 +300,13 @@ export function resolveMotionToken(tokens, theme, name, kind) {
 export function timingRefs(edge) {
   const refs = [{ pointer: '', scope: edge }];
   edge.phases.forEach((phase, i) => phase.forEach((scope, j) => refs.push({ pointer: '/phases/' + i + '/' + j, scope })));
-  return refs.flatMap(({ pointer, scope }) =>
+  const timings = refs.flatMap(({ pointer, scope }) =>
     ['duration', 'easing']
       .filter((kind) => !pointer || Object.hasOwn(scope, kind))
       .map((kind) => ({ pointer: pointer + '/' + kind, kind, name: scope[kind] }))
   );
+  if (edge.delay !== undefined) timings.push({ pointer: '/delay', kind: 'duration', name: edge.delay });
+  return timings;
 }
 
 export function transformRefs(edge) {

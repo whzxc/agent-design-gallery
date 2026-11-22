@@ -102,7 +102,8 @@ export function motionCards(catalog, inventory, source, prefix) {
     const label = spring ? spring.duration + ' ms / bounce ' + spring.bounce : light;
     const darkSpring = catalog.springs.dark[value];
     const themeLabel = darkSpring ? darkSpring.duration + ' ms / bounce ' + darkSpring.bounce : dark;
-    return escape(key) + ' <code>' + escape(value) + '</code>' +
+    const labelKey = { minDuration: 'Minimum duration', maxDuration: 'Maximum duration' }[key] ?? key;
+    return escape(labelKey) + ' <code>' + escape(value) + '</code>' +
       (label === undefined ? '' : ' · ' + escape(label)) + (label === themeLabel ? '' : ' / dark ' + escape(themeLabel)) +
       (isDefault(value) ? defaultLabel : '');
   }).join('<br>');
@@ -131,6 +132,7 @@ export function motionCards(catalog, inventory, source, prefix) {
       const spring = catalog.springs[theme][params.spring];
       return {
         duration: spring?.duration ?? milliseconds(value('duration')), easing: spring?.easing ?? value('easing'),
+        delay: milliseconds(value('delay')) || 0,
         distance: value('distance'), scale: Number(value('scale') ?? .85), stagger: milliseconds(value('stagger')) || 0,
         opacity: params.fromOpacity ?? 0,
       };

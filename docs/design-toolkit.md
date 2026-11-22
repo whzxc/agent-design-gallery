@@ -251,7 +251,7 @@ of affected `properties`, and `parameters`. The specimen effects are `fade`,
 `stagger`, `pulse`, `aurora`, `shimmer` and `spin`. Use the closest
 representative effect for a family of related consumers. Parameters reference
 tokens by CSS custom property name. Supply `duration` and `easing` or a
-`spring` name, plus optional `distance`, `scale`, `stagger` or numeric
+`spring` name, plus optional `delay`, `distance`, `scale`, `stagger` or numeric
 `fromOpacity` (0–1) where applicable. Optional `enter` and `exit`
 objects override those parameters for their direction. Built-in overrides
 inherit unspecified fields and directional parameters. A named project
@@ -261,6 +261,24 @@ policies and may declare only `parameters`, `enter`, `exit`, and its own
 role mappings and direct base overrides. A variant can override timing with
 a spring, or a spring with a duration and easing. Layers merge per parameter,
 with direction-specific entries taking precedence.
+
+`delay` references a duration token that resolves to a nonnegative CSS time
+in both themes, including `0ms`. Tokens specimens and pattern-backed Playable
+edges wait before starting timed tracks. The Playable inspector includes the
+wait in the timeline and shows the resolved delay separately. Reduced motion
+skips the wait along with the animation. Explicit cuts still apply at the
+start of the edge.
+
+An ambient loop with the `aurora`, `shimmer`, `pulse` or `spin` effect can
+declare `minDuration` and `maxDuration` alongside its representative
+`duration`, for example when runtime varies the period after the first pass.
+Supply both endpoints as duration tokens, with the minimum no
+greater than the maximum in either theme. The Tokens board inspector shows
+the range and its loop preview always uses the representative duration.
+Ambient patterns stay in the Tokens board and runtime inventory. Playable
+edges represent finite transitions. In `adg motion --json`,
+`data.durationRanges[patternId][direction]` includes the endpoint token names
+and resolved `light` and `dark` bounds as `{min, max}` in milliseconds.
 
 The Motion grid shows a compact live specimen, timing summary and usage
 for each base family and standalone pattern. Select a card or press Enter

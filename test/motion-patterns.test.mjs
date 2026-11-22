@@ -12,6 +12,8 @@ import { motionCodeExcerpt, scanMotion } from '../src/toolkit/motion-inventory.m
 import { readMotion, resolveMotionToken } from '../src/toolkit/motion.mjs';
 import { playbackEdge } from '../src/toolkit/play-endpoint.mjs';
 import { parseTokens } from '../src/toolkit/tokens.mjs';
+import { startServer } from '../src/server.mjs';
+import { launch } from '../src/toolkit/browser.mjs';
 
 const cli = fileURLToPath(new URL('../src/cli.mjs', import.meta.url));
 const tokens = `:root {
@@ -34,6 +36,138 @@ function fixture(t) {
   write('design/tokens.css', tokens);
   return { root, design, write };
 }
+
+test('contract: a consumer can check, map and play tokenized delays and declare deterministic ambient ranges', async t => {
+  const { root, design, write } = fixture(t);
+  write('adg.config.mjs', 'export default { check: { strictMotion: true } };');
+  const css = tokens.replace('--motion-spring-test-duration: 250ms;', `--motion-spring-test-duration: 250ms;
+  --wait: 200ms;
+  --zero: 0ms;
+  --change: 200ms;
+  --period: 3s;
+  --min: 2400ms;
+  --max: 4100ms;
+  --linear: linear;`).replace('--motion-spring-test-bounce: 0;', '--motion-spring-test-bounce: 0;\n  --max: 4s;');
+  write('design/tokens.css', css);
+  write('widget.css', '.status {transition-delay: var(--wait)}\n@keyframes spin {to {transform: rotate(1turn)}}');
+  mkdirSync(path.join(design, 'modules'));
+  write('design/modules/widget.tsx', `import { Frame } from 'adg';
+export default () => ['pending', 'complete'].map(state => (
+  <Frame name={state} width={240} height={100}>
+    <div>
+      <button data-adg-id="toggle">Complete task</button>
+      <div class="status" data-adg-id="status" style={{width: state === 'pending' ? 40 : 140}}>
+        {state === 'pending' ? 'Old' : 'New'}
+      </div>
+    </div>
+  </Frame>
+));`);
+  const source = 'design/modules/widget.tsx', from = {source, frame: 'pending'}, to = {source, frame: 'complete'};
+  write('design/modules/widget.motion.json', {version: 1,
+    flows: [{start: from, anchor: {anchor: 'toggle'}, ends: [{frame: 'complete'}]}],
+    edges: [{
+      id: 'complete-task', label: 'Complete task', from, to, focus: 'frame',
+      trigger: {on: 'click', target: {anchor: 'toggle'}},
+      pattern: {id: 'status-change', targets: [{anchor: 'status'}]},
+    }],
+  });
+  const resize = {
+    kind: 'layout', action: 'resize', effect: 'size', properties: ['width'], interrupt: 'finish', reduced: 'instant',
+    parameters: {duration: '--change', easing: '--linear', delay: '--wait'},
+    consumers: [{ file: 'widget.css', match: 'css:.status' }],
+  };
+  const sweep = {
+    kind: 'ambient', action: 'loop', effect: 'spin', properties: ['transform'], interrupt: 'cancel', reduced: 'static',
+    parameters: {duration: '--period', easing: '--linear', delay: '--wait', minDuration: '--min', maxDuration: '--max'},
+    consumers: [{file: 'widget.css', match: 'keyframes:spin'}],
+  };
+  const declare = (change = resize, loop = sweep) =>
+    write('design/motion-patterns.json', {version: 1, patterns: {'status-change': change, sweep: loop}});
+  const run = (...args) => {
+    const result = spawnSync(process.execPath, [cli, ...args, '--json'], {cwd: root, encoding: 'utf8'});
+    return {status: result.status, ...JSON.parse(result.stdout), ...(result.stderr && {stderr: result.stderr})};
+  };
+  declare({...resize, parameters: {...resize.parameters, delay: '--zero'}});
+  const zero = run('check', '--read-only');
+  assert.equal(zero.status, 0, JSON.stringify(zero));
+  declare();
+  const valid = run('check', '--read-only');
+  assert.equal(valid.status, 0, JSON.stringify(valid));
+  const coverage = run('motion', '--coverage');
+  assert.equal(coverage.status, 0, JSON.stringify(coverage));
+  assert.equal(coverage.data.summary.unmappedSites, 0);
+  assert.deepEqual(run('motion').data.durationRanges.sweep.enter, {
+    minDuration: '--min', maxDuration: '--max', light: {min: 2400, max: 4100}, dark: {min: 2400, max: 4000},
+  });
+
+  const reject = expected => {
+    const result = run('check', '--read-only');
+    assert.equal(result.status, 2, JSON.stringify(result));
+    assert.match(result.error.message, expected);
+  };
+  declare({...resize, parameters: {...resize.parameters, minDuration: '--min', maxDuration: '--max'}});
+  reject(/only for ambient/);
+  const {maxDuration, ...halfRange} = sweep.parameters;
+  declare(resize, {...sweep, parameters: halfRange});
+  reject(/needs minDuration and maxDuration/);
+  declare();
+  write('design/tokens.css', css.replace('--max: 4s;', '--max: 2s;'));
+  reject(/minDuration greater than maxDuration in dark/);
+  write('design/tokens.css', css.replace('--max: 4s;', '--max: 4s;\n  --wait: -1ms;'));
+  reject(/valid delay token in both themes/);
+  write('design/tokens.css', css);
+
+  const server = await startServer({directory: design, stateDirectory: path.join(root, 'state'), port: 0, readOnly: true});
+  t.after(() => server.close());
+  const browser = await launch();
+  try {
+    const page = await browser.newPage({reducedMotion: 'no-preference', colorScheme: 'light'});
+    await page.goto(new URL('?scope=tokens&section=motion&pattern=sweep', server.url).href);
+    const detail = page.getByRole('dialog', {name: 'Sweep', exact: true});
+    await detail.getByText(/Minimum duration.*2400ms.*Maximum duration.*4100ms/s).first().waitFor();
+    const shape = detail.locator('[data-motion-shape]');
+    await page.waitForFunction(node => node.getAnimations().length > 0, await shape.elementHandle());
+    assert.deepEqual(await shape.evaluate(node => {
+      const {delay, duration} = node.getAnimations()[0].effect.getTiming();
+      return {delay, duration};
+    }), {delay: 200, duration: 3000});
+
+    await page.goto(new URL('?asset=modules%2Fwidget.tsx&frame=pending', server.url).href);
+    await page.getByRole('button', {name: 'Play from pending', exact: true}).click();
+    const player = page.getByRole('dialog', {name: 'Play transitions'});
+    const toggle = player.frameLocator('iframe').getByRole('button', {name: 'Complete task'});
+    await toggle.waitFor();
+    const time = new Date('2025-01-01T00:00:00Z');
+    await page.clock.install({time});
+    await page.clock.pauseAt(new Date(+time + 1000));
+    await toggle.evaluate(node => node.click());
+    await player.getByRole('button', {name: 'Transition inspector'}).evaluate(node => node.click());
+    await player.getByText('Delay --wait · 200 ms', {exact: false}).waitFor();
+    assert.equal(await player.locator('[data-control=end]').textContent(), '400 ms');
+    const seek = player.getByRole('slider');
+    const samples = [];
+    for (const percent of [25, 75, 25]) {
+      await seek.evaluate((node, value) => {
+        node.value = value;
+        node.dispatchEvent(new Event('input', {bubbles: true}));
+      }, String(percent));
+      await page.locator('[data-control=seek][aria-valuetext="' + percent * 4 + ' ms"]:enabled').waitFor();
+      samples.push(await toggle.evaluate(node => {
+        const layer = node.ownerDocument.body.lastElementChild.shadowRoot;
+        const paint = [...layer.children].find(host => host.style.opacity === '1' &&
+          host.shadowRoot?.firstElementChild?.matches('.status'));
+        return [paint.getBoundingClientRect().width, paint.shadowRoot.textContent];
+      }));
+    }
+    assert.deepEqual(samples, [[40, 'Old'], [90, 'New'], [40, 'Old']]);
+    await page.emulateMedia({reducedMotion: 'reduce'});
+    await player.getByText('Applied instantly · 0 ms', {exact: true}).waitFor();
+    assert.equal(await seek.count(), 0);
+    await player.frameLocator('iframe').getByText('New', {exact: true}).waitFor();
+  } finally {
+    await browser.close();
+  }
+});
 
 test('algorithmic core: spring curve settles and approximates first overshoot in each theme', () => {
   const { springs } = motionPrimitives(parseTokens(tokens));

@@ -30,47 +30,58 @@ function animateStage(stage) {
   const effect = stage.dataset.effect;
   if (effect === 'follow' || reduced.matches) return [];
   if (effect === 'avoid') {
+    const cycle = enter.duration + exit.duration + 850;
+    const total = cycle + enter.delay + exit.delay;
+    const offset = (position, returning = false) =>
+      (cycle * position + enter.delay + (returning ? exit.delay : 0)) / total;
     return shapes(stage).slice(1).map((node, i) => node.animate([
-      { transform: 'translateY(0)', offset: 0, easing: enter.easing },
-      { transform: 'translateY(' + (i ? 12 : -12) + 'px)', offset: .35, easing: exit.easing },
-      { transform: 'translateY(' + (i ? 12 : -12) + 'px)', offset: .55, easing: exit.easing },
-      { transform: 'translateY(0)', offset: .85 },
+      { transform: 'translateY(0)', offset: 0 },
+      { transform: 'translateY(0)', offset: offset(0), easing: enter.easing },
+      { transform: 'translateY(' + (i ? 12 : -12) + 'px)', offset: offset(.35) },
+      { transform: 'translateY(' + (i ? 12 : -12) + 'px)', offset: offset(.55, true), easing: exit.easing },
+      { transform: 'translateY(0)', offset: offset(.85, true) },
       { transform: 'translateY(0)', offset: 1 },
-    ], { duration: enter.duration + exit.duration + 850, iterations: Infinity }));
+    ], { duration: total, iterations: Infinity }));
   }
+  const loopTiming = {
+    duration: Math.max(1, enter.duration), easing: enter.easing, delay: enter.delay, fill: 'backwards', iterations: Infinity,
+  };
   if (['aurora','shimmer','spin'].includes(effect)) {
     const aurora = effect === 'aurora';
     const animated = stage.querySelector(aurora ? '[data-motion-aurora]' : '[data-motion-shape]');
     const frames = effect !== 'shimmer' ? [{transform:'rotate(0turn)'},{transform:'rotate(1turn)'}]
       : [{backgroundPosition:'100% 0'},{backgroundPosition:'0% 0'}];
-    return [animated.animate(frames, { duration: Math.max(1, enter.duration), easing: enter.easing, iterations: Infinity })];
+    return [animated.animate(frames, loopTiming)];
   }
   if (effect === 'pulse' && stage.dataset.action === 'loop') {
     return shapes(stage).map(node => node.animate([
       { transform: 'scale(1)', opacity: 1 },
       { transform: 'scale(' + enter.scale + ')', opacity: .35 },
       { transform: 'scale(1)', opacity: 1 },
-    ], { duration: Math.max(1, enter.duration), easing: enter.easing, iterations: Infinity }));
+    ], loopTiming));
   }
   const first = stage.dataset.action === 'exit' ? exit : enter;
   const second = stage.dataset.action === 'exit' ? enter : exit;
   const pulse = effect === 'pulse';
   const hold = pulse ? 0 : 450;
   const stagger = effect === 'stagger' ? first.stagger : 0;
-  const total = Math.max(1, first.duration + second.duration + 2 * hold + 2 * stagger);
+  const total = Math.max(1, first.delay + first.duration + second.delay + second.duration + 2 * hold + 2 * stagger);
   return shapes(stage).map((node, i) => {
     const [from, to] = states(effect, first, first, i);
     const [exitFrom, exitTo] = states(effect, second, second, i);
     const reverse = stage.dataset.action === 'exit';
     const start = reverse ? to : from, end = reverse ? from : to;
     const returnStart = reverse ? exitFrom : exitTo, returnEnd = reverse ? exitTo : exitFrom;
-    const delay = i * stagger;
+    const startAt = first.delay + i * stagger;
+    const endAt = startAt + first.duration;
+    const returnAt = endAt + hold + second.delay;
     return node.animate([
       { ...start, offset: 0 },
-      { ...start, offset: delay / total, easing: first.easing },
-      { ...end, offset: (delay + first.duration) / total },
-      { ...returnStart, offset: (delay + first.duration + hold) / total, easing: second.easing },
-      { ...returnEnd, offset: (delay + first.duration + hold + second.duration) / total },
+      { ...start, offset: startAt / total, easing: first.easing },
+      { ...end, offset: endAt / total },
+      ...(second.delay ? [{ ...returnStart, offset: (endAt + hold) / total }] : []),
+      { ...returnStart, offset: returnAt / total, easing: second.easing },
+      { ...returnEnd, offset: (returnAt + second.duration) / total },
       { ...returnEnd, offset: 1 },
     ], { duration: total, iterations: Infinity });
   });
@@ -229,8 +240,8 @@ export function installMotionSpecimens(board) {
     running.get(node)?.cancel();
     points.set(stage, [x,y]);
     if (!reduced.matches) {
-      const { duration, easing } = parameters(stage).enter;
-      running.set(node, node.animate([{ transform: from }, { transform: to }], { duration, easing }));
+      const { duration, easing, delay } = parameters(stage).enter;
+      running.set(node, node.animate([{ transform: from }, { transform: to }], { duration, easing, delay, fill: 'backwards' }));
     }
   }
   board.addEventListener('pointerdown', event => {
@@ -312,12 +323,12 @@ export function installMotionSpecimens(board) {
       sibling.hidden = !insert;
       avoid.setAttribute('aria-pressed', String(insert));
       avoid.textContent = insert ? 'Remove sibling' : 'Insert sibling';
-      const { duration, easing } = parameters(stage)[insert ? 'enter' : 'exit'];
+      const { duration, easing, delay } = parameters(stage)[insert ? 'enter' : 'exit'];
       others.forEach((node, i) => {
         running.get(node)?.cancel();
         if (!reduced.matches) running.set(node, node.animate([
           { transform: 'translateY(' + (first[i] - node.offsetTop) + 'px)' }, { transform: 'translateY(0)' },
-        ], { duration, easing }));
+        ], { duration, easing, delay, fill: 'backwards' }));
       });
     }
     const consumers = event.target.closest('[data-motion-consumers]');

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.17.13
+
+- Add tokenized start delays to motion patterns, specimens and Playable transitions.
+- Declare ambient duration ranges and expose them in the Tokens inspector and CLI while keeping previews deterministic.
+
 ## 0.17.12
 
 - Disambiguate single Tailwind utilities by class context and report stale motion inventory ignores.
