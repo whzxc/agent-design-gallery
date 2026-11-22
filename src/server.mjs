@@ -62,6 +62,7 @@ export async function startServer({
       throw new CliError(e instanceof SyntaxError ? 'STATE_INVALID' : 'IO_FAILED', `Cannot read preferences: ${e.message}`, { cause: e });
   }
   let root,
+    cacheRoot,
     tokenSource = null,
     sources = sourceDirectories(),
     files = new Map(),
@@ -244,12 +245,14 @@ export async function startServer({
     })) {
       if (entry.name.startsWith(".") || entry.name === "node_modules" || (relative === "" && entry.name === "art" && !sourceNames.includes("art"))) continue;
       const name = path.posix.join(relative, entry.name);
+      const file = path.join(base, name);
+      if (file === cacheRoot) continue;
       if (entry.isDirectory()) await collect(base, name, out, sourceNames, discoveredCode, sidecars);
       else if (entry.isFile()) {
         if(name.endsWith('.motion.json')) sidecars.add(name.replace(/\.motion\.json$/,'.tsx'));
         if(/\.[jt]sx?$/.test(name))discoveredCode.add(name);
         if(!(/\.svg$/i.test(name)||isSourcePath(name,sourceNames)))continue;
-        const info = await stat(path.join(base, name));
+        const info = await stat(file);
         const version = `${info.mtimeMs}-${info.size}`;
         const old = base === root ? files.get(name) : undefined;
         out.set(
@@ -306,10 +309,13 @@ export async function startServer({
     if (hasTokens && !readOnly) refreshTypes({design:next});
     const project = await loadConfig(next);
     const nextSources = project.design === next ? project.sources : sourceDirectories({design:next});
+    const cacheDirectory = path.join(stateDirectory, 'cache');
+    await mkdir(cacheDirectory, { recursive: true });
+    cacheRoot = await realpath(cacheDirectory);
     const nextCode=new Set(), sidecars=new Set(), nextFiles = await collectProject(next, project, nextSources, nextCode, sidecars),
       nextGroups = await readGroups(next, nextSources);
 
-    const cacheBase=path.join(stateDirectory,'cache',digest(next));
+    const cacheBase=path.join(cacheRoot,digest(next));
     const nextStore=await createBuildStore({config:{...project,design:next,sources:nextSources,sourceFiles:[...nextCode].sort()},cacheDirectory:path.join(cacheBase,'build')});
     const nextViewerCache=await createViewerCache(path.join(cacheBase,'viewer'));
     await buildStore?.close();await closeOverlays();await viewerCache?.close();
@@ -318,10 +324,12 @@ export async function startServer({
       if(nextFiles.has(built.path)) {knownBuilds.set(built.path,built);Object.assign(nextFiles.get(built.path),{hash:built.hash,version:built.hash});frameCounts.set(built.path,built.frames.length);}
     }
     // Complete discovery before starting the watcher.
+    const cachePrefix = path.relative(next, cacheRoot).split(path.sep).join('/');
     const nextWatcher = watchDirectory(next, { recursive: true }, (_event, filename) => {
       if (filename && String(filename).split(path.sep).some(part => part.startsWith("."))) return;
       if (filename) {
         const name=String(filename).split(path.sep).join('/');
+        if (cachePrefix && (name === cachePrefix || name.startsWith(cachePrefix + '/'))) return;
         touched.add(name);
         invalidateBuilds([name]).catch(refreshError);
       }

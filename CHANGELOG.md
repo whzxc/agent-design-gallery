@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.6
+
+- Keep a viewer's generated cache out of source discovery when its state directory lives inside the design tree.
+
 ## 0.17.5
 
 - Declare instant cuts alongside timed tracks, including pattern-backed edges. Strict check recognizes the cut and the Playable inspector lists its targets.
