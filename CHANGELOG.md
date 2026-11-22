@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.1
+
+- Extend motion coverage and Tokens board usage to Vue, SCSS and HTML, plus element animations and recurring animation-frame callbacks. Report unscanned files and support reasoned exclusions for non-motion sites.
+
 ## 0.17.0
 
 - Add `adg motion --coverage` to find unmapped implementation motion, ADG role defaults in use, unlabeled edges, and incomplete flow declarations during adoption.

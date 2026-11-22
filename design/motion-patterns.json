@@ -1,5 +1,13 @@
 {
   "version": 1,
+  "ignore": [
+    {"file": "public/motion-paint.js", "match": "web:requestAnimationFrame", "within": "playTimeline", "reason": "Advances the prototype player clock. The played edge owns the motion."},
+    {"file": "public/motion-specimens.js", "match": "web:animate", "within": "animateStage", "reason": "Runs the currently selected pattern specimen from its catalog parameters."},
+    {"file": "public/motion-specimens.js", "match": "web:animate", "within": "follow", "reason": "Runs the interactive Follow specimen from its catalog parameters."},
+    {"file": "public/motion-specimens.js", "match": "web:animate", "within": "installMotionSpecimens", "reason": "Demonstrates sibling insertion within the Avoid Reflow specimen."},
+    {"file": "tooling/benchmark.mjs", "match": "web:requestAnimationFrame", "reason": "Samples frame timing in a performance benchmark."},
+    {"file": "tooling/perf-recent.mjs", "match": "web:requestAnimationFrame", "within": "clock", "reason": "Samples readiness and layout timing in a performance benchmark."}
+  ],
   "patterns": {
     "busy-spinner": {
       "kind": "ambient",

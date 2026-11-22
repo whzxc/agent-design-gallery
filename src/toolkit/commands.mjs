@@ -240,6 +240,8 @@ export async function check(config, args = [], options = {}, log = console.log, 
       const issues = options['motion-details'] ? inventory.issues : inventory.issues.slice(0, 16);
       data.motionPatterns = {
         animations: inventory.animations, unmapped: inventory.unmapped, unused: inventory.unused,
+        unscannedFiles: inventory.issues.filter(issue => issue.code === 'MOTION_SCAN_FAILED').length,
+        ignoredSites: inventory.ignored.length,
         findings: inventory.issues.length, omitted: inventory.issues.length - issues.length,
       };
       for (const { source, ...issue } of issues) {
@@ -258,7 +260,8 @@ export async function check(config, args = [], options = {}, log = console.log, 
         for (const problem of humanProblems) error(problem);
         data.complete = true;
         const message = 'Motion inventory: ' + inventory.animations + ' animation sites, ' + inventory.unmapped +
-          ' unmapped, ' + inventory.unused + ' unused patterns.';
+          ' unmapped, ' + inventory.unused + ' unused patterns, ' + data.motionPatterns.unscannedFiles + ' unscanned files, ' +
+          data.motionPatterns.ignoredSites + ' ignored sites.';
         log(message);
         if (data.findings.length) throw new CliError('CHECK_FAILED', message, { data, warnings, humanReported: true });
         return { data, warnings };

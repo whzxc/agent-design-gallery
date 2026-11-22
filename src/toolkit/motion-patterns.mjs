@@ -52,6 +52,9 @@ const object = value => value && typeof value === 'object' && !Array.isArray(val
 const idPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const tokenPattern = /^--[\w-]+$/;
 const portable = value => typeof value === 'string' && value.split('/').every(part => part && part !== '.' && part !== '..' && !/[\\:\x00-\x1f]/.test(part));
+const locator = ref => object(ref) && portable(ref.file) &&
+  typeof ref.match === 'string' && /^(?:css|keyframes|motion|style|attribute|web|call|vue):.+$/.test(ref.match) &&
+  (ref.within === undefined || (typeof ref.within === 'string' && ref.within.trim()));
 export const motionPatternFile = 'motion-patterns.json';
 
 function projectFile(config, name, fallback) {
@@ -88,8 +91,12 @@ export function loadMotionPatterns(config, authored) {
   if (!object(document) || document.version !== 1 ||
       (document.patterns !== undefined && !object(document.patterns)) ||
       (document.roles !== undefined && !object(document.roles)) ||
-      Object.keys(document).some(key => !['version', 'patterns', 'roles'].includes(key)))
-    invalid('Expected version 1 with optional roles and patterns objects.');
+      Object.keys(document).some(key => !['version', 'patterns', 'roles', 'ignore'].includes(key)))
+    invalid('Expected version 1 with optional roles, patterns and ignore.');
+  const ignore = document.ignore ?? [];
+  if ((document.ignore !== undefined && !Array.isArray(document.ignore)) || ignore.some(ref =>
+    !locator(ref) || Object.keys(ref).some(key => !['file','match','within','reason'].includes(key)) ||
+    typeof ref.reason !== 'string' || !ref.reason.trim())) invalid('Ignore entries need an exact code locator and a reason.');
 
   const css = authored ? null : projectFile(config, 'tokens.css', null);
   authored ??= css ? parseTokens(css) : {light: new Map(), dark: new Map()};
@@ -138,9 +145,8 @@ export function loadMotionPatterns(config, authored) {
         pattern.properties.some(prop => typeof prop !== 'string' || !/^(?:--)?[a-zA-Z][\w-]*$/.test(prop)) ||
         new Set(pattern.properties).size !== pattern.properties.length) invalid(id + ' needs a supported kind, action, effect, properties, interrupt and reduced policy.');
     if (pattern.consumers !== undefined && (!Array.isArray(pattern.consumers) || pattern.consumers.some(ref =>
-      !object(ref) || Object.keys(ref).some(key => !['file','match','within'].includes(key)) || !portable(ref.file) ||
-      typeof ref.match !== 'string' || !/^(?:css|keyframes|motion|style|attribute|web|call):.+$/.test(ref.match) ||
-      (ref.within !== undefined && (typeof ref.within !== 'string' || !ref.within.trim()))))) invalid(id + ' has an invalid code consumer.');
+      !locator(ref) || Object.keys(ref).some(key => !['file','match','within'].includes(key)))))
+      invalid(id + ' has an invalid code consumer.');
     if (pattern.frames !== undefined && (!Array.isArray(pattern.frames) || pattern.frames.some(ref =>
       !object(ref) || Object.keys(ref).some(key => !['source','frame'].includes(key)) || !portable(ref.source) ||
       !ref.source.endsWith('.tsx') || typeof ref.frame !== 'string' || !ref.frame.trim()))) invalid(id + ' has an invalid frame consumer.');
@@ -172,7 +178,7 @@ export function loadMotionPatterns(config, authored) {
     declare(id, entry, patterns.get(entry.extends));
     if (entry.extends) variants.get(entry.extends).push(id);
   }
-  return { ...primitives, patterns, variants, declared: declarations.map(([id]) => id) };
+  return { ...primitives, patterns, variants, ignore, declared: declarations.map(([id]) => id) };
 }
 
 export function patternParameters(pattern, direction) {

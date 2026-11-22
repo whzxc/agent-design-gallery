@@ -201,7 +201,7 @@ test('contract: coverage groups exact locations, audits used defaults and flow d
   const first = coverage('--json');
   assert.equal(first.status, 1);
   assert.equal(first.error.code, 'MOTION_COVERAGE_FAILED');
-  assert.deepEqual(first.data.summary, {unmappedSites: 2, fallbackRoles: 2, unlabeledEdges: 1, incompleteFlows: 1});
+  assert.deepEqual(first.data.summary, {unmappedSites: 2, fallbackRoles: 2, unlabeledEdges: 1, incompleteFlows: 1, unscannedFiles: 0, ignoredSites: 0});
   assert.deepEqual(first.data.unmapped, [{source: 'widget.css', groups: [{match: 'css:.widget', lines: [1, 2]}]}]);
   assert.deepEqual(first.data.fallbackRoles.map(row => row.role), ['duration-base', 'easing-enter']);
   assert.equal(first.data.unlabeledEdges[0].id, edge.id);
@@ -225,11 +225,90 @@ test('contract: coverage groups exact locations, audits used defaults and flow d
   const clean = coverage('--json');
   assert.equal(clean.status, 0);
   assert.equal(clean.ok, true);
-  assert.deepEqual(clean.data.summary, {unmappedSites: 0, fallbackRoles: 0, unlabeledEdges: 0, incompleteFlows: 0});
+  assert.deepEqual(clean.data.summary, {unmappedSites: 0, fallbackRoles: 0, unlabeledEdges: 0, incompleteFlows: 0, unscannedFiles: 0, ignoredSites: 0});
   assert.equal(coverage('--css', '--json').status, 2);
 
   write('design/motion-patterns.json', {version: 2});
   const invalid = coverage('--json');
   assert.equal(invalid.status, 2);
   assert.equal(invalid.error.code, 'CONFIG_INVALID');
+});
+
+test('contract: coverage and Tokens consumers share Vue, Sass, HTML, and JavaScript motion locations', t => {
+  const { root, design, write } = fixture(t);
+  write('adg.config.mjs', 'export default {}');
+  write('Widget.vue', `<template>
+  <Transition name="fade"><div /></Transition>
+  <transition-group><div /></transition-group>
+</template>
+<script setup lang="ts">
+const reveal = (element: HTMLElement) => element?.animate([{ opacity: 0 }, { opacity: 1 }], 150)
+</script>
+<style scoped>
+.widget { transition: opacity 150ms; }
+</style>
+<style lang="scss">
+$time: 150ms; // Sass comment
+.frame { animation: fade $time; }
+</style>`);
+  write('layout.scss', `$time: 120ms;
+@mixin reveal {
+  .card-#{&} { transition: opacity $time; }
+}
+@keyframes fade { to { opacity: 1; } }`);
+  write('index.html', `<!doctype html>
+<head>
+  <style>
+  #splash { transition: opacity 120ms; }
+  @keyframes sweep { to { opacity: 1; } }
+  </style>
+</head>`);
+  write('embedded.ts', 'const page = `<style>${tokens}\n${styles}</style>`;');
+  write('clock.ts', `function clock() {
+  const tick = useCallback(() => {
+    if (running) window.requestAnimationFrame(tick);
+  }, []);
+  requestAnimationFrame(tick);
+}
+function hostSize() {
+  const report = () => { sendSize(); };
+  function enqueue() { requestAnimationFrame(report); }
+}
+requestAnimationFrame(() => requestAnimationFrame(done));
+function measure() {
+  const sample = () => { requestAnimationFrame(sample); };
+  requestAnimationFrame(sample);
+}`);
+  write('design/motion-patterns.json', {version: 1, ignore: [{
+    file:'clock.ts', match:'web:requestAnimationFrame', within:'measure', reason:'Samples layout in a test harness.',
+  }], patterns: {fade: {consumers: [
+    {file:'Widget.vue', match:'vue:Transition:fade'},
+    {file:'Widget.vue', match:'web:animate', within:'reveal'},
+    {file:'index.html', match:'keyframes:sweep'},
+  ]}}});
+  const config = {root, design};
+  const catalog = loadMotionPatterns(config);
+  const inventory = scanMotion(config, catalog, {records: []}, {mappedOnly: true});
+  const refs = inventory.consumers.get('fade');
+  assert.deepEqual(refs.map(({source, line}) => [source, line]), [['Widget.vue', 2], ['Widget.vue', 6], ['index.html', 5]]);
+  assert.match(motionCards(catalog, inventory, 'design/motion-patterns.json', 'design').adopted, /Widget\.vue:6/);
+  assert.match(motionCodeExcerpt(config, catalog, 'index.html', 5).find(([line]) => line === 5)[1], /keyframes sweep/);
+
+  write('unreadable.scss', '.broken { animation: appear');
+  assert.equal(spawnSync('git', ['init', '-q'], {cwd:root}).status, 0);
+  write('missing.css', '.missing {animation: appear;}');
+  assert.equal(spawnSync('git', ['add', 'missing.css'], {cwd:root}).status, 0);
+  rmSync(path.join(root, 'missing.css'));
+  const result = spawnSync(process.execPath, [cli, 'motion', '--coverage', '--json'], {cwd:root, encoding:'utf8'});
+  assert.equal(result.status, 2);
+  const { data } = JSON.parse(result.stdout);
+  const sites = Object.fromEntries(data.unmapped.map(({source, groups}) => [source, groups.map(({match, lines}) => [match, lines])]));
+  assert.deepEqual(sites['Widget.vue'], [['vue:TransitionGroup', [3]], ['css:.widget', [9]], ['css:.frame', [13]]]);
+  assert.deepEqual(sites['layout.scss'], [['css:.card-#{&}', [3]], ['keyframes:fade', [5]]]);
+  assert.deepEqual(sites['index.html'], [['css:#splash', [4]]]);
+  assert.deepEqual(sites['clock.ts'], [['web:requestAnimationFrame', [3]], ['web:requestAnimationFrame', [5]]]);
+  assert.equal(data.summary.unscannedFiles, 2);
+  assert.deepEqual(data.unscanned.map(row => row.source), ['missing.css', 'unreadable.scss']);
+  assert.equal(data.summary.ignoredSites, 2);
+  assert.ok(data.ignored.every(row => row.reason === 'Samples layout in a test harness.'));
 });

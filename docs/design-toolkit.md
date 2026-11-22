@@ -312,9 +312,12 @@ from the inventory. For CSS these are `keyframes:<name>` and
 `css:<selector-list>` (serialized selector). For Motion imports they are
 `motion:<property-or-export>`, including `layout`, `animate`,
 `AnimatePresence`, `useSpring` and spring options. Inline JS styles use
-`style:<property>`. Optional links for JSX hooks and Web Animations use
-`attribute:data-…` and `web:animate`. Use `call:spring` for a custom spring method. Narrow a JS/TS match with `within`
-and the enclosing named declaration. Each mapped code location, explicitly
+`style:<property>`. Use `vue:Transition` or `vue:TransitionGroup` for Vue
+components. Append `:<name>` when the component declares a static `name`.
+Use `web:animate` for an element animation and `web:requestAnimationFrame`
+for a recurring frame callback. Optional links for JSX hooks and custom spring
+methods use `attribute:data-…` and `call:spring`. Narrow a JS/TS match with
+`within` and the enclosing named declaration. Each mapped code location, explicitly
 listed frame, and pattern-backed edge is one place. Open a card's usage
 count for links to those locations. Use `?scope=tokens&section=motion`
 to open the Motion section directly.
@@ -331,17 +334,40 @@ height to represent scale. The discrete player supports `finish` with
 belong to live specimens and runtime code. Existing handwritten phases
 continue to work.
 
-Whole-project `adg check` scans Git-tracked and nonignored local CSS and
-JS/TS/JSX/TSX source for animation and transition declarations, keyframes
-and Motion library usage. Generated output, dependencies, test sources and
-symlinks are skipped. Static detection covers CSS stylesheets, CSS
-templates and authored inline style declarations. Mappings are checked
-against observed locations. Explicitly declared patterns with zero consumers
-produce a finding. The shared built-ins are available even in projects that
-have yet to adopt them. `check.strictMotion` makes unmapped, unused, and
-unreadable sources errors. By default they are warnings with totals and up
-to 16 examples. Use `adg check --motion-only --motion-details --json` to
-list the complete inventory findings without building frames. A full check
+Whole-project `adg check` and `adg motion --coverage` share a static inventory
+of CSS, SCSS, JS/TS/JSX/TSX, Vue single-file components and HTML. It reads
+stylesheet blocks, static inline styles, CSS templates, Vue transition
+components and inline scripts. A named callback that schedules itself through
+`requestAnimationFrame` contributes its initial and recurring scheduling
+sites. One-shot scheduling is outside that rule. SCSS selectors, declarations
+and keyframes are read as authored, without evaluating Sass.
+Generated output, dependencies and test sources are outside the inventory.
+Source symlinks are reported as unscanned without following them. Each unreadable
+or partially parsed candidate file appears in the unscanned count.
+
+For a candidate that serves a non-motion purpose, add an exact locator to the
+top-level `ignore` array in `motion-patterns.json`:
+
+```json
+{
+  "version": 1,
+  "ignore": [
+    {"file": "tooling/sample.ts", "match": "web:requestAnimationFrame", "within": "measure", "reason": "Samples layout for a test harness."}
+  ]
+}
+```
+
+Use the same locator fields as a code consumer and supply a nonempty reason.
+A mapped site remains a pattern consumer. Exclusions apply to observed sites,
+so they cannot clear an unscanned file. Coverage JSON records ignored locations
+and their reasons.
+
+Mappings are checked against observed locations. Explicitly declared patterns
+with zero consumers produce a finding. The shared built-ins are available even
+in projects that have yet to adopt them. `check.strictMotion` makes unmapped,
+unused, and unscanned sources errors. By default they are warnings with totals
+and up to 16 examples. Use `adg check --motion-only --motion-details --json`
+to list the complete inventory findings without building frames. A full check
 also evaluates the existing frame and edge rules.
 
 ### ARC layer pilot
@@ -617,7 +643,7 @@ A first argument that names a command runs it; any other argument is a directory
 
 - `init` creates `adg.config.mjs` requiring `>=0.5.0`, required tokens, production source directories, fixtures/art, editor configuration and ignore entries. A fresh library gets `components/example.tsx`, `modules/example.tsx`, `surfaces/example.tsx` and `fixtures/example.ts`: one runnable downward composition with frame name `default` in each source. Explicit source names are used in place of the defaults. Existing source libraries or an existing example fixture receive no demo assets. Authored files are preserved, generated declarations are refreshed, missing ignore entries are appended, and created/skipped files are listed. It creates no study or empty studies directory.
 - `check` checks import direction and the named sources' frames, or all sources. `check.strictLayers` and `check.lifecycle` opt in to same-layer and implementation lifecycle findings; `adg init` enables both. `--read-only` skips generated type declarations and HTML build files; it runs the same import and both-theme frame checks without changing consumer files.
-- `motion --coverage` runs a read-only adoption audit from the project root without rendering frames. It uses the [static motion inventory](#motion-tokens-and-patterns) to group unmapped implementation sites by file and match, and reports default roles used by active patterns or edges, unlabeled edges, and connected flows missing an anchor or declared ends. Declare an empty ends array for a flow where every state has an outgoing edge. Text displays up to 32 groups and 16 lines per match. Use `--json` for every location. Exit 0 means clean, 1 means findings, and 2 means invalid configuration or an incomplete scan. See [Adopting motion](asset-rules.md#adopting-motion).
+- `motion --coverage` runs a read-only adoption audit from the project root without rendering frames. It uses the [static motion inventory](#motion-tokens-and-patterns) to group unmapped implementation sites by file and match, and reports default roles used by active patterns or edges, unlabeled edges, and connected flows missing an anchor or declared ends. Declare an empty ends array for a flow where every state has an outgoing edge. Text lists every unscanned file and displays up to 32 other groups and 16 lines per match. Use `--json` for all locations and exclusion reasons. Exit 0 means clean, 1 means findings, and 2 means invalid configuration or an incomplete scan. See [Adopting motion](asset-rules.md#adopting-motion).
 - `render` writes `output/design/<path>/<frame>-light.png` and `-dark.png` at the given scale, for every frame or the one named.
 - `compare` compares one frame; its flags override the frame's `fixture` and `capture`.
 - `owner --part` reverses a design part or whole source to active implementation bindings, including resolved selector files and regions.

@@ -1313,16 +1313,18 @@ actions are supported only on macOS and are finite even when they start a reside
 
 `adg motion --coverage --json` returns the v2 envelope with command `motion`.
 Exit 1 retains the full result in `data` with `MOTION_COVERAGE_FAILED`. Exit 0
-returns the same shape with zero counts. Exit 2 means the audit could not
-complete. Each source path is project-relative and each line number is one-based.
+returns the same shape with zero findings. Exit 2 means the audit could not
+complete. An incomplete scan retains observed findings and the unscanned file list in `data`. Each source path is project-relative and each line number is one-based.
 
 ```ts
 type MotionCoverageData = {
-  summary: { unmappedSites: number; fallbackRoles: number; unlabeledEdges: number; incompleteFlows: number };
+  summary: { unmappedSites: number; fallbackRoles: number; unlabeledEdges: number; incompleteFlows: number; unscannedFiles: number; ignoredSites: number };
   unmapped: { source: string; groups: { match: string; within?: string; lines: number[] }[] }[];
   fallbackRoles: { role: string; token: string; patterns: string[] }[];
   unlabeledEdges: { source: string; line: number; id: string }[];
   incompleteFlows: { start: { source: string; frame: string }; missing: ("anchor" | "ends")[] }[];
+  unscanned: { source: string; line: number | null; message: string }[];
+  ignored: { source: string; line: number; match: string; within?: string; reason: string }[];
 };
 ```
 
