@@ -115,27 +115,21 @@ function cardHtml(card, role) {
       </div>
     </header>
     <div class="panes" style="--panes:${panes.length}">
-      ${panes.map(side => `<figure data-side="${side}"><figcaption>
+      ${panes.map(side => `<figure data-side="${side}">${added ? '' : `<figcaption>
         <span>${side[0].toUpperCase() + side.slice(1)}</span>
         ${side === 'before' && card.previousOrigin ? `<small>${escape(card.previousOrigin.title)} · ${escape(card.previousOrigin.frame)}</small>` : ''}
         ${side === 'difference' && card.differentPixels ? `<small>${card.differentPixels.toLocaleString('en-US')} px changed</small>` : ''}
-      </figcaption><div class="stage">${card[side] ? `<button type="button" class="pane-trigger" data-enlarge="${side}" aria-label="Enlarge ${side} · ${escape(card.origin.frame)}" title="Enlarge ${side}">${icons.expand}</button>` : '<span class="absent">Absent at base</span>'}</div></figure>`).join('')}
+      </figcaption>`}<div class="stage">${card[side] ? `<button type="button" class="pane-trigger" data-enlarge="${side}" aria-label="Enlarge ${side} · ${escape(card.origin.frame)}" title="Enlarge ${side}">${icons.expand}</button>` : '<span class="absent">Absent at base</span>'}</div></figure>`).join('')}
     </div>
   </article>`;
 }
 
 function inheritedHtml(group, index, byKey) {
-  const representative = key(group.representative);
-  const outliers = group.outliers.map(key).filter(value => value !== representative);
-  const featured = new Set([representative, ...outliers]);
-  const rest = group.frames.map(key).filter(value => !featured.has(value));
+  const representative = byKey.get(key(group.representative));
+  const omitted = group.frames.length - 1;
   return `<section class="inherited-group" data-group="${index}" aria-labelledby="group-${index}">
-    <header class="group-head"><h3 id="group-${index}">${group.causes.length ? group.causes.map(cause => `<code>${escape(cause)}</code>`).join('') : 'Shared dependencies'}</h3><span>${countLabel(group.frames.length)}</span></header>
-    <div class="group-body">
-      ${cardHtml(byKey.get(representative), 'Representative')}
-      ${outliers.map(value => cardHtml(byKey.get(value), 'Outlier')).join('')}
-      ${rest.length ? `<details><summary>${countLabel(rest.length)} more</summary><div class="members">${rest.map(value => cardHtml(byKey.get(value))).join('')}</div></details>` : ''}
-    </div>
+    <header class="group-head"><h3 id="group-${index}">${group.causes.length ? group.causes.map(cause => `<code>${escape(cause)}</code>`).join('') : 'Shared dependencies'}</h3><span>${countLabel(group.frames.length)}${omitted ? ` · ${omitted} omitted` : ''}</span></header>
+    <div class="group-body">${cardHtml(representative, 'Representative')}</div>
   </section>`;
 }
 
@@ -227,7 +221,7 @@ function mountPreviews() {
   }
 
   function mount(card) {
-    if (card.dataset.mounted || card.closest('details:not([open])')) return;
+    if (card.dataset.mounted) return;
     card.dataset.mounted = 'true';
     const index = Number(card.dataset.card), preview = data[index];
     const decodes = [];
@@ -349,17 +343,6 @@ function mountPreviews() {
   });
   const zoomSizes = new ResizeObserver(fitZoom);
   zoomSizes.observe(zoomPanes);
-
-  function revealAnchor() {
-    const target = document.getElementById(location.hash.slice(1));
-    const group = target?.closest('details');
-    if (group && !group.open) {
-      group.open = true;
-      requestAnimationFrame(() => target.scrollIntoView());
-    }
-  }
-  window.addEventListener('hashchange', revealAnchor);
-  revealAnchor();
 }
 
 const documentStyles = `
@@ -389,7 +372,7 @@ const documentStyles = `
   .section-head h2{font-size:22px;letter-spacing:-.025em;font-weight:650}
   #added .section-head h2{color:var(--positive)}
   .section-head>span,.group-head>span{color:var(--muted);font-size:12px;white-space:nowrap}
-  .section-body,.members,.group-body{display:grid;gap:14px;min-width:0}
+  .section-body{display:grid;gap:14px;min-width:0}
   #added .section-body{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
   #added .frame-card,#added .panes figure{display:flex;flex-direction:column}
   #added .panes{flex:1;align-items:stretch}
@@ -411,7 +394,6 @@ const documentStyles = `
   .card-head .origin strong{flex:none;max-width:75%}
   .card-meta{display:flex;gap:8px;align-items:center;white-space:nowrap;flex:none}
   .role-label{font-size:10px;color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:0 6px}
-  [data-role="outlier"] .role-label{color:var(--warning)}
   button{font:inherit;color:inherit}
   .enlarge,.zoom-actions button,.zoom-modes button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:30px;padding:4px 9px;
     border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer;font-size:12px;white-space:nowrap}
@@ -435,9 +417,6 @@ const documentStyles = `
   .group-head h3{display:flex;flex-wrap:wrap;gap:5px 10px;min-width:0;font-size:13px}
   .group-head code{color:var(--accent);overflow-wrap:anywhere}
   .group-body{padding:12px}
-  details{min-width:0}
-  summary{cursor:pointer;color:var(--accent);font-size:12px;padding:6px 4px}
-  .members{margin-top:7px}
   .names{list-style:none;padding:10px 13px;display:grid;gap:9px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}
   .names li{display:flex;gap:9px;flex-wrap:wrap;overflow-wrap:anywhere}
   .failures{padding:14px 17px;border:1px solid var(--warning);border-radius:9px}

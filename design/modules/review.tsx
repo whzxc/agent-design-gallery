@@ -40,9 +40,9 @@ function Sample({ before = false, added = false }) {
 
 function Pane({ label, added = false }: { label: 'Before' | 'After' | 'Difference'; added?: boolean }) {
   return <figure class="min-w-0">
-    <figcaption class="flex items-baseline justify-between gap-2 px-px pb-[6px] text-[11px] font-[630] text-text-secondary">
+    {!added && <figcaption class="flex items-baseline justify-between gap-2 px-px pb-[6px] text-[11px] font-[630] text-text-secondary">
       <span>{label}</span>{label === 'Difference' && <small class="text-[10px] font-normal tabular-nums">20,810 px changed</small>}
-    </figcaption>
+    </figcaption>}
     <div class="grid min-h-10 place-items-center rounded-[7px] border border-border bg-surface-sunken py-[7px]">
       {label === 'Difference' ? <span class="h-10 w-[125px] rounded-field bg-danger/25" />
         : <Sample before={label === 'Before'} added={added} />}

@@ -114,7 +114,11 @@ function buildHtmlReview(model, data, built, theme, locate, format, target) {
   const comparisons = new Map(data.comparisons.filter(row => row.theme === theme).map(row => [identity(row), row]));
   const allEntries = [...model.sections.added, ...model.sections.changed];
   const embed = format === 'embed';
-  const selected = embed ? selectEmbedEntries(model, comparisons, data.review.groups) : allEntries;
+  const selected = embed ? selectEmbedEntries(model, comparisons, data.review.groups) : [
+    ...model.sections.added,
+    ...model.sections.changed.filter(entry => entry.change?.kind !== 'inherited'),
+    ...model.groups.map(group => group.representative),
+  ];
 
   function render(entries) {
     const { compileFrame, assets } = compileSpecimens({ built, theme, inlineArt: !embed });

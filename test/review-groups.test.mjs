@@ -8,6 +8,7 @@ import { groupReview } from '../src/toolkit/review-groups.mjs';
 import { buildReview } from '../src/toolkit/diff-document.mjs';
 import { diff, reviewChange } from '../src/toolkit/diff.mjs';
 import { loadConfig } from '../src/toolkit/config.mjs';
+import { review as writeReview } from '../src/toolkit/review.mjs';
 import { starterTokens } from '../src/toolkit/project.mjs';
 
 function frame(source, area, causes = ['design/components/button.tsx'], kind = 'inherited') {
@@ -132,7 +133,7 @@ test('buildReview propagates comparison change metadata and groups frame entries
   assert.equal(result.complete, false);
 });
 
-test('real Git ordinary and impacted diffs classify direct feature internals and inherited consumers', { timeout: 60000 }, async t => {
+test('contract: Git diffs classify inherited consumers and standalone review embeds one representative per group', { timeout: 60000 }, async t => {
   const root = await mkdtemp(path.join(tmpdir(), 'adg-review-groups-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const put = async (name, text) => {
@@ -144,12 +145,16 @@ test('real Git ordinary and impacted diffs classify direct feature internals and
   await put('adg.config.mjs', 'export default {};');
   await put('.gitignore', 'output/\nstate/\ndesign/.adg/\n');
   await put('design/tokens.css', starterTokens);
-  const part = color => `export function Card() { return <div style={{ width: 30, height: 20, background: '${color}' }}/>; }`;
+  const part = color => `export function Card({ width = 30 } = {}) { return <div style={{ width, height: 20, background: '${color}' }}/>; }`;
   await put('design/modules/card/part.tsx', part('#123456'));
   await put('design/modules/card/index.tsx', `import { Frame } from 'adg'; import { Card } from './part';
 export { Card } from './part'; export default () => <Frame name="default"><Card/></Frame>;`);
   await put('design/surfaces/page.tsx', `import { Frame } from 'adg'; import { Card } from '../modules/card';
-export default () => <Frame name="default"><Card/></Frame>;`);
+export default () => [
+  <Frame name="default"><Card/><span>Sample representative content</span></Frame>,
+  <Frame name="other"><Card/><span>Sample omitted content</span></Frame>,
+  <Frame name="wide"><Card width={300}/><span>Sample outlier content</span></Frame>,
+];`);
   await put('design/components/broken.tsx', 'invalid TSX <');
   git('init', '-q');
   git('add', '.');
@@ -167,14 +172,28 @@ export default () => <Frame name="default"><Card/></Frame>;`);
     assert.equal(data.complete, false);
     assert.equal(data.failures.length, 2);
     assert.deepEqual({ direct: data.review.direct, inherited: data.review.inherited, changed: data.review.changed },
-      { direct: 1, inherited: 1, changed: 2 });
+      { direct: 1, inherited: 3, changed: 4 });
     const own = data.comparisons.find(row => row.source === 'design/modules/card/index.tsx');
     const inherited = data.comparisons.find(row => row.source === 'design/surfaces/page.tsx');
     assert.deepEqual(own.change, { kind: 'direct', causes: ['design/modules/card/part.tsx'] });
     assert.deepEqual(inherited.change, { kind: 'inherited', causes: ['design/modules/card/part.tsx'] });
-    assert.deepEqual(data.review.groups[0].frames, [{ source: inherited.source, frame: inherited.frame }]);
+    const group = data.review.groups[0];
+    assert.deepEqual(group.frames, ['default', 'other', 'wide'].map(frame => ({ source: inherited.source, frame })));
+    assert.deepEqual(group.outliers, [{ source: inherited.source, frame: 'wide' }]);
+    assert.deepEqual(group.representative, { source: inherited.source, frame: 'default' });
     const persisted = JSON.parse(await readFile(data.reportPath, 'utf8'));
     assert.deepEqual(persisted.review, data.review);
     assert.deepEqual(persisted.comparisons.map(row => row.change), data.comparisons.map(row => row.change));
   }
+  const out = path.join(root, 'output', 'review.html');
+  await assert.rejects(writeReview(current, { base: 'HEAD', theme: 'light', json: true, out }), error => {
+    assert.equal(error.code, 'SOURCE_BUILD_FAILED');
+    assert.equal(error.data.counts.inherited, 3);
+    assert.equal(error.data.groups[0].frames.length, 3);
+    return true;
+  });
+  const document = await readFile(out, 'utf8');
+  assert.match(document, /3 frames · 2 omitted/);
+  assert.match(document, /Sample representative content/);
+  assert.doesNotMatch(document, /Sample (omitted|outlier) content/);
 });
