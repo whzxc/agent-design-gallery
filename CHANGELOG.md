@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.16
+
+- Bundle agent-first skills (`adg-setup`, `adg-design`) covering greenfield and existing-codebase onboarding, layer splitting, targeted design proposals, board comment iteration, and design-to-code implementation.
+- Add `adg skill [list | path | install]` to discover and install bundled skills for Codex, Claude Code, Antigravity, Cursor, `.agents/skills` or a custom directory.
+- Document staged pilot-first adoption for existing codebases without `design/` in `docs/asset-rules.md`.
+
+## 0.17.15
+
+- Compact standalone review cards, summarize inherited frame groups and restore static frame reports.
+
 ## 0.17.14
 
 - Allow reasoned, frame-specific lifecycle capture exemptions for bound production surfaces and show them in check and review.
