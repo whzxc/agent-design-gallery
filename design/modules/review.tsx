@@ -3,13 +3,15 @@ import { addedFrame, changedFrame, reviewProject } from '../fixtures/review';
 
 type Fixture = typeof changedFrame;
 
-function Origin({ location, title }: Fixture) {
+function Origin({ location, title, compact = false }: Fixture & { compact?: boolean }) {
   const [layer, asset] = location;
-  return <div class="flex min-w-0 flex-col gap-[3px]">
-    <span class="flex flex-wrap gap-[7px] text-[11px] font-medium leading-[1.3] text-text-secondary">
-      <span>{layer}</span><span aria-hidden="true">/</span><span>{asset}</span>
+  return <div class={`flex min-w-0 ${compact ? 'flex-1 items-baseline gap-2' : 'flex-col gap-[3px]'}`}>
+    <span class={`text-[11px] font-medium leading-[1.3] text-text-secondary ${compact ? 'truncate' : 'flex flex-wrap gap-[7px]'}`}>
+      <span>{layer}</span><span class={compact ? 'mx-[6px]' : ''} aria-hidden="true">/</span><span>{asset}</span>
     </span>
-    <strong class="flex items-center gap-[5px] text-[15px] leading-[1.25] font-[640]">{title}<span class="text-accent"><Icon name="arrow-up-right" size={13} /></span></strong>
+    <strong class={`text-[15px] leading-[1.25] font-[640] ${compact ? 'max-w-3/4 shrink-0 truncate' : 'flex items-center gap-[5px]'}`}>
+      {title}<span class={`text-accent ${compact ? 'ml-[5px] inline-block align-[-2px]' : ''}`}><Icon name="arrow-up-right" size={13} /></span>
+    </strong>
   </div>;
 }
 
@@ -41,7 +43,7 @@ function Pane({ label, added = false }: { label: 'Before' | 'After' | 'Differenc
     <figcaption class="flex items-baseline justify-between gap-2 px-px pb-[6px] text-[11px] font-[630] text-text-secondary">
       <span>{label}</span>{label === 'Difference' && <small class="text-[10px] font-normal tabular-nums">20,810 px changed</small>}
     </figcaption>
-    <div class="grid min-h-32 place-items-center rounded-[7px] border border-border bg-surface-sunken">
+    <div class="grid min-h-10 place-items-center rounded-[7px] border border-border bg-surface-sunken py-[7px]">
       {label === 'Difference' ? <span class="h-10 w-[125px] rounded-field bg-danger/25" />
         : <Sample before={label === 'Before'} added={added} />}
     </div>
@@ -50,10 +52,11 @@ function Pane({ label, added = false }: { label: 'Before' | 'After' | 'Differenc
 
 export function ReviewFrameCard(fixture: Fixture) {
   return <article class="min-w-0 overflow-hidden rounded-[11px] border border-border bg-surface">
-    <header class="flex min-h-[60px] items-center justify-between gap-[14px] border-b border-border px-[13px] py-[11px]">
-      <Origin {...fixture} />
-      <div class="flex items-center gap-[10px]"><span class="text-[11px] text-text-secondary font-mono">{fixture.size}</span>
-        <Control><Icon name="maximize" size={15} />Enlarge</Control></div>
+    <header class="flex items-center gap-[10px] border-b border-border px-3 py-1.5">
+      <Origin {...fixture} compact />
+      <button type="button" aria-label={`Enlarge ${fixture.title}`} class="grid size-7 shrink-0 place-items-center rounded-[6px] border border-border bg-surface">
+        <Icon name="maximize" size={15} />
+      </button>
     </header>
     <div class={`grid gap-[10px] p-3 pt-[11px] ${fixture.added ? 'grid-cols-1' : 'grid-cols-3'}`}>
       {!fixture.added && <Pane label="Before" />}

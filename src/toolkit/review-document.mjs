@@ -14,14 +14,12 @@ const icons = {
   close: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg>',
 };
 
-function originLabel(origin) {
-  const parts = [origin.layer, origin.chapter, origin.title].filter(Boolean);
-  return parts.map(part => `<span>${escape(part)}</span>`).join('<span class="crumb-separator" aria-hidden="true">/</span>');
-}
-
 function originHtml(origin) {
-  const content = `<span class="breadcrumbs">${originLabel(origin)}</span><strong>${escape(origin.frame)}${origin.href ? icons.external : ''}</strong>`;
-  return origin.href ? `<a class="origin" href="${escape(origin.href)}" target="_blank" rel="noopener" title="Open in ADG">${content}</a>` : `<span class="origin">${content}</span>`;
+  const parts = [origin.layer, origin.chapter, origin.title].filter(Boolean);
+  const breadcrumbs = parts.map(part => `<span>${escape(part)}</span>`).join('<span class="crumb-separator" aria-hidden="true">/</span>');
+  const content = `<span class="breadcrumbs">${breadcrumbs}</span><strong>${escape(origin.frame)}${origin.href ? icons.external : ''}</strong>`;
+  const title = escape([...parts, origin.frame].join(' / '));
+  return origin.href ? `<a class="origin" href="${escape(origin.href)}" target="_blank" rel="noopener" title="${title} · Open in ADG">${content}</a>` : `<span class="origin" title="${title}">${content}</span>`;
 }
 
 export function reviewDocument(report, { properties, styles, templates }) {
@@ -107,15 +105,13 @@ function cardHtml(card, role) {
   const id = `review-${card.index}`;
   const added = card.status === 'added';
   const panes = added ? ['after'] : ['before', 'after', ...(card.difference ? ['difference'] : [])];
-  const size = (preview) => `${Math.round(preview.width)} × ${Math.round(preview.height)}`;
-  const dimensions = card.after ? (card.before && size(card.before) !== size(card.after)
-    ? `${size(card.before)} → ${size(card.after)}` : size(card.after)) : '';
+  const enlargeLabel = escape(`Enlarge ${card.origin.frame}`);
   return `<article class="frame-card" id="${id}" data-card="${card.index}" data-status="${card.status}"
     data-source="${escape(card.source)}" data-frame="${escape(card.frame)}" ${role ? `data-role="${role.toLowerCase()}"` : ''} aria-labelledby="${id}-title">
     <header class="card-head">
       <h3 id="${id}-title">${originHtml(card.origin)}</h3>
-      <div class="card-meta">${role ? `<span class="role-label">${role}</span>` : ''}${dimensions ? `<span class="dimensions" aria-label="Frame size in CSS pixels">${dimensions}</span>` : ''}
-        <button type="button" class="enlarge" data-enlarge="${added ? 'after' : 'compare'}" aria-label="Enlarge ${escape(card.origin.frame)}">${icons.expand}<span>Enlarge</span></button>
+      <div class="card-meta">${role ? `<span class="role-label">${role}</span>` : ''}
+        <button type="button" class="enlarge" data-enlarge="${added ? 'after' : 'compare'}" aria-label="${enlargeLabel}" title="${enlargeLabel}">${icons.expand}</button>
       </div>
     </header>
     <div class="panes" style="--panes:${panes.length}">
@@ -375,7 +371,7 @@ const documentStyles = `
   *,*::before,*::after{box-sizing:border-box}
   body{margin:0;background:var(--page);color:var(--ink);font-size:14px;line-height:1.5}
   h1,h2,h3,p,ul,figure{margin:0} a{color:inherit;text-decoration:none}
-  code,.dimensions,#zoom-scale{font:12px/1.5 ui-monospace,"SF Mono",Menlo,monospace}
+  code,#zoom-scale{font:12px/1.5 ui-monospace,"SF Mono",Menlo,monospace}
   :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
   .shell{max-width:1680px;margin-inline:auto;padding-inline:clamp(16px,2.6vw,42px)}
   .masthead{background:var(--top);border-bottom:1px solid var(--line)}
@@ -401,27 +397,31 @@ const documentStyles = `
   .frame-card,.inherited-group{border:1px solid var(--line);border-radius:11px;min-width:0;overflow:hidden}
   .frame-card{background:var(--panel);--plane-height:0px}
   .frame-card:target{border-color:var(--accent)}
-  .card-head{padding:11px 13px;min-height:60px;display:flex;justify-content:space-between;align-items:center;gap:8px 14px;border-bottom:1px solid var(--line)}
-  .card-head h3{min-width:0}
+  .card-head{padding:6px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+  .card-head h3{flex:1;min-width:0}
   .origin{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
   .origin strong{color:var(--ink);font-size:15px;font-weight:640;line-height:1.25}
   .origin strong svg{display:inline-block;vertical-align:-2px;margin-left:5px;color:var(--accent)}
   a.origin:hover strong{color:var(--accent)}
   .breadcrumbs{display:flex;align-items:baseline;flex-wrap:wrap;gap:1px 7px;color:var(--muted);font-size:11px;font-weight:500;line-height:1.3}
   .crumb-separator{color:var(--muted);opacity:.65}
-  .card-meta{display:flex;gap:7px 10px;align-items:center;flex-wrap:wrap;justify-content:flex-end;color:var(--muted);flex:none}
-  .dimensions{font-size:11px;white-space:nowrap}
+  .card-head .origin{display:flex;align-items:baseline;gap:8px}
+  .card-head .breadcrumbs,.card-head .origin strong{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .card-head .crumb-separator{margin-inline:6px}
+  .card-head .origin strong{flex:none;max-width:75%}
+  .card-meta{display:flex;gap:8px;align-items:center;white-space:nowrap;flex:none}
   .role-label{font-size:10px;color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:0 6px}
   [data-role="outlier"] .role-label{color:var(--warning)}
   button{font:inherit;color:inherit}
   .enlarge,.zoom-actions button,.zoom-modes button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:30px;padding:4px 9px;
     border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer;font-size:12px;white-space:nowrap}
+  .enlarge{width:28px;min-height:28px;padding:0}
   .enlarge:hover,.zoom-actions button:hover,.zoom-modes button:hover,.zoom-modes button[aria-pressed="true"]{background:var(--nav-tint);color:var(--accent)}
   .panes{display:grid;grid-template-columns:repeat(var(--panes),minmax(0,1fr));gap:10px;padding:11px 12px 12px;align-items:start}
   .panes figure{min-width:0}
   figcaption{display:flex;justify-content:space-between;align-items:baseline;gap:4px 8px;flex-wrap:wrap;font-size:11px;font-weight:630;color:var(--muted);padding:0 1px 6px}
   figcaption small{font-size:10px;font-weight:400;font-variant-numeric:tabular-nums}
-  .stage{position:relative;display:grid;place-items:center;min-height:max(128px,calc(24px + var(--plane-height)));overflow:hidden;border:1px solid var(--line);border-radius:7px;background:var(--well)}
+  .stage{position:relative;display:grid;place-items:center;min-height:max(40px,calc(16px + var(--plane-height)));overflow:hidden;border:1px solid var(--line);border-radius:7px;background:var(--well)}
   .pane-trigger{display:block;position:absolute;inset:0;border:0;background:transparent;color:var(--ink);cursor:zoom-in}
   .pane-trigger svg{position:absolute;top:7px;right:7px;box-sizing:content-box;border:1px solid var(--line);border-radius:6px;padding:5px;background:var(--panel);opacity:0}
   .pane-trigger:hover svg,.pane-trigger:focus-visible svg{opacity:1}
@@ -459,9 +459,8 @@ const documentStyles = `
   .zoom-panes figure{display:flex;flex-direction:column;min-width:0;min-height:0}
   .zoom-stage{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--well);border:1px solid var(--line);border-radius:7px}
   .zoom-surface{width:max(100%,calc(var(--plane-width) + 16px));min-height:max(100%,calc(var(--plane-height) + 16px));display:grid;place-items:center}
-  @media(max-width:1000px){.card-head{flex-wrap:wrap}.card-meta{justify-content:flex-start}}
   @media(max-width:760px){.layout{padding-top:14px}.panes{gap:7px}.section-head h2{font-size:20px}.zoom-header{flex-wrap:wrap}}
   @media(max-width:540px){.panes,#added .section-body{grid-template-columns:minmax(0,1fr)}.theme-label{display:none}.masthead-inner{grid-template-columns:minmax(0,1fr) auto;gap:8px}
-    .revisions{gap:5px}.revisions code{font-size:9px}h1{font-size:15px}h1 span{font-size:11px}.card-meta{width:100%}.enlarge{margin-left:auto}
+    .revisions{gap:5px}.revisions code{font-size:9px}h1{font-size:15px}h1 span{font-size:11px}
     .group-body{padding:9px}.section-head{margin-bottom:10px}.zoom-panes{grid-template-columns:1fr}.zoom-actions{flex-wrap:wrap}}
 `;
