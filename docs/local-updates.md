@@ -15,7 +15,7 @@ npm pack --pack-destination "$update_dir"
 npm install --global "$update_dir"/whzxc-agent-design-gallery-*.tgz --prefer-offline --no-audit --no-fund
 ```
 
-Use the same tarball on the serving host when it differs from the development host. `npm pack` refreshes the packaged token stylesheet. Its file list must contain only `src/`, `public/`, package metadata, README and license.
+Use the same tarball on the serving host when it differs from the development host. `npm pack` refreshes the packaged token stylesheet. Its file list must contain only `src/`, `public/`, `skills/`, package metadata, README and license.
 
 ## One-time service migration
 

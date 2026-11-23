@@ -697,6 +697,7 @@ Apply these composition rules when authoring a frame or evaluating a layout deci
 ## Commands
 
 ```sh
+adg skill [list | path [name] | install (--target=codex|claude-code|antigravity|cursor|agents | --dir=<path>) [name...]] [--json]
 adg motion --coverage [--json]
 adg [open] [directory] [--port=<n>] [--no-open] [--state-dir=<path>]
 adg init
@@ -714,6 +715,7 @@ adg diff --base=<rev> --impacted [source...] --json
 
 A first argument that names a command runs it; any other argument is a directory to open. `adg open check` opens a directory named `check`.
 
+- `skill` lists, locates or installs the bundled agent skills (`adg-setup`, `adg-design`) without needing a project config. Use `--target` for a standard user agent skills directory or `--dir` for a custom or project-local directory.
 - `init` creates `adg.config.mjs` requiring `>=0.5.0`, required tokens, production source directories, fixtures/art, editor configuration and ignore entries. A fresh library gets `components/example.tsx`, `modules/example.tsx`, `surfaces/example.tsx` and `fixtures/example.ts`: one runnable downward composition with frame name `default` in each source. Explicit source names are used in place of the defaults. Existing source libraries or an existing example fixture receive no demo assets. Authored files are preserved, generated declarations are refreshed, missing ignore entries are appended, and created/skipped files are listed. It creates no study or empty studies directory.
 - `check` checks import direction and the named sources' frames, or all sources. `check.strictLayers` and `check.lifecycle` opt in to same-layer and implementation lifecycle findings; `adg init` enables both. `--read-only` skips generated type declarations and HTML build files; it runs the same import and both-theme frame checks without changing consumer files.
 - `motion --coverage` runs a read-only adoption audit from the project root without rendering frames. It uses the [static motion inventory](#motion-tokens-and-patterns) to group unmapped implementation sites by file and match, and reports default roles used by active patterns or edges, unlabeled edges, and connected flows missing an anchor or declared ends. Declare an empty ends array for a flow where every state has an outgoing edge. Text lists every unscanned file and displays up to 32 other groups and 16 lines per match. Use `--json` for all locations and exclusion reasons. Exit 0 means clean, 1 means findings, and 2 means invalid configuration or an incomplete scan. See [Adopting motion](asset-rules.md#adopting-motion).

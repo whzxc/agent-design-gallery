@@ -254,6 +254,16 @@ Once a direction is chosen, delete the study or turn it into real assets under t
 
 ## Adopting an existing project
 
+### 0. Start from an existing codebase without `design/`
+
+An existing application does not need to model every screen at once. Onboard through one cohesive pilot feature or screen first:
+
+1. Run `adg init` and pin `requires` in `adg.config.mjs` to the installed ADG version. Remove the starter `example.tsx` and `fixtures/example.ts` files once pilot sources are added.
+2. Extract the application's existing palette, typography, radii, shadows and sizing into `design/tokens.css` using role names (`:root` light and `:root[data-theme="dark"]` overrides).
+3. Split the pilot UI into ADG layers using [Layers and placement](#layers-and-placement) (only units embedded by two or more features enter `design/components/`; single-feature parts stay in `design/modules/<feature>`). Keep `design/*.tsx` as static build-time specs never imported by application runtime code.
+4. Bind the pilot in `design/implementation.json` and group its sources in `design/gallery.json`. Keep `check.lifecycle: false` only while authoring the initial pilot bindings; enable `check.lifecycle: true` once the pilot passes `adg check --read-only`.
+5. Adopt the remaining stages incrementally: Stage 1 is boards, `adg check` and `adg review`; Stage 2 adds `implementation.json`, `strictLayers` and `lifecycle`; Stage 3 adds a `compare` adapter, consumer-side style/consumer/token checks and motion adoption when the repository has deterministic local fixtures.
+
 ### 1. Inventory before editing
 
 Identify the actual design root, ADG configuration, declared source directories and entry surfaces. Follow imports to inventory the parts that those surfaces use. Include unlisted sources, fixture data, artwork, studies and implementation locations recorded by the consumer.

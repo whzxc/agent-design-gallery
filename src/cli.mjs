@@ -6,7 +6,7 @@ import { realpathSync } from 'node:fs';
 import { VERSION, loadConfig } from './toolkit/config.mjs';
 import { CliError, createOutput, withHumanOutput } from './cli-output.mjs';
 
-export const commands = ['comments', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'review', 'owner', 'impact', 'inspect', 'motion'];
+export const commands = ['comments', 'open', 'link', 'serve', 'root', 'service', 'skill', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'review', 'owner', 'impact', 'inspect', 'motion'];
 const targetOptions = '[--asset=<path> [--frame=<name>] | --group=<name> | --layer=<name> | --tokens] [--mode=query|path] [--base=<rev>]';
 const usage = {
   comments: '[[list] [--status=open|resolved|all] [--source=<path>] [--frame=<name>] | read <n> | reply <n> --author=<name> --message=<text> | resolve <n> --author=<name> [--message=<text>]] [--state-dir=<path>] [--json]',
@@ -14,6 +14,7 @@ const usage = {
   link: `<viewer-url> [--comment=<n> | ${targetOptions}]`,
   serve: '[--port=4310] [--state-dir=<path>] [--print-key | --rotate-key]',
   service: 'install|uninstall|status|logs|migrate [--state-dir=<path>] [--port=4310] [--public-origin=<origin>]',
+  skill: '[list | path [name] | install (--target=codex|claude-code|antigravity|cursor|agents | --dir=<path>) [name...]] [--json]',
   root: 'add <dir> [--depth=2] | remove <dir> | list | scan [dir] [--state-dir=<path>]',
   motion: '[--css | --coverage [--json] | --json]',
   migrate: '[project]', init: '', check: '[source...] [--transitions] [--read-only] [--motion-only] [--motion-details] [--impacted --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--state-dir=<path>] [--explain]]', render: '[source...] [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--base=<rev>] [--impacted [--state-dir=<path>] [--explain]]',
@@ -30,6 +31,7 @@ const details = {
   migrate: 'Rename a project configuration and runtime imports, update editor paths and ignore entries, remove old generated files and regenerate declarations. Refuses mixed config names; safe to run again.',
   serve: 'Run the resident multi-project hub on 127.0.0.1. Projects build on viewer access and idle viewers stop after five minutes. --print-key prints the key and exits; --rotate-key rotates the running hub key and exits. Forwarded data requests require a header or query key; direct-local requests are exempt.',
   service: 'Manage the macOS resident hub LaunchAgent. install creates or updates it with RunAtLoad and KeepAlive, recording absolute Node/CLI paths. --port and --public-origin apply only to install. Set --public-origin to an HTTP(S) origin for public comment links. Reinstalling keeps the port, state directory and public origin unless specified. status prints JSON; logs prints the last 200 lines per log. Uninstall retains state and logs. migrate moves old hub state and replaces its LaunchAgent, then lists other agents referencing the old state path. --state-dir selects the migration destination. Other platforms are unsupported.',
+  skill: 'List, locate or install bundled ADG agent skills (adg-setup, adg-design). Runs without a project configuration. Use --target=codex|claude-code|antigravity|cursor|agents for a standard user skills directory, or --dir=<path> for a custom or project-local directory.',
   root: 'Manage registered scan roots. add scans immediately. scan rescans registered roots only; depth is 0 through 3. Hidden directories, node_modules and Git worktrees are skipped.',
   open: 'Browse TSX, Mermaid architecture sources and legacy SVG designs on an independent random-port server.', init: 'Create design sources, tokens and editor configuration without overwriting files.',
   link: 'Print a clean ADG preview URL. --comment=<n> opens a comment thread. --base=<rev> enables Git overlays for architecture diagrams. Query mode isolates a target. Path mode locates it in the design hierarchy.',
@@ -42,6 +44,7 @@ const details = {
   impact: 'Query direct/transitive candidates from sources, named parts, tokens or implementation mappings, or compare exact Git endpoints. --base includes staged, unstaged and untracked working files; --head selects another exact commit. Hypothetical selectors cannot prove skips; token candidates assume unchanged Tailwind classification. Git mode freshly executes both endpoint source sets and compares eligible materialized inputs. Closure or occurrence absence never proves safety. Groups merge equal theme and same-source frame records; noncandidate proofs remain counts. --explain samples witnesses/digests without splitting groups. No browser launch. Render/check/diff --impacted compute their own operation-local proofs. Exit 0 completed, including empty/stale mappings; 2 invalid/incomplete.',
 };
 const helpExamples = {
+  skill: 'adg skill list --json\nadg skill path adg-setup --json\nadg skill install --target=codex --json\nadg skill install --dir=.agents/skills --json',
   impact: 'adg impact --source=design/components/badge.tsx --part=Badge --json\nadg impact --token=--accent --json\nadg impact --base=HEAD --json',
   render: 'adg render --impacted --base=HEAD --json\nadg render arch/catalog.mmd --base=HEAD --json',
   check: 'adg check --impacted --base=HEAD --read-only --json\nadg check --read-only --json',
@@ -58,7 +61,7 @@ export function parseCli(args, env = process.env) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' } };
   const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
-  const strings = { comments: ['status', 'source', 'frame', 'author', 'message', 'state-dir'], open: ['port', 'state-dir', ...locators], link: [...locators, 'comment'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir', 'public-origin'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['transition','file', 'text', 'color', 'token', 'part', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['transition','frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
+  const strings = { comments: ['status', 'source', 'frame', 'author', 'message', 'state-dir'], open: ['port', 'state-dir', ...locators], link: [...locators, 'comment'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir', 'public-origin'], skill: ['target', 'dir'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['transition','file', 'text', 'color', 'token', 'part', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['transition','frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'review') {
     for (const name of ['base', 'format', 'target', 'theme', 'out', 'viewer-url']) options[name] = { type: 'string' };
@@ -162,6 +165,18 @@ export function parseCli(args, env = process.env) {
     if ((command === 'init' && positionals.length) || (['open', 'migrate'].includes(command) && positionals.length > 1) || (command === 'compare' && (values.all ? positionals.length || values.frame : positionals.length !== 1 || !values.frame))) throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
     if (command === 'link' && positionals.length !== 1) throw new CliError('USAGE_INVALID', 'Expected one viewer URL. Run adg link --help.');
     if (command === 'service' && (positionals.length !== 1 || !serviceActions.includes(positionals[0]) || (['port', 'public-origin'].some(name => values[name] !== undefined) && positionals[0] !== 'install'))) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg service --help');
+    if (command === 'skill') {
+      const [action = 'list', ...rest] = positionals;
+      const hasTarget = values.target !== undefined, hasDir = values.dir !== undefined;
+      if (!skillActions.includes(action) ||
+          strings.skill.some(key => values[key] !== undefined && !values[key].trim()) ||
+          rest.some(name => !name.trim()) ||
+          (action === 'list' && (rest.length || hasTarget || hasDir)) ||
+          (action === 'path' && (rest.length > 1 || hasTarget || hasDir)) ||
+          (action === 'install' && (hasTarget === hasDir || (hasTarget && !skillTargetNames.includes(values.target))))) {
+        throw new CliError('USAGE_INVALID', 'Choose a skill action and valid options; run adg skill --help.');
+      }
+    }
     if (command === 'root') {
       const [action, directory, ...extra] = positionals;
       if (extra.length || !rootActions.includes(action) || (['add', 'remove'].includes(action) && !directory) || (action === 'list' && directory) || (values.depth !== undefined && action !== 'add')) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg root --help');
@@ -181,18 +196,20 @@ export function parseCli(args, env = process.env) {
     }
     if (command === 'serve' && positionals.length) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg serve --help');
     if (command === 'serve' && ((values['print-key'] && values['rotate-key']) || (values.port !== undefined && (values['print-key'] || values['rotate-key'])))) throw new CliError('USAGE_INVALID','Choose --print-key or --rotate-key without --port; run adg serve --help');
-  } else if (values.json && values.help && ['root', 'service'].includes(command) && (positionals.length > 1 || (positionals.length && !(command === 'root' ? rootActions : serviceActions).includes(positionals[0])))) {
+  } else if (values.json && values.help && ['root', 'service', 'skill'].includes(command) && (positionals.length > 1 || (positionals.length && !(command === 'root' ? rootActions : command === 'service' ? serviceActions : skillActions).includes(positionals[0])))) {
     throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
   }
   return { command, values, positionals, explicit };
 }
 const rootActions = ['add', 'remove', 'list', 'scan'];
 const serviceActions = ['install', 'uninstall', 'status', 'logs', 'migrate'];
+const skillActions = ['list', 'path', 'install'];
+const skillTargetNames = ['codex', 'claude-code', 'antigravity', 'cursor', 'agents'];
 const commentActions = ['list', 'read', 'reply', 'resolve'];
 
 export function commandIdentity({ command, positionals = [], values }) {
-  const actions = command === 'root' ? rootActions : command === 'service' ? serviceActions : command === 'comments' ? commentActions : [];
-  const action = positionals[0] ?? (command === 'comments' && !values?.help ? 'list' : undefined);
+  const actions = command === 'root' ? rootActions : command === 'service' ? serviceActions : command === 'skill' ? skillActions : command === 'comments' ? commentActions : [];
+  const action = positionals[0] ?? ((command === 'comments' || command === 'skill') && !values?.help ? 'list' : undefined);
   return actions.includes(action) ? `${command} ${action}` : command;
 }
 
@@ -207,8 +224,12 @@ function errorCommand(args) {
   return args[0] && !args[0].startsWith('-') ? 'open' : 'adg';
 }
 
-async function dispatch({ command, values, positionals }, cwd, output, serviceOptions) {
+async function dispatch({ command, values, positionals }, cwd, output, serviceOptions, skillOptions) {
   if (command === 'migrate') return { data: await (await import('./toolkit/migrate.mjs')).migrate(positionals[0] === undefined ? cwd : path.resolve(cwd, positionals[0]), output.log) };
+  if (command === 'skill') {
+    const [action = 'list', ...names] = positionals;
+    return (await import('./skill.mjs')).runSkill(action, names, values, { ...skillOptions, cwd, log: output.log });
+  }
   if (command === 'link') {
     const { previewTarget, previewURL } = await import('./link.mjs');
     const data = { url: previewURL(positionals[0], previewTarget(values)).href };
@@ -295,7 +316,7 @@ async function dispatch({ command, values, positionals }, cwd, output, serviceOp
 export async function main(args = process.argv.slice(2), cwd = process.cwd(), {
   stdout = process.stdout.write.bind(process.stdout), stderr = process.stderr.write.bind(process.stderr),
   exit = code => { process.exitCode = code; },
-  serviceOptions, openOptions, hubOptions, signals = process, stdoutEvents = process.stdout,
+  serviceOptions, skillOptions, openOptions, hubOptions, signals = process, stdoutEvents = process.stdout,
 } = {}) {
   let command = errorCommand(args), parsed;
   const json = jsonRequested(args);
@@ -326,7 +347,7 @@ export async function main(args = process.argv.slice(2), cwd = process.cwd(), {
       const run=()=>runForeground(command,start,{output,json,signals,stdoutEvents,context:{...parsed,command,stateDirectory}});
       code=json ? await withHumanOutput(run,stderr) : await run();
     } else {
-      const run=()=>dispatch(parsed,cwd,output,serviceOptions);
+      const run=()=>dispatch(parsed,cwd,output,serviceOptions,skillOptions);
       const result = json ? await withHumanOutput(run, stderr) : await run();
       if (json) output.success(result.data, result.warnings);
       else if (command === 'serve' && parsed.values['print-key']) stdout(`${result.data.key}\n`);

@@ -11,6 +11,25 @@ Requires Node.js 22 or newer. Installation starts without a build step. TSX buil
 
 `adg` opens a loopback server in your default browser. Use `--no-open` to print its URL, `--port 5200` to select a port, or omit the directory to use the current project. Stop the server with Ctrl+C.
 
+## Agent skills
+
+ADG ships agent-first skills for Codex, Claude Code, Antigravity, Cursor and other coding agents:
+
+- `adg-setup` ([skills/adg-setup/SKILL.md](skills/adg-setup/SKILL.md)): install ADG, initialize a greenfield or existing UI codebase without `design/`, split UI into ADG layers, audit/govern an existing library, and adopt motion coverage.
+- `adg-design` ([skills/adg-design/SKILL.md](skills/adg-design/SKILL.md)): design targeted UI changes and proposals, iterate on board comments, apply approved designs to real code, and keep `design/` and `implementation.json` synchronized during everyday edits.
+
+To have a local agent onboard a repository before installing skills:
+
+> Set up ADG for this repository. Follow https://raw.githubusercontent.com/whzxc/agent-design-gallery/main/skills/adg-setup/SKILL.md
+
+Once `adg` is installed globally, install the bundled skills directly:
+
+```sh
+adg skill list
+adg skill install --target=codex         # or claude-code, antigravity, cursor, agents
+adg skill install --dir=.agents/skills   # or any custom / project-local skills directory
+```
+
 ## Migrate an existing installation
 
 Install the new package, then run these one-time commands:

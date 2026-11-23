@@ -35,6 +35,7 @@ const invocations = [
   ['open'], ['link', 'http://127.0.0.1:4311/'], ['serve'],
   ['root', 'add', '/tmp/project'], ['root', 'remove', '/tmp/project'], ['root', 'list'], ['root', 'scan'],
   ...['install', 'uninstall', 'status', 'logs', 'migrate'].map(action => ['service', action]),
+  ['skill', 'list'], ['skill', 'path'], ['skill', 'install', '--target=codex'],
   ['migrate'], ['init'], ['check'], ['render'], ['compare', 'surfaces/demo', '--frame=default'],
   ['diff', '--base=HEAD'],
   ['owner', '--file=ui/controls.tsx'],
@@ -43,7 +44,7 @@ const invocations = [
 
 test('global JSON parsing and canonical identities cover every command/action without executing it', () => {
   for (const args of invocations) {
-    const expected = ['root', 'service'].includes(args[0]) ? args.slice(0, 2).join(' ') : args[0];
+    const expected = ['root', 'service', 'skill'].includes(args[0]) ? args.slice(0, 2).join(' ') : args[0];
     for (const argv of [['--json', ...args], [...args, '--json']]) {
       const parsed = parseCli(argv);
       assert.equal(parsed.values.json, true, argv.join(' '));
@@ -76,7 +77,7 @@ test('retired publish is absent from command help and diagnostic codes', async (
 });
 
 test('help/version use the injected entry and bypass project configuration', async () => {
-  for (const args of [[], ...commands.map(command => [command]), ...invocations.filter(args => ['root', 'service'].includes(args[0])).map(args => args.slice(0, 2))]) {
+  for (const args of [[], ...commands.map(command => [command]), ...invocations.filter(args => ['root', 'service', 'skill'].includes(args[0])).map(args => args.slice(0, 2))]) {
     const result = capture();
     assert.equal(await main(['--json', ...args, '--help'], '/missing/project', result.io), 0);
     const value = envelope(result, 'help', true, 0);
@@ -100,7 +101,10 @@ test('parse and dispatch-usage failures produce JSON before loading any command 
     [['--unknown'], 'adg'], [['open', 'a', 'b'], 'open'], [['link'], 'link'],
     [['serve', 'extra'], 'serve'], [['root', 'add'], 'root add'], [['root', 'invalid'], 'root'],
     [['root', 'list', 'extra'], 'root list'], [['service', 'invalid'], 'service'],
-    [['service', 'status', '--port=4000'], 'service status'], [['migrate', 'a', 'b'], 'migrate'],
+    [['service', 'status', '--port=4000'], 'service status'], [['skill', 'invalid'], 'skill'],
+    [['skill', 'install'], 'skill install'], [['skill', 'install', '--target=unknown'], 'skill install'],
+    [['skill', 'install', '--target=codex', '--dir=/tmp/out'], 'skill install'],
+    [['skill', 'invalid', '--help'], 'skill'], [['migrate', 'a', 'b'], 'migrate'],
     [['init', 'extra'], 'init'], [['check', '--unknown'], 'check'], [['render', '--unknown'], 'render'],
     [['compare', 'surfaces/demo'], 'compare'], [['root', 'invalid', '--help'], 'root'],
     [['render', '--scale'], 'render'],

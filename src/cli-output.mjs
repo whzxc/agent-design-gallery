@@ -86,10 +86,11 @@ export class CliError extends Error {
 }
 
 const canonicalCommands = new Set([
-  'comments', 'open', 'link', 'serve', 'root', 'service', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'owner', 'impact', 'inspect', 'motion',
+  'comments', 'open', 'link', 'serve', 'root', 'service', 'skill', 'migrate', 'init', 'check', 'render', 'compare', 'diff', 'review', 'owner', 'impact', 'inspect', 'motion',
   'comments list', 'comments read', 'comments reply', 'comments resolve',
   'root add', 'root remove', 'root list', 'root scan',
   'service install', 'service uninstall', 'service status', 'service logs', 'service migrate',
+  'skill list', 'skill path', 'skill install',
   'help', 'version', 'adg',
 ]);
 const playwrightVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).dependencies.playwright;

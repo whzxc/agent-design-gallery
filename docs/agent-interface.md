@@ -18,7 +18,7 @@ are not machine interfaces.
 
 | Invocation | Stdout framing |
 | --- | --- |
-| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, `owner`, `impact`, `inspect`, every `comments`, `root` and `service` action | One envelope, then exit |
+| `link`, `init`, `migrate`, `check`, `render`, `compare`, `diff`, `review`, `owner`, `impact`, `inspect`, `motion`, every `comments`, `root`, `service` and `skill` action | One envelope, then exit |
 | `serve --print-key`, `serve --rotate-key` | One envelope, then exit |
 | `--help`, `--version`, including command-specific forms | One envelope, then exit |
 | Foreground `open`, ordinary `serve` | NDJSON: one envelope per line until termination |
@@ -50,8 +50,8 @@ result or `null` when no result has been assembled. A failure need not undo comp
 file changes. Consumers must examine `ok` and process termination, even when data exists.
 
 Canonical command identities are `open`, `link`, `serve`, `init`, `migrate`, `check`,
-`render`, `compare`, `diff`, `owner`, `impact`, `inspect`, `comments list`, `comments read`, `comments reply`, `comments resolve`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
-`service uninstall`, `service status`, `service logs` and `service migrate`. Help and
+`render`, `compare`, `diff`, `review`, `owner`, `impact`, `inspect`, `motion`, `comments list`, `comments read`, `comments reply`, `comments resolve`, `root add`, `root remove`, `root list`, `root scan`, `service install`,
+`service uninstall`, `service status`, `service logs`, `service migrate`, `skill list`, `skill path` and `skill install`. Help and
 version use `help` and `version`. Parse failures use the recognized command/action when
 available, or the group identity `root`/`service` or global identity `adg`. An implicit
 directory invocation uses `open`.
@@ -1628,3 +1628,13 @@ The page ends with one moved entry, grouping pairs by source move and listing
 each frame count; renamed pairs show both `<source>#<frame>` references.
 `data.review.movePairs` carries both names as `before.frame` and `after.frame`.
 The [standalone review](design-toolkit.md#review-handoff) uses the same grouping.
+
+### Skill
+
+```sh
+adg skill [list] --json
+adg skill path [name] --json
+adg skill install (--target=codex|claude-code|antigravity|cursor|agents | --dir=<path>) [name...] --json
+```
+
+`skill` runs without project configuration discovery. `list` (the default action) returns `{ root, skills }` where each entry is `{ name, description, directory, path }`. `path` without a name returns `{ root, skills }`; with a bundled skill name it returns `{ name, directory, path }`. `install` copies all bundled skills (or the requested subset) into the target directory, replacing each installed skill directory without touching sibling skills, and returns `{ target, directory, installed: [{ name, source, destination, path }] }` (`target` is `null` when `--dir` is used). Unknown skill names, invalid targets or destinations resolving to the bundled source directory exit 2 with `USAGE_INVALID`.

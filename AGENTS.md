@@ -12,6 +12,6 @@
 - The viewer presents the design library as [boards](docs/boards.md), which own the board contract. [Comments](docs/comments.md) own comment threads.
 - Keep camera input independent of page component rendering.
 - `tooling/compare.mjs` is a reporting tool, not a gate. Run it when a change claims to be a pure refactor or targets performance. Use the evidence destination in [performance verification](docs/performance.md#retain-evidence-and-close-resources).
-- Publish `@whzxc/agent-design-gallery` to the public npm registry only when the user asks. Include only the CLI, server, browser files, toolkit runtime and types, README, and license in the package.
+- Publish `@whzxc/agent-design-gallery` to the public npm registry only when the user asks. Include only the CLI, server, browser files, toolkit runtime and types, skills, README, and license in the package.
 - MUST update the maintainer's global ADG installation after each completed task that changes the installed runtime or dependencies, once the push gate passes. Install the packed local tarball; npm publication is not needed for this. Follow [local updates](docs/local-updates.md), resolve the serving host and public endpoint through MAP, restart the hub when required, and verify the served runtime and viewer. This is part of task delivery; no additional update request is needed. Skip documentation-only, test-only and fixture-only commits. Public npm publication happens only on request.
 - Use English maintainer documentation and Conventional Commits. Preserve unrelated files and changes.
