@@ -24,10 +24,9 @@ function viewOptions(theme, changed, codex) {
 }
 
 function summaryLine(report) {
-  const { counts, omitted, omittedMotion } = report;
+  const { counts, omitted } = report;
   const parts = ['added', 'changed', 'removed', 'moved'].filter(kind => counts[kind]).map(kind => `${counts[kind]} ${kind}`);
   if (omitted) parts.push(`${omitted} more in full HTML`);
-  if (omittedMotion) parts.push(`${omittedMotion} motion changes in full HTML`);
   return parts.join(' · ') || 'No changes';
 }
 
@@ -50,30 +49,13 @@ function cardHtml(card, index, codex) {
   </article>`;
 }
 
-function motionCardHtml(card) {
-  const label = card.after?.edge.label ?? card.before?.edge.label ?? card.id;
-  const sideHtml = (side, name) => side ? `<section class="motion-side">
-    <div>${name} · ${side.error ? escape(side.error) : `${escape(side.edge?.gesture ?? side.edge?.trigger?.on ?? '')} · ${side.duration} ms`}</div>
-    ${side.error || !side.samples?.length ? '' : `<div class="motion-strip">${side.samples.map(sample => `<figure>
-      <img data-motion-image="${escape(sample.image)}" alt="${name} at ${sample.ms} ms">
-      <figcaption>${sample.state ? escape(sample.state) + ' ' : ''}${sample.ms} ms</figcaption>
-    </figure>`).join('')}</div>`}
-  </section>` : '';
-  return `<article class="frame-card motion-card">
-    <header class="card-head"><h2>${escape(label)}</h2><span class="badge">Motion · ${escape(card.kind)}</span></header>
-    <div class="motion-wrap">${sideHtml(card.before, 'Before')}${sideHtml(card.after, 'After')}</div>
-    ${card.reasons.length ? `<div class="card-note">${escape(card.reasons.join(' · '))}</div>` : ''}
-  </article>`;
-}
-
 export function reviewEmbedDocument(report, { properties, styles, templates }, target = 'antigravity') {
-  const { title, theme, base, head, cards, failures, motion } = report;
+  const { title, theme, base, head, cards, failures } = report;
   const codex = target === 'codex';
   const changed = cards.some(card => card.before);
   const payload = {
     title, base, head,
     cards: cards.map(({ source, frame, origin, before, after, proposed }) => ({ source, frame, origin, before, after, proposed })),
-    motionAssets: motion?.assets ?? null,
   };
   const zoomButton = (icon, label, action) => iconButton(icon, label, `data-zoom="${action}"`, { codex });
   const fragment = `<style>${cssText(properties.join('\n'))}\n${stylesForEmbed}</style>
@@ -85,8 +67,8 @@ export function reviewEmbedDocument(report, { properties, styles, templates }, t
   </header>
   ${failures.length ? `<section class="failures" role="alert"><strong>Some sources could not be built</strong><ul>${failures.map(f =>
     `<li><code>${escape(f.source)}</code> (${escape(f.side)}): ${escape(f.message)}</li>`).join('')}</ul></section>` : ''}
-  ${cards.length || motion?.cards.length ? `<div class="cards">${cards.map((card, index) => cardHtml(card, index, codex)).join('')}${(motion?.cards ?? []).map(motionCardHtml).join('')}</div>`
-    : `<div class="empty">${report.omitted || report.omittedMotion ? 'Open the full HTML review for previews.' : 'No changed frames.'}</div>`}
+  ${cards.length ? `<div class="cards">${cards.map((card, index) => cardHtml(card, index, codex)).join('')}</div>`
+    : `<div class="empty">${report.omitted ? 'Open the full HTML review for previews.' : 'No changed frames.'}</div>`}
   ${renderCaptureExemptions(report.captureExemptions)}
   <p data-handoff-status role="status" hidden></p>
   <dialog id="embed-zoom" aria-labelledby="embed-zoom-title">
@@ -155,11 +137,6 @@ function mountEmbed() {
   const zoomState = { ...appearance };
   let activeZoom;
   let zoom = 100;
-
-  for (const image of root.querySelectorAll('[data-motion-image]')) {
-    const source = data.motionAssets?.[image.dataset.motionImage];
-    if (source) image.src = source;
-  }
 
   function getSheet(index) {
     if (!sheetCache.has(index)) {

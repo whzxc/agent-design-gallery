@@ -1,4 +1,3 @@
-import { motionCard, motionStyle } from './review-motion-card.mjs';
 import { createHash } from 'node:crypto';
 import { renderCaptureExemptions } from './capture-exemptions.mjs';
 
@@ -35,17 +34,14 @@ export function reviewDocument(report, { properties, styles, templates }) {
     { id: 'added', title: 'Added', count: counts.added, html: () => added.map(card => cardHtml(card)).join('') },
     { id: 'direct', title: 'Direct changes', count: counts.direct, html: () => direct.map(card => cardHtml(card)).join('') },
     { id: 'inherited', title: 'Inherited changes', count: counts.inherited, html: () => groups.map((group, index) => inheritedHtml(group, index, byKey)).join('') },
-    { id: 'motion', title: 'Transition changes', count: report.motion?.cards.length ?? 0,
-      html: () => report.motion.cards.map((card, i) => motionCard(card, i)).join('') },
     { id: 'removed', title: 'Removed', count: counts.removed, html: () => namesHtml(removed.map(frame => originHtml(frame.origin))) },
     { id: 'moved', title: 'Moved', count: counts.moved, html: () => namesHtml(moved.map(({ before, after }) =>
       `${originHtml(before)}<span aria-hidden="true">→</span>${originHtml(after)}`)) },
   ].filter(section => section.count > 0);
-  const playback = report.motion ? report.motion.script + '\nreviewPlayback.mountReport();' : '';
-  const script = `(${mountPreviews.toString()})();` + playback;
+  const script = `(${mountPreviews.toString()})();`;
   const hash = createHash('sha256').update(script).digest('base64');
   const framed = cards.some(card => card.before?.framed || card.after?.framed);
-  const framesPolicy = report.motion ? "frame-src 'self' about:; " : framed ? 'frame-src about:; ' : '';
+  const framesPolicy = framed ? 'frame-src about:; ' : '';
   const metadata = JSON.stringify(cards.map(({ before, after, difference }) => ({ before, after, difference: Boolean(difference) })));
   return `<!doctype html>
 <html lang="en" data-theme="${theme}">
@@ -54,7 +50,7 @@ export function reviewDocument(report, { properties, styles, templates }) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; img-src data:; font-src data:; ${framesPolicy}base-uri 'none'; form-action 'none'">
   <title>${escape(title)} · Design review</title>
-  <style>${cssText(properties.join('\n'))}${documentStyles}${report.motion ? motionStyle : ''}</style>
+  <style>${cssText(properties.join('\n'))}${documentStyles}</style>
 </head>
 <body>
   <header id="top" class="masthead">
@@ -72,7 +68,7 @@ export function reviewDocument(report, { properties, styles, templates }) {
       ${failures.length ? `<section class="failures" role="alert"><h2>Some sources could not be built</h2><ul>${failures.map(failure =>
         `<li><code>${escape(failure.source)}</code> (${escape(failure.side)}) · ${escape(failure.message)}</li>`).join('')}</ul></section>` : ''}
       ${sections.map(({ id, title, count, html }) => `<section id="${id}" data-section="${id}" aria-labelledby="heading-${id}">
-        <header class="section-head"><h2 id="heading-${id}">${title}</h2><span>${id === 'motion' ? count + (count === 1 ? ' edge' : ' edges') : countLabel(count)}</span></header>
+        <header class="section-head"><h2 id="heading-${id}">${title}</h2><span>${countLabel(count)}</span></header>
         <div class="section-body">${html()}</div>
       </section>`).join('')}
       ${sections.length ? '' : '<p>No changed frames.</p>'}
@@ -98,7 +94,6 @@ export function reviewDocument(report, { properties, styles, templates }) {
   ${styles.map((style, index) => `<template id="style-${index}"><style>${cssText(style)}</style></template>`).join('\n')}
   ${templates.join('\n')}
   ${cards.filter(card => card.difference).map(card => `<template id="difference-${card.index}"><img src="${escape(card.difference)}" alt="Changed pixels in ${escape(label(card))}"></template>`).join('\n')}
-  ${report.motion ? '<script id="motion-data" type="application/json">' + JSON.stringify({ cards: report.motion.cards, assets: report.motion.assets, theme }).replaceAll('<', '\\u003c') + '</script>' : ''}
   <script>${script}</script>
 </body>
 </html>`;

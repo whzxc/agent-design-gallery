@@ -175,7 +175,7 @@ A source describes structure, not coordinates. Write it the way the UI is built.
 
 ## Frame transitions
 
-The toolkit validates authored edges and exposes them to agent queries. A selected specimen can play its outgoing edges on the board. Standalone Git reviews include offline playback and sampled filmstrips for changed edges.
+The toolkit validates authored edges and exposes them to agent queries. A selected specimen can play its outgoing edges on the board. Use `adg impact --base=<rev> --transitions --json` to find transitions affected by a Git change.
 
 A source can own a sibling `<stem>.motion.json` (including `index.motion.json` for a feature folder). Version 1 contains an ordered `edges` array. Each edge has a stable project-unique kebab-case `id`. Its owner is the adjacent configured TSX frame source. The edge list is declarative JSON with no expression evaluation. Both endpoints are exact `{source,frame}` references with project-root-relative POSIX paths including the extension, under the same project and Git revision. The `from` source must be the owner. A UX flow is the directed graph of these references. A reverse action needs its own edge, trigger, timing and focus. Layer admission and retirement follow the [asset rules](asset-rules.md#transition-ownership-and-lifecycle).
 
@@ -945,11 +945,11 @@ Use the commit where the task started as `--base`. Share the artifact at `data.p
 
 Both embed targets use stacked frame cards with an icon toolbar, light/dark controls, a Before/After slider by default, split view and an enlarged inspector. `--target=codex` emits an HTML fragment at `<configured output>/review-codex-embed.html`; use its path in the Codex visualization reference. When the chat host supports it, **Use this frame in Codex** opens a follow-up with the project, frame source, frame name and base commit. `--target=antigravity` emits a complete HTML document at `<configured output>/review-embed.html`. An explicit target overrides `ADG_EMBED_TARGET`. With neither set, embed uses Antigravity.
 
-Embed omits pixel-difference PNGs and caps stacked cards at 8 prioritized frames (proposed, added, direct, then inherited representatives and outliers). Codex fragments stay under 1 MB, omitting motion strips first and then lower-priority cards when needed. Use `--format=html` for the full review.
+Embed omits pixel-difference PNGs and caps stacked cards at 8 prioritized frames (proposed, added, direct, then inherited representatives and outliers). Codex fragments stay under 1 MB, omitting lower-priority cards when needed. Use `--format=html` for the full review.
 
 The HTML opens directly in a browser and needs no running viewer. Its full-width cards are organized into Added, Direct changes, Inherited changes, Removed and Moved. Added frames display After. Changed frames display Before, After and Difference in aligned panes. Before and After show the compiled frames on a solid preview well. ADG's injected capture backdrop is transparent so authored surfaces and controls keep their own paint. Previews mount near the viewport, and collapsed group members mount after expansion. Click **Enlarge** or a preview to inspect the comparison or one pane, fit it or view it at 100%. Click an available source breadcrumb and frame title to open that frame in the viewer. The link comes from the registered hub or an explicit `--viewer-url`. Use the board for comments.
 
-Standalone HTML stores linked `design/art/` stylesheets once per unique content. Include font bytes as data URLs in the stylesheet for offline use. Each affected preview uses its own script-disabled document so Before and After can render different font files with the same family name. Playable inlines these embedded stylesheets in its sandbox and replaces them when the scene changes.
+Standalone HTML stores linked `design/art/` stylesheets once per unique content. Include font bytes as data URLs in the stylesheet for offline use. Each affected preview uses its own script-disabled document so Before and After can render different font files with the same family name.
 
 The PNG shows up to 12 image cards at 2× with added frames, before-and-after comparisons and representative inherited changes. It also lists removed and moved frames. The footer counts frames omitted by grouping or by the sheet's size limit.
 
@@ -958,14 +958,6 @@ Direct changes edit a frame's source or its module feature folder. Inherited fra
 The hybrid pass uses impact proofs first, then compares frame dimensions, text, layout and paint observations in Chromium. Matching observations for supported TSX frames skip screenshot capture. Moves, additions, removals, required structural parents, architecture frames, unassessed inputs and frames with complex paint or changed observations use the pixel pass. Observation equality has narrower coverage than pixel equality. Use `--exact` to run the pixel pass for every scheduled frame, or `adg diff --impacted --base=<rev> --json` for automated verdicts and comparison artifacts across both themes.
 
 Source build failures are listed by source and side. The generated artifact includes the available results and the command exits 2. The [CLI contract](agent-interface.md#review) defines result fields.
-
-### Transition changes
-
-A motion-only edit can leave both endpoint images byte-identical. Review indexes edges by stable ID on each revision before applying static-frame skip proofs. Compare normalized edge data, status, referenced token values, endpoint paint/boxes and match identities in the selected theme. Distinguish direct edits from inherited endpoint/token effects and coalesce causes per ID. Keep removed edges from the base, additions from the head, and changed edges from both. Sort by owner path then edge ID. Keep moved references under the same ID when an established frame move explains the path change.
-
-Add one motion card per changed edge to the standalone HTML, with trigger, endpoints, status, durations, focus outcome and any fallback. Play each side independently, or seek both using the same normalized progress and display each side's elapsed milliseconds. The report embeds revision-local endpoints and token sheets once per content hash; it works offline and mounts one sandboxed player at a time. A missing historic build leaves an identified partial card and the existing incomplete-review exit. PNG uses a labeled filmstrip and reports omitted cards under the sheet limit.
-
-For deterministic filmstrips, fix the report theme, viewport for each endpoint, font/resource readiness, scale and reduced setting. Sample the compiled timeline at 0%, 50%, 100% and each phase boundary (sorted unique times). Use the source endpoint for the opening sample and the committed destination for the final sample; for an instant jump show those two labeled states. Generate each sample by absolute seek from frozen endpoints, without dispatching input, waiting on wall time, replaying history or changing focus. Use a shared time origin and millisecond labels. Cache keys include both endpoint hashes, edge data, resolved tokens, sampling environment and player version. An unsupported edge shows two endpoints and its reason. A video recording would couple review to frame scheduling and would give agents no addressable samples.
 
 ## Architecture sources
 

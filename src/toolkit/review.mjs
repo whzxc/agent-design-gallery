@@ -12,7 +12,6 @@ import { diff } from './diff.mjs';
 import { installFramePrimitives } from './frame-primitives.mjs';
 import { impactRowKey, withImpacted } from './impact-selection.mjs';
 import { readGroups, relative } from './project.mjs';
-import { reviewEdgeCandidates, reviewMotion } from './review-motion.mjs';
 import { reviewDocument } from './review-document.mjs';
 import { reviewEmbedDocument } from './review-embed-document.mjs';
 import { observeFrame } from './review-observation.mjs';
@@ -117,7 +116,7 @@ function buildHtmlReview(model, data, built, theme, locate, format, target) {
   const embed = format === 'embed';
   const selected = embed ? selectEmbedEntries(model, comparisons, data.review.groups) : allEntries;
 
-  function render(entries, motion) {
+  function render(entries) {
     const { compileFrame, assets } = compileSpecimens({ built, theme, inlineArt: !embed });
     const cards = entries.map((entry, index) => {
       const row = comparisons.get(identity(entry));
@@ -130,18 +129,17 @@ function buildHtmlReview(model, data, built, theme, locate, format, target) {
         proposed: row?.proposed ?? null, note: row?.note?.after ?? row?.note?.before ?? null };
     });
     const report = { title: model.label, theme, base: model.base.sha, head: model.current.head, counts: model.counts, cards,
-      omitted: allEntries.length - entries.length, omittedMotion: motion ? 0 : model.motion?.cards.length ?? 0,
+      omitted: allEntries.length - entries.length,
       groups: data.review.groups, removed: model.sections.removed.map(entry => ({ ...entry, origin: locate(entry, true) })),
-      motion, moved: model.movePairs.map(({ before, after }) => ({ before: locate(before, true), after: locate(after) })), failures: model.failures,
+      moved: model.movePairs.map(({ before, after }) => ({ before: locate(before, true), after: locate(after) })), failures: model.failures,
       captureExemptions: model.captureExemptions };
     return embed ? reviewEmbedDocument(report, assets(), target) : reviewDocument(report, assets());
   }
 
-  let document = render(selected, model.motion);
+  let document = render(selected);
   if (target !== 'codex' || Buffer.byteLength(document) < codexEmbedByteLimit) return document;
-  if (model.motion) document = render(selected, null);
   for (let count = selected.length; count > 0 && Buffer.byteLength(document) >= codexEmbedByteLimit; count--) {
-    document = render(selected.slice(0, count - 1), null);
+    document = render(selected.slice(0, count - 1));
   }
   return Buffer.byteLength(document) < codexEmbedByteLimit ? document
     : '<p>The review exceeds the Codex embed size limit. Generate the full review with <code>--format=html</code>.</p>';
@@ -166,7 +164,6 @@ export async function review(config, values, { log = console.log } = {}) {
   const options = { base: values.base, theme, impacted: true, json: true };
   let model, built, skipped, baseConfig;
   const { data, warnings } = await withImpacted(config, [], options, 'diff', async session => {
-    const candidates = reviewEdgeCandidates(session, theme);
     skipped = values.exact ? new Set() : await observeUnchanged(session, theme);
     const scheduled = session.scheduled;
     if (htmlLike) {
@@ -184,7 +181,6 @@ export async function review(config, values, { log = console.log } = {}) {
     } finally {
       session.scheduled = scheduled;
     }
-    model.motion = await reviewMotion(session, candidates, model, result.data.comparisons, theme);
     const current = session.views[1];
     if (current.map.captureExemptions?.length) {
       const selected = [...new Set(current.map.captureExemptions.map(({ source }) => source))].filter(source => current.built.has(source));
@@ -195,7 +191,6 @@ export async function review(config, values, { log = console.log } = {}) {
       model.captureExemptions = inspectCaptureExemptions(current.config, current.map, { sources, built: current.built, bindings }).active;
     }
     if (model.failures.length) model.complete = false;
-    if (model.motion) result.data.motion = { count: model.motion.cards.length };
     return result;
   });
 
@@ -226,13 +221,8 @@ export async function review(config, values, { log = console.log } = {}) {
     result.captureExemptions = model.captureExemptions;
     result.counts.captureExemptions = model.captureExemptions.length;
   }
-  if (model.motion) {
-    result.motion = { added: 0, changed: 0, removed: 0 };
-    for (const card of model.motion.cards) result.motion[card.kind]++;
-  }
   if (!values.json) {
     log(`${destination}\n${result.counts.added} added, ${result.counts.changed} changed, ${result.counts.removed} removed, ${result.counts.moved} moved.`);
-    if (result.motion) log(`Transitions: ${result.motion.added} added, ${result.motion.changed} changed, ${result.motion.removed} removed.`);
     if (result.captureExemptions) log(`Capture exemptions: ${result.captureExemptions.length}.`);
   }
   if (!result.complete) throw new CliError('SOURCE_BUILD_FAILED', 'Review contains source build failures.', { data: result, warnings });

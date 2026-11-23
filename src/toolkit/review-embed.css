@@ -141,14 +141,9 @@
 #embed-root .zoom-content { padding: 8px 10px 10px; overflow: auto; }
 #embed-root .zoom-content .comparison { max-width: none; }
 #embed-root .zoom-content :is(.well, .curtain-images) { min-height: 58px; }
-#embed-root :is(.failures, .empty, .motion-wrap, [data-handoff-status]) { padding: 6px 8px; overflow-wrap: anywhere; }
+#embed-root :is(.failures, .empty, [data-handoff-status]) { padding: 6px 8px; overflow-wrap: anywhere; }
 #embed-root .failures { border-inline-start: 2px solid light-dark(#a83027, #f08b80); margin: 4px 0; }
 #embed-root .failures ul { margin: 4px 0; padding-inline-start: 20px; }
-#embed-root .motion-wrap { display: grid; gap: 6px; }
-#embed-root .motion-strip { display: flex; gap: 6px; overflow-x: auto; }
-#embed-root .motion-strip figure { margin: 0; flex: none; }
-#embed-root .motion-strip img { height: 64px; width: auto; display: block; border-radius: 4px; }
-#embed-root .motion-strip figcaption { font-size: 11px; text-align: center; }
 
 @container (max-width: 500px) {
   #embed-root .comparison[data-mode="split"] .comparison-panes { grid-template-columns: minmax(0, 1fr); }

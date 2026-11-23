@@ -5,14 +5,12 @@ import { loadConfig } from '../src/toolkit/config.mjs';
 import { implementationTexts } from '../src/toolkit/document.mjs';
 import { review } from '../src/toolkit/review.mjs';
 import { prepareAtlas } from './hub-compare.mjs';
-import { prepareMotionCompare } from './review-motion.mjs';
 
-const motionFixtures = new Set(['standalone-motion-review', 'standalone-motion-card']);
 const embedFixtures = new Set(['embed-review-codex', 'embed-review-antigravity', 'embed-review-zoom']);
-export const reviewFixtures = new Set(['standalone-review', 'standalone-review-zoom', ...motionFixtures, ...embedFixtures]);
+export const reviewFixtures = new Set(['standalone-review', 'standalone-review-zoom', ...embedFixtures]);
 
 export async function startReviewFixture(port, directory, name) {
-  const project = motionFixtures.has(name) ? await prepareMotionCompare(directory) : await prepareAtlas(directory);
+  const project = await prepareAtlas(directory);
   const output = path.join(directory, 'review.html');
   const embed = embedFixtures.has(name);
   const codex = name === 'embed-review-codex';
@@ -38,10 +36,6 @@ export async function readyReviewFixture(page, name) {
   if (embedFixtures.has(name)) {
     await page.locator('[data-embed-card] .specimen:visible').first().waitFor();
     if (name === 'embed-review-zoom') await page.getByRole('button', { name: 'Enlarge Primary', exact: true }).click();
-    return;
-  }
-  if (motionFixtures.has(name)) {
-    await page.getByRole('button', {name:'Play after'}).waitFor();
     return;
   }
   if (name === 'standalone-review-zoom') {

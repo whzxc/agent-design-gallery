@@ -2,10 +2,6 @@
   "version": 2,
   "mappings": [
     {
-      "implementation": {"file":"src/toolkit/review-motion-card.mjs","symbol":"motionCard"},
-      "design": [{"source":"design/modules/review.tsx","part":"ReviewMotionCard"},{"source":"design/surfaces/review.tsx","frames":["motion"]}]
-    },
-    {
       "implementation":{"file":"public/recent-updates.js","symbol":"createHistoryFilter"},
       "design":[{"source":"design/surfaces/canvas.tsx","frames":["recent-updates-list","recent-updates-on-board"]}]
     },
@@ -397,7 +393,7 @@
       "design": [
         { "source": "design/modules/review.tsx", "part": "ReviewHeader" },
         { "source": "design/modules/review.tsx", "part": "ReviewLayout" },
-        { "source": "design/surfaces/review.tsx", "frames": ["report", "motion", "enlarged"] }
+        { "source": "design/surfaces/review.tsx", "frames": ["report", "enlarged"] }
       ]
     },
     {

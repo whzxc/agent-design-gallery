@@ -1,5 +1,4 @@
 import { Frame, Icon } from 'adg';
-import example from '../fixtures/review-motion.json';
 import { addedFrame, changedFrame, reviewProject } from '../fixtures/review';
 
 type Fixture = typeof changedFrame;
@@ -19,8 +18,8 @@ function Control({ children, selected = false, compact = false }: { children?: u
     ${selected ? 'bg-surface-sunken text-accent' : 'bg-surface'}`}>{children}</span>;
 }
 
-export function ReviewHeader({ project = reviewProject }: { project?: typeof reviewProject }) {
-  const { name, base, head } = project;
+export function ReviewHeader() {
+  const { name, base, head } = reviewProject;
   return <header class="flex h-14 items-center justify-between gap-[14px] border-b border-border bg-surface-section px-[38px]">
     <h1 class="flex items-baseline gap-[7px] text-[17px] font-semibold">{name}<span class="text-body font-medium text-text-secondary">Review</span></h1>
     <div class="flex items-center gap-[14px] text-caption text-text-secondary">
@@ -60,47 +59,6 @@ export function ReviewFrameCard(fixture: Fixture) {
       {!fixture.added && <Pane label="Before" />}
       <Pane label="After" added={fixture.added} />
       {!fixture.added && <Pane label="Difference" />}
-    </div>
-  </article>;
-}
-
-function MotionSide({ side, phase }: { side: string; phase: typeof example.before }) {
-  const total = phase.ms + example.after.ms;
-  const times = [...new Set([0, total / 2, phase.ms, total])].sort((a, b) => a - b);
-  const name = side.toLowerCase();
-  return <section class="min-w-0">
-    <h4 class="mt-[10px] mb-1 font-bold">{side} · {example.label}</h4>
-    <div>Click “{example.trigger.text}” · {example.trigger.anchor} · Current</div>
-    <code class="font-mono text-meta">{example.source}#{example.from} → {example.source}#{example.to}</code>
-    <div>Focus · {example.focus}</div><div>{phase.token} · {total} ms</div>
-    <div class="my-2 flex flex-wrap gap-[6px]">{times.map(ms =>
-      <figure key={ms} class="min-w-0 flex-[1_1_70px]">
-        <svg class="inline h-20 w-full align-baseline" viewBox="0 0 160 64" role="img" aria-label={side + ' at ' + ms + ' ms'}>
-          <rect width={160} height={64} class="fill-canvas" />
-          <text x={8} y={25} class="fill-text text-[16px]">{example.trigger.text}<tspan opacity={Math.max(0, ms - phase.ms) / example.after.ms}>{example.value.text}</tspan></text>
-        </svg>
-        <figcaption class="flex items-baseline px-px pb-[6px] text-caption font-[630] text-text-secondary">
-          {ms === 0 ? 'From ' : ms === total ? 'To ' : ''}{ms} ms
-        </figcaption>
-      </figure>)}</div>
-    <div class="my-2 flex flex-wrap items-center gap-2">
-      <button class="rounded-[6px] border border-border bg-surface px-[9px] py-1">Play {name}</button>
-      <button class="rounded-[6px] border border-border bg-surface px-[9px] py-1">Preview {name}</button>
-      <output>0 ms</output>
-    </div>
-  </section>;
-}
-
-export function ReviewMotionCard() {
-  return <article class="min-w-0 overflow-hidden rounded-[11px] border border-border bg-surface text-section leading-[1.5]">
-    <header class="flex min-h-[60px] items-center justify-between gap-[14px] border-b border-border px-[13px] py-[11px]">
-      <h3 class="text-[1.17em] font-bold">{example.label}</h3><span>changed</span>
-    </header>
-    <div class="p-3"><code class="font-mono text-meta">{example.id}</code> · Direct declaration
-      <div class="grid grid-cols-[repeat(auto-fit,minmax(min(270px,100%),1fr))] gap-3">
-        <MotionSide side="Before" phase={example.before} /><MotionSide side="After" phase={example.after} />
-      </div>
-      <label class="my-2 flex flex-wrap items-center gap-2">Seek both sides <input type="range" value="0" /></label>
     </div>
   </article>;
 }
@@ -146,7 +104,6 @@ export default () => [
   <Frame name="review-header" width={1100}><div class="w-[1100px]"><ReviewHeader /></div></Frame>,
   <Frame name="review-frame-card-added" width={540}><div class="w-[540px]"><ReviewFrameCard {...addedFrame} /></div></Frame>,
   <Frame name="review-frame-card-changed" width={900}><div class="w-[900px]"><ReviewFrameCard {...changedFrame} /></div></Frame>,
-  <Frame name="review-motion-card" width={1100} locale="en" fixture="standalone-motion-card" capture={{ selector: '.motion-card', viewport: '1160x900' }}><div class="w-[1100px]"><ReviewMotionCard /></div></Frame>,
   <Frame name="review-layout" width={1440} height={900}><div class="h-[900px] w-[1440px]"><ReviewLayout /></div></Frame>,
   <Frame name="review-zoom" width={1440} height={900}><div class="h-[900px] w-[1440px] p-[17px]"><ReviewZoom /></div></Frame>,
 ];
