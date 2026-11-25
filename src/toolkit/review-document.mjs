@@ -17,8 +17,8 @@ const icons = {
 function originHtml(origin) {
   const parts = [origin.layer, origin.chapter, origin.title].filter(Boolean);
   const breadcrumbs = parts.map(part => `<span>${escape(part)}</span>`).join('<span class="crumb-separator" aria-hidden="true">/</span>');
-  const content = `<span class="breadcrumbs">${breadcrumbs}</span><strong>${escape(origin.frame)}${origin.href ? icons.external : ''}</strong>`;
-  const title = escape([...parts, origin.frame].join(' / '));
+  const content = `<strong>${escape(origin.frame)}${origin.href ? icons.external : ''}</strong><span class="breadcrumbs">${breadcrumbs}</span>`;
+  const title = escape([origin.frame, ...parts].join(' · '));
   return origin.href ? `<a class="origin" href="${escape(origin.href)}" target="_blank" rel="noopener" title="${title} · Open in ADG">${content}</a>` : `<span class="origin" title="${title}">${content}</span>`;
 }
 
@@ -129,8 +129,11 @@ function cardHtml(card, role) {
 function inheritedHtml(group, index, byKey) {
   const representative = byKey.get(key(group.representative));
   const omitted = group.frames.length - 1;
+  const causes = group.causes.length
+    ? `<span class="cause-list" data-causes>${group.causes.map(cause => `<code>${escape(cause)}</code>`).join('')}</span><button type="button" class="cause-more" data-causes-more hidden aria-expanded="false"></button>`
+    : 'Shared dependencies';
   return `<section class="inherited-group" data-group="${index}" aria-labelledby="group-${index}">
-    <header class="group-head"><h3 id="group-${index}">${group.causes.length ? group.causes.map(cause => `<code>${escape(cause)}</code>`).join('') : 'Shared dependencies'}</h3><span>${countLabel(group.frames.length)}${omitted ? ` · ${omitted} omitted` : ''}</span></header>
+    <header class="group-head"><h3 id="group-${index}">${causes}</h3><span>${countLabel(group.frames.length)}${omitted ? ` · ${omitted} omitted` : ''}</span></header>
     <div class="group-body">${cardHtml(representative, 'Representative')}</div>
   </section>`;
 }
@@ -285,6 +288,63 @@ function mountPreviews() {
   const sizes = new ResizeObserver(entries => { for (const entry of entries) fit(entry.target); });
   for (const card of cards) { fit(card); sizes.observe(card); near.observe(card); }
 
+  const groupHeads = [...document.querySelectorAll('.group-head')];
+  function fitCauses(head) {
+    const heading = head.querySelector('h3');
+    const list = heading?.querySelector('[data-causes]');
+    const more = heading?.querySelector('[data-causes-more]');
+    if (!list || !more) return;
+    const items = [...list.children];
+    if (head.dataset.expanded === 'true') {
+      for (const item of items) item.hidden = false;
+      more.hidden = false;
+      more.textContent = 'Less';
+      more.title = 'Collapse changed inputs to one line';
+      more.setAttribute('aria-label', 'Show fewer changed inputs');
+      more.setAttribute('aria-expanded', 'true');
+      return;
+    }
+    for (const item of items) item.hidden = false;
+    more.hidden = true;
+    more.setAttribute('aria-expanded', 'false');
+    if (items.length <= 1) return;
+    const gap = parseFloat(getComputedStyle(list).columnGap) || 10;
+    const widths = items.map(item => Math.ceil(item.scrollWidth));
+    const total = widths.reduce((sum, w) => sum + w, 0) + gap * (items.length - 1);
+    if (total <= heading.clientWidth) return;
+    more.hidden = false;
+    more.textContent = '+' + (items.length - 1);
+    const headingGap = parseFloat(getComputedStyle(heading).columnGap) || 8;
+    const limit = heading.clientWidth - more.offsetWidth - headingGap;
+    let used = 0, shown = 0;
+    for (let i = 0; i < items.length; i++) {
+      const next = used + (shown ? gap : 0) + widths[i];
+      if (shown === 0 || next <= limit) {
+        used = next;
+        shown++;
+      } else {
+        items[i].hidden = true;
+      }
+    }
+    const hidden = items.length - shown;
+    if (hidden <= 0) {
+      more.hidden = true;
+    } else {
+      more.textContent = '+' + hidden;
+      more.title = items.slice(shown).map(item => item.textContent).join('\n');
+      more.setAttribute('aria-label', `${hidden} more changed ${hidden === 1 ? 'input' : 'inputs'}`);
+    }
+  }
+  const groupSizes = new ResizeObserver(entries => { for (const entry of entries) fitCauses(entry.target); });
+  for (const head of groupHeads) {
+    fitCauses(head);
+    groupSizes.observe(head);
+    head.querySelector('[data-causes-more]')?.addEventListener('click', () => {
+      head.dataset.expanded = head.dataset.expanded === 'true' ? 'false' : 'true';
+      fitCauses(head);
+    });
+  }
+
   function fitZoom() {
     if (!zoom.open || !activeZoom) return;
     const preview = data[activeZoom.index];
@@ -372,9 +432,9 @@ function mountPreviews() {
 const documentStyles = `
   :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:light;
     --page:#f4f5f7;--top:#fff;--panel:#fff;--group:#eef0f3;--well:#edf0f4;--line:#d8dde5;--ink:#171d27;--muted:#596679;
-    --accent:#284b9e;--nav-tint:#e7edf9;--positive:#266844;--warning:#8b4c18;}
+    --accent:#284b9e;--nav-tint:#e7edf9;--positive:#266844;--warning:#a16207;--danger:#c2453b;}
   :root[data-theme="dark"]{color-scheme:dark;--page:#11141a;--top:#181c24;--panel:#1b2029;--group:#151a22;--well:#101319;
-    --line:#313a49;--ink:#eff3f9;--muted:#a5b0c2;--accent:#afc4ff;--nav-tint:#232e47;--positive:#8ed2ab;--warning:#f0bb80;}
+    --line:#313a49;--ink:#eff3f9;--muted:#a5b0c2;--accent:#afc4ff;--nav-tint:#232e47;--positive:#8ed2ab;--warning:#f2cc60;--danger:#f08b80;}
   *,*::before,*::after{box-sizing:border-box}
   body{margin:0;background:var(--page);color:var(--ink);font-size:14px;line-height:1.5}
   h1,h2,h3,p,ul,figure{margin:0} a{color:inherit;text-decoration:none}
@@ -395,6 +455,8 @@ const documentStyles = `
   .section-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:13px;padding-bottom:10px;border-bottom:1px solid var(--line)}
   .section-head h2{font-size:22px;letter-spacing:-.025em;font-weight:650}
   #added .section-head h2{color:var(--positive)}
+  #direct .section-head h2,#inherited .section-head h2{color:var(--warning)}
+  #removed .section-head h2{color:var(--danger)}
   .section-head>span,.group-head>span{color:var(--muted);font-size:12px;white-space:nowrap}
   .section-body{display:grid;gap:14px;min-width:0}
   #added .section-body{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
@@ -437,9 +499,18 @@ const documentStyles = `
   .specimen{position:absolute;inset:0 auto auto 0;overflow:hidden;transform:scale(var(--preview-scale));transform-origin:top left;font:16px/normal "Times New Roman",serif;color:initial}
   .absent{color:var(--muted);font-size:12px}
   .inherited-group{background:var(--group)}
-  .group-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:13px 15px;border-bottom:1px solid var(--line)}
-  .group-head h3{display:flex;flex-wrap:wrap;gap:5px 10px;min-width:0;font-size:13px}
-  .group-head code{color:var(--accent);overflow-wrap:anywhere}
+  .group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 15px;border-bottom:1px solid var(--line)}
+  .group-head[data-expanded="true"]{align-items:flex-start}
+  .group-head h3{display:flex;align-items:center;gap:8px;min-width:0;flex:1;font-size:13px}
+  .group-head[data-expanded="true"] h3{align-items:flex-start;flex-wrap:wrap;gap:6px 8px}
+  .cause-list{display:flex;align-items:baseline;gap:10px;min-width:0;overflow:hidden;white-space:nowrap}
+  .group-head[data-expanded="true"] .cause-list{flex-wrap:wrap;white-space:normal;gap:5px 10px;overflow:visible}
+  .group-head code{color:var(--accent);flex:none;white-space:nowrap}
+  .cause-list code:first-child{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .group-head[data-expanded="true"] code{white-space:normal;overflow-wrap:anywhere;flex:none}
+  .cause-more{flex:none;font:11px/1.4 ui-monospace,"SF Mono",Menlo,monospace;padding:1px 7px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--muted);cursor:pointer;white-space:nowrap}
+  .cause-more[hidden]{display:none}
+  .cause-more:hover{background:var(--nav-tint);color:var(--accent)}
   .group-body{padding:12px}
   .names{list-style:none;padding:10px 13px;display:grid;gap:9px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}
   .names li{display:flex;gap:9px;flex-wrap:wrap;overflow-wrap:anywhere}

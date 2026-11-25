@@ -6,12 +6,12 @@ type Fixture = typeof changedFrame;
 function Origin({ location, title, compact = false }: Fixture & { compact?: boolean }) {
   const [layer, asset] = location;
   return <div class={`flex min-w-0 ${compact ? 'flex-1 items-baseline gap-2' : 'flex-col gap-[3px]'}`}>
-    <span class={`text-[11px] font-medium leading-[1.3] text-text-secondary ${compact ? 'truncate' : 'flex flex-wrap gap-[7px]'}`}>
-      <span>{layer}</span><span class={compact ? 'mx-[6px]' : ''} aria-hidden="true">/</span><span>{asset}</span>
-    </span>
     <strong class={`text-[15px] leading-[1.25] font-[640] ${compact ? 'max-w-3/4 shrink-0 truncate' : 'flex items-center gap-[5px]'}`}>
       {title}<span class={`text-accent ${compact ? 'ml-[5px] inline-block align-[-2px]' : ''}`}><Icon name="arrow-up-right" size={13} /></span>
     </strong>
+    <span class={`text-[11px] font-medium leading-[1.3] text-text-secondary ${compact ? 'truncate' : 'flex flex-wrap gap-[7px]'}`}>
+      <span>{layer}</span><span class={compact ? 'mx-[6px]' : ''} aria-hidden="true">/</span><span>{asset}</span>
+    </span>
   </div>;
 }
 
