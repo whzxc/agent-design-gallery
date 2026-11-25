@@ -450,7 +450,7 @@ const documentStyles = `
   .revision-arrow{color:var(--accent)}
   .theme-label{line-height:1;white-space:nowrap;color:var(--muted);border-left:1px solid var(--line);padding-left:14px;font-size:11px}
   .layout{padding-block:21px 72px}
-  main{min-width:0;display:grid;gap:42px}
+  main{min-width:0;display:grid;grid-template-columns:minmax(0,1fr);gap:42px}
   [data-section],.frame-card{scroll-margin-top:24px}
   .section-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:13px;padding-bottom:10px;border-bottom:1px solid var(--line)}
   .section-head h2{font-size:22px;letter-spacing:-.025em;font-weight:650}
@@ -458,7 +458,7 @@ const documentStyles = `
   #direct .section-head h2,#inherited .section-head h2{color:var(--warning)}
   #removed .section-head h2{color:var(--danger)}
   .section-head>span,.group-head>span{color:var(--muted);font-size:12px;white-space:nowrap}
-  .section-body{display:grid;gap:14px;min-width:0}
+  .section-body{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-width:0}
   #inherited .section-body{gap:22px}
   #added .section-body{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
   #added .frame-card,#added .panes figure{display:flex;flex-direction:column}
@@ -498,8 +498,8 @@ const documentStyles = `
   .plane>img{display:block;width:100%;height:100%;object-fit:contain;object-position:top left}
   .specimen{position:absolute;inset:0 auto auto 0;overflow:hidden;transform:scale(var(--preview-scale));transform-origin:top left;font:16px/normal "Times New Roman",serif;color:initial}
   .absent{color:var(--muted);font-size:12px}
-  .inherited-group{display:grid;gap:6px;min-width:0}
-  .group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 2px}
+  .inherited-group{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;min-width:0}
+  .group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 2px;min-width:0}
   .group-head[data-expanded="true"]{align-items:flex-start}
   .group-head h3{display:flex;align-items:center;gap:8px;min-width:0;flex:1;font-size:13px}
   .group-head[data-expanded="true"] h3{align-items:flex-start;flex-wrap:wrap;gap:6px 8px}
@@ -511,7 +511,7 @@ const documentStyles = `
   .cause-more{flex:none;font:11px/1.4 ui-monospace,"SF Mono",Menlo,monospace;padding:1px 7px;border:0;border-radius:999px;background:var(--group);color:var(--muted);cursor:pointer;white-space:nowrap}
   .cause-more[hidden]{display:none}
   .cause-more:hover{background:var(--nav-tint);color:var(--accent)}
-  .group-body{padding:0}
+  .group-body{padding:0;min-width:0}
   .names{list-style:none;padding:10px 13px;display:grid;gap:9px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}
   .names li{display:flex;gap:9px;flex-wrap:wrap;overflow-wrap:anywhere}
   .failures{padding:14px 17px;border:1px solid var(--warning);border-radius:9px}
