@@ -119,17 +119,15 @@ Do not redraw unrelated screens. Scope the change to the target feature or compo
    - Update `design/implementation.json` (`docs/design-toolkit.md#implementation-mappings`) with exact bindings for new or moved files/symbols/styles (whole-source bindings without `part` for surfaces; version 2 transition bindings for motion edges).
    - For current surface frames under `check.lifecycle: true`, declare `fixture` and `capture` when the project uses `compare`, or add a reasoned `captureExemptions` entry in `design/implementation.json` when faithful capture is unavailable.
 
-5. **Verify end to end:**
-   - Run full or impacted ADG checks:
-
+5. **Verify end to end (two-tier loop):**
+   - **Fast iteration tier (while refining layout/styles):** use selective checks and targeted visual QA first:
      ```sh
-     adg check --read-only --json
+     adg check --impacted --base="$base" --read-only --json
+     adg compare --impacted --base="$base" --json   # when compare is configured
      ```
-
+   - **Final closeout tier (once visual QA passes):** run full `adg check --read-only --json`, full `adg compare --all --json` (when configured), and generate any `adg review` handoff ONCE. Omit `adg review` HTML during direct live-preview micro-iterations when no approval handoff is requested.
    - Run the repository's own typecheck, unit/integration tests, and any implementation style/consumer/token checks.
-   - **Visual/layout verification (graded by project setup):**
-     - If `adg.config.*` defines a `compare` adapter and the frame declares `fixture`/`capture`, run `adg compare <source> --frame=<name> --json`. Treat compare findings as a review list (fix missing/extra text, wrong order, or systematic offsets; isolated 2–3 px differences do not require pixel-chasing).
-     - If the project has no `compare` adapter yet, verify the running app directly (browser / accessibility tree / visual check) against the approved frame in the affected themes.
+   - Treat `adg compare` findings as a review list (fix missing/extra text, wrong order, or systematic offsets; isolated 2–3 px differences do not require pixel-chasing). Without `compare`, verify the running app directly (browser / accessibility tree / visual check) in the affected themes.
 
 ## Route 3: Everyday UI change (Code-first)
 
@@ -143,14 +141,7 @@ For routine changes that do not alter the visual direction:
    ```
 
 3. Update the owning `design/*.tsx` sources and `design/implementation.json` in the same task. Delete retired counterparts and unreferenced assets immediately; never leave stale `OWNER_IMPLEMENTATION_MISSING` bindings.
-4. Run:
-
-   ```sh
-   adg check --impacted --base="$base" --read-only --json
-   adg review --base="$base" --json
-   ```
-
-   Run the project's own checks/tests, and run `adg compare` when configured and requested or investigating a layout mismatch.
+4. Follow the two-tier verification loop: during edits run `adg check --impacted --base="$base" --read-only --json` and targeted `adg compare --impacted --base="$base" --json` (if configured) plus repository checks/tests. Once visual QA is clean, run full `adg check --read-only --json` / `adg compare --all --json` and generate `adg review --base="$base" --json` once (omitting `adg review` during direct live-preview micro-iterations when no approval handoff is requested). Keep shared `kit` views split by section (`< ~300` lines per file).
 
 ## Route 4: Iterate on ADG board comments
 

@@ -7,7 +7,7 @@ import { CliError, classifyError } from '../cli-output.mjs';
 /** @typedef {{source: string, frame: string, theme: Theme, path: string, scale: number, width: number, height: number, pixelWidth: number, pixelHeight: number}} Capture */
 /** @typedef {{project: string, outputDirectory: string, complete: boolean, impact: object | null, base: {rev: string, sha: string} | null, themes: Theme[], captures: Capture[], deleted: string[]}} RenderData */
 /** @typedef {{source: string, frame: string, fixture: string, theme: Theme, settled: boolean, size: {design: [number, number], implementation: [number, number]}, matched: number, offBy2px: {text: string, dx: number, dy: number, dw: number, off: number}[], missing: string[], extra: string[], paths: {design?: string, implementation?: string, overlay?: string, report: string, html: string}}} Comparison */
-/** @typedef {{project: string, complete: boolean, all: boolean, comparisons: Comparison[], skipped: {source: string, frame: string, reason: 'no_fixture'}[], summary: {frames: number, matched: number, offsets: number, missing: number, extra: number}, indexPath: string | null, summaryPath: string | null}} CompareData */
+/** @typedef {{project: string, complete: boolean, impact: object | null, all: boolean, comparisons: Comparison[], skipped: {source: string, frame: string, reason: 'no_fixture'}[], summary: {frames: number, matched: number, offsets: number, missing: number, extra: number}, indexPath: string | null, summaryPath: string | null}} CompareData */
 
 /**
  * Attach observed command data without replacing a typed boundary's code or message.

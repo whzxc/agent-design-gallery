@@ -1,6 +1,7 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { CliError } from '../../cli-output.mjs';
+import { themeColorTokens } from '../tokens.mjs';
 
 export const SUPPORTED_KIT_ENGINES = ['react'];
 export const RESERVED_KIT_ENGINES = ['vue'];
@@ -210,4 +211,63 @@ export function kitWatchDirectories(config) {
     if (!collapsed.some(parent => isWithinDirectory(dir, parent))) collapsed.push(dir);
   }
   return collapsed;
+}
+
+function collectKitCssSources(entryFiles, rootDir) {
+  const seen = new Set();
+  const sources = [];
+  const visit = file => {
+    if (seen.has(file) || !isWithinDirectory(file, rootDir) || !existsSync(file)) return;
+    seen.add(file);
+    const raw = readFileSync(file, 'utf8');
+    const clean = raw.replace(/\/\*[\s\S]*?\*\//g, '');
+    sources.push(clean);
+    for (const match of clean.matchAll(/@import\s+(?:url\(\s*)?["']([^"']+)["']\s*\)?[^;]*;/g)) {
+      const spec = match[1].trim();
+      if (!spec.startsWith('.')) continue;
+      visit(path.resolve(path.dirname(file), spec));
+    }
+  };
+  for (const file of entryFiles) visit(file);
+  return sources.join('\n');
+}
+
+function extractThemeBlocks(css) {
+  const blocks = [];
+  const re = /@theme\b[^{;]*\{/g;
+  for (let match = re.exec(css); match; match = re.exec(css)) {
+    let depth = 1;
+    let i = match.index + match[0].length;
+    const start = i;
+    while (i < css.length && depth > 0) {
+      if (css[i] === '{') depth++;
+      else if (css[i] === '}') depth--;
+      i++;
+    }
+    if (depth === 0) blocks.push(css.slice(start, i - 1));
+    re.lastIndex = i;
+  }
+  return blocks;
+}
+
+export function kitThemeTokenFindings(config, tokens) {
+  if (!config?.kit || config.kit.tokens !== 'tailwind-kit' || !config.kit.css?.length || !tokens) return [];
+  const entryFiles = config.kit.css.map(rel => path.resolve(config.root, rel));
+  const combined = collectKitCssSources(entryFiles, path.resolve(config.root));
+  if (!/@import\s+["']tailwindcss["']|@theme\b/.test(combined)) return [];
+  const declared = new Set();
+  for (const body of extractThemeBlocks(combined)) {
+    for (const match of body.matchAll(/(--color-[\w-]+)\s*:/g)) declared.add(match[1]);
+  }
+  const missing = themeColorTokens(tokens).filter(({ themeVar }) => !declared.has(themeVar));
+  if (!missing.length) return [];
+  const preview = missing.slice(0, 8).map(({ token, themeVar }) => `${themeVar}: var(${token});`).join(' ');
+  const suffix = missing.length > 8 ? ` (+${missing.length - 8} more)` : '';
+  return [{
+    code: 'KIT_THEME_UNMAPPED',
+    source: config.kit.css[0],
+    message: `Missing Tailwind @theme inline color mappings (${missing.length}): ${preview}${suffix}`,
+    line: null,
+    column: null,
+  }];
 }

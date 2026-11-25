@@ -83,7 +83,9 @@ Pause for user confirmation if the pilot scope or appearance policy was not alre
 
 ### Step 3: Split existing UI into ADG layers
 
-Core mental model: **`design/*.tsx` are build-time static visual specs, never imported by application runtime code.** Sources have no React state/hooks/effects, no `<style>` tags, no npm package imports, and use HTML `class` (not `className`). Pass variants via plain function props, put sample data in `design/fixtures/`, and put brand SVGs/images in `design/art/`.
+Core mental model: **`design/*.tsx` are build-time static visual specs, never imported by application runtime code.** Two authoring modes exist (`docs/design-toolkit.md#sources`):
+- **Default zero-dependency string-JSX** (best for irregular UI, games, or custom chrome): no React state/hooks/effects, no `<style>` tags, no npm package imports, and HTML `class` (not `className`).
+- **Optional Component-library `kit` mode (`engine: 'react'`)** (best for regular standard-UI apps): configures `kit` in `adg.config.mjs` so `design/` shares `kit.ui` primitives and stateless presentational views directly with app code instead of duplicating markup, while preserving `design/tokens.css`, `@theme inline` color mappings in `kit.css` (guarded by `KIT_THEME_UNMAPPED`), and `< ~300`-line section-split shared views. Pass variants via plain props (including explicit `timeZone` when formatting clocks), put sample data in `design/fixtures/`, and put brand SVGs/images in `design/art/`.
 
 Map existing UI code to ADG layers using the first rule that applies (`docs/asset-rules.md#layers-and-placement`):
 

@@ -217,10 +217,12 @@ Next-action construction:
   `"log", "-5", "--oneline"`; tree/blob read failure suggests `"status", "--short"`.
   With no known project, use command help. These variants share the catalog reason.
 - Compare recovery requires a compare invocation. All mode uses
-  `["adg", "compare", "--all", "--json"]`. Single mode retains the explicit string
+  `["adg", "compare", "--all", "--json"]` (appending `"--no-screenshots"` and `"--", ...sources` when supplied).
+  Impacted mode uses `["adg", "compare", "--impacted", "--base=<rev>", ...]` retaining
+  `frame`/`state-dir`/`no-screenshots`/`explain` and `"--", ...sources`. Single mode retains the explicit string
   options in this order: frame, fixture, region, selector, origin, viewport, using
   attached `--name=value` arguments; then `--page` if set; then each `--click=value` in
-  order; then `"--json", "--", source`. It does not reconstruct settings from Frame
+  order; then `--no-screenshots` if set; then `"--json", "--", source`. It does not reconstruct settings from Frame
   metadata. Missing source/frame context or recovery from another command uses command
   help, retaining the catalog reason.
 - Diff retry requires canonical command `diff` and a nonempty string base. Start with
@@ -1152,6 +1154,7 @@ retained with `complete:false`. `--read-only` skips generated declarations and b
 | `STYLE_FORBIDDEN` | Unsupported inline style outside `data-free` |
 | `FRACTIONAL_LENGTH` | Fractional authored pixel length outside `data-free` |
 | `TOKEN_COLOR_MISMATCH` | Visible paint outside `data-brand` matches no token |
+| `KIT_THEME_UNMAPPED` | Tailwind `kit.css` (`@import "tailwindcss"` or `@theme`) is missing one or more `--color-*` declarations for `design/tokens.css` colors |
 | `FRAME_OVERFLOW` | Visible content leaves the frame |
 | `TEXT_OUTSIDE_FRAME` | Visible text leaves the frame |
 | `TEXT_OVERFLOW` | Visible text overflows its owning box |
@@ -1185,6 +1188,7 @@ execution failures, not finding codes.
 type CompareData = {
   project: string;
   complete: boolean;
+  impact: object | null;
   all: boolean;
   comparisons: Comparison[];
   skipped: { source: ProjectPath; frame: string; reason: "no_fixture" }[];

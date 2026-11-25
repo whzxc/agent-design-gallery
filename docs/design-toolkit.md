@@ -123,6 +123,13 @@ export default {
 
 In `react` mode, `adg` compiles sources with automatic React JSX and renders each `<Frame>` to script-free static HTML using `react-dom/server` (`renderToStaticMarkup`), refreshing `.adg/runtime.d.ts` without global intrinsic tag overrides. Elements authored inside `kit.ui` or `node_modules` receive `data-adg-kit`, exempting internal UI-primitive CSS transitions, headless inline styles, fractional lengths and translucent black/white optical drop shadows while keeping full `check` enforcement (tokens, layout geometry, overflow, overlap and strict motion) active for product views and design surfaces. `kit.ui` directories are excluded from `MOTION_UNMAPPED` inventory noise unless explicitly mapped.
 
+When authoring in `kit` mode:
+- Map every color token from `design/tokens.css` inside `@theme inline` in `kit.css` (`--color-<slug>: var(--<slug>);`); Tailwind v4's `tailwind-kit` build fails `KIT_THEME_UNMAPPED` in `adg check` if any `@import "tailwindcss"` / `@theme` entry misses a color mapping that production bundlers (such as Vite) rely on.
+- Thread an explicit optional `timeZone?: string` prop into shared views that format clocks/timestamps, passing `fixture.timezone` from design surfaces so Node SSR matches Chromium's fixture time zone in `adg compare`.
+- Match `<Frame width={W} height={H} capture={{ page: true, viewport: `${W}x${H}` }}>` when shared views use viewport-height (`100dvh`) desktop layouts so sheet and implementation compute identical viewport bounds.
+- Keep kit-styled wrapper primitives (such as anchor buttons, floating docks or tooltips using transitions/shadows) inside `kit.ui` rather than injecting raw product elements through `render={...}` props.
+- Split shared views by cohesive section (`< ~300` lines per file) so routine edits touch focused files with minimal re-reads and fast targeted checks.
+
 ### Frame
 
 A `Frame` is one declared form of a component or surface.
@@ -539,7 +546,8 @@ The Float toolbar keeps Play explicit so ordinary specimen selection still inspe
 - content that overflows the frame's declared width or height;
 - a `<style>` element, script or event attribute in the output;
 - a fractional pixel length in a class or style outside `data-free`;
-- a `style` outside `data-free` that sets anything but width, height or custom properties.
+- a `style` outside `data-free` that sets anything but width, height or custom properties;
+- missing Tailwind `@theme inline` `--color-*` declarations (`KIT_THEME_UNMAPPED`) in `kit.css` when `kit.tokens` is `'tailwind-kit'` and `kit.css` uses `@import "tailwindcss"` or `@theme`.
 
 Each problem is one line, `<path>: <frame>: <problem>`. Completed rule findings exit 1. Build or frame-execution failures exit 2; `--json` returns `complete: false` with the observed partial findings. A completed check uses `complete: true`, with `CHECK_FAILED` when findings remain.
 
@@ -696,9 +704,11 @@ Consumers using the feature can set `requires: '>=0.9.0'` in their ADG config.
 
 ## Workflow
 
-1. Implement everyday layout and behavior changes with shared components and runtime tokens, then sync the owning design source and its binding in the same task.
-2. Run `adg check --read-only --json` for the affected scope and resolve applicable findings.
-3. Generate the [standalone review](#review-handoff) against the task's starting commit after the changes are ready.
+1. Record the task's starting commit (`base=$(git rev-parse HEAD)`).
+2. Implement everyday layout and behavior changes with shared components and runtime tokens, then sync the owning design source and its binding in the same task. Keep shared `kit` view modules split by section (`< ~300` lines per file).
+3. Use a two-tier verification loop during iteration:
+   - **Fast iteration tier (during edits):** run targeted checks and captures only (`adg check --impacted --base="$base" --read-only --json`, single-source `adg render` or `adg compare [source] --all` / `adg compare --impacted --base="$base"`). Fix visual QA findings on the affected frames before generating any review bundle.
+   - **Final closeout tier (once visual QA passes):** run whole-project `adg check --read-only --json` and `adg compare --all` (when configured), then generate the [standalone review](#review-handoff) ONCE against the starting commit. Omit `adg review` during direct live-preview micro-iterations when the user inspects the running app directly and no approval handoff is requested.
 
 Use `adg compare` when requested, required by project acceptance, or needed to investigate a specific mismatch reproducible by a fixture. Read the text and position findings first. Inspect a relevant preview, screenshot or overlay when the user requests visual acceptance or an appearance question requires it. Capture the relevant frame and theme when an image is needed.
 
@@ -733,8 +743,9 @@ adg [open] [directory] [--port=<n>] [--no-open] [--state-dir=<path>]
 adg init
 adg check [source...] [--read-only]
 adg render [source...] [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]
-adg compare <source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin=<x> <y>] [--click=<name>...] [--viewport=<w>x<h>]
-adg compare --all
+adg compare <source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin=<x> <y>] [--click=<name>...] [--viewport=<w>x<h>] [--no-screenshots]
+adg compare [source...] --all [--no-screenshots]
+adg compare [source...] --impacted --base=<rev> [--frame=<name>] [--no-screenshots] [--state-dir=<path>] [--explain]
 adg diff [source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--scale=2] [--out-dir=<path>] [--json]
 adg owner --part=<source>[#<Export>] [--json]
 adg impact (--source=<path> [--part=<export>] | --token=<name> | --file=<implementation-path> | --base=<rev> [--head=<rev>]) --json
@@ -754,9 +765,9 @@ A first argument that names a command runs it; any other argument is a directory
 - `owner --part` reverses a design part or whole source to active implementation bindings, including resolved selector files and regions.
 - `impact` explains direct/transitive candidates and, for Git queries, fresh materialized-input equality.
 - `diff` compares Git base and working-tree frames, writes PNGs and a machine-readable report, and gates ordinary changes or structural parts. It defaults to both themes at 2×.
-- `compare --all` compares every frame that has a fixture and writes `output/design/compare/summary.json` and `index.html`, one row per frame with its counts and report link.
+- `[source...] --all` compares every fixture frame across the project (or the named sources); `--impacted --base=<rev>` compares only impacted fixture frames in the working tree. Both batch modes reuse one Chromium process and one `compare.start()` dev server while still isolating and closing fresh pages per frame, and write `output/design/compare/summary.json` and `index.html`.
 
-Each design capture in `render` and `compare` uses a fresh page and browser context, including between themes, so PNG bytes are independent of frame order. `render` reuses one Chromium process for the batch, runs up to four captures concurrently within the available CPU parallelism, and closes each page after capture. Console output follows source, frame and theme order.
+Each design capture in `render` and `compare` uses a fresh page and browser context, including between themes, so PNG bytes are independent of frame order. `render` and batch `compare` reuse one Chromium process for the batch (and `compare` reuses one `compare.start()` dev server); `render` runs up to four captures concurrently within the available CPU parallelism, and both close each page after its frame/capture. Console output follows source, frame and theme order.
 
 Source arguments are paths under the design directory, with or without `design/` and `.tsx`. Exit codes are 0 for success, 1 when `check`, `compare`, `diff` or `motion --coverage` found problems, and 2 for a usage, configuration or environment error, with one line on stderr naming the fix.
 
@@ -779,6 +790,7 @@ adg impact --base=main --head=HEAD --json
 # After edits, compute fresh proofs and consume them in the same operation.
 adg render --impacted --base=HEAD --json
 adg check --impacted --base=HEAD --read-only --json
+adg compare --impacted --base=HEAD --json
 adg diff --base=HEAD --impacted --json
 ```
 
@@ -794,13 +806,14 @@ belong to the changed source; transitive frames consume it. Token candidates fol
 aliases, fallbacks and absent declarations; architecture depends on the full token sheet. Hypothetical
 token queries assume unchanged Tailwind classification. Git mode also compares freshly compiled utilities.
 
-Only Git selection can drive `--impacted`. Render/check require `--base`; diff already requires it.
+Only Git selection can drive `--impacted`. `render`, `check` and `compare` require `--base`; `diff` already requires it.
 These commands use the current working tree, accept no `--head` or hypothetical selectors, and apply
-source/frame/theme filters after materializing the complete union. For example:
+source/frame/theme filters (or source/frame filters for `compare`, which evaluates each fixture in its declared theme) after materializing the complete union. For example:
 
 ```sh
 adg render surfaces/catalog --frame=empty --theme=light --impacted --base=HEAD --json
 adg check surfaces/catalog --frame=empty --theme=light --impacted --base=HEAD --read-only --json
+adg compare surfaces/catalog --impacted --base=HEAD --json
 ```
 
 Every TSX entry executes freshly on both sides once per operation. Skipping requires exact equality
@@ -973,7 +986,7 @@ adg review --base=<rev> --format=png --json
 adg review --base=<rev> --theme=dark --out=/path/to/run/review.html --viewer-url=https://gallery.example/p/project/
 ```
 
-Use the commit where the task started as `--base`. Share the artifact at `data.path`. HTML is the default at `<configured output>/review.html` and suits frame-by-frame review and approvals. PNG defaults to `<configured output>/review.png`. A relative `--out` resolves from the project root and its extension must match the format (`.html` for `html` and `embed`, `.png` for `png`). Reviews default to the macOS system theme or light on other platforms. Regenerate the report when its design inputs change.
+Use the commit where the task started as `--base`. Generate the review bundle once per round after visual checks pass, and share the artifact at `data.path` (skip HTML generation on direct live-preview micro-iterations when no approval handoff is requested). HTML is the default at `<configured output>/review.html` and suits frame-by-frame review and approvals. PNG defaults to `<configured output>/review.png`. A relative `--out` resolves from the project root and its extension must match the format (`.html` for `html` and `embed`, `.png` for `png`). Reviews default to the macOS system theme or light on other platforms. Regenerate the report when its design inputs change.
 
 Both embed targets use stacked frame cards with an icon toolbar, light/dark controls, a Before/After slider by default, split view and an enlarged inspector. `--target=codex` emits an HTML fragment at `<configured output>/review-codex-embed.html`; use its path in the Codex visualization reference. When the chat host supports it, **Use this frame in Codex** opens a follow-up with the project, frame source, frame name and base commit. `--target=antigravity` emits a complete HTML document at `<configured output>/review-embed.html`. An explicit target overrides `ADG_EMBED_TARGET`. With neither set, embed uses Antigravity.
 

@@ -19,7 +19,7 @@ export async function withImpacted(config, args, options, command, work) {
   function discardProofs() {
     if (selection) {
       selection.coverage.proofComplete = false;
-      selection.coverage.uncoveredRows += selection.coverage.provenRows; selection.coverage.provenRows = 0; selection.coverage.scope = 'partial'; selection.coverage.basis = command === 'check' ? 'selected' : 'rendered';
+      selection.coverage.uncoveredRows += selection.coverage.provenRows; selection.coverage.provenRows = 0; selection.coverage.scope = 'partial'; selection.coverage.basis = command === 'check' || command === 'compare' ? 'selected' : 'rendered';
       for (const group of selection.frames) for (const row of group.rows) if (row.proof) { delete row.proof; row.disposition = 'unassessed'; row.unassessedReasons = ['incomplete_identity']; }
     }
     if (outcome?.data && 'verdict' in outcome.data) outcome.data.verdict = null;
@@ -43,7 +43,7 @@ export async function withImpacted(config, args, options, command, work) {
         }
         selection = { query: data.query, facts: data.facts, frames: groupImpactFrames(data.frames.filter(frame => chosen.some(row => row.source === frame.ref.source && row.frame === frame.ref.frame))
           .map(frame => ({ ...frame, themes: frame.themes.filter(row => themes.includes(row.theme)) })).filter(frame => frame.themes.length), { explain: !!options.explain }),
-        coverage: { scope: 'partial', basis: command === 'check' ? 'selected' : 'proven', expectedRows: rows.length * 2, renderedRows: 0,
+        coverage: { scope: 'partial', basis: command === 'check' || command === 'compare' ? 'selected' : 'proven', expectedRows: rows.length * 2, renderedRows: 0,
           provenRows: 0, uncoveredRows: 0, deletedRows: 0, exclusions, proofComplete: false }, timings: data.timings };
         const usedFacts = new Set(selection.frames.flatMap(group => group.rows.flatMap(row => (row.reasons ?? []).map(reason => reason.fact))));
         selection.facts = data.facts.filter(fact => usedFacts.has(fact.id));
@@ -56,13 +56,13 @@ export async function withImpacted(config, args, options, command, work) {
         for (const row of chosen) for (const theme of themes) {
           if (row.status === 'removed') selection.coverage.deletedRows++;
           if (!scheduled(row, theme) && assessments.get(impactRowKey(row, theme)).disposition === 'proven_unaffected') {
-            if (command === 'check') exclusions.not_checked++;
+            if (command === 'check' || command === 'compare') exclusions.not_checked++;
             else selection.coverage.provenRows++;
           }
         }
         const finalize = data => {
           const coverage = selection.coverage;
-          coverage.renderedRows = command === 'diff' ? data.summary.comparisons + data.summary.supportComparisons : command === 'check' ? data.summary.evaluations : data.captures.length;
+          coverage.renderedRows = command === 'diff' ? data.summary.comparisons + data.summary.supportComparisons : command === 'check' ? data.summary.evaluations : command === 'compare' ? data.summary.frames : data.captures.length;
           if (command === 'diff') {
             // A revision comparison of a move covers both original impact rows.
             const pairedRows = (data.comparisons ?? []).filter(row => row.previousSource).length;
@@ -72,11 +72,11 @@ export async function withImpacted(config, args, options, command, work) {
           const deleted = command === 'render' ? coverage.deletedRows : 0;
           coverage.uncoveredRows = Math.max(0, coverage.expectedRows - coverage.renderedRows - coverage.provenRows - deleted);
           coverage.scope = failures.length ? 'partial' : !coverage.expectedRows ? 'empty' : coverage.uncoveredRows || args.length || options.frame !== undefined || themes.length !== 2 ? 'partial' : 'full';
-          coverage.basis = command === 'check' ? 'selected' : coverage.renderedRows ? coverage.provenRows ? 'rendered_and_proven' : 'rendered' : coverage.provenRows ? 'proven' : 'selected';
+          coverage.basis = command === 'check' || command === 'compare' ? 'selected' : coverage.renderedRows ? coverage.provenRows ? 'rendered_and_proven' : 'rendered' : coverage.provenRows ? 'proven' : 'selected';
           data.impact = selection;
         };
-        const next = [{ argv: ['adg', command, ...(command === 'diff' ? [`--base=${options.base}`] : command === 'check' ? ['--read-only'] : []),
-          ...(options.scale !== undefined && command !== 'check' ? [`--scale=${options.scale}`] : []), '--json'], reason: 'Evaluate the full project without impact filtering.' }];
+        const next = [{ argv: ['adg', command, ...(command === 'diff' ? [`--base=${options.base}`] : command === 'check' ? ['--read-only'] : command === 'compare' ? ['--all'] : []),
+          ...(options.scale !== undefined && !['check', 'compare'].includes(command) ? [`--scale=${options.scale}`] : []), '--json'], reason: 'Evaluate the full project without impact filtering.' }];
         session.selection = selection; session.sources = sources; session.chosen = chosen; session.themes = themes; session.scheduled = scheduled;
         session.diffInputs = { ...inputs.session, sources,
           changes: inputs.changes.map(change => Object.fromEntries(['before', 'after'].map(side => [side,
@@ -92,7 +92,7 @@ export async function withImpacted(config, args, options, command, work) {
           if (selection.coverage.scope === 'partial') warnings.push({ code: 'IMPACT_COVERAGE_PARTIAL', message: 'Impact selection has partial frame/theme coverage.', next });
           if (!failure && !outcome.data.motion?.count && !chosen.some(row => (command === 'diff' || row.after) && themes.some(theme => scheduled(row, theme)))) warnings.push({ code: 'IMPACT_NO_CHANGES', message: 'No capture or browser-evaluation jobs were scheduled.', next });
         }
-        if (failure && !['CHECK_FAILED', 'DIFF_FAILED'].includes(failure.code) && !(command === 'diff' && failure.partialSourceFailures === true)) throw failure;
+        if (failure && !['CHECK_FAILED', 'DIFF_FAILED', 'COMPARE_FAILED'].includes(failure.code) && !(command === 'diff' && failure.partialSourceFailures === true)) throw failure;
       },
       tolerateSourceFailures: command === 'diff',
     });

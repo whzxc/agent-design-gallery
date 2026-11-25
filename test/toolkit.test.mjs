@@ -448,6 +448,80 @@ test('compare uses Frame capture, flags override it, both sides share a reader, 
   c.compare.fixture=()=>({url:'http://localhost',theme:'dark',locale:'en',timezone:'Invalid/Zone',clock:'2026-01-01'});await assert.rejects(compare(c,[f],{frame:'frame-sample'}),/timezone/);
 });
 
+test('Contract: compare reuses one browser and dev server across frames, scopes [source] --all, and supports --impacted', async t => {
+  const c = await project(t);
+  const { createServer } = await import('node:http');
+  const httpServer = createServer((req, res) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.end('<!doctype html><style>body{margin:0;font:16px/24px system-ui}.box{width:180px;height:60px}</style><div class="box">Row</div>');
+  });
+  await new Promise(resolve => httpServer.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => httpServer.close(resolve)));
+  const testPort = httpServer.address().port;
+  const counts = { starts: 0, stops: 0 };
+  globalThis.__adgCompareTestCounts = counts;
+  t.after(() => { delete globalThis.__adgCompareTestCounts; });
+  writeFileSync(path.join(c.root, 'adg.config.mjs'), `export default {
+  compare: {
+    port: ${testPort},
+    start: async () => { globalThis.__adgCompareTestCounts.starts++; return async () => { globalThis.__adgCompareTestCounts.stops++; }; },
+    fixture: name => ({ url: 'http://127.0.0.1:${testPort}/?f=' + name, theme: 'light', locale: 'en-US', clock: '2026-01-01T00:00:00Z' }),
+  },
+};
+`);
+  const configured = await loadConfig(c.root, { fresh: true });
+  const a = put(configured, 'surfaces/a.tsx', `import {Frame} from 'adg';
+export default()=>[
+  <Frame name="a-one" fixture="a1" capture={{selector:".box"}}><div class="w-[180px] h-[60px]">Row</div></Frame>,
+  <Frame name="a-two" fixture="a2" capture={{selector:".box"}}><div class="w-[180px] h-[60px]">Row</div></Frame>
+];`);
+  const b = put(configured, 'surfaces/b.tsx', `import {Frame} from 'adg';
+export default()=> <Frame name="b-one" fixture="b1" capture={{selector:".box"}}><div class="w-[180px] h-[60px]">Row</div></Frame>;`);
+  const { execFileSync: gitSync } = await import('node:child_process');
+  gitSync('git', ['-C', configured.root, 'init', '-q']);
+  gitSync('git', ['-C', configured.root, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'add', '.']);
+  gitSync('git', ['-C', configured.root, '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'base']);
+
+  const { launch } = await import('../src/toolkit/browser.mjs');
+  let launches = 0, closes = 0, closedPages = 0;
+  const trackingLaunch = async () => {
+    launches++;
+    const real = await launch();
+    const realNewPage = real.newPage.bind(real);
+    const realClose = real.close.bind(real);
+    real.newPage = async (...args) => {
+      const page = await realNewPage(...args);
+      const pageClose = page.close.bind(page);
+      page.close = async () => { closedPages++; return pageClose(); };
+      return page;
+    };
+    real.close = async () => { closes++; return realClose(); };
+    return real;
+  };
+
+  const allRes = await compare(configured, [], { all: true, 'no-screenshots': true }, { launchBrowser: trackingLaunch });
+  assert.equal(allRes.data.complete, true);
+  assert.equal(allRes.data.summary.frames, 3);
+  assert.equal(launches, 1);
+  assert.equal(closes, 1);
+  assert.equal(counts.starts, 1);
+  assert.equal(counts.stops, 1);
+  assert.equal(closedPages, 6);
+
+  // Source-scoped --all compares only the named file
+  const scoped = await compare(configured, [a], { all: true, 'no-screenshots': true }, { launchBrowser: trackingLaunch });
+  assert.equal(scoped.data.summary.frames, 2);
+  assert.ok(scoped.data.comparisons.every(row => row.source === 'design/surfaces/a.tsx'));
+
+  // Edit only b.tsx so compare --impacted --base=HEAD evaluates only b-one
+  put(configured, 'surfaces/b.tsx', `import {Frame} from 'adg';
+export default()=> <Frame name="b-one" fixture="b1" capture={{selector:".box"}}><div data-probe="changed" class="w-[180px] h-[60px]">Row</div></Frame>;`);
+  const impactedRes = await compare(configured, [], { impacted: true, base: 'HEAD', 'no-screenshots': true }, { launchBrowser: trackingLaunch });
+  assert.equal(impactedRes.data.summary.frames, 1);
+  assert.equal(impactedRes.data.comparisons[0].source, 'design/surfaces/b.tsx');
+  assert.equal(impactedRes.data.comparisons[0].frame, 'b-one');
+});
+
 // Regression: overlapping source bundles repeated every imported export transform.
 // Cached registrations must preserve render bytes and observe edits to an import.
 test('shared source transforms preserve documents and invalidate changed exports',async t=>{

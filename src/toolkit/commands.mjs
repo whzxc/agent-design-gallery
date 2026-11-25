@@ -20,6 +20,7 @@ import { withImpacted } from './impact-selection.mjs';
 import { mappingFacts, frameOwners } from './source-facts.mjs';
 import { resolveThemes, systemTheme } from './theme.mjs';
 import { withPaintOcclusion } from './paint-occlusion.mjs';
+import { kitThemeTokenFindings } from './kit/index.mjs';
 
 function frameStructure(frame) {
   return frame.html
@@ -236,6 +237,11 @@ export async function check(config, args = [], options = {}, log = console.log, 
     for (const finding of motion.findings) if(inScope(finding.source)) emit(finding);
     for (const finding of deadEndFindings(motion, records, config.check?.strictMotion)) emit(finding);
     const tokens = files.length ? loadTokens(config) : null;
+    if (config.kit && tokens) {
+      for (const finding of kitThemeTokenFindings(config, tokens)) {
+        add({ code: finding.code, message: finding.message, line: finding.line, column: finding.column }, path.join(config.root, finding.source));
+      }
+    }
     const arch = files.some(file => file.endsWith('.mmd')) ? await import('./arch.mjs') : null;
     let page;
     const builtSources = new Map(), allBuilt = new Map(), failedSources = new Map();

@@ -143,10 +143,11 @@ export function nextActions(code, context = {}) {
     case 'owner-help': argv = helpArgv('owner'); break;
     case 'impact-help': argv = helpArgv('impact'); break;
     case 'impact': {
-      if (['render', 'check', 'diff'].includes(context.command) && context.values?.impacted && typeof context.values.base === 'string') {
+      if (['render', 'check', 'diff', 'compare'].includes(context.command) && context.values?.impacted && typeof context.values.base === 'string') {
         argv = ['adg', context.command, '--impacted'];
         for (const key of ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir']) if (typeof context.values[key] === 'string') argv.push(`--${key}=${context.values[key]}`);
         if (context.values['read-only']) argv.push('--read-only');
+        if (context.values['no-screenshots']) argv.push('--no-screenshots');
         if (context.values.explain) argv.push('--explain');
         argv.push('--json');
         if (context.positionals?.length) argv.push('--', ...context.positionals);
@@ -200,23 +201,36 @@ export function nextActions(code, context = {}) {
     }
     case 'compare': {
       const values = context.values ?? {}, sources = context.positionals ?? [];
-      if (context.command !== 'compare' || (!values.all && (sources.length !== 1 || typeof values.frame !== 'string' || !values.frame))) {
+      const validImpacted = values.impacted && typeof values.base === 'string' && values.base.trim();
+      if (context.command !== 'compare' || (!values.all && !validImpacted && (sources.length !== 1 || typeof values.frame !== 'string' || !values.frame))) {
         argv = helpArgv(context.command);
         break;
       }
       argv = ['adg', 'compare'];
-      if (values.all) argv.push('--all');
-      else {
-        // Attached values preserve literal operands starting with '-'.
-        for (const key of ['frame', 'fixture', 'region', 'selector', 'origin', 'viewport']) {
-          if (typeof values[key] === 'string') argv.push(`--${key}=${values[key]}`);
-        }
-        if (values.page) argv.push('--page');
-        for (const click of Array.isArray(values.click) ? values.click : []) argv.push(`--click=${click}`);
-        argv.push('--json', '--', sources[0]);
+      if (values.all) {
+        argv.push('--all');
+        if (values['no-screenshots']) argv.push('--no-screenshots');
+        argv.push('--json');
+        if (sources.length) argv.push('--', ...sources);
         break;
       }
-      argv.push('--json');
+      if (validImpacted) {
+        argv.push('--impacted', `--base=${values.base}`);
+        for (const key of ['frame', 'state-dir']) if (typeof values[key] === 'string') argv.push(`--${key}=${values[key]}`);
+        if (values['no-screenshots']) argv.push('--no-screenshots');
+        if (values.explain) argv.push('--explain');
+        argv.push('--json');
+        if (sources.length) argv.push('--', ...sources);
+        break;
+      }
+      // Attached values preserve literal operands starting with '-'.
+      for (const key of ['frame', 'fixture', 'region', 'selector', 'origin', 'viewport']) {
+        if (typeof values[key] === 'string') argv.push(`--${key}=${values[key]}`);
+      }
+      if (values.page) argv.push('--page');
+      for (const click of Array.isArray(values.click) ? values.click : []) argv.push(`--click=${click}`);
+      if (values['no-screenshots']) argv.push('--no-screenshots');
+      argv.push('--json', '--', sources[0]);
       break;
     }
     default: argv = helpArgv(context.command);

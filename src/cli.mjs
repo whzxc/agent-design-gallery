@@ -18,7 +18,7 @@ const usage = {
   root: 'add <dir> [--depth=2] | remove <dir> | list | scan [dir] [--state-dir=<path>]',
   motion: '[--css | --coverage [--json] | --json]',
   migrate: '[project]', init: '', check: '[source...] [--transitions] [--read-only] [--motion-only] [--motion-details] [--impacted --base=<rev> [--frame=<name>] [--theme=both|light|dark] [--state-dir=<path>] [--explain]]', render: '[source...] [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--base=<rev>] [--impacted [--state-dir=<path>] [--explain]]',
-  compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] [--no-screenshots] | --all',
+  compare: '<source> --frame=<name> [--fixture=<name>] [--region=<name> | --selector=<css> | --page] [--origin="<x> <y>"] [--click=<name>...] [--viewport=<w>x<h>] [--no-screenshots] | [source...] --all [--no-screenshots] | [source...] --impacted --base=<rev> [--frame=<name>] [--no-screenshots] [--state-dir=<path>] [--explain]',
   diff: '[source...] --base=<rev> [--frame=<name>] [--theme=both|light|dark|system] [--scale=2] [--out-dir=<path>] [--json] [--impacted [--state-dir=<path>] [--explain]]',
   review: '--base=<rev> [--format=html|png|embed] [--target=codex|antigravity] [--theme=system|light|dark] [--out=<file>] [--viewer-url=<project-url>] [--exact] [--json]',
   owner: '[--transitions] (--transition=<id> | --file=<path|directory|glob> [--line=<n>] [--symbol=<name>] | --text=<text> [--contains] [--locale=<tag>] | --color=<css> | --token=<name> | --part=<source>[#<Export>]) [--theme=both|light|dark] [--state-dir=<path>] [--json]',
@@ -48,6 +48,7 @@ const helpExamples = {
   impact: 'adg impact --source=design/components/badge.tsx --part=Badge --json\nadg impact --token=--accent --json\nadg impact --base=HEAD --json',
   render: 'adg render --impacted --base=HEAD --json\nadg render arch/catalog.mmd --base=HEAD --json',
   check: 'adg check --impacted --base=HEAD --read-only --json\nadg check --read-only --json',
+  compare: 'adg compare --impacted --base=HEAD --json\nadg compare surfaces/demo --all --json\nadg compare surfaces/demo --frame=default --json',
   diff: 'adg diff --base=HEAD --impacted --json',
   review: 'adg review --base=HEAD --json\nadg review --base=HEAD --format=embed --target=codex --json\nadg review --base=HEAD --format=embed --target=antigravity --json\nadg review --base=HEAD --format=png --json',
 };
@@ -61,7 +62,7 @@ export function parseCli(args, env = process.env) {
   const explicit = commands.includes(args[0]), command = explicit ? args[0] : 'open';
   const options = { help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' } };
   const locators = ['asset', 'frame', 'group', 'layer', 'mode', 'base'];
-  const strings = { comments: ['status', 'source', 'frame', 'author', 'message', 'state-dir'], open: ['port', 'state-dir', ...locators], link: [...locators, 'comment'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir', 'public-origin'], skill: ['target', 'dir'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin'], owner: ['transition','file', 'text', 'color', 'token', 'part', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['transition','frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
+  const strings = { comments: ['status', 'source', 'frame', 'author', 'message', 'state-dir'], open: ['port', 'state-dir', ...locators], link: [...locators, 'comment'], serve: ['port', 'state-dir'], root: ['depth', 'state-dir'], service: ['port', 'state-dir', 'public-origin'], skill: ['target', 'dir'], check: ['base', 'frame', 'theme', 'state-dir'], render: ['scale', 'frame', 'theme', 'out-dir', 'base', 'state-dir'], diff: ['base', 'frame', 'theme', 'scale', 'out-dir', 'state-dir'], compare: ['frame', 'fixture', 'region', 'selector', 'viewport', 'origin', 'base', 'state-dir'], owner: ['transition','file', 'text', 'color', 'token', 'part', 'line', 'symbol', 'locale', 'theme', 'state-dir'], impact: ['source', 'part', 'token', 'file', 'line', 'symbol', 'base', 'head', 'theme', 'state-dir'], inspect: ['transition','frame','theme','part','element','text','depth','fields','wrappers','state-dir'] };
   for (const name of strings[command] ?? []) options[name] = { type: 'string' };
   if (command === 'review') {
     for (const name of ['base', 'format', 'target', 'theme', 'out', 'viewer-url']) options[name] = { type: 'string' };
@@ -73,7 +74,7 @@ export function parseCli(args, env = process.env) {
   if (command === 'check') for (const name of ['read-only','motion-only','motion-details']) options[name] = { type: 'boolean' };
   if (command === 'compare') options['no-screenshots'] = { type: 'boolean' };
   if (command === 'motion') for (const name of ['css','coverage']) options[name] = { type: 'boolean' };
-  if (['render', 'check', 'diff'].includes(command)) { options.impacted = { type: 'boolean' }; options.explain = { type: 'boolean' }; }
+  if (['render', 'check', 'diff', 'compare'].includes(command)) { options.impacted = { type: 'boolean' }; options.explain = { type: 'boolean' }; }
   if (command === 'owner' || command === 'inspect') options.contains = { type: 'boolean' };
   if (['inspect','owner','impact','check'].includes(command)) options.transitions = {type:'boolean'};
   if (command === 'inspect') options.explain = {type:'boolean'};
@@ -113,7 +114,7 @@ export function parseCli(args, env = process.env) {
         throw new CliError('USAGE_INVALID', '--target requires --format=embed.');
       }
     }
-    if (['render', 'check', 'diff'].includes(command)) {
+    if (['render', 'check', 'diff', 'compare'].includes(command)) {
       if (!values.impacted && (values.explain !== undefined || values['state-dir'] !== undefined)) throw new CliError('USAGE_INVALID', '--explain and --state-dir require --impacted --base=<rev>.');
       if (values.impacted && (typeof values.base !== 'string' || !values.base.trim())) throw new CliError('USAGE_INVALID', '--impacted requires --base=<rev>.');
       if (command === 'check' && !values.impacted && ['base', 'frame', 'theme', 'state-dir', 'explain'].some(key => values[key] !== undefined)) throw new CliError('USAGE_INVALID', 'Check selection flags require --impacted --base=<rev>.');
@@ -162,7 +163,18 @@ export function parseCli(args, env = process.env) {
         values.line !== undefined && (!/^[1-9]\d*$/.test(values.line) || !Number.isSafeInteger(Number(values.line)))) throw new CliError('USAGE_INVALID', 'Choose one nonempty owner input and compatible options; run adg owner --help.');
     }
     if (command === 'diff' && (typeof values.base !== 'string' || !values.base.trim())) throw new CliError('USAGE_INVALID', 'Set --base to a Git revision; run adg diff --help.');
-    if ((command === 'init' && positionals.length) || (['open', 'migrate'].includes(command) && positionals.length > 1) || (command === 'compare' && (values.all ? positionals.length || values.frame : positionals.length !== 1 || !values.frame))) throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
+    if ((command === 'init' && positionals.length) || (['open', 'migrate'].includes(command) && positionals.length > 1)) throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
+    if (command === 'compare') {
+      const hasSingleOverride = ['fixture', 'region', 'selector', 'page', 'origin', 'viewport', 'click'].some(key => values[key] !== undefined);
+      if (values.all && values.impacted) throw new CliError('USAGE_INVALID', 'Choose --all or --impacted, not both; run adg compare --help');
+      if (values.all) {
+        if (values.frame !== undefined || values.base !== undefined || hasSingleOverride) throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
+      } else if (values.impacted) {
+        if (hasSingleOverride || values.frame === '') throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
+      } else if (positionals.length !== 1 || !values.frame || values.base !== undefined) {
+        throw new CliError('USAGE_INVALID', `Invalid arguments; run adg ${command} --help`);
+      }
+    }
     if (command === 'link' && positionals.length !== 1) throw new CliError('USAGE_INVALID', 'Expected one viewer URL. Run adg link --help.');
     if (command === 'service' && (positionals.length !== 1 || !serviceActions.includes(positionals[0]) || (['port', 'public-origin'].some(name => values[name] !== undefined) && positionals[0] !== 'install'))) throw new CliError('USAGE_INVALID', 'Invalid arguments; run adg service --help');
     if (command === 'skill') {

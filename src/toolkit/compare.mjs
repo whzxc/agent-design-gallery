@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { launch, loadFrame } from './browser.mjs';
@@ -9,6 +9,7 @@ import { buildSource } from './build.mjs';
 import { viewport } from './config.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
 import { commandFailure, cleanup, emptySelection } from './results.mjs';
+import { withImpacted } from './impact-selection.mjs';
 
 export function compareReport(asset, frame, fixture, design, implementation) {
   const { pairs, missing, extra } = matchTexts(design.texts, implementation.texts);
@@ -69,7 +70,7 @@ async function adapterCall(adapter, method, ...args) {
   }
 }
 
-async function compareFrame(config, file, definition, options, data, { launchBrowser, clock, log }) {
+async function compareFrame(config, file, definition, options, data, { ensureBrowser, ensureServer, clock, log }) {
   const adapter = config.compare, frame = definition.name;
   if (!adapter.fixture) throw new CliError('CONFIG_INVALID', 'Compare needs compare.fixture(name); add it to adg.config.mjs');
   if ([options.region,options.selector,options.page].filter(Boolean).length > 1) throw new CliError('USAGE_INVALID', 'Choose --region, --selector or --page');
@@ -77,8 +78,8 @@ async function compareFrame(config, file, definition, options, data, { launchBro
   if (options.region || options.selector || options.page) { delete settings.region; delete settings.selector; delete settings.page; }
   for (const key of ['region','selector','page','origin','viewport']) if (options[key] !== undefined) settings[key] = options[key];
   settings.clicks = options.click ?? settings.clicks ?? [];
-  const browser = await launchBrowser();
-  let stop, primary;
+  const browser = await ensureBrowser();
+  let sheet, app, overlayPage;
   try {
     const fixtureName = options.fixture ?? definition.fixture;
     if (!fixtureName) throw new CliError('CONFIG_INVALID', 'Frame needs a fixture; supply --fixture or Frame fixture');
@@ -90,7 +91,7 @@ async function compareFrame(config, file, definition, options, data, { launchBro
         new Intl.DateTimeFormat('en-US', { timeZone: fixture.timezone });
       } catch { throw new CliError('CONFIG_INVALID', 'compare.fixture timezone must be a valid IANA time zone such as Asia/Shanghai; fix adg.config.mjs'); }
     }
-    const sheet = await browser.newPage({colorScheme:fixture.theme,locale:fixture.locale,timezoneId:fixture.timezone,reducedMotion:'reduce'});
+    sheet = await browser.newPage({colorScheme:fixture.theme,locale:fixture.locale,timezoneId:fixture.timezone,reducedMotion:'reduce'});
     const frameBox = await loadFrame(sheet,definition,fixture.theme);
     let design = await sheet.locator('[data-adg-frame] > :first-child').evaluate(implementationTexts);
     const size = viewport(settings.viewport ?? adapter.viewport);
@@ -101,10 +102,7 @@ async function compareFrame(config, file, definition, options, data, { launchBro
     if (!adapter.start && !absolute) throw new CliError('CONFIG_INVALID', 'Relative fixture URL needs compare.start; add it or return an absolute URL');
     const url = new URL(fixture.url, `http://127.0.0.1:${adapter.port}`).href;
     if (!/^https?:/.test(url)) throw new CliError('CONFIG_INVALID', 'Fixture URL must use HTTP or HTTPS; fix compare.fixture');
-    if (adapter.start) {
-      stop = await adapterCall(adapter, 'start', { port: adapter.port, root: config.root });
-      if (typeof stop !== 'function') throw new CliError('CONFIG_INVALID', 'compare.start must return a stop function; fix adg.config.mjs');
-    }
+    await ensureServer();
     await sheet.emulateMedia({ colorScheme: fixture.theme, reducedMotion: 'reduce' });
     await sheet.evaluate(theme => document.documentElement.setAttribute('data-theme', theme), fixture.theme);
     design = await sheet.locator('[data-adg-frame] > :first-child').evaluate(implementationTexts);
@@ -112,7 +110,7 @@ async function compareFrame(config, file, definition, options, data, { launchBro
     mkdirSync(target, { recursive: true });
     const screenshots = !options['no-screenshots'];
     if (screenshots) await sheet.screenshot({ path: path.join(target, 'design.png'), clip: frameBox });
-    const app = await browser.newPage({ viewport: size, colorScheme: fixture.theme, reducedMotion: 'reduce', locale: fixture.locale, timezoneId: fixture.timezone });
+    app = await browser.newPage({ viewport: size, colorScheme: fixture.theme, reducedMotion: 'reduce', locale: fixture.locale, timezoneId: fixture.timezone });
     for (const pattern of adapter.block ?? []) await app.route(pattern, route => route.abort());
     await app.addInitScript(({ clock, theme }) => {
       const original = Date, fixed = original.parse(clock);
@@ -165,7 +163,8 @@ async function compareFrame(config, file, definition, options, data, { launchBro
       const screenshot = { path: path.join(target, 'implementation.png') };
       if (capture) await app.screenshot({ ...screenshot, clip: capture });
       else await panel.screenshot(screenshot);
-      await overlay(await browser.newPage(), target);
+      overlayPage = await browser.newPage();
+      await overlay(overlayPage, target);
     }
     const report = { ...compareReport(relative(config, file), frame, fixtureName, {...design,box:frameBox}, implementation), settled };
     writeFileSync(path.join(target, 'report.json'), JSON.stringify(report, null, 2) + '\n');
@@ -178,40 +177,61 @@ async function compareFrame(config, file, definition, options, data, { launchBro
     data.summary.offsets += report.offBy2px.length;
     data.summary.missing += report.missing.length;
     data.summary.extra += report.extra.length;
-    if (!data.all) data.indexPath = paths.html;
+    if (!data.all && !options.impacted) data.indexPath = paths.html;
     log(`${relative(config, paths.html)}: matched ${report.matched}, ${report.offBy2px.length} off by >2px, ${report.missing.length} missing, ${report.extra.length} extra.`);
     return {...report, report:path.relative(path.join(config.output,'compare'),paths.html)};
   } catch (cause) {
-    primary = commandFailure(cause, data, [], browser.isConnected() ? 'RENDER_FAILED' : 'BROWSER_FAILED');
-    throw primary;
+    throw commandFailure(cause, data, [], browser.isConnected() ? 'RENDER_FAILED' : 'BROWSER_FAILED');
   } finally {
-    try { await cleanup(() => browser.close(), primary); }
-    catch (cause) { primary = commandFailure(cause, data, []); throw primary; }
-    finally { if (typeof stop === 'function') await cleanup(stop, primary); }
+    await Promise.allSettled([sheet?.close(), app?.close(), overlayPage?.close()]);
   }
 }
 
-export async function compare(config, args = [], options = {}, { launchBrowser = launch, clock, log = console.log } = {}) {
+export async function compare(config, args = [], options = {}, { launchBrowser = launch, clock, log = console.log, session } = {}) {
+  if (options.impacted && !session) return withImpacted(config, args, options, 'compare', selected =>
+    compare(config, args, options, { launchBrowser, clock, log, session: selected }));
   /** @type {import('./results.mjs').CompareData} */
-  const data = {project:config.root, complete:false, all:!!options.all, comparisons:[], skipped:[], summary:{frames:0,matched:0,offsets:0,missing:0,extra:0}, indexPath:null, summaryPath:null};
+  const data = {project:config.root, complete:false, impact:session?.selection ?? null, all:!!options.all, comparisons:[], skipped:[], summary:{frames:0,matched:0,offsets:0,missing:0,extra:0}, indexPath:null, summaryPath:null};
   const warnings = [], reports = [];
+  let browser, stop, started = false, primary;
+  const ensureBrowser = async () => {
+    if (!browser) browser = await launchBrowser();
+    return browser;
+  };
+  const ensureServer = async () => {
+    if (started || !config.compare?.start) return;
+    started = true;
+    stop = await adapterCall(config.compare, 'start', { port: config.compare.port, root: config.root });
+    if (typeof stop !== 'function') throw new CliError('CONFIG_INVALID', 'compare.start must return a stop function; fix adg.config.mjs');
+  };
   try {
-    const files = selectSources(config, args);
+    const batch = !!options.all || !!session;
+    const activeFrames = session
+      ? new Set(session.chosen.filter(row => row.after && session.themes.some(theme => session.scheduled(row, theme))).map(row => JSON.stringify([row.source, row.frame])))
+      : null;
+    const files = session
+      ? session.sources.filter(source => !source.endsWith('.mmd')).map(source => path.join(config.root, source)).filter(existsSync)
+      : selectSources(config, args);
     for (const file of files) {
-      const built = await buildSource(config,file,{allowLegacy:false});
-      const frames = options.all ? built.frames : built.frames.filter(frame => frame.name === options.frame);
-      if (!options.all && !frames.length) throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${options.frame}; choose a declared frame`);
+      const sourceRel = relative(config, file);
+      const built = session?.views[1].built.get(sourceRel) ?? await buildSource(config, file, { allowLegacy: false });
+      const frames = options.frame !== undefined
+        ? built.frames.filter(frame => frame.name === options.frame)
+        : built.frames;
+      if (!batch && !frames.length) throw new CliError('FRAME_NOT_FOUND', `Unknown frame ${options.frame}; choose a declared frame`);
       for (const frame of frames) {
-        if (options.all && !frame.fixture) {
-          data.skipped.push({source:relative(config,file),frame:frame.name,reason:'no_fixture'});
-          if (!warnings.length) warnings.push({code:'COMPARE_FRAMES_SKIPPED',message:'Frames without fixtures were skipped.',next:[]});
+        if (activeFrames && !activeFrames.has(JSON.stringify([sourceRel, frame.name]))) continue;
+        if (batch && !frame.fixture) {
+          data.skipped.push({source:sourceRel,frame:frame.name,reason:'no_fixture'});
+          if (!warnings.some(warning => warning.code === 'COMPARE_FRAMES_SKIPPED')) warnings.push({code:'COMPARE_FRAMES_SKIPPED',message:'Frames without fixtures were skipped.',next:[]});
           continue;
         }
-        reports.push(await compareFrame(config,file,frame,options.all ? {frame:frame.name, 'no-screenshots':options['no-screenshots']} : options,data,{launchBrowser,clock,log}));
+        const frameOptions = batch ? { frame: frame.name, 'no-screenshots': options['no-screenshots'] } : options;
+        reports.push(await compareFrame(config,file,frame,frameOptions,data,{ensureBrowser,ensureServer,clock,log}));
         if (!data.comparisons.at(-1).settled) throw new CliError('COMPARE_UNSETTLED', 'Comparison text boxes did not settle within 5 seconds.', {humanReported:true});
       }
     }
-    if (options.all) {
+    if (options.all || (options.impacted && reports.length)) {
       const target=path.join(config.output,'compare'); mkdirSync(target,{recursive:true});
       writeFileSync(path.join(target,'summary.json'),JSON.stringify(reports,null,2)+'\n');
       data.summaryPath = path.join(target,'summary.json');
@@ -222,5 +242,12 @@ export async function compare(config, args = [], options = {}, { launchBrowser =
     data.complete = true;
     if (data.summary.offsets || data.summary.missing || data.summary.extra) throw new CliError('COMPARE_FAILED', 'Comparison found text or position differences.', {data,warnings,humanReported:true});
     return {data,warnings};
-  } catch (cause) { throw commandFailure(cause,data,warnings); }
+  } catch (cause) {
+    primary = commandFailure(cause, data, warnings);
+    throw primary;
+  } finally {
+    try { if (browser) await cleanup(() => browser.close(), primary); }
+    catch (cause) { primary = commandFailure(cause, data, warnings); throw primary; }
+    finally { if (typeof stop === 'function') await cleanup(stop, primary); }
+  }
 }

@@ -151,7 +151,7 @@ function createKitProject(t, { strictMotion = false, withView = true } = {}) {
 };
 `,
     'design/tokens.css': kitTokens(),
-    'frontend/styles/kit.css': `@import "tailwindcss";\n@layer base { * { border-color: var(--border); } }\n`,
+    'frontend/styles/kit.css': `@import "tailwindcss";\n@theme inline {\n  --color-canvas: var(--canvas);\n  --color-text: var(--text);\n  --color-surface: var(--surface);\n  --color-border: var(--border);\n  --color-ring: var(--ring);\n  --color-primary: var(--primary);\n}\n@layer base { * { border-color: var(--border); } }\n`,
     'frontend/components/ui/button.tsx': `import { MockPrimitive } from 'mock-kit';
 export function Button({ label, children, onClick }: { label?: string; children?: any; onClick?: () => void }) {
   return (
@@ -339,6 +339,28 @@ export function OverviewView({ heading }: { heading: string }) {
   assert.match(joined, /Color rgb\(255, 1, 1\) matches no token/);
   assert.match(joined, /Declare the motion on a frame edge/);
 
+  // KIT_THEME_UNMAPPED fails when kit.css omits a color token mapping and passes via local @import
+  writeFiles(root, {
+    'frontend/views/OverviewView.tsx': `import { Button } from '@/components/ui/button';\nimport { Card } from '@/components/ui/card';\nexport function OverviewView({ heading }: { heading: string }) { return <Card title={heading}><Button label="Sync" /></Card>; }\n`,
+    'frontend/styles/kit.css': `@import "tailwindcss";\n@theme inline { --color-canvas: var(--canvas); --color-text: var(--text); }\n`,
+  });
+  await assert.rejects(
+    check(config, ['surfaces/overview.tsx'], { 'read-only': true }, () => {}, () => {}),
+    err => err.code === 'CHECK_FAILED' && err.data.findings.some(f => f.code === 'KIT_THEME_UNMAPPED' && f.message.includes('--color-primary'))
+  );
+  writeFiles(root, {
+    'frontend/styles/theme-map.css': `@theme inline {\n  --color-canvas: var(--canvas);\n  --color-text: var(--text);\n  --color-surface: var(--surface);\n  --color-border: var(--border);\n  --color-ring: var(--ring);\n  --color-primary: var(--primary);\n}\n`,
+    'frontend/styles/kit.css': `@import "tailwindcss";\n`,
+  });
+  const splitConfig = { ...config, kit: { ...config.kit, css: ['frontend/styles/theme-map.css', 'frontend/styles/kit.css'] } };
+  const mappedRes = await check(splitConfig, ['surfaces/overview.tsx'], { 'read-only': true }, () => {}, () => {});
+  assert.equal(mappedRes.data.findings.length, 0);
+  writeFiles(root, {
+    'frontend/styles/kit.css': `.btn { border-color: var(--border); }\n`,
+  });
+  const plainCssRes = await check(config, ['surfaces/overview.tsx'], { 'read-only': true }, () => {}, () => {});
+  assert.equal(plainCssRes.data.findings.length, 0);
+
   // Unlisted npm package & escaping root imports are rejected
   writeFiles(root, {
     'outside-secret.ts': `export const secret = 1;\n`,
@@ -415,7 +437,7 @@ export function OverviewView({ heading }: { heading: string }) {
   for (let i = 0; i < 40; i++) {
     await new Promise(r => setTimeout(r, 100));
     const current = await fetch(`${server.url}asset/surfaces/home.tsx`).then(r => r.json());
-    if (current.hash !== beforeAsset.hash) {
+    if (!current.error && current.hash && current.hash !== beforeAsset.hash && Array.isArray(current.frames)) {
       afterAsset = current;
       break;
     }

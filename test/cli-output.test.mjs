@@ -192,6 +192,13 @@ test('recovery actions preserve scope, separators, subcommands, state and cause-
   assert.deepEqual(parsed.positionals, selection.positionals);
   assert.deepEqual({ ...parsed.values }, { ...selection.values, json: true });
   assert.equal(parseAction(nextActions('COMPARE_FAILED', { command: 'compare', values: { all: true } })[0]).values.all, true);
+  assert.deepEqual(nextActions('COMPARE_FAILED', { command: 'compare', positionals: ['surfaces/demo'], values: { all: true } })[0].argv, ['adg', 'compare', '--all', '--json', '--', 'surfaces/demo']);
+  const impactedCompare = nextActions('COMPARE_FAILED', { command: 'compare', positionals: ['surfaces/demo'], values: { impacted: true, base: 'HEAD', 'no-screenshots': true } })[0].argv;
+  assert.deepEqual(impactedCompare, ['adg', 'compare', '--impacted', '--base=HEAD', '--no-screenshots', '--json', '--', 'surfaces/demo']);
+  assert.equal(parseCli(impactedCompare.slice(1)).values.impacted, true);
+  assert.equal(parseCli(['compare', 'surfaces/demo', '--all']).values.all, true);
+  assert.throws(() => parseCli(['compare', '--all', '--impacted', '--base=HEAD']), { code: 'USAGE_INVALID' });
+  assert.throws(() => parseCli(['compare', '--impacted']), { code: 'USAGE_INVALID' });
   assert.deepEqual(parseAction(nextActions('CHECK_FAILED', { command: 'check', positionals: ['--literal-source'] })[0]).positionals, ['--literal-source']);
 });
 

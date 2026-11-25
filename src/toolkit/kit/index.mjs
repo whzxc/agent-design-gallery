@@ -11,6 +11,7 @@ export {
   isKitUiFile,
   matchesAllowedPackage,
   kitWatchDirectories,
+  kitThemeTokenFindings,
 } from './config.mjs';
 
 const ADAPTERS = {
