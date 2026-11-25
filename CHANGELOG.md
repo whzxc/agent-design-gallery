@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.17.17
+
+- Add opt-in component-library `kit` mode (`design/kit/`) with React SSR rendering, shared `kit.ui` primitives, and kit theme-token checks.
+- Reuse a single browser and dev server across `adg compare` frames, scope `[source] --all`, and add `adg compare --impacted --base=<rev>`.
+- Shrink offline review HTML and embed outputs with cascade-preserving CSS rule deduplication, shared `@font-face` hoisting without unnecessary nested iframes, lossless 4-bit indexed difference PNGs, and `adg review --no-difference` for code-only Before/After previews.
+- Serve project review HTML over direct-local HTTP on the resident hub (`/p/<slug>/review.html`, `/p/<slug>/review-embed.html`, `/p/<slug>/review/<name>.html`) with key auth on forwarded access, and return `data.localUrl` from `adg review --json`.
+- Refine standalone review presentation with single-line collapsible `+N` inherited cause headers, title-first frame headings, semantic section heading colors, and flattened single-border cards.
+
 ## 0.17.16
 
 - Bundle agent-first skills (`adg-setup`, `adg-design`) covering greenfield and existing-codebase onboarding, layer splitting, targeted design proposals, board comment iteration, and design-to-code implementation.
