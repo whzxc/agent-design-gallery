@@ -26,6 +26,7 @@ function frameStructure(frame) {
     .replace(/>[^<]*</g, '><')
     .replace(/\s(?:aria-label|aria-description|title|placeholder|value)="[^"]*"/g, '')
     .replace(/\sdata-adg-keys="[^"]*"/g, '')
+    .replace(/\sdata-adg-kit(?:="[^"]*")?/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -37,7 +38,8 @@ function frameOwnsPart(frame, source, part) {
 function proposedFrame(source, frame) {
   return frame.proposed ? { source, frame: frame.name, scope: frame.proposed } : null;
 }
-export const inspectFrame = withPaintOcclusion(function inspectFrame(paintOcclusion, tokenNames) {
+export const inspectFrame = withPaintOcclusion(function inspectFrame(paintOcclusion, input) {
+  const { tokenNames = [], kit = false } = Array.isArray(input) ? { tokenNames: input, kit: false } : (input ?? {});
   const frame = document.querySelector('[data-adg-frame]'), box = frame.getBoundingClientRect(), problems = new Map();
   const add = (code, message) => problems.set(message, {code, message, line:null, column:null});
   if (frame.children.length !== 1 || [...frame.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) add('FRAME_ROOT_INVALID', 'Frame needs exactly one root element');
@@ -91,7 +93,8 @@ export const inspectFrame = withPaintOcclusion(function inspectFrame(paintOcclus
     const s = style(el), r = rectFor(el);
     if (['STYLE','SCRIPT'].includes(el.tagName.toUpperCase())) add('MARKUP_FORBIDDEN', `Forbidden <${el.tagName.toLowerCase()}> in output`);
     for (const attr of el.attributes) if (/^on/i.test(attr.name) || attr.name === 'classname') add('MARKUP_FORBIDDEN', `Forbidden attribute ${attr.name} in output`);
-    if (!el.closest('[data-free]')) {
+    const isKitEl = kit && el.hasAttribute('data-adg-kit');
+    if (!el.closest('[data-free]') && !isKitEl) {
       const authored = (el.getAttribute('class') ?? '') + ' ' + (el.getAttribute('style') ?? '');
       if ([...authored.matchAll(/(-?(?:\d*\.)?\d+)px\b/g)].some(m => !Number.isInteger(Number(m[1])))) add('FRACTIONAL_LENGTH', 'Fractional pixel length outside data-free');
       for (const [,property] of (el.getAttribute('style') ?? '').matchAll(/(?:^|;)\s*([-\w]+)\s*:/g)) if (!['width','height'].includes(property) && !property.startsWith('--')) add('STYLE_FORBIDDEN', `Style ${property} outside data-free; use layout classes`);
@@ -105,16 +108,20 @@ export const inspectFrame = withPaintOcclusion(function inspectFrame(paintOcclus
       for (const side of ['Top','Right','Bottom','Left']) if (parseFloat(s[`border${side}Width`]) > 0) paints.push(s[`border${side}Color`]);
       if (s.outlineStyle !== 'none') paints.push(s.outlineColor);
       if (el instanceof SVGElement && /^(path|rect|circle|ellipse|polygon|polyline|line|text)$/.test(el.localName)) paints.push(s.fill, s.stroke);
-      paints.push(...((s.boxShadow+' '+s.textShadow+' '+s.backgroundImage).match(/(?:rgba?|hsla?|oklch|oklab|color)\([^)]*\)/g) ?? []));
-      for (const value of paints) {
-        if (!value || value === 'none' || value.startsWith('url(')) continue;
+      paints.push(...(s.backgroundImage.match(/(?:rgba?|hsla?|oklch|oklab|color)\([^)]*\)/g) ?? []));
+      const shadowPaints = (s.boxShadow+' '+s.textShadow).match(/(?:rgba?|hsla?|oklch|oklab|color)\([^)]*\)/g) ?? [];
+      const checkPaint = (value, isShadow) => {
+        if (!value || value === 'none' || value.startsWith('url(')) return;
         const paint = normalize(value), alpha = paint[3];
-        if (alpha === 0) continue;
+        if (alpha === 0) return;
+        if (kit && isShadow && alpha < 1 && ((paint[0] <= 2 && paint[1] <= 2 && paint[2] <= 2) || (paint[0] >= 253 && paint[1] >= 253 && paint[2] >= 253))) return;
         const matches = colors.some(color => alpha < 1
           ? paint.slice(0, 3).every((channel, i) => Math.abs(channel - color[i]) <= 2)
           : paint.every((channel, i) => channel === color[i]));
         if (!matches) add('TOKEN_COLOR_MISMATCH', `Color ${value} matches no token`);
-      }
+      };
+      for (const value of paints) checkPaint(value, false);
+      for (const value of shadowPaints) checkPaint(value, true);
     }
     for (const node of el.childNodes) {
       if (node.nodeType !== 3 || !node.textContent.trim()) continue;
@@ -267,7 +274,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
         if (session && options.frame && frame.name !== options.frame) continue;
         const lintMotion = !session || session.assessments.get(JSON.stringify([relative(config,file),frame.name,theme]))?.candidate ||
           session.views[0].config.check?.strictMotion !== config.check?.strictMotion || !session.views[0].tokenBytes.equals(session.views[1].tokenBytes);
-        if (!architecture && lintMotion) for (const message of sourceMotion(built,frame,tokens,theme)) {
+        if (!architecture && lintMotion) for (const message of sourceMotion(built,frame,tokens,theme,{skipKit:!!config.kit})) {
           const key=JSON.stringify([file,frame.name,message]);
           if(cssFindings.has(key))cssFindings.get(key).theme=null;
           else cssFindings.set(key,{code:'MOTION_SOURCE_CSS',source:relative(config,file),frame:frame.name,theme,message,line:null,column:null,warning:!config.check?.strictMotion});
@@ -277,7 +284,7 @@ export async function check(config, args = [], options = {}, log = console.log, 
         try {
           page ??= await browserTask(browser, () => browser.newPage());
           await loadFrame(page, frame, theme);
-          const findings = await browserTask(browser, () => page.evaluate(architecture ? arch.inspectArchLabels : inspectFrame, architecture ? undefined : [...tokens.light.keys()]));
+          const findings = await browserTask(browser, () => page.evaluate(architecture ? arch.inspectArchLabels : inspectFrame, architecture ? undefined : (config.kit ? { tokenNames: [...tokens.light.keys()], kit: true } : [...tokens.light.keys()])));
           for (const finding of findings) add(finding, file, frame.name, theme);
           data.summary.evaluations++;
         } catch (cause) {

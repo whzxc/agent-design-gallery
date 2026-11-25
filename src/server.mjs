@@ -27,6 +27,7 @@ import { cleanup } from './toolkit/results.mjs';
 import { createViewerCache } from './viewer-cache.mjs';
 import { refreshTypes, archFiles, isSourcePath, readGroups, sourceDirectories, isFeatureInternal } from './toolkit/project.mjs';
 import { loadConfig } from './toolkit/config.mjs';
+import { kitWatchDirectories } from './toolkit/kit/config.mjs';
 import { parseTokens } from './toolkit/tokens.mjs';
 import { tokenBoard } from './boards/token-board.mjs';
 import { loadMotionPatterns, motionPatternFile } from './toolkit/motion-patterns.mjs';
@@ -68,6 +69,7 @@ export async function startServer({
     files = new Map(),
     groups = [],
     watcher, archWatcher, activeProject,
+    kitWatchers = [],
     refreshTimer,
     revision = 0,
     closing = false,
@@ -296,6 +298,27 @@ export async function startServer({
     });
     archWatcher.on('error',e=>watcherError(e,'Architecture'));
   }
+  function watchKit(project, base) {
+    for (const entry of kitWatchers) entry.close();
+    kitWatchers = [];
+    if (project.design !== base || !project.kit) return;
+    for (const directory of kitWatchDirectories(project)) {
+      const entry = watchDirectory(directory, { recursive: true }, (_event, filename) => {
+        if (!filename) return;
+        const text = String(filename);
+        if (text.split(path.sep).some(part => part.startsWith('.') || part === 'node_modules')) return;
+        if (!/\.(?:[cm]?[jt]sx?|css|json|svg|png|jpe?g|webp|vue)$/i.test(text)) return;
+        const file = path.join(directory, text);
+        const dependency = path.relative(base, file).split(path.sep).join('/');
+        const name = path.relative(project.root, file).split(path.sep).join('/');
+        touched.add(dependency); touched.add(name);
+        invalidateBuilds([dependency, name]).catch(refreshError);
+        clearTimeout(refreshTimer); refreshTimer = setTimeout(() => refresh().catch(refreshError), 80);
+      });
+      entry.on('error', e => watcherError(e, 'Kit'));
+      kitWatchers.push(entry);
+    }
+  }
   async function openDirectory(input) {
     let next;
     try { next = await realpath(path.resolve(input.replace(/^~(?=$|[\\/])/, os.homedir()))); }
@@ -306,8 +329,8 @@ export async function startServer({
     if (!(await stat(next)).isDirectory())
       throw new CliError('DIRECTORY_NOT_FOUND', "Choose a directory containing SVG files.");
     const hasTokens = (await readdir(next)).includes(tokenFile);
-    if (hasTokens && !readOnly) refreshTypes({design:next});
     const project = await loadConfig(next);
+    if (hasTokens && !readOnly) refreshTypes(project.design === next ? project : { design: next });
     const nextSources = project.design === next ? project.sources : sourceDirectories({design:next});
     const cacheDirectory = path.join(stateDirectory, 'cache');
     await mkdir(cacheDirectory, { recursive: true });
@@ -347,7 +370,7 @@ export async function startServer({
     for (const controller of recentJobs.keys()) controller.abort();
     recentPages.clear();
     historyRepository = null;
-    activeProject=project;watchArch(project,next);
+    activeProject=project;watchArch(project,next);watchKit(project,next);
     root = next;
     motionOwners.clear(); motionFrames=motionEdges=undefined; await indexMotion(project, next, sidecars, sidecars, true);
     commentsFile = await commentFile(project.root, commentStateDirectory);
@@ -405,7 +428,8 @@ export async function startServer({
       }
       const stamps=[...new Set([...files.keys(),...next.keys()])].filter(name=>files.get(name)?.stamp!==next.get(name)?.stamp);
       const grouping=JSON.stringify(groups)!==JSON.stringify(nextGroups);
-      const configChanged=JSON.stringify(sources)!==JSON.stringify(nextSources)||activeProject.arch!==project.arch;
+      const kitChanged=JSON.stringify(activeProject.kit??null)!==JSON.stringify(project.kit??null);
+      const configChanged=JSON.stringify(sources)!==JSON.stringify(nextSources)||activeProject.arch!==project.arch||kitChanged;
       const structural=configChanged || [...new Set([...codePaths,...nextCode])].some(name=>codePaths.has(name)!==nextCode.has(name));
       if(structural){await closeOverlays();await buildStore.close();buildStore=await createBuildStore({config:{...project,design:base,sources:nextSources,sourceFiles:[...nextCode].sort()},cacheDirectory:path.join(stateDirectory,'cache',digest(base),'build')});}
       const observedPaths=[...new Set([...observed,...stamps])];
@@ -436,6 +460,7 @@ export async function startServer({
         }
       }
       if(activeProject.arch!==project.arch)watchArch(project,base);
+      if(kitChanged)watchKit(project,base);
       activeProject=project;
       files = next;
       tokenSource = nextTokenSource;
@@ -929,6 +954,7 @@ export async function startServer({
     for (const step of [
       async () => { watcher?.close(); },
       async () => { archWatcher?.close(); },
+      async () => { for (const entry of kitWatchers) entry.close(); kitWatchers = []; },
       async () => {
         for (const client of clients) client.end();
         const disconnected = server.listening ? new Promise(resolve => server.close(resolve)) : Promise.resolve();

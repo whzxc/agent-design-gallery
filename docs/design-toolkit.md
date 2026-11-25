@@ -89,9 +89,39 @@ export default () => [
 ];
 ```
 
-The specifier `adg` resolves to the installed toolkit's runtime. Relative imports resolve within `design/`. Importing an `.svg` file under `design/` yields a component that inlines the drawing and passes its props to the drawing's root; importing a PNG, JPEG or WebP file yields a data URL. `import url from './x.svg?url'` yields a data URL for any file under `design/art/`, preserving self-contained artwork as an image. Packages from npm are not available to sources.
+The specifier `adg` resolves to the installed toolkit's runtime. Relative imports resolve within `design/` unless a [`kit` adapter](#component-library-kits) expands resolution to configured project roots. Importing an `.svg` file under `design/` yields a component that inlines the drawing and passes its props to the drawing's root; importing a PNG, JPEG or WebP file yields a data URL. `import url from './x.svg?url'` yields a data URL for any file under `design/art/`, preserving self-contained artwork as an image. In default projects without `kit`, npm packages are unavailable to sources.
 
 Reuse components and pass parameters instead of copying markup between sources. Generate repeated geometry with ordinary functions and loops in the source.
+
+### Component-library kits
+
+Regular UI projects can configure an optional `kit` block in `adg.config.mjs` so `design/` shares UI primitives and stateless presentational views directly with the application instead of duplicating markup. Projects without `kit` keep ADG's default zero-dependency string-JSX workflow unchanged.
+
+```js
+export default {
+  requires: '>=0.17.16',
+  design: 'design',
+  output: 'output/design',
+  kit: {
+    engine: 'react',
+    paths: { '@/': 'frontend/' },
+    roots: ['frontend/components/ui', 'frontend/views'],
+    ui: ['frontend/components/ui'],
+    packages: ['@base-ui/react', 'class-variance-authority', 'clsx', 'tailwind-merge', 'lucide-react'],
+    css: ['frontend/styles/kit.css'],
+    tokens: 'tailwind-kit',
+  },
+};
+```
+
+- `engine`: `'react'` is supported now (`'vue'` is reserved for a future adapter on the same contract and currently raises `CONFIG_INVALID`).
+- `paths`: project-root-relative TypeScript/bundler alias map (for example `{ '@/': 'frontend/' }`).
+- `roots` and `ui`: project-root-relative directories readable from `design/` (`kit.ui` identifies pure UI kit primitives).
+- `packages`: allowlisted bare npm packages resolved from the consumer's `node_modules` alongside the engine runtime (`react`, `react-dom/server`). Transitive imports inside `node_modules` resolve normally; unlisted direct imports are rejected.
+- `css`: optional project-root-relative stylesheets compiled alongside `design/tokens.css`.
+- `tokens`: `'tailwind-kit'` (default when `kit` is enabled) preserves Tailwind v4 default structural scales (`--color-black`, `--color-white`, radii, spacing, shadows) while overlaying `design/tokens.css`; `'strict'` strips Tailwind defaults as in non-kit projects.
+
+In `react` mode, `adg` compiles sources with automatic React JSX and renders each `<Frame>` to script-free static HTML using `react-dom/server` (`renderToStaticMarkup`), refreshing `.adg/runtime.d.ts` without global intrinsic tag overrides. Elements authored inside `kit.ui` or `node_modules` receive `data-adg-kit`, exempting internal UI-primitive CSS transitions, headless inline styles, fractional lengths and translucent black/white optical drop shadows while keeping full `check` enforcement (tokens, layout geometry, overflow, overlap and strict motion) active for product views and design surfaces. `kit.ui` directories are excluded from `MOTION_UNMAPPED` inventory noise unless explicitly mapped.
 
 ### Frame
 

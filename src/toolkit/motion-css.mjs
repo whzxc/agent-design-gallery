@@ -58,7 +58,7 @@ function split(value, separator) {
   return parts.map((p) => p.trim()).filter(Boolean);
 }
 
-export function sourceMotion(built, frame, tokens, theme) {
+export function sourceMotion(built, frame, tokens, theme, { skipKit = false } = {}) {
   // Most frames have no authored motion. Do not parse the large generated preflight for them.
   if (!/(?:animat|transition|duration|delay|ease|timing-function)/i.test(frame.html)) return [];
   const rules = utilities(built),
@@ -92,7 +92,8 @@ export function sourceMotion(built, frame, tokens, theme) {
     }
   }
   function visit(node) {
-    for (const { name, value } of node.attrs ?? []) {
+    const isKitNode = skipKit && node.attrs?.some(attr => attr.name === 'data-adg-kit');
+    if (!isKitNode) for (const { name, value } of node.attrs ?? []) {
       if (name === 'class')
         for (const cls of value.split(/\s+/)) for (const [prop, v] of rules.get(cls) ?? []) check(prop, v, cls, true);
       if (name === 'style' && /(?:transition|animat|--tw-(?:duration|ease))/i.test(value))

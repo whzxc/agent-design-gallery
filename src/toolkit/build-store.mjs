@@ -6,6 +6,7 @@ import { mkdir, readFile, writeFile, rename, readdir, stat, unlink, realpath } f
 import path from 'node:path';
 import { perfSpan } from '../perf.mjs';
 import { CliError, errorCatalog } from '../cli-output.mjs';
+import { kitFingerprintFiles } from './kit/index.mjs';
 
 const digest = value => createHash('sha256').update(value).digest('hex');
 const aborted = () => Object.assign(new Error('Build superseded'), { name: 'AbortError' });
@@ -110,14 +111,15 @@ export class BuildPool {
 
 export async function createBuildStore({ config, cacheDirectory }) {
   const design = await realpath(config.design);
-  const workerConfig = { root: await realpath(config.root), design, output: config.output, sources: config.sources, arch:config.arch, check:config.check, ...(config.overlay?{overlay:config.overlay}:{}) };
+  const workerConfig = { root: await realpath(config.root), design, output: config.output, sources: config.sources, arch:config.arch, check:config.check, ...(config.kit?{kit:config.kit}:{}), ...(config.overlay?{overlay:config.overlay}:{}) };
   const require = createRequire(import.meta.url);
   const fingerprint = digest(Buffer.concat(await Promise.all([
     ...['../../package.json', './build.mjs', './frame-document.mjs', './html.mjs', './runtime.mjs', './tokens.mjs', './text.mjs', './project.mjs', './build-worker.mjs', './build-store.mjs', './arch.mjs', './arch-browser.mjs', './browser.mjs'].map(file => new URL(file, import.meta.url)),
+    ...kitFingerprintFiles(),
     ...(config.overlay?['./arch-overlay.mjs','./arch-git.mjs'].map(file=>new URL(file,import.meta.url)):[]),
     require.resolve('esbuild/package.json'), require.resolve('tailwindcss/package.json'),
   ].map(file => readFile(file)))));
-  const namespace = digest(JSON.stringify({ fingerprint, design, ...(config.overlay?{overlay:config.overlay}:{}), arch:config.arch, check:config.check, sources: config.sources, sourceFiles: config.sourceFiles }));
+  const namespace = digest(JSON.stringify({ fingerprint, design, ...(config.kit?{kit:config.kit}:{}), ...(config.overlay?{overlay:config.overlay}:{}), arch:config.arch, check:config.check, sources: config.sources, sourceFiles: config.sourceFiles }));
   const directory = cacheDirectory, indexPath = path.join(directory, 'index.json');
   await mkdir(directory, { recursive: true });
   const pool = new BuildPool(), entries = new Map(), reverse = new Map(), pending = new Map(), generations = new Map(), memory = new Map();
@@ -147,7 +149,7 @@ export async function createBuildStore({ config, cacheDirectory }) {
   };
   async function hashesFor(dependencies, cache = new Map()) {
     try { return Object.fromEntries(await Promise.all(dependencies.map(async name => {
-      if (!cache.has(name)) cache.set(name, readFile(path.join(config.design, name)).then(bytes=>digest(Buffer.concat([Buffer.from('present\0'),bytes]))).catch(error=>{if(error.code==='ENOENT'&&name.endsWith('.md'))return digest('missing\0');throw error;}));
+      if (!cache.has(name)) cache.set(name, readFile(path.resolve(config.design, name)).then(bytes=>digest(Buffer.concat([Buffer.from('present\0'),bytes]))).catch(error=>{if(error.code==='ENOENT'&&name.endsWith('.md'))return digest('missing\0');throw error;}));
       return [name, await cache.get(name)];
     }))); }
     catch (error) { if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return null; throw error; }

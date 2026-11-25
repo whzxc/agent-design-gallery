@@ -32,15 +32,17 @@ export function parseTokens(css) {
 }
 
 const namedColors = new Set(('aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato transparent turquoise violet wheat white whitesmoke yellow yellowgreen').split(' '));
-export function themeCss(tokens) {
+export function themeCss(tokens, { mode = 'strict' } = {}) {
   const color = (value, seen = new Set()) => {
     const alias = /^var\((--[\w-]+)\)$/.exec(value);
     if (alias) { if (seen.has(alias[1])) return false; seen.add(alias[1]); return color(tokens.light.get(alias[1]) ?? '', seen); }
-    return namedColors.has(value.toLowerCase()) || /^(#|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|color\(|color-mix\(|(?:transparent|black|white|red|blue|green|rebeccapurple|orange|purple|pink|gray|grey|yellow|cyan|magenta|currentColor)$)/i.test(value);
+    return namedColors.has(value.toLowerCase()) || /^(#|rgba?\(|hsla?\(|oklch\(|oklab\(|lab\(|lch\(|color\(|color-mix\(|light-dark\(|--alpha\(|(?:transparent|black|white|red|blue|green|rebeccapurple|orange|purple|pink|gray|grey|yellow|cyan|magenta|currentColor)$)/i.test(value);
   };
   const declarations = [...tokens.light].flatMap(([key, value]) => {
     const theme = color(value) ? '--color-' + key.slice(2) : /^(--font-|--radius-|--shadow-)/.test(key) || (key.startsWith('--text-') && /^[-.\d]+(?:px|rem|em|ch)$/.test(value)) ? key : null;
     return theme ? [`${theme}:var(${key});`] : [];
   });
-  return `@theme { --color-*:initial; --text-*:initial; --font-*:initial; --radius-*:initial; --shadow-*:initial; --inset-shadow-*:initial; --drop-shadow-*:initial; --text-shadow-*:initial; }\n@theme inline reference { ${declarations.join('\n')} }`;
+  const directive = `@theme inline reference { ${declarations.join('\n')} }`;
+  if (mode === 'tailwind-kit') return directive;
+  return `@theme { --color-*:initial; --text-*:initial; --font-*:initial; --radius-*:initial; --shadow-*:initial; --inset-shadow-*:initial; --drop-shadow-*:initial; --text-shadow-*:initial; }\n${directive}`;
 }

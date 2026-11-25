@@ -8,8 +8,10 @@ import { loadTokens, refreshTypes, rejectLegacy, relative, isSourcePath, sourceD
 import { themeCss, parseTokens } from './tokens.mjs';
 import { motionPrimitives, motionTokenCss } from './motion-primitives.mjs';
 import { componentOwner } from './runtime.mjs';
+import { decodeHTML } from 'entities';
 import { CliError, classifyError } from '../cli-output.mjs';
 import { frameDocument } from './frame-document.mjs';
+import { getKitAdapter } from './kit/index.mjs';
 const require = createRequire(import.meta.url);
 const runtime = fileURLToPath(new URL('./runtime.mjs', import.meta.url));
 const tailwind = path.dirname(require.resolve('tailwindcss/package.json'));
@@ -105,7 +107,27 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
   file = files ? path.resolve(file) : realpathSync(file);
   const base = files ? path.resolve(config.design) : realpathSync(config.design), dependencies = new Set();
   const imports = new Set(), sources = sourceDirectories(config);
-  const result = await build({ entryPoints: [file], bundle: true, write: false, format: 'esm', platform: 'node', jsx: 'automatic', jsxImportSource: 'adg', jsxDev: true, metafile: true, logLevel: 'silent', plugins: [{ name: 'adg-sources', setup(api) {
+  const adapter = getKitAdapter(config);
+  const extraCss = [];
+  let kitContext = null;
+  let buildPlugins;
+  let esbuildJsxOptions = { jsx: 'automatic', jsxImportSource: 'adg', jsxDev: true };
+  if (adapter) {
+    const physicalRoot = files ? path.resolve(config.root) : realpathSync(config.root);
+    for (const cssRel of config.kit.css ?? []) {
+      const candidate = path.resolve(physicalRoot, cssRel);
+      const resolvedCss = files ? candidate : realpathSync(candidate);
+      dependencies.add(resolvedCss);
+      extraCss.push(await read(resolvedCss, 'utf8'));
+    }
+    kitContext = await adapter.createBuildContext({
+      config, file, base, physicalRoot, files, snapshot, read,
+      dependencies, imports, sources, allowLegacy, extraCss, registeredSource,
+    });
+    buildPlugins = [kitContext.plugin];
+    esbuildJsxOptions = adapter.esbuildOptions();
+  } else {
+    buildPlugins = [{ name: 'adg-sources', setup(api) {
     api.onResolve({ filter: /.*/ }, args => {
       if (args.path === 'adg:self') return {path:args.importer};
       if (args.path.startsWith('adg:art-bytes:')) return {path:args.path.slice('adg:art-bytes:'.length),namespace:'art-bytes'};
@@ -145,7 +167,9 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
       if (forbidden) { const before=source.slice(0,forbidden.index); return {errors:[{text:'Forbidden SVG markup; remove styles, scripts and event attributes',location:{file:args.path,line:before.split('\n').length,column:before.length-before.lastIndexOf('\n')-1}}]}; }
       return { contents: `import { artwork } from 'adg'; export default props => artwork(${JSON.stringify(source)}, props, ${JSON.stringify(path.relative(base,args.path).split(path.sep).join('/'))});`, loader:'js' };
     });
-  } }] }).catch(error => {
+  } }];
+  }
+  const result = await build({ entryPoints: [file], bundle: true, write: false, format: 'esm', platform: 'node', ...esbuildJsxOptions, metafile: true, logLevel: 'silent', plugins: buildPlugins }).catch(error => {
     const typed = error.errors?.find(item => item.detail instanceof CliError)?.detail;
     if (!typed) throw error;
     // Retain esbuild's human diagnostics and details while carrying the owning boundary's code.
@@ -167,8 +191,14 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
     return { frames: [], parts, dependencies: [...dependencies], imports: [...imports].sort(), css: '', tokenCss: '', cssWithoutTokens: '', cssBeforeTokens: '', cssAfterTokens: '' };
   }
   if (typeof mod.default !== 'function') throw Error(`${relative(config,file)}: export a default function returning Frames`);
-  const value = mod.default(), frames = (Array.isArray(value) ? value.flat(Infinity) : [value]).filter(v => v != null && v !== false);
-  if (!frames.length) throw Error(`${relative(config,file)}: default export must return at least one Frame`);
+  const frames = adapter
+    ? await adapter.renderFrames(mod, kitContext, { relativeFile: relative(config, file), framesOnly })
+    : (() => {
+        const value = mod.default();
+        const items = (Array.isArray(value) ? value.flat(Infinity) : [value]).filter(v => v != null && v !== false);
+        if (!items.length) throw Error(`${relative(config,file)}: default export must return at least one Frame`);
+        return items;
+      })();
   const names = new Set();
   for (const frame of frames) {
     try { validateFrame(frame); if (names.has(frame.name)) throw Error(`Duplicate frame name ${frame.name}`); names.add(frame.name); }
@@ -178,8 +208,9 @@ async function buildDesignSource(config, file, { write = true, allowLegacy = tru
   const tokenFile = path.join(base, 'tokens.css');
   dependencies.add(tokenFile);
   const tokenSource = await read(tokenFile,'utf8'), tokens = snapshot ? parseTokens(tokenSource) : loadTokens(config);
-  const compiler = await compile(`${readFileSync(path.join(tailwind,'theme.css'),'utf8')}\n${themeCss(tokens)}\n${readFileSync(path.join(tailwind,'preflight.css'),'utf8')}\n@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));\n@tailwind utilities;`);
-  const classes = [...new Set(frames.flatMap(f => [...f.html.matchAll(/\bclass="([^"]*)"/g)].flatMap(m => m[1].split(/\s+/))))];
+  const sanitizedExtraCss = extraCss.map(css => css.replace(/^\s*@import\s+(?:["']tailwindcss["']|url\(\s*["']tailwindcss["']\s*\))\s*;\s*$/gm, '')).join('\n');
+  const compiler = await compile(`${readFileSync(path.join(tailwind,'theme.css'),'utf8')}\n${themeCss(tokens, { mode: config.kit ? config.kit.tokens : 'strict' })}\n${readFileSync(path.join(tailwind,'preflight.css'),'utf8')}\n@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));\n${sanitizedExtraCss}\n@tailwind utilities;`);
+  const classes = [...new Set(frames.flatMap(f => [...f.html.matchAll(/\bclass="([^"]*)"/g)].flatMap(m => decodeHTML(m[1]).split(/\s+/).filter(Boolean))))];
   const utilities = compiler.build(classes);
   const defaults = 'html,body{margin:0;font-family:var(--font-ui);color:var(--text);background:var(--canvas)}[data-adg-frame]{display:flex;align-items:flex-start;position:relative;background:var(--canvas)}[data-adg-frame]>*,svg{flex-shrink:0} @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}';
   const hasSprings = [...tokens.light.keys()].some(name => /^--motion-spring-.+-(?:duration|bounce)$/.test(name));

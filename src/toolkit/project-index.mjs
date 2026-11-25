@@ -15,9 +15,10 @@ import { entryTokenReachability } from './token-reachability.mjs';
 import { identityVersion } from './frame-identity.mjs';
 import { inspectVersion } from './inspect-styles.mjs';
 import { frameDocument } from './frame-document.mjs';
+import { kitWatchDirectories } from './kit/config.mjs';
 export { sourceFacts } from './source-facts.mjs';
 
-const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'frame-observation.mjs', 'frame-facets.mjs', 'frame-primitives.mjs', 'frame-identity.mjs', 'inspect-styles.mjs', 'owner-colors.mjs', 'tokens.mjs', 'token-reachability.mjs', 'arch.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
+const collectorIdentity = indexDigest(Buffer.concat(await Promise.all(['project-index.mjs', 'source-facts.mjs', 'implementation-map.mjs', 'owner-locators.mjs', 'owner-observation.mjs', 'frame-observation.mjs', 'frame-facets.mjs', 'frame-primitives.mjs', 'frame-identity.mjs', 'inspect-styles.mjs', 'owner-colors.mjs', 'tokens.mjs', 'token-reachability.mjs', 'arch.mjs', 'kit/config.mjs'].map(name => readFile(new URL(name, import.meta.url))))));
 
 export function discoverProject(config) {
   const tsx = listSources(config.design, sourceDirectories(config)).map(file => relative(config, file));
@@ -44,6 +45,9 @@ async function resolutionFiles(config, artifactDirectory) {
     }
   }
   try { await visit(config.design); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  for (const dir of kitWatchDirectories(config)) {
+    try { await visit(dir); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
   return files.sort();
 }
 
@@ -69,7 +73,11 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
         const {buildSource}=await import('./build.mjs');
         const snapshot = new Map();
         built = await buildSource(config, path.join(config.root, source), { write: false, allowLegacy: false, snapshot });
-        built.dependencyHashes = Object.fromEntries([...snapshot].map(([file, bytes]) => [path.relative(config.design, file), indexDigest(bytes === null ? 'missing\0' : Buffer.concat([Buffer.from('present\0'), bytes]))]));
+        const physicalDesign = await realpath(config.design).catch(() => config.design);
+        built.dependencyHashes = Object.fromEntries([...snapshot].map(([file, bytes]) => {
+          const base = (file === root || file.startsWith(root + path.sep) || file.startsWith(physicalDesign + path.sep)) ? physicalDesign : config.design;
+          return [path.relative(base, file).split(path.sep).join('/'), indexDigest(bytes === null ? 'missing\0' : Buffer.concat([Buffer.from('present\0'), bytes]))];
+        }));
       } else {
         storePromise ??= createBuildStore({ config: { ...config, sourceFiles: inventory.tsx }, cacheDirectory: buildDirectory });
         built = await (await storePromise).get(path.relative(config.design, path.join(config.root, source)).split(path.sep).join('/'));
@@ -91,7 +99,7 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
     if (!materializations.has(source)) {
       requestedSources.add(source); freshPool ??= new BuildPool();
       materializations.set(source, freshPool.run({ config: { root, design: physicalDesign ?? config.design, output: config.output,
-        sources: config.sources, arch: config.arch, check: config.check, allowLegacy: false, frameOrigins },
+        sources: config.sources, arch: config.arch, check: config.check, ...(config.kit ? { kit: config.kit } : {}), allowLegacy: false, frameOrigins },
       name: path.relative(physicalDesign ?? config.design, path.join(root, source)).split(path.sep).join('/') }, new AbortController().signal).then(built => {
         observeDependencies(built);
         for (const frame of built.frames) frame.document = theme => frameDocument(frame, theme, built.css);
@@ -172,7 +180,7 @@ export async function openProjectIndex(config, { stateDirectory = defaultStateDi
       if (resolution && JSON.stringify(await resolutionFiles(config, artifactDirectory)) !== JSON.stringify(resolution)) throw new CliError('OWNER_INDEX_CHANGED', 'Design resolution inventory changed during query.');
       for (const [name, hash] of observedInputs) {
         let value;
-        try { value = indexDigest(Buffer.concat([Buffer.from('present\0'), await readFile(path.join(config.design, name))])); }
+        try { value = indexDigest(Buffer.concat([Buffer.from('present\0'), await readFile(path.resolve(config.design, name))])); }
         catch (error) { if (error.code !== 'ENOENT') throw error; value = indexDigest('missing\0'); }
         if (value !== hash) throw new CliError('OWNER_INDEX_CHANGED', `Design dependency changed during query: ${name}.`);
       }

@@ -1,6 +1,6 @@
 # Design asset rules
 
-These rules define a reusable design library for any ADG consumer. The [toolkit contract](design-toolkit.md) defines TSX syntax, rendering and checks. A consumer owns its visual direction, implementation mappings, review process and adoption status in its own documentation. Its application does not need to import the design sources or depend on ADG.
+These rules define a reusable design library for any ADG consumer. The [toolkit contract](design-toolkit.md) defines TSX syntax, rendering, [component-library kits](design-toolkit.md#component-library-kits) and checks. A consumer owns its visual direction, implementation mappings, review process and adoption status in its own documentation. By default its application does not import `design/` or depend on ADG; when using an optional `kit` configuration for regular UIs, `design/surfaces/` may directly import UI kit primitives (`kit.ui`) and stateless pure presentational views from `kit.roots` while keeping custom-style and irregular UI projects unchanged.
 
 ## Layers and placement
 

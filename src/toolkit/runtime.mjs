@@ -18,6 +18,7 @@ export function attributes(props) {
 }
 const artworkSources = new Map();
 export function registerArtwork(url, source) { artworkSources.set(url,source); return url; }
+export const artworkSource = url => artworkSources.get(url);
 const componentOwners = new WeakMap();
 export const componentOwner = component => componentOwners.get(component);
 export function registerComponent(component, source, name) {
@@ -46,6 +47,8 @@ export function jsx(type, props = {}, key = props.key) {
 export const jsxs = jsx;
 let frameOrigins;
 export const captureFrameOrigins = () => (frameOrigins ??= new WeakMap());
+export function recordFrameOrigin(value, source) { if (frameOrigins && source) frameOrigins.set(value, source); }
+export function transferFrameOrigin(from, to) { if (frameOrigins?.has(from)) frameOrigins.set(to, frameOrigins.get(from)); }
 export function jsxDEV(type, props, key, isStatic, source) {
   try {
     const value = jsx(type, props, key);

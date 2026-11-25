@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, realpa
 import path from 'node:path';
 import { parseTokens } from './tokens.mjs';
 import { CliError, classifyError } from '../cli-output.mjs';
+import { getKitAdapter } from './kit/index.mjs';
 export const starterTokens = `:root {
   --font-ui: system-ui, sans-serif;
   --font-mono: ui-monospace, monospace;
@@ -31,7 +32,8 @@ export function sourceDirectories(config = {}) {
 const sourceLocations = sources => sources.map(name => `${name}/`).join(', ');
 export function refreshTypes(config, changes) {
   mkdirSync(path.join(config.design, '.adg'), { recursive: true });
-  const runtime = readFileSync(new URL('./runtime.d.ts', import.meta.url), 'utf8');
+  const adapter = getKitAdapter(config);
+  const runtime = adapter ? adapter.runtimeDts() : readFileSync(new URL('./runtime.d.ts', import.meta.url), 'utf8');
   writeFileSync(path.join(config.design, '.adg/runtime.d.ts'), runtime);
   changes?.push({ action: 'regenerated', path: path.join(config.design, '.adg/runtime.d.ts'), from: null });
   writeFileSync(path.join(config.design, '.adg/assets.d.ts'), `declare module '*?url' { const url: string; export default url; }\ndeclare module '*.svg' { const Art: (props: Record<string, unknown>) => any; export default Art; }\n${['png','jpg','jpeg','webp'].map(ext => `declare module '*.${ext}' { const url: string; export default url; }`).join('\n')}\n`);

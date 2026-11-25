@@ -322,9 +322,11 @@ export function scanMotion(config, catalog = loadMotionPatterns(config), graph =
   // Check never follows symlinks or scans ignored/untracked dependencies.
   const root = realpathSync(config.root);
   const tokens = relative(config, path.join(config.design, 'tokens.css'));
+  const kitUiDirs = config.kit?.ui ?? [];
   let animations = 0, unmapped = 0, unused = 0;
   for (const name of mappedOnly ? [...mappings.keys()].filter(codeFile).sort() : codeFiles(config)) {
     if (name === tokens) continue;
+    if (!mappedOnly && kitUiDirs.some(dir => name === dir || name.startsWith(dir + '/')) && !mappings.has(name)) continue;
     // Git paths already use slashes. A literal backslash in a Git name
     // cannot be opened as that name on Windows.
     if (path.sep === '\\' && name.includes('\\')) {

@@ -27,10 +27,15 @@ parentPort.on('message', async ({ id, config, name, type }) => {
       const origin = origins.get(frame);
       if (origin) frames[i].declaration = {source:path.relative(config.root,path.resolve(origin.fileName)), line:origin.lineNumber,column:origin.columnNumber};
     });
+    const physicalRoot = realpathSync(config.root);
     const designRoot = realpathSync(config.design);
-    const dependencies = [...new Set(built.dependencies.map(file => path.relative(file.startsWith(designRoot + path.sep) ? designRoot : config.design, file).split(path.sep).join('/')))].sort();
+    const designRelative = file => {
+      const base = (file === physicalRoot || file.startsWith(physicalRoot + path.sep) || file.startsWith(designRoot + path.sep)) ? designRoot : config.design;
+      return path.relative(base, file).split(path.sep).join('/');
+    };
+    const dependencies = [...new Set(built.dependencies.map(designRelative))].sort();
     const dependencyHashes = Object.fromEntries(dependencies.map(name => {
-      const designFile = path.join(designRoot, name), rawFile = path.join(config.design, name);
+      const designFile = path.resolve(designRoot, name), rawFile = path.resolve(config.design, name);
       const bytes = snapshot.has(designFile) ? snapshot.get(designFile) : snapshot.get(rawFile);
       if (bytes === undefined) throw Error(`Missing snapshot bytes for dependency ${name}`);
       return [name,createHash('sha256').update(bytes===null?'missing\0':'present\0').update(bytes??'').digest('hex')];
