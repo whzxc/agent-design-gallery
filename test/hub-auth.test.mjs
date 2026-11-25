@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request } from 'node:http';
-import { mkdtemp, mkdir, cp, writeFile, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, cp, writeFile, readFile, readdir, rm, stat, symlink } from 'node:fs/promises';
 import { spawn, execFile } from 'node:child_process';
 import { once } from 'node:events';
 import { promisify } from 'node:util';
@@ -9,6 +9,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { startHub } from '../src/hub.mjs';
 import { hubKey, equalKey } from '../src/hub/auth.mjs';
+import { hubProjectLocation, hubReviewURL } from '../src/hub/project-link.mjs';
 import { directLocal } from '../src/http.mjs';
 import { addRoot } from '../src/hub/registry.mjs';
 import { registerInstance, listInstances } from '../src/hub/instances.mjs';
@@ -172,4 +173,39 @@ test('adg open records actual health identity and cleans records on exit without
   assert.equal((await fetch(new URL('manifest',url))).status,200);
   const done=once(child,'exit');child.kill('SIGTERM');await done;
   assert.deepEqual(await readdir(path.join(state,'instances')),[]);
+});
+
+test('contract: hub serves project review HTML within output root with local exemption and key auth', async t => {
+  const { hub, project, stateDirectory, auth } = await fixture(t);
+  const [registered] = await (await fetch(new URL('api/projects', hub.url))).json();
+  const outputDir = path.join(project, 'output/design');
+  await mkdir(outputDir, { recursive: true });
+  await writeFile(path.join(outputDir, 'review.html'), '<!doctype html><title>Work Review</title>');
+  await writeFile(path.join(outputDir, 'custom-round2.html'), '<!doctype html><title>Round 2</title>');
+  await writeFile(path.join(project, 'secret.html'), 'secret');
+  await symlink(path.join(project, 'secret.html'), path.join(outputDir, 'escape.html'));
+
+  // Direct-local access works without a key and returns fresh HTML.
+  const localReview = await fetch(new URL(registered.url + 'review.html', hub.url));
+  assert.equal(localReview.status, 200);
+  assert.match(localReview.headers.get('content-type'), /^text\/html\b/);
+  assert.equal(localReview.headers.get('cache-control'), 'no-store');
+  assert.equal(await localReview.text(), '<!doctype html><title>Work Review</title>');
+
+  const customReview = await fetch(new URL(registered.url + 'review/custom-round2.html', hub.url));
+  assert.equal(customReview.status, 200);
+  assert.equal(await customReview.text(), '<!doctype html><title>Round 2</title>');
+
+  // Forwarded access still requires authentication; writes, missing files and escapes are rejected.
+  assert.equal(await rawStatus(new URL(registered.url + 'review.html', hub.url), forwarded), 401);
+  assert.equal((await fetch(new URL(registered.url + 'review.html', hub.url), { headers: auth })).status, 200);
+  assert.equal((await fetch(new URL(registered.url + 'review.html', hub.url), { method: 'POST' })).status, 405);
+  assert.equal((await fetch(new URL(registered.url + 'review/escape.html', hub.url))).status, 404);
+  assert.equal((await fetch(new URL(registered.url + 'review/missing.html', hub.url))).status, 404);
+
+  // hubReviewURL maps files inside config.output to direct-local hub URLs and rejects outside paths.
+  const location = await hubProjectLocation(project, stateDirectory);
+  assert.equal(hubReviewURL(location, path.join(outputDir, 'review.html'), outputDir), new URL(registered.url + 'review.html', hub.url).href);
+  assert.equal(hubReviewURL(location, path.join(outputDir, 'custom-round2.html'), outputDir), new URL(registered.url + 'review/custom-round2.html', hub.url).href);
+  assert.equal(hubReviewURL(location, path.join(project, 'secret.html'), outputDir), null);
 });

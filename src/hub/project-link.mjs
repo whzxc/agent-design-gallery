@@ -22,7 +22,7 @@ export async function publishHubAddress(stateDirectory, address) {
   await rename(temporary, file);
 }
 
-export async function hubProjectURL(root, stateDirectory = defaultStateDirectory) {
+export async function hubProjectLocation(root, stateDirectory = defaultStateDirectory) {
   let hub;
   try { hub = JSON.parse(await readFile(hubFile(stateDirectory), 'utf8')); }
   catch (error) {
@@ -32,10 +32,30 @@ export async function hubProjectURL(root, stateDirectory = defaultStateDirectory
   if (!hub || !Number.isInteger(hub.port) || hub.port < 1 || hub.port > 65535 || typeof hub.id !== 'string') return null;
   const project = await registeredProject(root, stateDirectory);
   if (!project?.slug) return null;
-  const local = `http://127.0.0.1:${hub.port}`;
+  const localOrigin = `http://127.0.0.1:${hub.port}`;
   try {
-    const response = await fetch(local + '/api/health', { signal: AbortSignal.timeout(750), redirect: 'error' });
+    const response = await fetch(localOrigin + '/api/health', { signal: AbortSignal.timeout(750), redirect: 'error' });
     if (!response.ok || (await response.json()).id !== hub.id) return null;
   } catch { return null; }
-  return new URL(`/p/${project.slug}/`, hub.publicOrigin ?? local).href;
+  const pathname = `/p/${project.slug}/`;
+  return {
+    slug: project.slug,
+    local: new URL(pathname, localOrigin).href,
+    url: new URL(pathname, hub.publicOrigin ?? localOrigin).href,
+  };
+}
+
+export async function hubProjectURL(root, stateDirectory = defaultStateDirectory) {
+  return (await hubProjectLocation(root, stateDirectory))?.url ?? null;
+}
+
+export function hubReviewURL(location, filePath, outputDirectory) {
+  if (!location || !filePath || !outputDirectory) return null;
+  const resolved = path.resolve(filePath);
+  const outputRoot = path.resolve(outputDirectory);
+  if (path.dirname(resolved) !== outputRoot) return null;
+  const base = path.basename(resolved);
+  if (base === 'review.html' || base === 'review-embed.html') return new URL(base, location.local).href;
+  if (/^[A-Za-z0-9._-]+\.html$/i.test(base) && !base.includes('..')) return new URL(`review/${base}`, location.local).href;
+  return null;
 }

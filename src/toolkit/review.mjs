@@ -5,7 +5,7 @@ import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
 import path from 'node:path';
 import { CliError } from '../cli-output.mjs';
-import { hubProjectURL } from '../hub/project-link.mjs';
+import { hubProjectLocation, hubReviewURL } from '../hub/project-link.mjs';
 import { previewTarget, previewURL } from '../link.mjs';
 import { launch, loadFrame } from './browser.mjs';
 import { diff } from './diff.mjs';
@@ -150,7 +150,7 @@ function buildHtmlReview(model, data, built, theme, locate, format, target, omit
 }
 
 /** Generate a standalone, single-theme review without starting a viewer. */
-export async function review(config, values, { log = console.log } = {}) {
+export async function review(config, values, { log = console.log, stateDirectory } = {}) {
   const started = performance.now();
   const format = values.format ?? 'html';
   const target = format === 'embed' ? (values.target ?? 'antigravity') : undefined;
@@ -158,12 +158,14 @@ export async function review(config, values, { log = console.log } = {}) {
   const [theme] = resolveThemes(values.theme ?? 'system');
   const filename = target === 'codex' ? 'review-codex-embed.html' : target ? 'review-embed.html' : `review.${format}`;
   const destination = path.resolve(config.root, values.out ?? path.join(config.output, filename));
-  let locate;
+  let locate, localUrl = null;
   if (htmlLike) {
-    const projectURL = values['viewer-url'] ?? await hubProjectURL(config.root);
+    const location = await hubProjectLocation(config.root, stateDirectory);
+    const projectURL = values['viewer-url'] ?? location?.url ?? null;
     const viewer = projectURL ? previewURL(projectURL, previewTarget({})) : null;
     if (viewer) viewer.search = '';
     locate = sourceLocator(config, viewer);
+    localUrl = hubReviewURL(location, destination, config.output);
   }
   const omitDifference = Boolean(values['no-difference']);
   const options = { base: values.base, theme, impacted: true, json: true };
@@ -219,7 +221,7 @@ export async function review(config, values, { log = console.log } = {}) {
   } finally {
     await rm(temporary, { force: true });
   }
-  const result = { path: destination, format, ...(target ? { target } : {}), base: model.base, current: model.current, theme, counts: model.counts, groups: data.review.groups,
+  const result = { path: destination, ...(localUrl ? { localUrl } : {}), format, ...(target ? { target } : {}), base: model.base, current: model.current, theme, counts: model.counts, groups: data.review.groups,
     mode: values.exact ? 'exact' : 'hybrid', structureMatches: skipped.size, pixelComparisons: data.summary.comparisons,
     complete: model.complete, failures: model.failures, bytes, generationMs: performance.now() - started };
   if (model.captureExemptions?.length) {

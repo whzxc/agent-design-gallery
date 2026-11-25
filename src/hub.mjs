@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { startServer } from './server.mjs';
 import { listProjects, listRoots, scanRoots, defaultStateDirectory } from './hub/registry.mjs';
@@ -66,6 +67,35 @@ export async function startHub({ port = 4310, stateDirectory = defaultStateDirec
           return;
         }
         const slug = projectRoute[1];
+        const reviewMatch = route[2]?.match(/^\/(review(?:-embed)?\.html)$|^\/review\/([A-Za-z0-9._-]+\.html)$/);
+        if (reviewMatch) {
+          if (!read) return json(response, 405, { error: 'Review HTML files are read-only.' });
+          const filename = reviewMatch[1] ?? reviewMatch[2];
+          if (filename.includes('..')) return json(response, 404, { error: 'Review file not found.' });
+          const project = (await listProjects(stateDirectory)).find(item => item.slug === slug);
+          if (!project) return json(response, 404, { error: 'Unknown project; run adg root scan.' });
+          const config = await loadConfig(project.path, { checkVersion: false });
+          let content;
+          try {
+            const outputRoot = await realpath(config.output);
+            const target = await realpath(path.join(outputRoot, filename));
+            if (path.dirname(target) !== outputRoot || !(await stat(target)).isFile()) {
+              return json(response, 404, { error: 'Review file not found.' });
+            }
+            content = await readFile(target);
+          } catch (error) {
+            if (['ENOENT', 'ENOTDIR'].includes(error.code)) return json(response, 404, { error: 'Review file not found.' });
+            throw error;
+          }
+          response.writeHead(200, {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+            'Referrer-Policy': 'no-referrer',
+          });
+          response.end(request.method === 'HEAD' ? undefined : content);
+          return;
+        }
         let entry = viewers.get(slug);
         if (!entry) {
           entry = { active: 0, last: Date.now() };
