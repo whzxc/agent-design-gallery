@@ -9,6 +9,7 @@ import { pairFrameMoves } from './move-pairing.mjs';
 import { currentHead } from './arch-git.mjs';
 import { relative, sourceDirectories, sourceFeature } from './project.mjs';
 import { pixelComparator, imageDifference } from './pixel-diff.mjs';
+import { compressIndexedPng } from './indexed-png.mjs';
 import { partContext, captureEvidence, capturePart, isolateParent, frameIdentity, comparisonIdentity } from './part-diff.mjs';
 import { commandFailure, cleanup, emptySelection } from './results.mjs';
 import { CliError, classifyError, asCliError, nextActions } from '../cli-output.mjs';
@@ -147,8 +148,8 @@ async function comparePair(browser, pair, thresholds, context) {
         return { ...pair, ...result,
           before: result.beforePng ? { ...pair.before, png: Buffer.from(result.beforePng, 'base64') } : pair.before,
           isolated: result.isolatedPng ? Buffer.from(result.isolatedPng, 'base64') : null,
-          bleedMask: result.bleedPng ? Buffer.from(result.bleedPng, 'base64') : null,
-          difference: Buffer.from(result.png, 'base64') };
+          bleedMask: result.bleedPng ? compressIndexedPng(Buffer.from(result.bleedPng, 'base64')) : null,
+          difference: compressIndexedPng(Buffer.from(result.png, 'base64')) };
       } finally { await compare.dispose(); }
     });
   } catch (error) { throw frameFailure(error, pair.row, pair.theme); }
@@ -162,7 +163,7 @@ function revisionReasons(pair) {
   return reasons;
 }
 
-async function writePair(output, pair, thresholds, reviewImages, reviewFormat) {
+async function writePair(output, pair, thresholds, reviewImages, reviewFormat, skipDifference = false) {
   const { row, theme } = pair;
   const directory = output && path.join(output, row.support ? 'support' : 'frames', ...row.source.split('/').map(safeName), safeName(row.frame), theme);
   const paths = directory ? {
@@ -203,7 +204,7 @@ async function writePair(output, pair, thresholds, reviewImages, reviewFormat) {
       after: row.after ? { locale: row.after.locale ?? null, proposed: row.after.proposed ?? null, fixture: row.after.fixture ?? null, capture: row.after.capture ?? null } : null }, paths,
   };
   const pngSummary = reviewFormat === 'png';
-  const omitDifference = pngSummary || reviewFormat === 'embed';
+  const omitDifference = pngSummary || reviewFormat === 'embed' || Boolean(skipDifference);
   const shownInSummary = row.status === 'added' ||
     (row.status !== 'removed' && (row.previousSource || comparison.verdict === 'changed'));
   const embedCaptures = output || pngSummary;
@@ -229,7 +230,7 @@ async function writePair(output, pair, thresholds, reviewImages, reviewFormat) {
 }
 
 /** Exact ordinary frames and evidence-backed structural part comparisons. */
-export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock, session, onReview, readSystemTheme = systemTheme, renderSheet = renderReviewSheet, sheetTheme, reviewFormat } = {}) {
+export async function diff(config, args = [], options = {}, { launchBrowser = launch, prepareInputs = prepareDiffInputs, log = console.log, clock, session, onReview, readSystemTheme = systemTheme, renderSheet = renderReviewSheet, sheetTheme, reviewFormat, omitDifference = false } = {}) {
   const started = performance.now(), scale = Number(options.scale ?? 2);
   if (!Number.isFinite(scale) || scale <= 0) throw new CliError('USAGE_INVALID', 'Invalid --scale; use a positive number.');
   const themes = resolveThemes(options.theme, readSystemTheme);
@@ -239,7 +240,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
   if (options.impacted && !session) {
     return withImpacted(config, args, options, 'diff', selected =>
       diff(config, args, options, { launchBrowser, prepareInputs, log, clock, session: selected,
-        readSystemTheme, renderSheet, sheetTheme, onReview, reviewFormat }));
+        readSystemTheme, renderSheet, sheetTheme, onReview, reviewFormat, omitDifference }));
   }
   const output = reviewFormat ? null : path.resolve(config.root, options['out-dir'] ?? path.join(config.output, 'diff'));
   const timings = { prepareMs: 0, buildMs: 0, captureMs: 0, compareMs: 0, writeMs: 0, totalMs: 0 };
@@ -340,7 +341,7 @@ export async function diff(config, args = [], options = {}, { launchBrowser = la
           }
           return pairs.filter(item => themes.includes(item.theme));
         });
-        const rows = await phase('writeMs', selected, pair => writePair(output, pair, thresholds, reviewImages, reviewFormat));
+        const rows = await phase('writeMs', selected, pair => writePair(output, pair, thresholds, reviewImages, reviewFormat, omitDifference));
         for (const row of rows) {
           context?.comparisons.set(comparisonIdentity(row, row.theme), row);
           if (supportKeys.has(frameIdentity(row))) { data.support.push(row); data.summary.supportComparisons++; }

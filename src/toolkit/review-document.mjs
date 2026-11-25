@@ -22,12 +22,14 @@ function originHtml(origin) {
   return origin.href ? `<a class="origin" href="${escape(origin.href)}" target="_blank" rel="noopener" title="${title} · Open in ADG">${content}</a>` : `<span class="origin" title="${title}">${content}</span>`;
 }
 
-export function reviewDocument(report, { properties, styles, templates }) {
+export function reviewDocument(report, { properties, styleChunks, styles, templates }) {
   const { title, theme, base, head, cards, counts, groups, removed, moved, failures } = report;
   const byKey = new Map(cards.map(card => [key(card), card]));
   const added = cards.filter(card => card.status === 'added');
   const direct = cards.filter(card => card.status === 'changed' && card.change?.kind !== 'inherited');
   const cssText = value => value.replace(/<\/style/gi, '<\\/style');
+  const safeJson = value => JSON.stringify(value).replaceAll('<', '\\u003c');
+  const stylesPayload = `{\n"chunks":[\n${styleChunks.map(chunk => safeJson(chunk)).join(',\n')}\n],\n"specs":${safeJson(styles)}\n}`;
   const sections = [
     { id: 'added', title: 'Added', count: counts.added, html: () => added.map(card => cardHtml(card)).join('') },
     { id: 'direct', title: 'Direct changes', count: counts.direct, html: () => direct.map(card => cardHtml(card)).join('') },
@@ -40,7 +42,7 @@ export function reviewDocument(report, { properties, styles, templates }) {
   const hash = createHash('sha256').update(script).digest('base64');
   const framed = cards.some(card => card.before?.framed || card.after?.framed);
   const framesPolicy = framed ? 'frame-src about:; ' : '';
-  const metadata = JSON.stringify(cards.map(({ before, after, difference }) => ({ before, after, difference: Boolean(difference) })));
+  const metadata = safeJson(cards.map(({ before, after, difference }) => ({ before, after, difference: Boolean(difference) })));
   return `<!doctype html>
 <html lang="en" data-theme="${theme}">
 <head>
@@ -89,7 +91,7 @@ export function reviewDocument(report, { properties, styles, templates }) {
     <div class="zoom-panes" id="zoom-panes"></div>
   </dialog>
   <script id="review-data" type="application/json">${metadata}</script>
-  ${styles.map((style, index) => `<template id="style-${index}"><style>${cssText(style)}</style></template>`).join('\n')}
+  <script id="review-styles" type="application/json">${stylesPayload}</script>
   ${templates.join('\n')}
   ${cards.filter(card => card.difference).map(card => `<template id="difference-${card.index}"><img src="${escape(card.difference)}" alt="Changed pixels in ${escape(label(card))}"></template>`).join('\n')}
   <script>${script}</script>
@@ -135,7 +137,9 @@ function inheritedHtml(group, index, byKey) {
 
 function mountPreviews() {
   const data = JSON.parse(document.getElementById('review-data').textContent);
+  const { chunks: styleChunks, specs: styleSpecs } = JSON.parse(document.getElementById('review-styles').textContent);
   const cards = [...document.querySelectorAll('[data-card]')];
+  const cssCache = new Map();
   const sheetCache = new Map();
   const frameReady = new WeakMap();
   const pending = new Set();
@@ -146,12 +150,38 @@ function mountPreviews() {
   const zoomScale = document.getElementById('zoom-scale');
   const zoomNames = { compare: 'Compare', before: 'Before', after: 'After', difference: 'Difference' };
   let activeZoom;
-  const styleTemplate = index => document.getElementById('style-' + index);
+  const expandStyle = list => {
+    let out = '';
+    for (const item of list) {
+      if (typeof item === 'number') out += styleChunks[item];
+      else if (typeof item[0] === 'number') {
+        for (let i = 0; i < item[1]; i++) out += styleChunks[item[0] + i];
+      } else {
+        out += item[0] + '{' + expandStyle(item[1]) + '}';
+      }
+    }
+    return out;
+  };
+  const styleText = index => {
+    if (!cssCache.has(index)) cssCache.set(index, expandStyle(styleSpecs[index]));
+    return cssCache.get(index);
+  };
+  const escapeStyle = value => value.replace(/<\/style/gi, '<\\/style');
+  const getSheet = (index, base = false) => {
+    const cacheKey = base ? 'b:' + index : 'e:' + index;
+    if (!sheetCache.has(cacheKey)) {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync((base ? 'review-document,review-body{display:block}review-document{min-height:100%}' : '') + styleText(index));
+      sheetCache.set(cacheKey, sheet);
+    }
+    return sheetCache.get(cacheKey);
+  };
   function framedSpecimen(host, preview, body) {
     // Font faces are document-scoped in Chromium. Give each revision its own
     // document so faces with the same family name keep their original bytes.
     for (const link of body.content.querySelectorAll('link[data-review-style]')) {
-      const style = styleTemplate(link.dataset.reviewStyle).content.firstElementChild.cloneNode(true);
+      const style = document.createElement('style');
+      style.textContent = escapeStyle(styleText(Number(link.dataset.reviewStyle)));
       if (link.hasAttribute('media')) style.media = link.media;
       link.replaceWith(style);
     }
@@ -165,7 +195,7 @@ function mountPreviews() {
       if (doc) await Promise.allSettled([doc.fonts.ready, ...[...doc.images].map(image => image.decode())]);
     }));
     const policy = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; frame-src 'none'; base-uri 'none'; form-action 'none'";
-    host.srcdoc = `<!doctype html><html data-theme="${document.documentElement.dataset.theme}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}">${styleTemplate(preview.style).innerHTML}</head><body>${body.innerHTML}</body></html>`;
+    host.srcdoc = `<!doctype html><html data-theme="${document.documentElement.dataset.theme}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>${escapeStyle(styleText(preview.style))}</style></head><body>${body.innerHTML}</body></html>`;
   }
   function specimen(preview) {
     const host = document.createElement(preview.framed ? 'iframe' : 'div');
@@ -181,14 +211,8 @@ function mountPreviews() {
     for (const [unit, value] of Object.entries({ vw: width, vh: height, vmin: Math.min(width, height), vmax: Math.max(width, height) })) {
       host.style.setProperty('--review-' + unit, value / 100 + 'px');
     }
-    if (!sheetCache.has(preview.style)) {
-      const sheet = new CSSStyleSheet();
-      const css = styleTemplate(preview.style).content.firstElementChild.textContent;
-      sheet.replaceSync('review-document,review-body{display:block}review-document{min-height:100%}' + css);
-      sheetCache.set(preview.style, sheet);
-    }
     const root = host.attachShadow({ mode: 'open' });
-    root.adoptedStyleSheets = [sheetCache.get(preview.style)];
+    root.adoptedStyleSheets = [getSheet(preview.style, true), ...(preview.extraStyles ?? []).map(i => getSheet(i))];
     root.append(body.content.cloneNode(true));
     return host;
   }

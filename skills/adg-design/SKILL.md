@@ -73,8 +73,9 @@ Do not redraw unrelated screens. Scope the change to the target feature or compo
 4. **Generate and deliver the review artifact:**
 
    ```sh
-   # Default standalone offline HTML (full multi-frame review):
+   # Default standalone offline HTML (add --no-difference for code-only Before/After without diff PNGs):
    adg review --base="$base" --json
+   adg review --base="$base" --no-difference --json
    # Compact inline embed (for Codex or Antigravity chat hosts):
    adg review --base="$base" --format=embed --target=codex --json
    adg review --base="$base" --format=embed --target=antigravity --json

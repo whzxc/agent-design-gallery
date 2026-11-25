@@ -110,7 +110,7 @@ function selectEmbedEntries(model, comparisons, groups) {
   return selected;
 }
 
-function buildHtmlReview(model, data, built, theme, locate, format, target) {
+function buildHtmlReview(model, data, built, theme, locate, format, target, omitDifference = false) {
   const comparisons = new Map(data.comparisons.filter(row => row.theme === theme).map(row => [identity(row), row]));
   const allEntries = [...model.sections.added, ...model.sections.changed];
   const embed = format === 'embed';
@@ -127,7 +127,7 @@ function buildHtmlReview(model, data, built, theme, locate, format, target) {
       const changed = entry.status === 'changed';
       const before = changed ? compileFrame(row.before, row.beforeSize, 'before') : null;
       const after = compileFrame(row.after, row.afterSize, 'after');
-      const difference = !embed && changed ? entry.themes.find(item => item.theme === theme)?.images.difference : null;
+      const difference = !embed && !omitDifference && changed ? entry.themes.find(item => item.theme === theme)?.images.difference : null;
       return { index, source: entry.source, frame: entry.frame, status: entry.status, change: entry.change, origin: locate(entry),
         previousOrigin: entry.previousSource && locate(row.before), before, after, difference, differentPixels: row.pixels?.differentPixels,
         proposed: row?.proposed ?? null, note: row?.note?.after ?? row?.note?.before ?? null };
@@ -165,6 +165,7 @@ export async function review(config, values, { log = console.log } = {}) {
     if (viewer) viewer.search = '';
     locate = sourceLocator(config, viewer);
   }
+  const omitDifference = Boolean(values['no-difference']);
   const options = { base: values.base, theme, impacted: true, json: true };
   let model, built, skipped, baseConfig;
   const { data, warnings } = await withImpacted(config, [], options, 'diff', async session => {
@@ -178,7 +179,7 @@ export async function review(config, values, { log = console.log } = {}) {
     session.scheduled = (row, theme) => scheduled(row, theme) && !skipped.has(impactRowKey(row, theme));
     let result;
     try {
-      result = await diff(config, [], options, { session, reviewFormat: format, onReview: value => { model = value; } });
+      result = await diff(config, [], options, { session, reviewFormat: format, omitDifference, onReview: value => { model = value; } });
     } catch (error) {
       if (error.code !== 'DIFF_FAILED' && !error.partialSourceFailures) throw error;
       result = { data: error.data, warnings: error.warnings };
@@ -211,7 +212,7 @@ export async function review(config, values, { log = console.log } = {}) {
         await browser.close();
       }
     } else {
-      await writeFile(temporary, buildHtmlReview(model, data, built, theme, locate, format, target));
+      await writeFile(temporary, buildHtmlReview(model, data, built, theme, locate, format, target, omitDifference));
     }
     ({ size: bytes } = await stat(temporary));
     await rename(temporary, destination);

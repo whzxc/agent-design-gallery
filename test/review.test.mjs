@@ -148,6 +148,25 @@ export default () => [
   const document = await readFile(standalone, 'utf8');
   assert.match(document, /https:\/\/design\.example\/p\/project\/\?asset=components%2Fcard\.tsx&amp;frame=themed/);
   assert.doesNotMatch(document, /key=discard/);
+  assert.match(document, /<template id="difference-/i);
+  const diffPngPath = path.join(project, 'output/design/diff/frames/design/components/card%2Etsx/themed/dark/difference.png');
+  const diffPng = await readFile(diffPngPath);
+  assert.equal(diffPng.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  assert.equal(diffPng[24], 4, 'difference mask uses 4-bit depth');
+  assert.equal(diffPng[25], 3, 'difference mask uses indexed palette color type');
+
+  const noDiff = path.join(root, 'standalone', 'review-nodiff.html');
+  stdout = '';
+  const noDiffCode = await main(['review', `--base=${baseSha}`, '--theme=dark', '--no-difference', `--out=${noDiff}`, '--json'], project,
+    { stdout: chunk => { stdout += chunk; }, stderr: () => {}, exit: () => {} });
+  assert.equal(noDiffCode, 0, stdout);
+  const { data: noDiffReport } = JSON.parse(stdout);
+  assert.equal(noDiffReport.format, 'html');
+  assert.deepEqual(noDiffReport.counts, report.counts);
+  const noDiffHtml = await readFile(noDiff, 'utf8');
+  assert.doesNotMatch(noDiffHtml, /<template id="difference-/i);
+  assert.doesNotMatch(noDiffHtml, /data-side="difference"/i);
+  assert.ok(noDiffReport.bytes < report.bytes, 'omitting difference PNGs reduces HTML size');
 
   stdout = '';
   const pngCode = await main(['review', `--base=${baseSha}`, '--theme=dark', '--format=png', '--json'], project,
@@ -242,6 +261,17 @@ export default () => [
     assert.match(prompt, /Source: design\/components\/card\.tsx\nFrame: themed/);
     assert.ok(prompt.includes(baseSha));
     assert.equal(await chat.getByRole('article').count(), 2);
+    await page.goto(pathToFileURL(noDiff).href);
+    const noDiffCard = page.locator('[data-card][data-frame="themed"]');
+    await noDiffCard.locator('[data-side="after"] .specimen').waitFor();
+    assert.equal(await noDiffCard.locator('[data-side="difference"]').count(), 0);
+    assert.equal(await noDiffCard.locator('iframe').count(), 0);
+    await noDiffCard.locator('.enlarge').click();
+    const zoomDialog = page.locator('#frame-zoom');
+    await zoomDialog.waitFor({ state: 'visible' });
+    assert.deepEqual(await zoomDialog.locator('#zoom-modes button').allTextContents(), ['Compare', 'Before', 'After']);
+    await zoomDialog.locator('[data-zoom="close"]').click();
+
     assert.deepEqual(errors, []);
     assert.deepEqual(network, []);
   } finally {
@@ -319,6 +349,44 @@ test('contract: standalone review embeds artwork styles and isolates revision-lo
           color: doc.defaultView.getComputedStyle(element).color, faces: faces.map(face => face.status) };
       });
       assert.deepEqual(observed, { width, color: 'rgb(42, 43, 44)', faces: ['loaded'] });
+    }
+    assert.deepEqual(network, []);
+    assert.deepEqual(errors, []);
+
+    // When both revisions share identical font bytes, hoist the font once into Shadow DOM
+    // without creating nested iframe documents, in both standalone HTML and embed outputs.
+    await write('design/art/font.css', css(fonts[0]));
+    await write('design/components/card.tsx', `
+      import { Frame } from 'adg';
+      import sheet from '../art/font.css?url';
+      export default () => ['one', 'two'].map(name => <Frame name={name} width={100} height={50}>
+        <div style={{ background: '#112233' }}><link rel="stylesheet" href={sheet}/><span class="font-probe">AA</span></div>
+      </Frame>);
+    `);
+    for (const [label, extraArgs] of [
+      ['html', ['--no-difference']],
+      ['embed', ['--format=embed', '--target=antigravity']],
+    ]) {
+      let out = '';
+      const sharedCode = await main(['review', '--base=HEAD', '--json', '--theme=light', ...extraArgs], project,
+        { stdout: chunk => { out += chunk; }, stderr: () => {}, exit: () => {} });
+      assert.equal(sharedCode, 0, `${label}: ${out}`);
+      const shared = JSON.parse(out).data;
+      const sharedDoc = await readFile(shared.path, 'utf8');
+      assert.equal(sharedDoc.split(fonts[0]).length, 2, `${label}: store shared font once`);
+      assert.doesNotMatch(sharedDoc, /"framed":true/, `${label}: avoid iframe isolation when fonts match`);
+      await page.goto(pathToFileURL(shared.path).href);
+      const probe = label === 'html'
+        ? page.locator('[data-card][data-frame="one"] [data-side="after"] .specimen .font-probe')
+        : page.locator('[data-embed-card] .curtain-layer[data-side="after"] .specimen .font-probe').first();
+      await probe.waitFor();
+      assert.equal(await page.locator('iframe').count(), 0, `${label}: zero nested iframes`);
+      const observed = await probe.evaluate(async element => {
+        const faces = await document.fonts.load('20px "ADG Review Probe"', element.textContent);
+        return { width: element.getBoundingClientRect().width,
+          color: getComputedStyle(element).color, faces: faces.map(face => face.status) };
+      });
+      assert.deepEqual(observed, { width: 40, color: 'rgb(42, 43, 44)', faces: ['loaded'] }, `${label}: custom font applied in Shadow DOM`);
     }
     assert.deepEqual(network, []);
     assert.deepEqual(errors, []);

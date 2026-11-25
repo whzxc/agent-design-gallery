@@ -248,4 +248,7 @@ test('review embed target resolves explicit choice, host declaration and legacy 
   assert.throws(() => parseCli(args, { ADG_EMBED_TARGET: 'unknown' }), { code: 'USAGE_INVALID' });
   assert.throws(() => parseCli(['review', '--base=HEAD', '--target=codex'], {}), { code: 'USAGE_INVALID' });
   assert.equal(parseCli(['review', '--base=HEAD'], { ADG_EMBED_TARGET: 'codex' }).values.target, undefined);
+  assert.equal(parseCli(['review', '--base=HEAD', '--no-difference'], {}).values['no-difference'], true);
+  assert.throws(() => parseCli(['review', '--base=HEAD', '--format=embed', '--no-difference'], {}), { code: 'USAGE_INVALID' });
+  assert.throws(() => parseCli(['review', '--base=HEAD', '--format=png', '--no-difference'], {}), { code: 'USAGE_INVALID' });
 });

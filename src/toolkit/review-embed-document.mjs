@@ -49,7 +49,7 @@ function cardHtml(card, index, codex) {
   </article>`;
 }
 
-export function reviewEmbedDocument(report, { properties, styles, templates }, target = 'antigravity') {
+export function reviewEmbedDocument(report, { properties, styleChunks, styles, templates }, target = 'antigravity') {
   const { title, theme, base, head, cards, failures } = report;
   const codex = target === 'codex';
   const changed = cards.some(card => card.before);
@@ -57,6 +57,7 @@ export function reviewEmbedDocument(report, { properties, styles, templates }, t
     title, base, head,
     cards: cards.map(({ source, frame, origin, before, after, proposed }) => ({ source, frame, origin, before, after, proposed })),
   };
+  const stylesPayload = `{\n"chunks":[\n${styleChunks.map(chunk => safeJson(chunk)).join(',\n')}\n],\n"specs":${safeJson(styles)}\n}`;
   const zoomButton = (icon, label, action) => iconButton(icon, label, `data-zoom="${action}"`, { codex });
   const fragment = `<style>${cssText(properties.join('\n'))}\n${stylesForEmbed}</style>
 <div id="embed-root" data-preview-theme="${escape(theme)}" data-comparison-mode="slider">
@@ -104,7 +105,7 @@ export function reviewEmbedDocument(report, { properties, styles, templates }, t
     </div>
   </template>
   <script id="embed-data" type="application/json">${safeJson(payload)}</script>
-  ${styles.map((style, index) => `<template id="style-${index}"><style>${cssText(style)}</style></template>`).join('\n')}
+  <script id="embed-styles" type="application/json">${stylesPayload}</script>
   ${templates.join('\n')}
   <script>(${mountEmbed.toString()})();</script>
 </div>`;
@@ -126,6 +127,7 @@ ${fragment}
 function mountEmbed() {
   const root = document.getElementById('embed-root');
   const data = JSON.parse(root.querySelector('#embed-data').textContent);
+  const { chunks: styleChunks, specs: styleSpecs } = JSON.parse(root.querySelector('#embed-styles').textContent);
   const template = root.querySelector('#embed-comparison');
   const controls = root.querySelector('[data-review-options]');
   const dialog = root.querySelector('#embed-zoom');
@@ -138,14 +140,27 @@ function mountEmbed() {
   let activeZoom;
   let zoom = 100;
 
-  function getSheet(index) {
-    if (!sheetCache.has(index)) {
-      const sheet = new CSSStyleSheet();
-      const css = root.querySelector('#style-' + index).content.firstElementChild.textContent;
-      sheet.replaceSync('review-document,review-body{display:block}review-document{min-height:100%}' + css);
-      sheetCache.set(index, sheet);
+  function expandStyle(list) {
+    let out = '';
+    for (const item of list) {
+      if (typeof item === 'number') out += styleChunks[item];
+      else if (typeof item[0] === 'number') {
+        for (let i = 0; i < item[1]; i++) out += styleChunks[item[0] + i];
+      } else {
+        out += item[0] + '{' + expandStyle(item[1]) + '}';
+      }
     }
-    return sheetCache.get(index);
+    return out;
+  }
+
+  function getSheet(index, base = false) {
+    const cacheKey = base ? 'b:' + index : 'e:' + index;
+    if (!sheetCache.has(cacheKey)) {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync((base ? 'review-document,review-body{display:block}review-document{min-height:100%}' : '') + expandStyle(styleSpecs[index]));
+      sheetCache.set(cacheKey, sheet);
+    }
+    return sheetCache.get(cacheKey);
   }
 
   function createSpecimen(preview) {
@@ -158,7 +173,7 @@ function mountEmbed() {
       specimen.style.setProperty('--review-' + unit, extent / 100 + 'px');
     }
     const shadow = specimen.attachShadow({ mode: 'open' });
-    shadow.adoptedStyleSheets = [getSheet(preview.style)];
+    shadow.adoptedStyleSheets = [getSheet(preview.style, true), ...(preview.extraStyles ?? []).map(i => getSheet(i))];
     shadow.append(root.querySelector('#frame-' + preview.template).content.cloneNode(true));
     return specimen;
   }
