@@ -43,7 +43,7 @@ function Pane({ label, added = false }: { label: 'Before' | 'After' | 'Differenc
     {!added && <figcaption class="flex items-baseline justify-between gap-2 px-px pb-[6px] text-[11px] font-[630] text-text-secondary">
       <span>{label}</span>{label === 'Difference' && <small class="text-[10px] font-normal tabular-nums">20,810 px changed</small>}
     </figcaption>}
-    <div class="grid min-h-10 place-items-center rounded-[7px] border border-border bg-surface-sunken py-[7px]">
+    <div class="grid min-h-10 place-items-center rounded-[7px] bg-surface-sunken py-[8px]">
       {label === 'Difference' ? <span class="h-10 w-[125px] rounded-field bg-danger/25" />
         : <Sample before={label === 'Before'} added={added} />}
     </div>
@@ -96,7 +96,7 @@ export function ReviewZoom() {
       <Control compact selected>After</Control><Control compact>Difference</Control></div>
     <div class="flex min-h-0 grow flex-col p-[15px] pt-3">
       <p class="px-px pb-[6px] text-[11px] font-[630] text-text-secondary">After</p>
-      <div class="grid grow place-items-center rounded-[7px] border border-border bg-surface-sunken">
+      <div class="grid grow place-items-center rounded-[7px] bg-surface-sunken">
         <Sample />
       </div>
     </div>

@@ -459,12 +459,12 @@ const documentStyles = `
   #removed .section-head h2{color:var(--danger)}
   .section-head>span,.group-head>span{color:var(--muted);font-size:12px;white-space:nowrap}
   .section-body{display:grid;gap:14px;min-width:0}
+  #inherited .section-body{gap:22px}
   #added .section-body{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
   #added .frame-card,#added .panes figure{display:flex;flex-direction:column}
   #added .panes{flex:1;align-items:stretch}
   #added .stage{flex:1}
-  .frame-card,.inherited-group{border:1px solid var(--line);border-radius:11px;min-width:0;overflow:hidden}
-  .frame-card{background:var(--panel);--plane-height:0px}
+  .frame-card{border:1px solid var(--line);border-radius:11px;min-width:0;overflow:hidden;background:var(--panel);--plane-height:0px}
   .frame-card:target{border-color:var(--accent)}
   .card-head{padding:6px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
   .card-head h3{flex:1;min-width:0}
@@ -479,7 +479,7 @@ const documentStyles = `
   .card-head .crumb-separator{margin-inline:6px}
   .card-head .origin strong{flex:none;max-width:75%}
   .card-meta{display:flex;gap:8px;align-items:center;white-space:nowrap;flex:none}
-  .role-label{font-size:10px;color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:0 6px}
+  .role-label{font-size:10px;color:var(--accent);background:var(--nav-tint);border-radius:999px;padding:1px 7px}
   button{font:inherit;color:inherit}
   .enlarge,.zoom-actions button,.zoom-modes button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:30px;padding:4px 9px;
     border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer;font-size:12px;white-space:nowrap}
@@ -489,7 +489,7 @@ const documentStyles = `
   .panes figure{min-width:0}
   figcaption{display:flex;justify-content:space-between;align-items:baseline;gap:4px 8px;flex-wrap:wrap;font-size:11px;font-weight:630;color:var(--muted);padding:0 1px 6px}
   figcaption small{font-size:10px;font-weight:400;font-variant-numeric:tabular-nums}
-  .stage{position:relative;display:grid;place-items:center;min-height:max(40px,calc(16px + var(--plane-height)));overflow:hidden;border:1px solid var(--line);border-radius:7px;background:var(--well)}
+  .stage{position:relative;display:grid;place-items:center;min-height:max(40px,calc(16px + var(--plane-height)));overflow:hidden;border-radius:7px;background:var(--well)}
   .pane-trigger{display:block;position:absolute;inset:0;border:0;background:transparent;color:var(--ink);cursor:zoom-in}
   .pane-trigger svg{position:absolute;top:7px;right:7px;box-sizing:content-box;border:1px solid var(--line);border-radius:6px;padding:5px;background:var(--panel);opacity:0}
   .pane-trigger:hover svg,.pane-trigger:focus-visible svg{opacity:1}
@@ -498,20 +498,20 @@ const documentStyles = `
   .plane>img{display:block;width:100%;height:100%;object-fit:contain;object-position:top left}
   .specimen{position:absolute;inset:0 auto auto 0;overflow:hidden;transform:scale(var(--preview-scale));transform-origin:top left;font:16px/normal "Times New Roman",serif;color:initial}
   .absent{color:var(--muted);font-size:12px}
-  .inherited-group{background:var(--group)}
-  .group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 15px;border-bottom:1px solid var(--line)}
+  .inherited-group{display:grid;gap:6px;min-width:0}
+  .group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 2px}
   .group-head[data-expanded="true"]{align-items:flex-start}
   .group-head h3{display:flex;align-items:center;gap:8px;min-width:0;flex:1;font-size:13px}
   .group-head[data-expanded="true"] h3{align-items:flex-start;flex-wrap:wrap;gap:6px 8px}
   .cause-list{display:flex;align-items:baseline;gap:10px;min-width:0;overflow:hidden;white-space:nowrap}
   .group-head[data-expanded="true"] .cause-list{flex-wrap:wrap;white-space:normal;gap:5px 10px;overflow:visible}
-  .group-head code{color:var(--accent);flex:none;white-space:nowrap}
+  .group-head code{color:var(--muted);flex:none;white-space:nowrap}
   .cause-list code:first-child{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
   .group-head[data-expanded="true"] code{white-space:normal;overflow-wrap:anywhere;flex:none}
-  .cause-more{flex:none;font:11px/1.4 ui-monospace,"SF Mono",Menlo,monospace;padding:1px 7px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--muted);cursor:pointer;white-space:nowrap}
+  .cause-more{flex:none;font:11px/1.4 ui-monospace,"SF Mono",Menlo,monospace;padding:1px 7px;border:0;border-radius:999px;background:var(--group);color:var(--muted);cursor:pointer;white-space:nowrap}
   .cause-more[hidden]{display:none}
   .cause-more:hover{background:var(--nav-tint);color:var(--accent)}
-  .group-body{padding:12px}
+  .group-body{padding:0}
   .names{list-style:none;padding:10px 13px;display:grid;gap:9px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}
   .names li{display:flex;gap:9px;flex-wrap:wrap;overflow-wrap:anywhere}
   .failures{padding:14px 17px;border:1px solid var(--warning);border-radius:9px}
@@ -531,10 +531,10 @@ const documentStyles = `
   .zoom-modes button{min-height:28px}
   .zoom-panes{min-height:0;flex:1;display:grid;grid-template-columns:repeat(var(--zoom-panes,1),minmax(0,1fr));gap:10px;padding:12px 15px 15px}
   .zoom-panes figure{display:flex;flex-direction:column;min-width:0;min-height:0}
-  .zoom-stage{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--well);border:1px solid var(--line);border-radius:7px}
+  .zoom-stage{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--well);border-radius:7px}
   .zoom-surface{width:max(100%,calc(var(--plane-width) + 16px));min-height:max(100%,calc(var(--plane-height) + 16px));display:grid;place-items:center}
   @media(max-width:760px){.layout{padding-top:14px}.panes{gap:7px}.section-head h2{font-size:20px}.zoom-header{flex-wrap:wrap}}
   @media(max-width:540px){.panes,#added .section-body{grid-template-columns:minmax(0,1fr)}.theme-label{display:none}.masthead-inner{grid-template-columns:minmax(0,1fr) auto;gap:8px}
     .revisions{gap:5px}.revisions code{font-size:9px}h1{font-size:15px}h1 span{font-size:11px}
-    .group-body{padding:9px}.section-head{margin-bottom:10px}.zoom-panes{grid-template-columns:1fr}.zoom-actions{flex-wrap:wrap}}
+    .section-head{margin-bottom:10px}.zoom-panes{grid-template-columns:1fr}.zoom-actions{flex-wrap:wrap}}
 `;
